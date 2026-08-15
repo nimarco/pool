@@ -1,0 +1,147 @@
+# =============================================================================
+# SECRETS — never commit these. See AGENTS.md §4.
+# This repository is intended to become PUBLIC. Assume every committed file is
+# world-readable, permanently, including in history.
+# =============================================================================
+.env
+.env.*
+!.env.example
+*.env
+secrets.json
+secrets.yaml
+secrets.yml
+credentials
+credentials.json
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+.aws/
+aws.json
+*credentials*.csv
+
+# =============================================================================
+# AWS / infrastructure
+# =============================================================================
+.aws-sam/
+samconfig.toml
+cdk.out/
+cdk.context.json
+.serverless/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.chalice/deployments/
+node_modules/.cache/serverless/
+
+# Deployment/bootstrap artifacts that may embed account IDs or ARNs
+.agentcore/
+.bedrock_agentcore.yaml
+deploy-output.json
+stack-outputs.json
+
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib60/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.uv/
+
+# =============================================================================
+# Node / frontend
+# =============================================================================
+node_modules/
+.npm
+.pnpm-store/
+.yarn/
+.next/
+.nuxt/
+.svelte-kit/
+.vite/
+.turbo/
+.parcel-cache/
+out/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =============================================================================
+# Local data — synthetic fixtures that are meant to be shared should be
+# committed explicitly; scratch data and local databases should not.
+# =============================================================================
+*.sqlite
+*.sqlite3
+*.db
+.local/
+scratch/
+tmp/
+data/local/
+
+# =============================================================================
+# Logs and traces — may contain addresses, tokens, or account identifiers.
+# Redact before committing anything under docs/evidence/. See AGENTS.md §4.
+# =============================================================================
+*.log
+logs/
+traces/raw/
+
+# =============================================================================
+# Editors and OS
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+desktop.ini
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.claude/settings.local.json

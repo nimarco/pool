@@ -158,18 +158,25 @@ No "world's first" claims are made anywhere.
 
 ## Bonus — Builder Center articles
 
-Up to +0.6 (0.2 each). **All unpublished.** Material is being captured as it happens in
+Up to +0.6 (0.2 each, max three). **All unpublished.** Material is captured as it happens in
 [`ARTICLE_NOTES.md`](ARTICLE_NOTES.md) and `BUILD_HISTORY.md`.
 
-| # | Working title | Material | Status |
-| --- | --- | :-: | :-: |
-| 1 | Replacing the neighbourhood group-buy organiser with an AI agent | ✅ strong | ⬜ unpublished |
-| 2 | Building Pool with Strands Agents and Amazon Bedrock AgentCore | 🟡 needs real deployment evidence | ⬜ unpublished |
-| 3 | When should an autonomous agent ask permission? | ✅ strong | ⬜ unpublished |
+**Requirement verified 2026-08-15:**
 
-⚠️ **Before publishing**, re-check the current Builder Center title and tag requirements
-against the live rules — the competition changed its blog-post wording mid-event, so the
-requirement recorded here may already be stale.
+> "Publish a post on builder.aws.com covering your **build journey and use of AWS** for this
+> hackathon. **Use Agents for Humans in your title.**"
+
+Two hard gates: the literal phrase *Agents for Humans* in the title, and content that is
+genuinely a build-journey-and-AWS piece rather than a product essay. All three articles were
+re-anchored on 2026-08-15 to satisfy the second gate.
+
+| # | Title | Blocked on | Status |
+| --- | --- | --- | :-: |
+| 1 | *Agents for Humans:* what I learned building an autonomous group-buying coordinator with Strands | nothing — writable now | ⬜ |
+| 2 | *Agents for Humans:* deploying a Strands agent to Bedrock AgentCore, and what broke | **real deployment** | ⬜ |
+| 3 | *Agents for Humans:* bounding an agent loop so it can't burn your AWS credits | nothing — writable now | ⬜ |
+
+⚠️ Re-check the wording before publishing — it changed once already during the event.
 
 ---
 

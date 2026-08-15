@@ -3,17 +3,58 @@
 Evidence buckets for three articles. **Do not write the articles from memory later** —
 that produces a generic, partly-false narrative. Add notes as things happen.
 
-> ⚠️ **Before publishing:** re-check the current Builder Center title and tag requirements
-> against the live competition rules. The wording changed mid-event, so anything recorded
-> here about the publishing requirement may already be stale.
-
 Status: **all three unpublished.**
 
 ---
 
-## Article 1 — Replacing the neighbourhood group-buy organiser with an AI agent
+## ⚠️ The bonus requirement (verified 2026-08-15)
 
-*Concept and problem framing. Least AWS-specific; most likely to be read by non-engineers.*
+Quoted from the official rules and overview:
+
+> "Publish a post on builder.aws.com covering your **build journey and use of AWS** for
+> this hackathon. **Use Agents for Humans in your title.**"
+
+> "You can submit more than one blog post. The Blog Post must be published publicly on
+> builder.aws.com. Should use Agents for Humans in the Title."
+
+Up to **+0.6 total, 0.2 per post, maximum three.** Published publicly on builder.aws.com
+**before the submission deadline**. There is no submission form — judges discover the posts,
+so the title is both the requirement *and* the discovery mechanism.
+
+**Two hard constraints this places on all three articles:**
+
+1. **"Agents for Humans" must literally appear in the title.** No exceptions, no clever
+   variations. A great post without it scores zero.
+2. **Every post must be a build-journey-and-AWS piece.** A pure product essay does not
+   satisfy "covering your build journey and use of AWS", however good it is. The original
+   plan for Articles 1 and 3 was product/philosophy framing with AWS as background — that
+   has been re-anchored below. Keep the ideas; lead with the build.
+
+Re-verify this wording before publishing. The competition changed its blog-post wording
+once already during the event.
+
+### Working titles (all satisfy the constraint)
+
+| # | Title | Anchor |
+| --- | --- | --- |
+| 1 | **Agents for Humans:** what I learned building an autonomous group-buying coordinator with Strands | Journey + why the AI/deterministic split drove the architecture |
+| 2 | **Agents for Humans:** deploying a Strands agent to Bedrock AgentCore, and what broke | Pure AWS build story |
+| 3 | **Agents for Humans:** bounding an agent loop so it can't burn your AWS credits | Strands hooks + cost engineering, with HITL as the second half |
+
+Article 3's reframe is the important one: cost-bounding *is* an AWS build story, it is the
+most transferable thing in the project, and the autonomy/HITL material fits naturally
+inside it ("what the agent may do unattended" and "what it may spend unattended" are the
+same question asked twice).
+
+---
+
+## Article 1 — *Agents for Humans:* what I learned building an autonomous group-buying coordinator with Strands
+
+*Build journey. Opens with the problem, but the body is the decisions: why one agent not a
+swarm, why the model is never allowed to produce a number, what that cost and bought.*
+
+**Qualifies because:** it is explicitly a build-journey post, and the architecture section
+carries Strands, Bedrock, and the tool design.
 
 ### The thesis
 
@@ -55,10 +96,12 @@ unconditionally — partly for privacy, partly because that is genuinely where t
 
 ---
 
-## Article 2 — Building Pool with Strands Agents and Amazon Bedrock AgentCore
+## Article 2 — *Agents for Humans:* deploying a Strands agent to Bedrock AgentCore, and what broke
 
-*The technical article. Currently the weakest of the three: it needs real deployment
-evidence.*
+*The AWS article. Currently the weakest of the three: it is blocked on real deployment
+evidence and cannot be written until something has actually run in the cloud.*
+
+**Qualifies because:** it is nothing but AWS build journey.
 
 ### Material captured
 
@@ -126,9 +169,25 @@ they added)
 
 ---
 
-## Article 3 — When should an autonomous agent ask permission?
+## Article 3 — *Agents for Humans:* bounding an agent loop so it can't burn your AWS credits
 
-*Strongest material. The most generalisable beyond this project.*
+*Strongest material, re-anchored. Lead with the Strands hook system and cost engineering —
+concrete, AWS-specific, and genuinely useful to anyone on free credits. Then widen into the
+HITL question, since "what may it do unattended" and "what may it spend unattended" are the
+same question.*
+
+**Qualifies because:** the first half is Strands hooks, Bedrock invocation bounds, and
+CloudFormation-asserted cost policy — all build journey and AWS.
+
+**Structure with the cost half in front:**
+
+1. The bill you don't see coming: an agent loop with no ceiling
+2. Strands hooks as the enforcement point (`BeforeModelCallEvent`, `BeforeToolCallEvent`)
+3. Cancel vs. raise — and why `cancel_tool` taking a *string* matters
+4. The bug our own guard caught
+5. Turning cost policy into CloudFormation assertions
+6. From "what may it spend" to "what may it do": the autonomy boundary
+7. Smart Join as a pure function, and the re-pricing case nobody plans for
 
 ### The thesis
 

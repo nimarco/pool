@@ -1,0 +1,89 @@
+%% Pool — system architecture
+%% Only services that are actually implemented appear here.
+%% Render: npx -y @mermaid-js/mermaid-cli -i docs/architecture.mmd -o docs/architecture.svg
+flowchart TB
+    subgraph client["Browser"]
+        WEB["Pool web app<br/>React + TypeScript<br/><i>no AWS credentials</i>"]
+    end
+
+    subgraph edge["Delivery"]
+        CF["CloudFront + S3<br/><i>static hosting</i>"]
+        APIGW["API Gateway HTTP API"]
+    end
+
+    subgraph compute["Application layer"]
+        API["Pool API — Lambda<br/>FastAPI + Mangum"]
+        AC["PoolCoordinator on<br/>Bedrock AgentCore Runtime"]
+    end
+
+    subgraph agent["Agent loop — Strands Agents SDK"]
+        LOOP["PoolCoordinator<br/>single agent"]
+        BOUNDS["BoundedRun hook<br/>iterations · tool calls · duplicates · wall clock"]
+        BR["Amazon Bedrock<br/><i>model reasons about which tool to call</i>"]
+    end
+
+    subgraph tools["Typed tools — deterministic"]
+        T1["list_unmet_demand"]
+        T2["evaluate_opportunity"]
+        T3["create_buying_pool"]
+        T4["list_pools_needing_attention"]
+        T5["recover_pool"]
+        T6["record_no_action"]
+    end
+
+    subgraph domain["Deterministic domain — source of truth"]
+        MATCH["matching<br/>compatibility · timing · geography"]
+        ALLOC["allocation<br/>integer-cent money · exact splits"]
+        POLICY["Smart Join policy engine<br/>machine-verifiable"]
+        FSM["pool state machine<br/>validated transitions"]
+    end
+
+    subgraph aws["AWS services"]
+        DDB[("DynamoDB<br/>authoritative state<br/><i>on-demand · TTL</i>")]
+        LOC["Amazon Location<br/>geo-routes matrix"]
+        EB["EventBridge rule<br/><b>disabled by default</b>"]
+        CW["CloudWatch Logs<br/><i>14-day retention</i>"]
+    end
+
+    subgraph out["Outputs"]
+        INBOX["Decision Inbox<br/><i>only what needs a human</i>"]
+        ACT["Activity feed<br/><i>structured audit</i>"]
+        TRACE["Agent trace<br/><i>tools + counters, no reasoning</i>"]
+    end
+
+    WEB --> CF
+    WEB -->|"REST"| APIGW --> API
+    EB -->|"scheduled scan"| API
+    API --> LOOP
+    AC --> LOOP
+
+    LOOP <-->|"reason → tool choice"| BR
+    BOUNDS -.->|"enforces limits,<br/>cancels or terminates"| LOOP
+    LOOP --> T1 & T2 & T3 & T4 & T5 & T6
+
+    T2 --> MATCH & ALLOC & POLICY
+    T3 --> ALLOC & POLICY & FSM
+    T5 --> MATCH & ALLOC & POLICY & FSM
+
+    MATCH --> DDB
+    ALLOC --> DDB
+    FSM --> DDB
+    T2 --> LOC
+    T5 --> LOC
+
+    LOOP --> CW
+    AC --> CW
+
+    T3 --> INBOX
+    FSM --> ACT
+    BOUNDS --> TRACE
+
+    classDef det fill:#e6efe7,stroke:#3f6b4f,color:#1c1a17
+    classDef ai fill:#f8ece3,stroke:#a8562c,color:#1c1a17
+    classDef awsc fill:#e8eef5,stroke:#37506b,color:#1c1a17
+    classDef guard fill:#fdf1ef,stroke:#8f3222,color:#1c1a17
+
+    class MATCH,ALLOC,POLICY,FSM,T1,T2,T3,T4,T5,T6 det
+    class BR,LOOP ai
+    class DDB,LOC,EB,CW,APIGW,CF,API,AC awsc
+    class BOUNDS guard

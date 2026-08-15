@@ -145,3 +145,6 @@ desktop.ini
 *.swo
 *~
 .claude/settings.local.json
+
+# CDK synth output from local verification runs
+cdk.out.test/

@@ -1,0 +1,197 @@
+# Builder Center article notes
+
+Evidence buckets for three articles. **Do not write the articles from memory later** —
+that produces a generic, partly-false narrative. Add notes as things happen.
+
+> ⚠️ **Before publishing:** re-check the current Builder Center title and tag requirements
+> against the live competition rules. The wording changed mid-event, so anything recorded
+> here about the publishing requirement may already be stale.
+
+Status: **all three unpublished.**
+
+---
+
+## Article 1 — Replacing the neighbourhood group-buy organiser with an AI agent
+
+*Concept and problem framing. Least AWS-specific; most likely to be read by non-engineers.*
+
+### The thesis
+
+Group buying is not a software problem that nobody solved. It is a **labour** problem that
+software mostly ignored. Every group-buying tool assumes a human organiser and gives them
+better spreadsheets. The organiser is the bottleneck, and the organiser is unpaid.
+
+### Material captured
+
+- **The economics, concretely.** Retail jasmine rice $1.35/lb. Wholesale $0.69/lb in 25 lb
+  bags with a 150 lb minimum. One household needing 15 lb cannot reach it. Eight households
+  needing 155 lb clear it easily and save 42.3%. The gap between those two facts *is* the
+  entire product.
+- **Why it's agent-shaped, not CRUD-shaped.** The opportunity is latent — nobody says
+  "let's buy rice together", they separately buy rice. Discovering a viable group requires
+  searching a space no one requested. That is the distinguishing property.
+- **The design constraint that follows.** A "create a group and invite your neighbours"
+  flow is a *product failure*, not a feature. If a human has to notice the opportunity
+  first, we built the wrong thing. This single rule shaped the whole UI: there is no
+  create-a-pool button anywhere.
+- **The demand shape that makes it work.** 25 synthetic households, 29 standing
+  declarations. The eight-household rice pool emerges from declarations that were never
+  coordinated.
+- **Quiet by default.** Every notification spends the attention the product exists to
+  conserve. A Pool that pings you six times to assemble one order has reproduced the
+  problem. Measured outcome in the demo: 7 commitments, 2 questions.
+
+### Good Neighbor framing
+
+The track is about helping *groups*, not individuals. Pool's unit of value is a
+neighbourhood: nobody saves anything alone, and the saving scales with how many people
+participate. Community pickup sites (libraries, rec centres, schools) are preferred
+unconditionally — partly for privacy, partly because that is genuinely where this happens.
+
+### Still to capture
+
+- Whether the framing survives contact with anyone who has actually run a buying club
+- A second product domain where the same latent-overlap pattern applies
+
+---
+
+## Article 2 — Building Pool with Strands Agents and Amazon Bedrock AgentCore
+
+*The technical article. Currently the weakest of the three: it needs real deployment
+evidence.*
+
+### Material captured
+
+**Strands specifics worth writing about**
+
+- The tool decorator derives schemas from type hints and docstrings, so the tool surface
+  and its documentation cannot drift apart.
+- `HookProvider` is the right place for safety. `BeforeModelCallEvent` counts iterations,
+  `BeforeToolCallEvent` can *cancel* a tool with an explanatory message the model then sees
+  and can act on. That distinction — cancel gracefully at tool level, raise at run level —
+  is a genuinely useful pattern.
+- `BeforeToolCallEvent.cancel_tool` accepting a *string* is the nicest API detail we found:
+  the model gets told why its call was refused instead of just receiving an error.
+
+**Two integration findings with real teeth**
+
+1. **Strands wraps hook exceptions in `EventLoopException`.** Our `except BoundExceeded`
+   never fired, so a tripped safety bound was recorded as a generic crash. Fix: walk the
+   `__cause__`/`__context__` chain. Lesson: when your safety net raises, verify that the
+   thing catching it actually catches it — otherwise the most important signal in the
+   system is mislabelled as noise.
+2. **Token usage is not on `stop_response.usage`.** It's in
+   `stop_response.message["metadata"]["usage"]`. We found it by probing a live run rather
+   than reading types. Reading usage *per model call* rather than from `AgentResult` means
+   an aborted run still records its cost — and the aborted run is the one you care about.
+
+**The offline planner — the most transferable idea here**
+
+Implementing the Strands `Model` interface with a deterministic planner means the entire
+test suite and the local demo drive the *real* event loop, the *real* tools, and the *real*
+domain logic at zero token cost. It is not a mock of the system; it is a substitute for one
+component. Runs are labelled `model_provider="offline"` so nothing can be misrepresented.
+
+This is the answer to "how do you test an agent without burning money", and it's better
+than mocking the loop because the loop is the part most likely to break.
+
+**Deliberate architectural subtractions** (worth a section — everyone writes about what
+they added)
+
+- No multi-agent swarm: deterministic domains are tools, not agents.
+- No AgentCore Browser or Web Search: synthetic supplier data demonstrates coordination;
+  scraping demonstrates scraping.
+- No route calculator resource: `geo-routes` needs none, so there is one less billable
+  resource to create and forget. Choosing the newer API for *operational* reasons rather
+  than feature reasons is a small but real lesson.
+- No vector DB, no RAG: nothing here is a semantic retrieval problem.
+
+**Cost engineering**
+
+- Bounds as configuration with safe defaults, enforced in the event loop.
+- Route matrices are `origins × destinations` and billed per cell — the cap is checked
+  before the call, and the check is unit tested with a client that throws if invoked.
+- The EventBridge rule ships **disabled**, and `infra/test_stack.py` asserts that against
+  the synthesized template. Turning a cost claim into a test is the only way it stays true.
+- Caching adapter so one agent run cannot re-bill the same route lookup.
+
+### Missing — blocks publication
+
+- [ ] A real Bedrock invocation: latency, token counts, actual cost per run
+- [ ] A real AgentCore Runtime deployment: what `agentcore configure`/`launch` actually did
+- [ ] A real CloudWatch/AgentCore trace screenshot
+- [ ] A real Amazon Location route matrix response vs. the deterministic estimate — how
+      wrong was the great-circle model?
+- [ ] Whether the chosen Bedrock model id is even correct for the account/region
+
+---
+
+## Article 3 — When should an autonomous agent ask permission?
+
+*Strongest material. The most generalisable beyond this project.*
+
+### The thesis
+
+Autonomy is not a slider. It is a **classification problem over actions**, and the answer
+has to be machine-verifiable — because "the model judged it was fine" is not something you
+can put in front of someone's money.
+
+### Material captured
+
+- **The action split.** Autonomous: evaluate demand, compare offers, calculate routes, form
+  a candidate pool, search for a replacement, send status notifications. Consequential:
+  commit money, raise a budget, accept a substitute, offer a private residence as pickup,
+  accept worse terms. Unknown actions default to consequential — an action nobody
+  classified is not evidence that it's safe. (There is a test asserting exactly that.)
+- **Smart Join is a pure function.** Six rules, all numeric or boolean, all evaluated (not
+  short-circuited) so the UI can show *every* failing rule rather than the first. The model
+  reads the verdict; it never produces it.
+- **Stricter-wins conflict resolution.** A household's standing policy and a specific need
+  can disagree; the tighter constraint wins. Simple rule, surprisingly load-bearing.
+- **The best finding of the project: recovery re-pricing.** Adding a replacement changes
+  everyone's share. If that pushes an existing member past their own spend cap, that is
+  "materially worse terms" — a consequential change to a commitment they already made. Pool
+  **asks them** rather than silently updating. This is the case that isn't in anyone's HITL
+  checklist, and it only shows up when you build the recovery path for real.
+- **Quietest sufficient escalation.** Repairing a dropout by asking one household with
+  compatible latent demand beats broadcasting to the whole pool. The measurable claim:
+  during recovery, zero existing members were contacted. There's a test asserting nobody
+  else was re-invited.
+- **Form tight, repair wide.** The formation radius is 2 km; the recovery radius is 8 km.
+  Deliberate asymmetry: keep the initial travel burden low, widen only to repair — and even
+  then every candidate is still bounded by their own travel policy.
+- **Explainability without chain-of-thought.** Run records store tool names, counters,
+  termination reasons, and token usage. They store *no* model reasoning, and tool arguments
+  only as a hash — so the log is safe to publish and still answers "why did this happen?".
+- **When the guard caught us.** A planner bug re-issued a terminal tool forever; the
+  iteration cap stopped it and recorded a `loop_fault`. Two lessons worth writing: the
+  safety net must fail *loudly* (a silent truncation would have looked like a normal empty
+  result), and a system that relies on its safety net every run has a bug, not a design.
+
+### Structure sketch
+
+1. The naive framing: an autonomy slider from 0 to 100
+2. Why that fails: autonomy is per-action, not per-user
+3. Classify actions, default unknown ones to consequential
+4. Make the policy a pure function, not a judgement
+5. The case nobody plans for: when someone *else's* action changes your terms
+6. Escalate as quietly as the situation allows
+7. Explainability without exposing reasoning
+8. What the guard rails caught, including our own bug
+
+---
+
+## Evidence still worth capturing
+
+| Item | For | Status |
+| --- | --- | --- |
+| Screenshot: decision inbox with "why you're being asked" | 1, 3 | ⬜ |
+| Screenshot: activity feed showing the automatic recovery | 1, 3 | ⬜ |
+| Screenshot: agent trace with tool sequence and termination reason | 2, 3 | ⬜ |
+| Screenshot: neighbourhood map showing approximate positions | 1 | ⬜ |
+| Real Bedrock run: latency, tokens, cost | 2 | ⬜ blocked |
+| Real AgentCore deployment output and trace | 2 | ⬜ blocked |
+| Real vs. deterministic routing comparison | 2 | ⬜ blocked |
+| `make demo` terminal transcript | all | ✅ reproducible any time |
+| Test output: 219 passing | 2 | ✅ |
+| Synthesized CloudFormation showing the disabled schedule | 2 | ✅ |

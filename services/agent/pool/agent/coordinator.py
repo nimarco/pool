@@ -1,0 +1,223 @@
+"""PoolCoordinator — the single Strands agent that runs Pool.
+
+One agent, not a swarm. The deterministic domains (pricing, matching, routing, policy)
+are tools, not agents, because they need to be *correct*, not *creative*. The agent's
+contribution is adaptive orchestration: which opportunity to investigate, whether the
+result is worth acting on, when a situation needs a human, and when to stop.
+
+The run is bounded by :class:`~pool.agent.bounds.BoundedRun` and always terminates in a
+recorded state — success, no-action, loop fault, or error. There is no path where it
+simply spins (AGENTS.md §3.1).
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from strands import Agent
+
+from ..adapters.repository import Repository
+from ..adapters.routing import RoutingService, build_routing
+from ..config import Settings, get_settings
+from ..domain.models import ActivityEvent, AgentRun, RunOutcome, iso, new_id, utcnow
+from .bounds import BoundedRun, BoundExceeded, RunTelemetry
+from .tools import ToolContext, build_tools
+
+logger = logging.getLogger(__name__)
+
+
+SYSTEM_PROMPT = """You are Pool's coordinator for one neighbourhood.
+
+Households have told Pool what they routinely buy. Your job is to notice when several \
+of them want the same thing, decide whether a bulk purchase is genuinely worth it, and \
+either form a buying pool or stop cleanly.
+
+How to work:
+- Call tools to learn facts. Never state a price, quantity, saving, distance, or \
+threshold that did not come from a tool result — the tools compute those, you do not.
+- Investigate the most promising opportunity first. Not every product is worth pooling; \
+concluding "nothing worthwhile" and calling record_no_action is a good outcome.
+- Form at most one pool per run. Households should hear from Pool rarely and only when \
+there is a real decision for them.
+- Never assume a household will accept something. The tools apply each household's own \
+Smart Join rules and decide who can be auto-joined and who must be asked.
+- When you are done, stop. Do not repeat a tool call whose inputs have not changed."""
+
+
+class PoolCoordinator:
+    """Builds and runs the bounded Strands agent."""
+
+    def __init__(
+        self,
+        repo: Repository,
+        settings: Settings | None = None,
+        routing: RoutingService | None = None,
+        model: Any | None = None,
+    ) -> None:
+        self.repo = repo
+        self.settings = settings or get_settings()
+        self.routing = routing or build_routing(
+            self.settings.routing_provider,
+            self.settings.aws_region,
+            self.settings.max_route_matrix_cells,
+        )
+        self._model_override = model
+
+    # -- model -------------------------------------------------------------
+
+    def _build_model(self) -> tuple[Any, str, str]:
+        """Return ``(model, model_id, provider)``."""
+        if self._model_override is not None:
+            provider = getattr(self._model_override, "provider_name", "injected")
+            config = {}
+            if hasattr(self._model_override, "get_config"):
+                try:
+                    config = self._model_override.get_config() or {}
+                except Exception:  # noqa: BLE001
+                    config = {}
+            return self._model_override, str(config.get("model_id", provider)), provider
+
+        if self.settings.model_provider == "offline":
+            from .offline_model import DeterministicPlannerModel
+
+            model = DeterministicPlannerModel()
+            return model, "offline-deterministic-planner", "offline"
+
+        if self.settings.model_provider == "bedrock":
+            from strands.models import BedrockModel
+
+            model = BedrockModel(
+                region_name=self.settings.aws_region,
+                model_config={
+                    "model_id": self.settings.bedrock_model_id,
+                    "max_tokens": self.settings.model_max_tokens,
+                },
+            )
+            return model, self.settings.bedrock_model_id, "bedrock"
+
+        raise ValueError(f"unknown model provider: {self.settings.model_provider!r}")
+
+    # -- run ---------------------------------------------------------------
+
+    def run(self, ws: str, trigger: str = "manual", instruction: str | None = None) -> AgentRun:
+        """Execute one bounded coordination run and return its record.
+
+        The same method serves the EventBridge schedule, the demo button, and the
+        tests. There is no separate demo code path (brief §10).
+        """
+        model, model_id, provider = self._build_model()
+        run_id = new_id("run")
+        telemetry = RunTelemetry()
+        bounded = BoundedRun(self.settings.bounds, telemetry)
+
+        ctx = ToolContext(repo=self.repo, ws=ws, routing=self.routing, run_id=run_id)
+        tools = build_tools(ctx)
+
+        record = AgentRun(
+            id=run_id,
+            trigger=trigger,
+            model_id=model_id,
+            model_provider=provider,
+            started_at=iso(utcnow()),
+        )
+
+        prompt = instruction or (
+            "Run a background scan of this neighbourhood. Find the most worthwhile bulk "
+            "buying opportunity among unserved household needs and form a pool if one is "
+            "genuinely worth forming."
+        )
+
+        try:
+            agent = Agent(
+                model=model,
+                tools=tools,
+                system_prompt=SYSTEM_PROMPT,
+                hooks=[bounded],
+                callback_handler=None,  # no console streaming; we record structured events
+            )
+            agent(prompt)
+            record.outcome = ctx.outcome
+            record.termination_reason = telemetry.termination_reason or "completed"
+        except Exception as exc:  # noqa: BLE001 - classified and recorded, never swallowed
+            # Strands wraps an exception raised inside a hook in EventLoopException, so
+            # a bound never arrives as BoundExceeded at this level. Unwrap the chain
+            # before deciding whether this was our safety net or a genuine failure —
+            # misclassifying a fired bound as a crash would hide the thing we most
+            # need to see.
+            bound = _find_bound_exceeded(exc)
+            if bound is not None:
+                logger.warning("run %s hit bound %s: %s", run_id, bound.bound, bound.detail)
+                record.outcome = RunOutcome.LOOP_FAULT
+                record.termination_reason = f"bound:{bound.bound}"
+                record.notes.append(bound.detail)
+            else:
+                logger.exception("run %s failed", run_id)
+                record.outcome = RunOutcome.ERROR
+                record.termination_reason = "error"
+                record.notes.append(f"{type(exc).__name__}: {exc}")
+
+        record.ended_at = iso(utcnow())
+        record.iterations = telemetry.iterations
+        record.tool_calls = telemetry.tool_calls
+        record.input_tokens = telemetry.input_tokens
+        record.output_tokens = telemetry.output_tokens
+        record.hitl_decisions_created = ctx.decisions_created
+        if ctx.no_action_reason:
+            record.notes.append(ctx.no_action_reason)
+
+        self.repo.put_run(ws, record)
+        self.repo.append_activity(
+            ws,
+            ActivityEvent(
+                id=new_id("evt"),
+                kind="agent_run",
+                summary=_run_summary(record, ctx),
+                facts={
+                    "outcome": record.outcome.value,
+                    "trigger": trigger,
+                    "iterations": record.iterations,
+                    "tool_calls": len(record.tool_calls),
+                    "tools_used": [t.name for t in record.tool_calls],
+                    "termination_reason": record.termination_reason,
+                    "model_provider": provider,
+                    "model_id": model_id,
+                    "duration_ms": record.duration_ms,
+                    "input_tokens": record.input_tokens,
+                    "output_tokens": record.output_tokens,
+                },
+                run_id=run_id,
+            ),
+        )
+        return record
+
+
+def _find_bound_exceeded(exc: BaseException) -> BoundExceeded | None:
+    """Walk the exception chain looking for one of our bounds.
+
+    Strands raises ``EventLoopException(original, ...)`` around anything a hook throws,
+    so the bound is reachable via ``__cause__``/``__context__`` rather than directly.
+    Bounded to a fixed depth so a cyclic chain cannot spin here.
+    """
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    for _ in range(12):
+        if current is None or id(current) in seen:
+            return None
+        if isinstance(current, BoundExceeded):
+            return current
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
+    return None
+
+
+def _run_summary(record: AgentRun, ctx: ToolContext) -> str:
+    if record.outcome == RunOutcome.POOL_CREATED:
+        return f"Pool ran a background scan and formed {len(ctx.created_pool_ids)} new buying pool"
+    if record.outcome == RunOutcome.POOL_RECOVERED:
+        return f"Pool repaired {len(ctx.recovered_pool_ids)} buying pool after a dropout"
+    if record.outcome == RunOutcome.LOOP_FAULT:
+        return f"Run stopped by a safety bound ({record.termination_reason})"
+    if record.outcome == RunOutcome.ERROR:
+        return "Run failed with an error"
+    return "Pool ran a background scan and found nothing worth acting on"

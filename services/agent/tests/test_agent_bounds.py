@@ -39,7 +39,7 @@ class BrokenRecordModel(Model):
 
     provider_name = "test-broken-record"
 
-    def __init__(self, name: str = "list_unmet_demand", payload: dict | None = None):
+    def __init__(self, name: str = "list_latent_demand", payload: dict | None = None):
         self.name = name
         self.payload = payload or {}
         self.turns = 0
@@ -81,10 +81,10 @@ class VariedLoopModel(Model):
 
     async def stream(self, messages, tool_specs=None, system_prompt=None, **kw) -> AsyncIterable[dict]:
         self.turns += 1
-        for event in _tool_call("evaluate_opportunity", {
-            "product_id": "prod_rice_jasmine",
-            "pickup_site_id": "site_maple_library",
-            "pickup_in_days": 10 + self.turns,
+        for event in _tool_call("evaluate_pool_economics", {
+            "product_id": "prod_whey_vanilla",
+            "pickup_site_id": "site_union",
+            "include_future_demand": self.turns % 2 == 0,
         }):
             yield event
         yield {"metadata": {"usage": {"inputTokens": 10, "outputTokens": 5, "totalTokens": 15},
@@ -174,7 +174,7 @@ class TestTelemetry:
     def test_tool_calls_are_recorded_with_names(self, world):
         run = coordinator(world, VariedLoopModel(), max_iterations=3).run(WS, trigger="test")
         assert [t.name for t in run.tool_calls]
-        assert all(t.name == "evaluate_opportunity" for t in run.tool_calls)
+        assert all(t.name == "evaluate_pool_economics" for t in run.tool_calls)
 
     def test_no_reasoning_text_is_stored(self, world):
         """The run record is explainability, not chain-of-thought exposure."""

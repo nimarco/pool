@@ -1,10 +1,14 @@
 """The showcase scenario, as executable code.
 
-This drives the *real* path: real agent runs, real tools, real pricing, real policy
-evaluation, real state machine. The only thing the scenario supplies is the situation —
-seeded households, a withdrawal at a chosen moment — which is legitimate scripting of
-inputs. Nothing about the outcome is predetermined; if the arithmetic stopped clearing
-the supplier minimum, this scenario would report failure rather than pretend (AGENTS.md §8).
+This drives the *real* path end to end: real agent runs, real tools, real economics,
+real host ranking, real policy evaluation, real payment provider, real state machine,
+real pickup credentials. The only things the scenario supplies are the situation and
+the human answers — a seeded community, a member volunteering to host, buyers replying
+to their Decision Inbox — which is legitimate scripting of inputs.
+
+Nothing about the outcome is predetermined. If the arithmetic stopped clearing the
+supplier minimum, if the case maths stopped landing on a boundary, or if no host
+qualified, this scenario would report failure rather than pretend (AGENTS.md §8).
 
 Used by ``make demo`` and by the UI's "Run full scenario" action, so the demo a judge
 watches is the same code the tests assert on.
@@ -19,10 +23,24 @@ from ..adapters.repository import Repository
 from ..adapters.routing import RoutingService
 from ..agent.coordinator import PoolCoordinator
 from ..config import Settings
-from ..data.seed import seed
-from ..domain.models import DecisionState, MembershipState, PoolStatus
+from ..data.seed import COMMUNITY_ID, seed
+from ..domain.models import (
+    AllocationState,
+    DecisionKind,
+    DecisionState,
+    HostProfile,
+    ParticipationState,
+    PaymentState,
+    PoolStatus,
+    utcnow,
+)
 from ..domain.money import bps_to_pct_str, format_cents
+from . import communication, fulfillment, hosting
 from . import coordination as coord
+from .context import PoolContext
+
+#: The member who offers to host from inside the pool (§27, second source of hosts).
+VOLUNTEER_HOST = "hh_thibault"
 
 
 @dataclass
@@ -40,11 +58,13 @@ class ScenarioResult:
     ok: bool
     steps: list[Step]
     failure: str = ""
+    pool_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "ok": self.ok,
             "failure": self.failure,
+            "pool_id": self.pool_id,
             "steps": [s.to_dict() for s in self.steps],
         }
 
@@ -57,150 +77,397 @@ def run_showcase(
     routing: RoutingService | None = None,
     reseed: bool = True,
 ) -> ScenarioResult:
-    """Run the full showcase: discover → form → approve → dropout → recover.
+    """Run the full canonical lifecycle and return a structured transcript.
 
-    Returns a structured transcript. ``ok`` is False if any stage did not actually
-    happen — the scenario reports what occurred, it does not assert success.
+    ``ok`` is False if any stage did not actually happen — the scenario reports what
+    occurred, it does not assert success.
     """
     steps: list[Step] = []
+    pool_id = ""
 
     def fail(msg: str) -> ScenarioResult:
-        return ScenarioResult(ok=False, steps=steps, failure=msg)
+        return ScenarioResult(ok=False, steps=steps, failure=msg, pool_id=pool_id)
 
     if reseed:
         counts = seed(repo, ws)
-        steps.append(Step("seed", "Loaded the synthetic neighbourhood", counts))
+        steps.append(Step("seed", "Loaded the synthetic Demo University community", counts))
 
     coordinator = PoolCoordinator(repo, settings=settings, routing=routing)
+    ctx = PoolContext(
+        repo=repo,
+        ws=ws,
+        routing=coordinator.routing,
+        payments=coordinator.payments,
+        purchaser=coordinator.purchaser,
+        sourcing=coordinator.sourcing,
+        now=utcnow(),
+    )
 
-    # 1. Background scan. The agent picks the product and the pickup site itself.
-    run1 = coordinator.run(ws, trigger="demo_background_scan")
+    # 1. Background scan. The agent picks the product and the pickup site itself, and
+    #    decides whether flexible future demand is worth investigating.
+    run1 = coordinator.run(ws, trigger="demo_background_scan", community_id=COMMUNITY_ID)
+    pools = [p for p in repo.list_pools(ws) if p.community_id == COMMUNITY_ID]
+    if not pools:
+        steps.append(Step("background_scan", "Pool found nothing worth forming",
+                          {"outcome": run1.outcome.value,
+                           "tools_called": [t.name for t in run1.tool_calls]}))
+        return fail("the background scan formed no pool")
+    pool = pools[0]
+    pool_id = pool.id
+    product = repo.get_product(ws, pool.product_id)
+    site = repo.get_site(ws, pool.pickup_site_id)
+    members = repo.list_memberships(ws, pool.id)
+
     steps.append(
         Step(
-            "background_scan",
-            "Pool scanned declared needs and looked for overlapping demand",
+            "latent_demand_discovered",
+            f"Nobody created a group. Pool noticed {len(members)} students independently "
+            f"needed {product.name.lower() if product else 'the same product'} and formed "
+            "a candidate pool",
             {
                 "outcome": run1.outcome.value,
                 "tools_called": [t.name for t in run1.tool_calls],
                 "iterations": run1.iterations,
                 "model_provider": run1.model_provider,
                 "run_id": run1.id,
-            },
-        )
-    )
-
-    pools = [p for p in repo.list_pools(ws)]
-    if not pools:
-        return fail("the background scan formed no pool")
-    pool = pools[0]
-
-    product = repo.get_product(ws, pool.product_id)
-    site = repo.get_site(ws, pool.pickup_site_id)
-    members = repo.list_memberships(ws, pool.id)
-    auto = [m for m in members if m.state == MembershipState.COMMITTED]
-    asked = [m for m in members if m.state == MembershipState.INVITED]
-    steps.append(
-        Step(
-            "pool_formed",
-            f"Formed a {product.name if product else ''} pool at "
-            f"{site.name if site else 'a pickup site'}",
-            {
                 "pool_id": pool.id,
-                "product": product.name if product else pool.product_id,
+                "members": len(members),
+                "provisional_units": coord.provisional_units(ctx, pool.id),
+                "threshold_units": pool.threshold_units,
                 "pickup_site": site.name if site else "",
-                "households": len(members),
-                "auto_joined_via_smart_join": len(auto),
-                "approval_requested": len(asked),
-                "committed_units": coord.committed_units(repo, ws, pool.id),
-                "threshold_units": pool.threshold_units,
-                "status": pool.status.value,
-                "group_savings": format_cents(sum(m.savings_cents for m in members)),
-                "savings_pct": bps_to_pct_str(members[0].savings_bps) if members else "0%",
-            },
-        )
-    )
-
-    # 2. The humans who had to be asked answer. This is the Decision Inbox.
-    answered = 0
-    for d in repo.list_decisions(ws):
-        if d.state == DecisionState.PENDING and d.pool_id == pool.id:
-            coord.respond_to_decision(repo=repo, ws=ws, decision_id=d.id, approve=True)
-            answered += 1
-    pool = repo.get_pool(ws, pool.id) or pool
-    steps.append(
-        Step(
-            "approvals",
-            f"{answered} household(s) approved from the Decision Inbox",
-            {
-                "approved": answered,
-                "committed_units": coord.committed_units(repo, ws, pool.id),
-                "threshold_units": pool.threshold_units,
                 "status": pool.status.value,
             },
         )
     )
-    if pool.status != PoolStatus.THRESHOLD_MET:
-        return fail(f"pool did not reach its threshold (status={pool.status.value})")
 
-    # 3. Someone drops out — the moment the whole product exists for.
-    largest = max(
-        (m for m in repo.list_memberships(ws, pool.id) if m.state == MembershipState.COMMITTED),
-        key=lambda m: (m.allocated_units, m.household_id),
+    # 2. A pool member offers to host — the second source of host candidates (§27).
+    #    They are added to the candidate set, not handed the job (§28).
+    hosting.volunteer_to_host(
+        ctx=ctx,
+        pool_id=pool.id,
+        household_id=VOLUNTEER_HOST,
+        profile=HostProfile(
+            household_id=VOLUNTEER_HOST,
+            community_id=COMMUNITY_ID,
+            has_vehicle=True,
+            vehicle_capacity_units=60,
+            max_orders=40,
+            max_weight_kg=80,
+            max_supplier_distance_km=16.0,
+            minimum_compensation_cents=3000,
+            standing=False,
+        ),
     )
-    household = repo.get_household(ws, largest.household_id)
-    dropout = coord.withdraw_household(
-        repo=repo, ws=ws, pool_id=pool.id, household_id=largest.household_id
-    )
+    evaluation = hosting.evaluate_host_candidates(ctx=ctx, pool_id=pool.id)
     steps.append(
         Step(
-            "dropout",
-            f"{household.display_name if household else largest.household_id} withdrew",
+            "host_candidates_evaluated",
+            "Standing hosts and one pool member who volunteered were evaluated against "
+            "the actual job — capacity, vehicle, distance, availability, and their own "
+            "minimum pay",
             {
-                "released_units": dropout["released_units"],
-                "committed_units": dropout["committed_units"],
-                "threshold_units": dropout["threshold_units"],
-                "below_threshold": dropout["below_threshold"],
-                "status": dropout["pool_status"],
+                "candidates": evaluation.candidates,
+                "eligible_count": evaluation.eligible_count,
+                "volunteer": VOLUNTEER_HOST,
             },
         )
     )
-    if not dropout["below_threshold"]:
-        return fail("the withdrawal did not actually break the threshold")
+    if evaluation.eligible_count == 0:
+        return fail("no host candidate was eligible for this job")
 
-    # 4. Recovery — a second real agent run, not a scripted branch.
+    # 3. Pool offers the job to the best-ranked candidate, and they accept.
+    offer = hosting.offer_to_next_host(ctx=ctx, pool_id=pool.id)
+    if not offer.offered_household_id:
+        return fail(f"no host was offered the job: {offer.reason}")
+    accept = hosting.respond_to_host_offer(
+        ctx=ctx, pool_id=pool.id, household_id=offer.offered_household_id, accept=True
+    )
+    assignment = repo.get_host_assignment(ws, pool.id)
+    steps.append(
+        Step(
+            "host_accepted",
+            "The best-ranked host accepted. Their pay is now a known input to every "
+            "buyer's price",
+            {
+                "host_household_id": offer.offered_household_id,
+                "reward_total": format_cents(accept.get("reward_total_cents", 0)),
+                "reward_breakdown": assignment.reward_breakdown if assignment else {},
+                "handled_orders": assignment.handled_orders if assignment else 0,
+                "supplier_distance_km": round(assignment.supplier_distance_km, 1)
+                if assignment
+                else 0,
+                "status": accept.get("pool_status", ""),
+            },
+        )
+    )
+
+    # 4. Quote refresh + exact landed economics + final offer. Smart Join authorises
+    #    who it may; everyone else lands in the Decision Inbox.
     run2 = coordinator.run(
         ws,
-        trigger="demo_dropout_recovery",
+        trigger="demo_final_offer",
+        community_id=COMMUNITY_ID,
         instruction=(
-            "A participant withdrew from a buying pool. Recover any pool that has "
-            "fallen below its supplier threshold, disturbing as few people as possible."
+            "A host has accepted a pool. Advance every pool that is blocked: refresh "
+            "the supplier quote, issue exact final offers, and lock anything that is "
+            "fully funded and viable."
         ),
     )
     pool = repo.get_pool(ws, pool.id) or pool
-    recovered_units = coord.committed_units(repo, ws, pool.id)
-    new_members = [
+    economics = pool.final_economics
+    if not economics:
+        return fail("no final offer was issued")
+
+    pending = [
+        d for d in repo.list_decisions(ws)
+        if d.pool_id == pool.id
+        and d.state == DecisionState.PENDING
+        and d.kind == DecisionKind.APPROVE_FINAL_OFFER
+    ]
+    authorised = [
         m for m in repo.list_memberships(ws, pool.id)
-        if m.household_id not in {x.household_id for x in members}
+        if m.state == ParticipationState.AUTHORIZED
+    ]
+    failed_auth = [
+        m for m in repo.list_memberships(ws, pool.id)
+        if m.state == ParticipationState.AUTHORIZATION_FAILED
     ]
     steps.append(
         Step(
-            "recovery",
-            "Pool searched the wider neighbourhood and repaired the group",
+            "final_offer",
+            "Supplier quote re-verified, then the complete landed price computed: "
+            "merchandise + host pay + processing + Pool's fee. Nothing is hidden",
             {
-                "outcome": run2.outcome.value,
-                "tools_called": [t.name for t in run2.tool_calls],
                 "run_id": run2.id,
-                "replacements": [m.household_id for m in new_members],
-                "committed_units": recovered_units,
-                "threshold_units": pool.threshold_units,
-                "status": pool.status.value,
-                "existing_members_asked_again": 0,
+                "tools_called": [t.name for t in run2.tool_calls],
+                "merchandise": format_cents(economics["merchandise_cents"]),
+                "host_compensation": format_cents(economics["host_compensation_cents"]),
+                "payment_processing": format_cents(economics["payment_processing_cents"]),
+                "pool_fee": format_cents(economics["platform_fee_cents"]),
+                "all_in": format_cents(economics["all_in_cents"]),
+                "retail_baseline": format_cents(economics["retail_baseline_cents"]),
+                "net_savings": format_cents(economics["net_savings_cents"]),
+                "net_savings_pct": bps_to_pct_str(economics["net_savings_bps"]),
+                "authorised_by_smart_join": len(authorised),
+                "awaiting_human_decision": len(pending),
+                "authorisation_failures": len(failed_auth),
+                "quote_verified_at": pool.quote_verified_at,
             },
         )
     )
 
-    if pool.status != PoolStatus.THRESHOLD_MET:
-        return fail(f"pool was not recovered (status={pool.status.value})")
+    # 5. A payment failed. This is not narration — the simulated provider genuinely
+    #    declined a saved method, and those units stopped counting as funded. The
+    #    numbers below are captured here, before anything repairs them, so the
+    #    transcript reads in the order events actually happened.
+    if failed_auth:
+        steps.append(
+            Step(
+                "payment_failure",
+                "One buyer's card was declined, so their units stopped counting toward "
+                "the funded order and the pool fell short",
+                {
+                    "declined": [m.household_id for m in failed_auth],
+                    "units_lost": sum(m.allocated_units for m in failed_auth),
+                    "threshold_units": pool.threshold_units,
+                    "provider": ctx.payments.name,
+                },
+            )
+        )
 
-    steps.append(Step("impact", "Impact computed from stored state", coord.impact_metrics(repo, ws)))
-    return ScenarioResult(ok=True, steps=steps)
+    # 6. The humans who had to be asked answer. This is the Decision Inbox.
+    answered = 0
+    for d in pending:
+        coord.respond_to_decision(ctx=ctx, decision_id=d.id, approve=True)
+        answered += 1
+    steps.append(
+        Step(
+            "decision_inbox",
+            f"{answered} buyer(s) approved their exact final price from the Decision Inbox",
+            {
+                "approved": answered,
+                "funded_units": coord.funded_units(ctx, pool.id),
+                "threshold_units": pool.threshold_units,
+            },
+        )
+    )
+
+    # 7. Recovery — real agent runs, not a scripted branch. Which run repairs the gap
+    #    depends on when the authorisation failed, so the transcript reports what the
+    #    agent actually did rather than asserting it happened on a particular pass.
+    funded_before = coord.funded_units(ctx, pool.id)
+    run3 = coordinator.run(
+        ws,
+        trigger="demo_recovery",
+        community_id=COMMUNITY_ID,
+        instruction=(
+            "A buyer authorisation failed and a pool is short of funded demand. Recover "
+            "any pool below its threshold, disturbing as few people as possible, then "
+            "lock anything that has become viable."
+        ),
+    )
+    pool = repo.get_pool(ws, pool.id) or pool
+    recovery_events = [
+        e for e in repo.list_activity(ws, limit=500) if e.kind == "pool_recovered"
+    ]
+    replacements = (
+        int(recovery_events[0].facts.get("replacements_authorised", 0))
+        if recovery_events
+        else 0
+    )
+    steps.append(
+        Step(
+            "recovery",
+            "Pool searched the wider community for compatible demand and restored the "
+            "order without disturbing the buyers who were already committed",
+            {
+                "recovered": bool(recovery_events),
+                "replacements_authorised": replacements,
+                "tools_called": [t.name for t in run2.tool_calls + run3.tool_calls],
+                "funded_units_before_this_run": funded_before,
+                "funded_units_now": coord.funded_units(ctx, pool.id),
+                "threshold_units": pool.threshold_units,
+                "status": pool.status.value,
+            },
+        )
+    )
+
+    # 8. Lock. Runs the central viability engine against stored facts, then captures.
+    if pool.status not in {PoolStatus.LOCKED, PoolStatus.PURCHASE_READY,
+                           PoolStatus.PURCHASED, PoolStatus.DISTRIBUTING,
+                           PoolStatus.COMPLETED}:
+        lock = coord.lock_pool(ctx=ctx, pool_id=pool.id)
+        if not lock.get("locked"):
+            steps.append(Step("lock_blocked", "Pool did not lock", lock))
+            return fail(f"pool did not lock: {lock.get('reason', '')}")
+        pool = repo.get_pool(ws, pool.id) or pool
+
+    captured = [
+        p for p in repo.list_payments(ws, pool.id) if p.state == PaymentState.CAPTURED
+    ]
+    steps.append(
+        Step(
+            "locked_and_captured",
+            "Every viability condition passed — buyer, supplier, host, timing, quote "
+            "freshness, package allocation, pickup, and funding — so the pool locked "
+            "and payments captured",
+            {
+                "status": pool.status.value,
+                "captured_payments": len(captured),
+                "captured_total": format_cents(sum(p.amount_cents for p in captured)),
+                "provider": ctx.payments.name,
+                "provider_mode": ctx.payments.mode,
+            },
+        )
+    )
+
+    # 9. Purchase. Clearly simulated, and labelled as such everywhere it appears.
+    purchase = fulfillment.execute_purchase(ctx=ctx, pool_id=pool.id)
+    if not purchase.get("purchased"):
+        return fail(f"purchase did not execute: {purchase.get('reason', '')}")
+    record = repo.get_purchase_for_pool(ws, pool.id)
+    steps.append(
+        Step(
+            "purchase",
+            "The bulk order was placed against the captured funds — SIMULATED in this "
+            "build; the host never fronts the money",
+            {
+                "simulated": purchase.get("simulated"),
+                "supplier_reference": purchase.get("supplier_reference"),
+                "units": purchase.get("units"),
+                "cases": purchase.get("cases"),
+                "total": format_cents(record.total_cents) if record else "",
+            },
+        )
+    )
+
+    # 10. Distribution opens; the host gets a real fulfilment job.
+    fulfillment.open_distribution(ctx=ctx, pool_id=pool.id)
+    communication.announce_status(ctx=ctx, pool_id=pool.id, status=PoolStatus.DISTRIBUTING)
+    checklist = fulfillment.host_checklist(ctx=ctx, pool_id=pool.id)
+    steps.append(
+        Step(
+            "distribution_open",
+            "The host sees a fulfilment job with a live checklist, and every buyer gets "
+            "a one-time pickup credential",
+            {
+                "orders": checklist["total"],
+                "units": checklist["units_total"],
+                "window": f"{checklist['distribution_starts_at']} → "
+                          f"{checklist['distribution_ends_at']}",
+                "host_earnings": checklist["earnings"].get("total_display", ""),
+            },
+        )
+    )
+
+    # 11. Pickup. Each buyer's one-time credential is issued and redeemed.
+    redeemed = 0
+    rejected_reasons: list[str] = []
+    allocations = repo.list_allocations(ws, pool.id)
+    for index, allocation in enumerate(allocations):
+        credential = fulfillment.issue_pickup_credential(
+            ctx=ctx, pool_id=pool.id, household_id=allocation.household_id
+        )
+        result = fulfillment.redeem_pickup(
+            ctx=ctx, pool_id=pool.id, presented=credential.token
+        )
+        if result.ok:
+            redeemed += 1
+        # Prove the single-use guarantee by actually re-scanning — but only once.
+        # Replaying all ten would bury the rest of the activity feed under rejections,
+        # and one genuine rejection demonstrates the property just as well. Every
+        # credential is covered by the test suite.
+        if index == 0:
+            replay = fulfillment.redeem_pickup(
+                ctx=ctx, pool_id=pool.id, presented=credential.token
+            )
+            if not replay.ok:
+                rejected_reasons.append(replay.reason)
+
+    pool = repo.get_pool(ws, pool.id) or pool
+    steps.append(
+        Step(
+            "pickup",
+            f"{redeemed} handoffs confirmed by one-time QR, and re-scanning a used "
+            "credential was rejected",
+            {
+                "confirmed": redeemed,
+                "expected": len(allocations),
+                "replay_attempts_rejected": len(rejected_reasons),
+                "replay_rejection_reason": rejected_reasons[0] if rejected_reasons else "",
+                "status": pool.status.value,
+            },
+        )
+    )
+
+    if pool.status != PoolStatus.COMPLETED:
+        return fail(f"pool did not complete (status={pool.status.value})")
+
+    picked_up = sum(
+        1 for a in repo.list_allocations(ws, pool.id) if a.state == AllocationState.PICKED_UP
+    )
+    metrics = coord.impact_metrics(ctx)
+    steps.append(
+        Step(
+            "impact",
+            "Impact computed from stored records — every figure traces to a row",
+            {
+                # Money is formatted here because the transcript is read by people. The
+                # underlying metrics payload keeps exact cents; this is presentation only.
+                "buying_alone": format_cents(metrics["estimated_retail_spend_cents"]),
+                "all_in_pool_cost": format_cents(metrics["pool_spend_cents"]),
+                "collective_saving": format_cents(metrics["collective_savings_cents"]),
+                "average_saving_each": format_cents(metrics["average_buyer_savings_cents"]),
+                "host_earnings": format_cents(metrics["host_earnings_cents"]),
+                "pool_fee": format_cents(metrics["platform_fee_cents"]),
+                "members_participating": metrics["members_participating"],
+                "pickups_confirmed": f"{picked_up}/{metrics['pickups_expected']}",
+                "actions_taken_automatically": metrics["coordination_actions_automated"],
+                "humans_asked": metrics["human_decisions_requested"],
+                "committed_without_asking": metrics["commitments_without_asking"],
+                "pools_repaired": metrics["pools_recovered"],
+                "is_demo_data": metrics["is_demo_data"],
+            },
+        )
+    )
+    return ScenarioResult(ok=True, steps=steps, pool_id=pool.id)

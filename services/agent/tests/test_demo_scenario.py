@@ -1,143 +1,236 @@
-"""End-to-end proof of the showcase.
+"""The flagship end-to-end scenario, run for real and asserted on.
 
-One command has to demonstrate that the central claim is real: Pool discovers latent
-overlap, forms a group, asks only where it must, and repairs itself after a dropout.
-If any of that stops being true, this test fails rather than the demo quietly lying.
+This is the single most important test in the repository: it is the same code path a
+judge watches, so if the demo would be dishonest, this fails.
+
+It runs entirely offline and free — deterministic planner, simulated payments,
+simulated purchase, deterministic routing. No AWS call, no token spend (AGENTS.md §3.6).
 """
 
 from __future__ import annotations
 
 from pool.adapters.repository import InMemoryRepository
 from pool.domain.models import (
+    AllocationState,
     AutonomyPath,
-    MembershipState,
+    ParticipationState,
+    PaymentState,
     PoolStatus,
-    RunOutcome,
 )
-from pool.services import coordination as coord
 from pool.services.demo import run_showcase
-
-WS = "demo"
-
-
-def steps_by_name(result) -> dict:
-    return {s.name: s for s in result.steps}
+from tests.conftest import WS
 
 
-class TestShowcase:
-    def test_the_whole_scenario_succeeds(self, repo: InMemoryRepository):
-        result = run_showcase(repo, WS)
-        assert result.ok, result.failure
+def _run(repo: InMemoryRepository):
+    return run_showcase(repo, WS)
 
-    def test_agent_discovered_the_opportunity_itself(self, repo):
-        """Nobody told the agent which product to look at."""
-        s = steps_by_name(run_showcase(repo, WS))["background_scan"]
-        assert s.facts["outcome"] == RunOutcome.POOL_CREATED.value
-        assert s.facts["tools_called"][0] == "list_unmet_demand"
-        assert "evaluate_opportunity" in s.facts["tools_called"]
-        assert "create_buying_pool" in s.facts["tools_called"]
 
-    def test_run_is_bounded(self, repo):
-        s = steps_by_name(run_showcase(repo, WS))["background_scan"]
-        assert 0 < s.facts["iterations"] <= 8
+def _step(result, name: str) -> dict:
+    return next(s.facts for s in result.steps if s.name == name)
 
-    def test_a_real_group_formed_with_meaningful_savings(self, repo):
-        s = steps_by_name(run_showcase(repo, WS))["pool_formed"]
-        assert s.facts["households"] >= 8
-        assert s.facts["committed_units"] > 0
-        # The savings figure is whatever the arithmetic produced; assert only that it
-        # is a genuinely worthwhile deal rather than pinning a marketing number.
-        pct = float(s.facts["savings_pct"].rstrip("%"))
-        assert pct >= 25.0
 
-    def test_both_autonomy_paths_are_exercised(self, repo):
-        """Smart Join households join silently; Ask Me households are asked."""
-        s = steps_by_name(run_showcase(repo, WS))["pool_formed"]
-        assert s.facts["auto_joined_via_smart_join"] > 0
-        assert s.facts["approval_requested"] > 0
+def test_the_whole_lifecycle_completes(repo):
+    result = _run(repo)
+    assert result.ok, result.failure
+    names = [s.name for s in result.steps]
+    assert names == [
+        "seed",
+        "latent_demand_discovered",
+        "host_candidates_evaluated",
+        "host_accepted",
+        "final_offer",
+        "payment_failure",
+        "decision_inbox",
+        "recovery",
+        "locked_and_captured",
+        "purchase",
+        "distribution_open",
+        "pickup",
+        "impact",
+    ]
 
-    def test_threshold_reached_only_after_human_approvals(self, repo):
-        result = run_showcase(repo, WS)
-        formed = steps_by_name(result)["pool_formed"]
-        approvals = steps_by_name(result)["approvals"]
-        assert formed.facts["committed_units"] < formed.facts["threshold_units"]
-        assert approvals.facts["committed_units"] >= approvals.facts["threshold_units"]
-        assert approvals.facts["status"] == PoolStatus.THRESHOLD_MET.value
 
-    def test_dropout_genuinely_breaks_the_pool(self, repo):
-        s = steps_by_name(run_showcase(repo, WS))["dropout"]
-        assert s.facts["below_threshold"] is True
-        assert s.facts["committed_units"] < s.facts["threshold_units"]
-        assert s.facts["status"] == PoolStatus.RECOVERING.value
+def test_nobody_created_the_group(repo):
+    """The core product claim: the agent discovered the pool from standing needs."""
+    result = _run(repo)
+    facts = _step(result, "latent_demand_discovered")
+    assert facts["outcome"] == "pool_created"
+    assert "list_latent_demand" in facts["tools_called"]
+    assert facts["members"] >= 5
+    assert facts["provisional_units"] >= facts["threshold_units"]
 
-    def test_recovery_is_performed_by_a_real_agent_run(self, repo):
-        s = steps_by_name(run_showcase(repo, WS))["recovery"]
-        assert s.facts["outcome"] == RunOutcome.POOL_RECOVERED.value
-        assert s.facts["tools_called"] == ["list_pools_needing_attention", "recover_pool"]
 
-    def test_recovery_restores_the_threshold(self, repo):
-        s = steps_by_name(run_showcase(repo, WS))["recovery"]
-        assert s.facts["committed_units"] >= s.facts["threshold_units"]
-        assert s.facts["status"] == PoolStatus.THRESHOLD_MET.value
-        assert s.facts["replacements"], "a replacement household should have been found"
+def test_the_agent_loop_stayed_bounded(repo):
+    result = _run(repo)
+    facts = _step(result, "latent_demand_discovered")
+    assert facts["iterations"] <= 8
+    assert facts["model_provider"] == "offline"
 
-    def test_recovery_does_not_disturb_existing_members(self, repo):
-        """The headline claim is 'no action required' for everyone else."""
-        result = run_showcase(repo, WS)
-        pool = repo.list_pools(WS)[0]
-        replacements = set(steps_by_name(result)["recovery"].facts["replacements"])
-        for m in repo.list_memberships(WS, pool.id):
-            if m.household_id in replacements:
-                continue
-            assert m.state != MembershipState.INVITED, (
-                f"{m.household_id} was re-asked during recovery"
-            )
 
-    def test_replacement_joined_under_its_own_smart_join_policy(self, repo):
-        result = run_showcase(repo, WS)
-        pool = repo.list_pools(WS)[0]
-        for hid in steps_by_name(result)["recovery"].facts["replacements"]:
-            m = repo.get_membership(WS, pool.id, hid)
-            assert m.state == MembershipState.COMMITTED
-            assert m.path == AutonomyPath.SMART_JOIN
+def test_hosts_were_ranked_from_both_sources(repo):
+    """Standing hosts and an in-pool volunteer are both considered (§27)."""
+    result = _run(repo)
+    facts = _step(result, "host_candidates_evaluated")
+    assert facts["eligible_count"] >= 1
+    sources = {c["household_id"] for c in facts["candidates"]}
+    assert facts["volunteer"] in sources
+    assert len(sources) > 1
+    # At least one candidate is refused for a stated factual reason, not a vibe.
+    ineligible = [c for c in facts["candidates"] if not c["eligible"]]
+    assert ineligible and all(c["ineligible_reasons"] for c in ineligible)
 
-    def test_impact_metrics_trace_to_stored_state(self, repo):
-        result = run_showcase(repo, WS)
-        reported = steps_by_name(result)["impact"].facts
-        recomputed = coord.impact_metrics(repo, WS)
-        assert reported["collective_savings_cents"] == recomputed["collective_savings_cents"]
-        assert reported["pools_recovered"] == 1
-        assert reported["commitments_without_asking"] > 0
-        assert reported["is_demo_data"] is True
 
-    def test_activity_feed_tells_the_story(self, repo):
-        run_showcase(repo, WS)
-        kinds = [e.kind for e in repo.list_activity(WS, limit=100)]
-        for expected in ("pool_created", "threshold_met", "participant_withdrew", "pool_recovered"):
-            assert expected in kinds, f"missing activity event: {expected}"
+def test_the_selected_host_is_paid_a_broken_out_reward(repo):
+    result = _run(repo)
+    facts = _step(result, "host_accepted")
+    assert facts["host_household_id"]
+    assert facts["handled_orders"] > 0
+    assert sum(facts["reward_breakdown"].values()) > 0
+    assert facts["reward_breakdown"]["per_order"] > 0
 
-    def test_no_model_tokens_were_spent_offline(self, repo):
-        """The whole scenario must be runnable for free, or it will not get run."""
-        run_showcase(repo, WS)
-        for run in repo.list_runs(WS):
-            assert run.model_provider == "offline"
-            assert (run.input_tokens or 0) == 0
-            assert (run.output_tokens or 0) == 0
 
-    def test_scenario_is_repeatable(self, repo):
-        """A judge must be able to reset and re-run and see the same thing."""
-        first = run_showcase(repo, WS)
-        second = run_showcase(repo, WS)  # reseeds
-        assert first.ok and second.ok
-        f = steps_by_name(first)["pool_formed"].facts
-        s = steps_by_name(second)["pool_formed"].facts
-        assert f["households"] == s["households"]
-        assert f["savings_pct"] == s["savings_pct"]
-        assert f["threshold_units"] == s["threshold_units"]
+def test_the_final_price_shows_every_cost(repo):
+    """No hidden fees: the four components and the all-in total are all displayed."""
+    result = _run(repo)
+    facts = _step(result, "final_offer")
+    for key in (
+        "merchandise", "host_compensation", "payment_processing", "pool_fee", "all_in"
+    ):
+        assert facts[key].startswith("$")
+    assert facts["quote_verified_at"]
+    assert facts["authorised_by_smart_join"] > 0
+    assert facts["awaiting_human_decision"] > 0
 
-    def test_isolated_workspaces_do_not_interfere(self, repo):
-        a = run_showcase(repo, "judge_a")
-        b = run_showcase(repo, "judge_b")
-        assert a.ok and b.ok
-        assert len(repo.list_pools("judge_a")) == 1
-        assert len(repo.list_pools("judge_b")) == 1
+
+def test_savings_are_real_and_net_of_everything(repo):
+    result = _run(repo)
+    facts = _step(result, "final_offer")
+    all_in = float(facts["all_in"].lstrip("$"))
+    retail = float(facts["retail_baseline"].lstrip("$"))
+    savings = float(facts["net_savings"].lstrip("$"))
+    assert all_in < retail
+    assert round(retail - all_in, 2) == round(savings, 2)
+
+
+def test_a_payment_genuinely_failed_and_was_recovered(repo):
+    """The recovery branch is executed, not narrated (AGENTS.md §8)."""
+    result = _run(repo)
+    failure = _step(result, "payment_failure")
+    recovery = _step(result, "recovery")
+    assert failure["declined"]
+    assert failure["units_lost"] > 0
+    assert recovery["recovered"] is True
+    assert recovery["replacements_authorised"] > 0
+    assert "recover_pool" in recovery["tools_called"]
+    assert recovery["funded_units_now"] >= recovery["threshold_units"]
+
+
+def test_recovery_did_not_over_recruit(repo):
+    """Filling a funding hole must not create speculative stock (§48)."""
+    result = _run(repo)
+    recovery = _step(result, "recovery")
+    assert recovery["funded_units_now"] == recovery["threshold_units"]
+
+
+def test_the_pool_locked_only_after_every_condition_passed(repo):
+    result = _run(repo)
+    facts = _step(result, "locked_and_captured")
+    assert facts["captured_payments"] > 0
+    assert facts["provider_mode"] in {"simulated", "test"}
+
+
+def test_the_purchase_is_clearly_simulated(repo):
+    result = _run(repo)
+    facts = _step(result, "purchase")
+    assert facts["simulated"] is True
+    assert facts["supplier_reference"].startswith("SIMULATED-")
+    assert facts["cases"] * 12 == facts["units"]  # whole cases, nothing left over
+
+
+def test_every_handoff_was_proved_and_no_credential_worked_twice(repo):
+    result = _run(repo)
+    facts = _step(result, "pickup")
+    assert facts["confirmed"] == facts["expected"]
+    # The scenario re-scans one credential to demonstrate the property; the exhaustive
+    # single-use coverage lives in test_fulfillment.
+    assert facts["replay_attempts_rejected"] == 1
+    assert "already been used" in facts["replay_rejection_reason"]
+    assert facts["status"] == "completed"
+
+
+def test_impact_is_computed_from_records(repo):
+    result = _run(repo)
+    facts = _step(result, "impact")
+    assert facts["is_demo_data"] is True
+    assert facts["collective_saving"].startswith("$")
+    assert float(facts["collective_saving"].lstrip("$")) > 0
+    assert float(facts["host_earnings"].lstrip("$")) > 0
+    confirmed, _, expected = facts["pickups_confirmed"].partition("/")
+    assert confirmed == expected
+    assert facts["committed_without_asking"] > 0
+
+
+# ------------------------------------------------------------------- stored state
+
+
+def test_the_stored_state_matches_the_transcript(repo):
+    """A transcript that disagreed with the database would be the worst failure here."""
+    result = _run(repo)
+    pool = repo.get_pool(WS, result.pool_id)
+    assert pool.status == PoolStatus.COMPLETED
+
+    members = repo.list_memberships(WS, pool.id)
+    locked = [m for m in members if m.state == ParticipationState.LOCKED]
+    assert locked
+    assert all(m.final_cost_cents > 0 for m in locked)
+
+    payments = repo.list_payments(WS, pool.id)
+    assert all(
+        p.state in {PaymentState.CAPTURED, PaymentState.AUTHORIZATION_FAILED}
+        for p in payments
+    )
+    captured = [p for p in payments if p.state == PaymentState.CAPTURED]
+    assert sum(p.amount_cents for p in captured) == pool.final_economics["all_in_cents"]
+
+    allocations = repo.list_allocations(WS, pool.id)
+    assert allocations
+    assert all(a.state == AllocationState.PICKED_UP for a in allocations)
+
+    purchase = repo.get_purchase_for_pool(WS, pool.id)
+    assert purchase.simulated is True
+    assert purchase.units_purchased == sum(m.allocated_units for m in locked)
+
+
+def test_the_scenario_is_reproducible(repo):
+    """Two runs of the same seed produce the same shape — no hidden randomness."""
+    first = _run(repo)
+    second = _run(InMemoryRepository())
+    assert first.ok and second.ok
+    assert [s.name for s in first.steps] == [s.name for s in second.steps]
+    assert _step(first, "final_offer")["all_in"] == _step(second, "final_offer")["all_in"]
+    assert (
+        _step(first, "impact")["collective_saving"]
+        == _step(second, "impact")["collective_saving"]
+    )
+
+
+def test_smart_join_and_the_inbox_are_both_exercised(repo):
+    result = _run(repo)
+    pool = repo.get_pool(WS, result.pool_id)
+    paths = {m.path for m in repo.list_memberships(WS, pool.id) if m.counts_as_funded}
+    assert AutonomyPath.SMART_JOIN in paths
+    assert AutonomyPath.HUMAN_APPROVED in paths
+
+
+def test_the_activity_feed_tells_the_story_without_reasoning_text(repo):
+    result = _run(repo)
+    kinds = [e.kind for e in repo.list_activity(WS, limit=200)]
+    for expected in (
+        "pool_created", "host_offered", "host_accepted", "final_offer_issued",
+        "payment_failed", "pool_recovered", "pool_locked", "payment_captured",
+        "purchase_executed", "pickup_completed", "pool_completed",
+    ):
+        assert expected in kinds, f"missing activity event: {expected}"
+    blob = str([e.to_dict() for e in repo.list_activity(WS, limit=200)])
+    assert "@demo.invalid" not in blob
+    assert result.ok

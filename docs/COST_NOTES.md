@@ -41,7 +41,7 @@ One coordination run at defaults:
 | Location `geo-routes` | ≤ 1 matrix call, ≤ 100 cells | Cached per run so repeated tool calls cannot re-bill |
 | CloudWatch | a few KB | 14-day retention |
 
-The demo scenario is two runs. In offline mode both cost **zero**.
+The demo scenario is three runs. In offline mode all three cost **zero**.
 
 ## Infrastructure choices, and why
 
@@ -51,7 +51,7 @@ The demo scenario is two runs. In offline mode both cost **zero**.
 | DynamoDB **TTL** on demo workspaces | Judge workspaces expire automatically after 24 h |
 | **No** point-in-time recovery | Synthetic data; PITR is storage cost for nothing worth recovering |
 | CloudWatch retention **14 days** | Explicit log group — the implicit Lambda one never expires *and survives `cdk destroy`* |
-| EventBridge rule **disabled**, 6-hourly when on | Neighbourhood demand changes over days; faster buys nothing and costs invocations |
+| EventBridge rule **disabled**, 6-hourly when on | Recurring demand changes over days and a Pool Day comes round weekly; faster buys nothing and costs invocations |
 | CloudFront **PriceClass_100** | Cheapest edge footprint |
 | **No** route calculator resource | `geo-routes` needs none — one less billable thing to forget |
 | **No** EC2 / RDS / NAT / ALB / OpenSearch | All bill continuously. Asserted absent by test |
@@ -60,6 +60,22 @@ The demo scenario is two runs. In offline mode both cost **zero**.
 These are not claims — `infra/test_stack.py` asserts each one against the synthesized
 CloudFormation template, so a future change that quietly enables the schedule or removes
 log retention fails the build.
+
+## Money that is not AWS credit
+
+Payments deserve their own note, because the failure mode is worse than a surprise bill.
+
+| Control | Where it is enforced |
+| --- | --- |
+| Default provider is `simulated` | `config.py`; the CDK stack pins it, asserted by an infra test |
+| Stripe provider **refuses any non-`sk_test_` key** | `adapters/payments.py`, unconditional — no flag relaxes it |
+| No Stripe credential in the CDK template | Asserted by `test_no_stripe_credential_is_baked_into_the_template` |
+| Purchase executor pinned to `simulated` | Only executor implemented; the builder raises on any other value |
+| Webhooks verified before parsing, replays rejected | `verify_webhook_signature`, tested |
+
+The simulated provider never opens a socket. Every test, the demo, and the deployed
+default move exactly zero real money, and a misconfigured environment fails loudly at
+construction rather than quietly charging a card.
 
 ## What could still cost money unattended
 
@@ -104,8 +120,9 @@ See the ledger at the top of [`BUILD_HISTORY.md`](../BUILD_HISTORY.md). It is cu
 
 ## Development practices that keep this cheap
 
-- Default configuration is in-memory + deterministic routing + offline planner: the full
-  219-test suite and `make demo` cost nothing and need no account.
+- Default configuration is in-memory + deterministic routing + offline planner + the
+  simulated payment provider: the full 469-test suite and `make demo` cost nothing, need
+  no account, and move no money.
 - Real model calls are opt-in via `MODEL_PROVIDER=bedrock`, never a default.
 - UI work needs no inference; the frontend was developed entirely against the offline path.
 - The route adapter is wrapped in a cache so a single run cannot re-bill a lookup.

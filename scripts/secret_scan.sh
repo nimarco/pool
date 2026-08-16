@@ -27,6 +27,15 @@ scan "private key block"      'BEGIN (RSA|OPENSSH|EC|PGP) PRIVATE KEY'
 scan "hardcoded bearer token" 'Bearer[[:space:]]+[A-Za-z0-9._-]{30,}'
 scan "generic api key assign" '(api[_-]?key|apikey|secret)[[:space:]]*[:=][[:space:]]*["'"'"'][A-Za-z0-9_\-]{24,}["'"'"']'
 
+# Payment credentials. A live key is a hard failure; a *test* key still must not be
+# committed, because a committed secret is a committed secret whatever it unlocks.
+# The prefixes below are matched with a following key body so the bare strings in
+# documentation and in the provider's own refusal check do not trip the scan.
+scan "Stripe live secret key"    'sk_live_[A-Za-z0-9]{16,}'
+scan "Stripe restricted key"     'rk_live_[A-Za-z0-9]{16,}'
+scan "Stripe test secret key"    'sk_test_[A-Za-z0-9]{16,}'
+scan "Stripe webhook secret"     'whsec_[A-Za-z0-9]{20,}'
+
 # A committed .env is a finding regardless of contents.
 if git ls-files --error-unmatch .env >/dev/null 2>&1; then
   echo "✗ .env is tracked by git"

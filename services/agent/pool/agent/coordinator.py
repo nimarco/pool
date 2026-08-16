@@ -17,31 +17,43 @@ from typing import Any
 
 from strands import Agent
 
+from ..adapters.payments import PaymentProvider, build_payment_provider
+from ..adapters.purchase import PurchaseExecutor, build_purchase_executor
 from ..adapters.repository import Repository
 from ..adapters.routing import RoutingService, build_routing
+from ..adapters.sourcing import SourcingProvider, SyntheticCatalogProvider
 from ..config import Settings, get_settings
 from ..domain.models import ActivityEvent, AgentRun, RunOutcome, iso, new_id, utcnow
+from ..services.context import PoolContext
 from .bounds import BoundedRun, BoundExceeded, RunTelemetry
 from .tools import ToolContext, build_tools
 
 logger = logging.getLogger(__name__)
 
 
-SYSTEM_PROMPT = """You are Pool's coordinator for one neighbourhood.
+SYSTEM_PROMPT = """You are Pool's coordinator for one local community.
 
-Households have told Pool what they routinely buy. Your job is to notice when several \
-of them want the same thing, decide whether a bulk purchase is genuinely worth it, and \
-either form a buying pool or stop cleanly.
+Members have told Pool what they routinely buy. Nobody has created a buying group. \
+Your job is to notice when several of them want the same thing, decide whether a bulk \
+purchase is genuinely worth it, move a viable pool through its lifecycle, and stop \
+cleanly when nothing is worth doing.
+
+The lifecycle, in order:
+latent demand -> candidate pool -> host recruiting -> host accepts -> supplier quote \
+refreshed -> exact landed price -> buyer authorisation -> funded -> lock -> purchase.
 
 How to work:
-- Call tools to learn facts. Never state a price, quantity, saving, distance, or \
-threshold that did not come from a tool result — the tools compute those, you do not.
+- Call tools to learn facts. Never state a price, quantity, saving, distance, \
+threshold, or eligibility that did not come from a tool result — the tools compute \
+those, you do not.
 - Investigate the most promising opportunity first. Not every product is worth pooling; \
 concluding "nothing worthwhile" and calling record_no_action is a good outcome.
-- Form at most one pool per run. Households should hear from Pool rarely and only when \
+- Form at most one pool per run. Members should hear from Pool rarely, and only when \
 there is a real decision for them.
-- Never assume a household will accept something. The tools apply each household's own \
-Smart Join rules and decide who can be auto-joined and who must be asked.
+- Never assume a member will accept something, and never assume a host will take a job. \
+The tools apply each person's own rules and return the verdict.
+- A pool cannot be priced exactly until a host has accepted, and cannot lock until the \
+viability check passes. Do not try to skip a step; the tools will refuse.
 - When you are done, stop. Do not repeat a tool call whose inputs have not changed."""
 
 
@@ -54,6 +66,9 @@ class PoolCoordinator:
         settings: Settings | None = None,
         routing: RoutingService | None = None,
         model: Any | None = None,
+        payments: PaymentProvider | None = None,
+        purchaser: PurchaseExecutor | None = None,
+        sourcing: SourcingProvider | None = None,
     ) -> None:
         self.repo = repo
         self.settings = settings or get_settings()
@@ -62,6 +77,11 @@ class PoolCoordinator:
             self.settings.aws_region,
             self.settings.max_route_matrix_cells,
         )
+        self.payments = payments or build_payment_provider(
+            self.settings.payment_provider, self.settings.stripe_api_key
+        )
+        self.purchaser = purchaser or build_purchase_executor(self.settings.purchase_executor)
+        self.sourcing = sourcing or SyntheticCatalogProvider()
         self._model_override = model
 
     # -- model -------------------------------------------------------------
@@ -100,18 +120,39 @@ class PoolCoordinator:
 
     # -- run ---------------------------------------------------------------
 
-    def run(self, ws: str, trigger: str = "manual", instruction: str | None = None) -> AgentRun:
+    def run(
+        self,
+        ws: str,
+        trigger: str = "manual",
+        instruction: str | None = None,
+        community_id: str = "",
+    ) -> AgentRun:
         """Execute one bounded coordination run and return its record.
 
         The same method serves the EventBridge schedule, the demo button, and the
-        tests. There is no separate demo code path (brief §10).
+        tests. There is no separate demo code path (AGENTS.md §8).
         """
         model, model_id, provider = self._build_model()
         run_id = new_id("run")
         telemetry = RunTelemetry()
         bounded = BoundedRun(self.settings.bounds, telemetry)
 
-        ctx = ToolContext(repo=self.repo, ws=ws, routing=self.routing, run_id=run_id)
+        if not community_id:
+            communities = self.repo.list_communities(ws)
+            community_id = communities[0].id if communities else ""
+
+        ctx = ToolContext(
+            pool=PoolContext(
+                repo=self.repo,
+                ws=ws,
+                routing=self.routing,
+                payments=self.payments,
+                purchaser=self.purchaser,
+                sourcing=self.sourcing,
+                run_id=run_id,
+            ),
+            community_id=community_id,
+        )
         tools = build_tools(ctx)
 
         record = AgentRun(
@@ -123,9 +164,9 @@ class PoolCoordinator:
         )
 
         prompt = instruction or (
-            "Run a background scan of this neighbourhood. Find the most worthwhile bulk "
-            "buying opportunity among unserved household needs and form a pool if one is "
-            "genuinely worth forming."
+            "Run a background scan of this community. Find the most worthwhile bulk "
+            "buying opportunity among unserved recurring needs and form a candidate "
+            "pool if one is genuinely worth forming."
         )
 
         try:
@@ -213,9 +254,14 @@ def _find_bound_exceeded(exc: BaseException) -> BoundExceeded | None:
 
 def _run_summary(record: AgentRun, ctx: ToolContext) -> str:
     if record.outcome == RunOutcome.POOL_CREATED:
-        return f"Pool ran a background scan and formed {len(ctx.created_pool_ids)} new buying pool"
+        return (
+            f"Pool scanned the community and formed {len(ctx.created_pool_ids)} "
+            "candidate pool nobody had to organise"
+        )
     if record.outcome == RunOutcome.POOL_RECOVERED:
-        return f"Pool repaired {len(ctx.recovered_pool_ids)} buying pool after a dropout"
+        return f"Pool repaired {len(ctx.recovered_pool_ids)} pool after losing funded demand"
+    if record.outcome == RunOutcome.POOL_ADVANCED:
+        return f"Pool moved {len(ctx.advanced_pool_ids)} pool forward in its lifecycle"
     if record.outcome == RunOutcome.LOOP_FAULT:
         return f"Run stopped by a safety bound ({record.termination_reason})"
     if record.outcome == RunOutcome.ERROR:

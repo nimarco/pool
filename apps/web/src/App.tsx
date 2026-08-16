@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AppState,
   Health,
   MapData,
   NeedRow,
+  PoolView,
   RunResult,
   ScenarioResult,
   api,
@@ -11,20 +12,25 @@ import {
 } from "./api";
 import {
   AgentRuns,
+  Chip,
   Dashboard,
+  HostConsole,
   Impact,
   Landing,
   Needs,
+  Operator,
   PoolDetail,
   ScenarioPanel,
 } from "./views";
 
-type View = "home" | "dashboard" | "needs" | "impact" | "agent" | "pool";
+type View = "home" | "dashboard" | "needs" | "host" | "operator" | "agent" | "impact" | "pool";
 
 const NAV: { id: View; label: string }[] = [
-  { id: "dashboard", label: "Neighbourhood" },
+  { id: "dashboard", label: "Community" },
   { id: "needs", label: "Needs" },
-  { id: "agent", label: "Agent activity" },
+  { id: "host", label: "Host" },
+  { id: "operator", label: "Operator" },
+  { id: "agent", label: "Agent" },
   { id: "impact", label: "Impact" },
 ];
 
@@ -45,7 +51,7 @@ export default function App() {
   const [map, setMap] = useState<MapData | null>(null);
   const [needs, setNeeds] = useState<NeedRow[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
-  const [openPool, setOpenPool] = useState<string | null>(null);
+  const [openPool, setOpenPool] = useState<PoolView | null>(null);
   const [busyDecision, setBusyDecision] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [scenario, setScenario] = useState<ScenarioResult | null>(null);
@@ -58,93 +64,111 @@ export default function App() {
       setState(s);
       setMap(m);
       setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not reach the Pool API");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   }, []);
 
   useEffect(() => {
+    // One load on mount. Nothing here polls: a browser tab that quietly re-triggers
+    // work is exactly the kind of background cost AGENTS.md §3.2 forbids.
+    void refresh();
     api.health().then(setHealth).catch(() => setHealth(null));
-    refresh();
+    api.needs().then(setNeeds).catch(() => setNeeds([]));
   }, [refresh]);
 
-  useEffect(() => {
-    if (view === "needs" && needs.length === 0) {
-      api.needs().then((r) => setNeeds(r.needs)).catch(() => undefined);
-    }
-  }, [view, needs.length]);
+  const openPoolDetail = useCallback(
+    async (poolId: string) => {
+      try {
+        setOpenPool(await api.pool(poolId));
+        setView("pool");
+        setError(null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // A pool the client knows about but the server does not means this tab is
+        // holding a stale list — after a demo reset, say. Re-reading is the right
+        // recovery; an alarming error banner is not.
+        if (message.includes("not found")) {
+          setOpenPool(null);
+          setView("dashboard");
+          await refresh();
+          return;
+        }
+        setError(message);
+      }
+    },
+    [refresh],
+  );
 
-  const runAgent = async (trigger: string) => {
+  const runAgent = useCallback(
+    async (trigger: string, instruction?: string) => {
+      setRunning(true);
+      try {
+        setLastRun(await api.run(trigger, instruction));
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setRunning(false);
+      }
+    },
+    [refresh],
+  );
+
+  const runScenario = useCallback(async () => {
     setRunning(true);
-    setLastRun(null);
     try {
-      const result = await api.runAgent(trigger);
-      setLastRun(result);
+      const result = await api.scenario();
+      setScenario(result);
       await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Run failed");
+      setView("dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setRunning(false);
     }
-  };
+  }, [refresh]);
 
-  const respond = async (id: string, approve: boolean) => {
-    setBusyDecision(id);
-    try {
-      await api.respond(id, approve);
-      await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not record that answer");
-    } finally {
-      setBusyDecision(null);
-    }
-  };
+  const respond = useCallback(
+    async (decisionId: string, approve: boolean) => {
+      setBusyDecision(decisionId);
+      try {
+        await api.respond(decisionId, approve);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusyDecision(null);
+      }
+    },
+    [refresh],
+  );
 
-  const withdraw = async (poolId: string, householdId: string) => {
-    setRunning(true);
-    try {
-      await api.withdraw(poolId, householdId);
-      await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Withdrawal failed");
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  const runScenario = async () => {
-    setRunning(true);
-    setScenario(null);
-    try {
-      setScenario(await api.scenario());
-      await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Scenario failed");
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  const resetDemo = async () => {
+  const reset = useCallback(async () => {
     setRunning(true);
     try {
       await api.reset();
       setScenario(null);
       setLastRun(null);
+      setOpenPool(null);
       await refresh();
+      setNeeds(await api.needs());
+      setView("dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setRunning(false);
     }
-  };
+  }, [refresh]);
 
-  const newWorkspace = async () => {
-    resetWorkspaceId();
-    setScenario(null);
-    setLastRun(null);
-    await refresh();
-  };
-
-  const pool = state?.pools.find((p) => p.pool_id === openPool) ?? null;
+  /** The host console shows whichever pool currently has a fulfilment job. */
+  const hostPoolId = useMemo(() => {
+    const pools = state?.pools ?? [];
+    const active = pools.find(
+      (p) => p.status === "distributing" || p.status === "completed" || p.status === "purchased",
+    );
+    return active?.pool_id ?? null;
+  }, [state]);
 
   return (
     <div className="shell">
@@ -154,162 +178,152 @@ export default function App() {
 
       <header className="topbar">
         <div className="topbar-inner">
-          <button
-            className="brand"
-            onClick={() => setView("home")}
-            style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
-          >
+          <button className="brand" onClick={() => setView("home")}>
             <BrandMark />
             <span className="brand-name">Pool</span>
           </button>
-
-          <nav className="nav" aria-label="Sections">
-            {NAV.map((n) => (
+          <nav className="nav">
+            {NAV.map((item) => (
               <button
-                key={n.id}
-                onClick={() => {
-                  setView(n.id);
-                  setOpenPool(null);
-                }}
-                aria-current={view === n.id || (n.id === "dashboard" && view === "pool") ? "page" : undefined}
+                key={item.id}
+                className={view === item.id ? "active" : ""}
+                onClick={() => setView(item.id)}
               >
-                {n.label}
+                {item.label}
               </button>
             ))}
           </nav>
+          <div className="btn-row">
+            <button
+              className="btn btn-sm"
+              onClick={() => runAgent("manual_scan")}
+              disabled={running}
+            >
+              {running ? "Working…" : "Run a scan"}
+            </button>
+            <button
+              className="btn btn-sm"
+              onClick={() =>
+                runAgent(
+                  "manual_advance",
+                  "Advance every pool that is blocked: recruit a host, refresh the " +
+                    "supplier quote, issue final offers, recover lost demand, and lock " +
+                    "anything that is fully funded and viable.",
+                )
+              }
+              disabled={running}
+            >
+              Advance pools
+            </button>
+            <button className="btn btn-sm" onClick={reset} disabled={running}>
+              Reset
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="main" id="main">
-        {error && (
-          <div className="banner banner-warn" style={{ marginBottom: 18 }}>
-            <div>
-              <strong>{error}</strong>
-              <div className="tiny">
-                If you are running locally, make sure the API is up:{" "}
-                <code className="mono">make api</code>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {view === "home" && (
-          <Landing onStart={() => setView("dashboard")} health={health} />
-        )}
-
-        {view !== "home" && (
-          <section className="card" style={{ marginBottom: 20 }}>
-            <div className="card-head">
-              <h2>Pool is running in the background</h2>
-              <span className="spacer" />
-              <div className="btn-row">
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => runAgent("manual_demo")}
-                  disabled={running}
-                >
-                  {running && <span className="spin" />}
-                  Run a background scan
-                </button>
-                <button className="btn btn-sm" onClick={resetDemo} disabled={running}>
-                  Reset demo
-                </button>
-                <button className="btn btn-sm" onClick={newWorkspace} disabled={running}>
-                  New workspace
-                </button>
-              </div>
-            </div>
-            <div className="card-pad small muted">
-              In production this runs on a schedule, event-driven and unattended. The button
-              triggers the identical code path so you can watch it happen — there is no
-              separate demo mode.
-              {lastRun && (
-                <div style={{ marginTop: 10 }}>
-                  <span
-                    className={`chip ${
-                      lastRun.outcome === "loop_fault" || lastRun.outcome === "error"
-                        ? "chip-warn"
-                        : "chip-ok"
-                    }`}
-                  >
-                    {lastRun.outcome.replace(/_/g, " ")}
-                  </span>{" "}
-                  <span className="mono tiny">
-                    {lastRun.iterations} iterations · {lastRun.tool_calls.map((t) => t.name).join(" → ")}
-                    {" · "}
-                    {lastRun.duration_ms}ms
-                  </span>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {view === "dashboard" && state && (
-          <>
-            <Dashboard
-              state={state}
-              map={map}
-              onOpenPool={(id) => {
-                setOpenPool(id);
-                setView("pool");
+        {error ? (
+          <div className="banner banner-warn">
+            {error}{" "}
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                resetWorkspaceId();
+                window.location.reload();
               }}
-              onRespond={respond}
-              busyDecision={busyDecision}
-            />
-            <div style={{ marginTop: 18 }}>
-              <ScenarioPanel onRun={runScenario} running={running} result={scenario} />
-            </div>
-          </>
-        )}
+            >
+              Start a fresh workspace
+            </button>
+          </div>
+        ) : null}
 
-        {view === "pool" && pool && (
-          <PoolDetail
-            pool={pool}
-            onBack={() => {
-              setOpenPool(null);
-              setView("dashboard");
-            }}
-            onWithdraw={(hid) => withdraw(pool.pool_id, hid)}
-            busy={running}
-          />
-        )}
+        {state?.is_demo_data ? (
+          <div className="banner">
+            Synthetic demo data. Payments are {health?.payment_mode ?? "simulated"}; the
+            supplier purchase is simulated; no goods move.
+          </div>
+        ) : null}
 
-        {view === "pool" && !pool && (
-          <div className="card">
-            <div className="empty">
-              <strong>Pool not found</strong>
-              <button className="btn btn-sm" onClick={() => setView("dashboard")}>
-                Back to the neighbourhood
+        {lastRun && view !== "home" ? (
+          <div className="card card-pad">
+            <div className="card-head">
+              <h3>
+                Last run <Chip tone="info">{lastRun.outcome}</Chip>
+              </h3>
+              <button className="btn btn-sm" onClick={() => setLastRun(null)}>
+                Dismiss
               </button>
             </div>
+            <p className="tiny mono muted">
+              {lastRun.tool_calls.map((t) => t.name).join(" → ") || "no tools called"} ·{" "}
+              {lastRun.iterations} iterations · {lastRun.termination_reason} ·{" "}
+              {lastRun.input_tokens ?? 0}/{lastRun.output_tokens ?? 0} tokens
+            </p>
+            {lastRun.notes.length > 0 ? (
+              <p className="small muted">{lastRun.notes.join(" · ")}</p>
+            ) : null}
           </div>
-        )}
+        ) : null}
 
-        {view === "needs" && <Needs rows={needs} />}
-        {view === "impact" && state && <Impact metrics={state.metrics} />}
-        {view === "agent" && state && <AgentRuns runs={state.runs} health={health} />}
+        {scenario ? (
+          <ScenarioPanel scenario={scenario} onClose={() => setScenario(null)} />
+        ) : null}
 
-        {view !== "home" && !state && (
-          <div className="card">
-            <div className="empty">
-              <strong>Loading the neighbourhood…</strong>
-              <span className="small">Fetching state from the Pool API.</span>
-            </div>
-          </div>
-        )}
+        {view === "home" ? (
+          <Landing
+            onEnter={() => setView("dashboard")}
+            onScenario={runScenario}
+            running={running}
+            health={health}
+          />
+        ) : null}
+
+        {view === "dashboard" && state ? (
+          <Dashboard
+            state={state}
+            map={map}
+            onOpenPool={openPoolDetail}
+            onRespond={respond}
+            busyDecision={busyDecision}
+          />
+        ) : null}
+
+        {view === "needs" ? <Needs needs={needs} /> : null}
+
+        {view === "host" ? <HostConsole poolId={hostPoolId} /> : null}
+
+        {view === "operator" ? <Operator /> : null}
+
+        {view === "agent" && state ? (
+          <AgentRuns runs={state.runs} activity={state.activity} />
+        ) : null}
+
+        {view === "impact" && state ? <Impact state={state} /> : null}
+
+        {view === "pool" && openPool ? (
+          <PoolDetail
+            pool={openPool}
+            onBack={() => setView("dashboard")}
+            onRefresh={() => void openPoolDetail(openPool.pool_id)}
+          />
+        ) : null}
+
+        {!state && view !== "home" ? <p className="empty">Loading…</p> : null}
       </main>
 
       <footer className="footer">
         <div className="footer-inner">
-          <span>
-            Pool — autonomous neighbourhood group-buying coordinator. Built for the AWS Agents
-            for Humans hackathon.
+          <span className="tiny muted">
+            Pool — an autonomous collective-purchasing coordinator. Synthetic data
+            throughout; no real money, no real supplier, no real institution.
           </span>
-          <span>
-            All data is synthetic. No payments are processed. Household locations are
-            approximate by design.
-          </span>
+          {health ? (
+            <span className="tiny mono muted">
+              {health.repository} · {health.routing_provider} · {health.model_provider} ·{" "}
+              {health.payment_mode}
+            </span>
+          ) : null}
         </div>
       </footer>
     </div>

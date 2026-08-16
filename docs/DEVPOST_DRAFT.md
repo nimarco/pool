@@ -1,200 +1,170 @@
-# Devpost submission — draft
+# Devpost submission draft
 
-**Not submitted.** Factual draft. Nothing below claims users, traction, partnerships, or
-deployed services that do not exist.
+Draft copy for the submission form. Every claim here must be true at the moment of
+submission — check the status table at the bottom before pasting anything.
 
 ---
 
-## Project name
-
-**Pool**
-
 ## Tagline
 
-Neighbours buying together, without anyone having to organise it.
+**Pool notices when nearby people could save by buying together, then does the
+coordination needed to make it actually happen.**
 
 ## Track
 
-Good Neighbor Agents
+Good Neighbor Agents. The value is structurally collective: one person alone cannot
+create it.
 
 ---
 
 ## Inspiration
 
-Bulk pricing is one of the few genuinely free lunches in household spending — often 30–45%
-off. Most households never touch it, because a 150 lb minimum is not something one family
-needs.
+This already happens on every campus, and it always goes the same way:
 
-Eight families together clear that minimum easily. So why don't neighbourhood buying clubs
-exist everywhere?
+> "I can buy 50 tubs of protein powder way cheaper than the store. DM me if you want one."
 
-Because someone has to run them. Recruit the eight families. Split the quantities. Compare
-suppliers. Work out whether the saving justifies the hassle. Book a pickup. Chase the four
-people who didn't reply. Then someone drops out and the whole thing collapses.
+It works, badly. One person guesses the demand, fronts their own money, buys stock before
+anyone has committed, then answers thirty messages, chases payment, arranges meetups, and
+eats the leftovers. They aren't paid for any of it, so it happens once and stops.
 
-That work is unpaid, tedious, and always lands on one exhausted volunteer. It is the real
-barrier — not the absence of an app. Every group-buying product we looked at still assumes
-a human organiser and just gives them better tools.
+The software isn't what's missing. What's missing is that the *coordination labour* is
+unpaid, tedious, and lands on one exhausted volunteer.
 
-We wanted to remove the organiser entirely. Which turns out to be an agent problem, because
-the hard part is *searching a space nobody asked about*: nobody says "let's buy rice
-together", they just separately buy rice.
+That labour is exactly what an agent is for:
+
+- **The opportunity is latent, not stated.** Nobody said "let's buy protein powder
+  together". Eight people separately said they buy it monthly. Discovering that a viable
+  group *could* exist means searching a space nobody asked about.
+- **Feasibility is multi-constraint and moves.** Supplier minimums, case sizes, budget
+  ceilings, substitution tolerance, timing windows, who can carry thirty kilos, who's
+  free on Saturday.
+- **Failure is normal.** A card declines at 90% commitment. What to do next depends on
+  the specific pool, the specific shortfall, and who could plausibly fill it.
+- **Most of it should never reach a human at all** — and the bits that do should arrive
+  already worked out.
 
 ## What it does
 
-Households declare what they routinely buy — once — with their own limits: quantity,
-cadence, minimum saving, maximum spend, maximum travel, substitution tolerance, and how
-much authority Pool has to act for them. Then they close the app.
+People declare what they routinely need. Pool does the rest:
 
-Pool runs in the background and:
+1. **Finds latent overlap** — community-scoped, verification-gated, timing-aware.
+2. **Evaluates real supply** — supplier minimums, case structure, quote freshness.
+3. **Recruits fulfilment** — from standing hosts *and* pool members who volunteer,
+   ranked deterministically on the whole transaction.
+4. **Computes the complete landed price** — merchandise + host pay + card processing +
+   Pool's fee. Nothing hidden.
+5. **Respects each person's own rules** — Smart Join authorises within stated limits;
+   everyone else gets one question with the answer already worked out.
+6. **Recovers from failure** — when an authorisation fails, it finds compatible
+   replacement demand that fills the gap exactly.
+7. **Locks only when it works for everyone** — buyer, supplier, host, and Pool.
+8. **Proves the handoff** — one-time pickup credentials, stored as hashes, single use.
 
-1. **Discovers latent overlap.** Finds households with compatible declared demand nearby.
-   Nobody posted a listing.
-2. **Evaluates whether it's worth it.** Compares bulk tiers, checks supplier minimums,
-   computes exact per-household allocations and savings against a retail baseline.
-3. **Solves the logistics.** Picks the public pickup site that serves the most households,
-   computes real travel times, and checks each household's travel limit.
-4. **Forms the group.** Households whose Smart Join policy deterministically passes are
-   committed without being interrupted. Everyone else gets one worked-out question.
-5. **Repairs itself.** When a participant withdraws and the pool falls below the supplier
-   minimum, Pool widens its search, finds a compatible replacement, and restores the
-   threshold — without disturbing the people who did nothing wrong.
+**Nobody creates the group. Pool discovers that the group can exist.**
 
-In the demo scenario: eight households, 155 lb of rice, **$99.00 saved (42.3% below
-retail)**, seven commitments made without interrupting anyone, two questions asked. Then
-the largest participant withdraws — 30 lb gone, pool dead at 125/150 — and Pool
-automatically finds a replacement and restores it. Nobody else is contacted.
+## How I built it
 
-## The idea, in one line
+**Strands is load-bearing.** The agent loop — which opportunity to investigate, whether
+to recruit a host, which recovery to attempt, when to stop — runs through Strands, with
+twelve narrow typed tools and no shell or arbitrary query escape hatch.
 
-**People should not have to organise a buying group. Pool should discover that the buying
-group can exist.**
+**The central rule:** the model decides *what to do*; deterministic code decides *what is
+true*. The model may choose to investigate a product. It may never invent a price, a
+quantity, an eligibility, or a viability verdict. Every number that reaches a human came
+from a tool.
 
-## How we built it
+**A pure domain layer.** `domain/` performs no I/O and imports no adapter. Economics,
+viability, Smart Join, host ranking, timing, case fitting, and the state machine are pure
+functions — which is why the whole thing is testable without fixtures and why swapping in
+DynamoDB or Stripe changes nothing about what a price is.
 
-### One agent, many deterministic tools
+**AWS, used where it earns its place:** Bedrock for inference, AgentCore Runtime to host
+the agent, DynamoDB as authoritative state, API Gateway + Lambda, S3 + CloudFront,
+EventBridge for the background scan (created disabled), Amazon Location for routing,
+CloudWatch for run records.
 
-A single **Strands Agents** coordinator on **Amazon Bedrock**, with seven narrow, typed
-tools. We deliberately did not build a swarm: pricing, matching, routing, and policy need
-to be *correct*, not creative, so they are tools rather than agents.
+**Bounded by construction.** Iterations, tool calls, duplicate calls, wall clock, and
+route-matrix size are enforced in the event loop as a hook provider — not by asking the
+model nicely. Every run terminates in a recorded outcome.
 
-The organising principle: **AI decides what to do; deterministic systems decide what is
-true.**
+## Challenges
 
-The agent chooses which opportunity to investigate, which tool to call, whether a result is
-worth acting on, how to recover a broken pool, whether a human is needed, and when to stop.
-It never computes a price, a quantity, a threshold, a route, or an authorization — those
-come from pure Python modules that cannot import a model client. If a number reaches a
-household, a tool computed it.
+**Case rounding nearly broke the honesty of the whole thing.** Suppliers sell cases;
+demand doesn't divide evenly. The tempting fix is to buy the extra units and spread the
+cost. That is exactly the speculative-inventory problem the product exists to remove. So
+Pool solves it properly: a bounded exact search picks the buyer set whose quantities fill
+whole cases, preferring people whose need is already due over demand pulled forward. If no
+combination lands on a boundary, the pool doesn't lock, and it says why.
 
-### Smart Join — a machine-verifiable autonomy boundary
+**The fee and the processing charge are both circular if you're careless.** The platform
+fee is a share of savings, but savings depend on the total, which includes the fee. And
+card processing is charged on the amount you charge — including the processing. Both are
+resolved deterministically: the fee is defined against *gross* savings, and processing is
+grossed up per buyer so the charge covers the processor's cut of that charge. Computing
+processing the naive way under-recovers by a few cents per buyer — a silent platform
+subsidy, which is the thing the model is not allowed to do.
 
-Each household sets explicit rules. A pure function evaluates six of them and returns a
-full audit trail:
+**Recovery over-recruited.** The first version treated any funding gap as demand to
+replace, including buyers who simply hadn't answered yet. It filled a hole that wasn't
+there and left the pool oversubscribed — trading a funding problem for surplus stock. The
+fix was to distinguish demand that is *lost* from demand that is *pending*, and to require
+replacements that sum to exactly the gap.
 
-```
-Auto-join only if:
-  savings ≥ 30%   AND  total cost ≤ $25   AND  travel ≤ 8 min
-  AND exact product (or an explicitly accepted substitute)
-  AND pickup site is public   AND Smart Join is enabled
-```
+**The agent needed to see the consequences of its own actions.** A planner that reads the
+work queue once, acts, and then decides from a stale view will never notice that the pool
+it just repaired has become lockable. It re-reads after acting — capped, so alternation
+never becomes polling.
 
-Where a standing policy and a specific need disagree, the stricter value wins. The model
-reads the verdict; it never makes it. Committing money, raising a budget, accepting a
-substitute, or offering a private residence as a pickup point always require a human unless
-explicitly pre-authorised.
+## What I learned
 
-A subtlety we're proud of: during recovery, adding a replacement changes everyone's share.
-If that pushes an existing member past their own cap, Pool **asks them** rather than
-silently repricing a commitment they already made.
+The interesting boundary in an agent product isn't "can the model do it". It's **which
+decisions must never be the model's**. Writing that boundary down as two columns — what
+the model may decide, what deterministic code must determine — turned out to be the single
+most useful design artifact in the project. It made the tool surface obvious, it made the
+tests obvious, and it's the reason a wrong price is structurally difficult rather than
+merely unlikely.
 
-### Cost safety as engineering, not intention
-
-This ran on a student's promotional credits, so every bound is enforced in the event loop
-via a Strands `HookProvider`: 8 model iterations, 25 tool calls, duplicate-call detection
-by argument digest, 3 retries, a 120 s wall clock, and a 100-cell cap on route matrices
-checked *before* any Location API call. A run that hits a bound terminates loudly as a
-recorded `loop_fault` — never a silent truncation dressed up as success.
-
-Infrastructure is serverless and destroyable, and `infra/test_stack.py` asserts against the
-synthesized CloudFormation that the schedule ships disabled, DynamoDB is on-demand with a
-TTL, logs expire in 14 days, and nothing always-on exists.
-
-### Tech
-
-Strands Agents SDK · Amazon Bedrock · Bedrock AgentCore Runtime · DynamoDB · EventBridge ·
-Amazon Location (geo-routes) · Lambda + API Gateway · S3 + CloudFront · CDK · FastAPI ·
-React + TypeScript.
-
-## Challenges we ran into
-
-- **A hook exception doesn't arrive as itself.** Strands wraps anything a hook raises in
-  `EventLoopException`, so our `except BoundExceeded` never fired and a tripped safety bound
-  was being recorded as a generic crash. We now walk the `__cause__` chain. Misclassifying a
-  fired bound as an error hides exactly the signal you most need.
-- **Token usage isn't where the type hints suggest.** It rides in
-  `stop_response.message["metadata"]["usage"]`, not `stop_response.usage`. We read it per
-  model call rather than from the final result, so an *aborted* run still records what it
-  spent — and an aborted run is the one whose cost matters.
-- **Our own agent looped, and the guard caught it.** A planner bug re-issued a terminal
-  tool forever. The iteration cap stopped it and recorded a `loop_fault`. That was the
-  safety net working — but a planner that needs the net every run is a bug, so we fixed the
-  planner and added a regression test.
-- **Making a dropout genuinely break the pool.** Early tuning left so much surplus demand
-  that no single withdrawal mattered, which made the recovery demo hollow. We reshaped the
-  supplier minimum and introduced a deliberate radius asymmetry — *form tight, repair
-  wide* — so the failure is real and the repair has to find someone genuinely new.
-- **No AWS credentials.** Everything cloud-facing is written, synth-verified, and
-  unit-tested against recorded service shapes, but none of it has run live.
-
-## What we learned
-
-- Cost safety and testability turn out to be the same problem. Building a deterministic
-  planner behind the Strands `Model` interface let the entire test suite and demo exercise
-  the real agent loop for free — and cheap tests are the tests that actually get run.
-- The interesting part of an autonomy boundary isn't the happy path, it's who gets
-  disturbed when things change. "Don't silently reprice someone who already committed"
-  taught us more about HITL design than any amount of prompt engineering.
-- The strongest constraint we adopted was refusing to let the model produce numbers. It
-  eliminated a whole category of failure before it could exist.
+The second thing: **an agent that does nothing is often correct.** A pool whose bulk price
+barely beats retail should bother nobody. Building "found nothing worth doing" as a
+first-class recorded outcome — rather than a failure — changed how the whole loop reads.
 
 ## What's next
 
-- Deploy to AgentCore Runtime and publish the live demo (blocked only on account access)
-- Smart Join editing in the UI
-- A supplier portal and negotiated pool-specific offers
-- Pickup-host compensation and reputation
-- Longer term: consumer demand aggregation — Pool negotiating directly with distributors on
-  behalf of verified aggregated demand
+- Cloud verification: real Bedrock inference, AgentCore deployment, a live demo URL.
+- Stripe TEST-mode verification against Stripe's actual servers.
+- A controlled pilot in one dense community: operator-entered verified offers, a founder
+  fallback fulfiller, a hard cap on order value.
+- The unresolved questions are legal, not technical — merchant of record, custody of buyer
+  funds, host classification. They're written down in `PILOT_READINESS.md` rather than
+  guessed at in code.
 
-## Try it
-
-```bash
-git clone <repo> && cd pool
-make install
-make demo     # the whole scenario, printed
-make test     # 219 tests
-make dev      # API + web locally
-```
-
-No AWS account needed to run the demo: the default configuration uses an in-memory store,
-deterministic routing, and an offline planner in place of the LLM. That planner replaces
-the model *only* — the real Strands loop, tools, domain math, state machine, and approval
-boundary all execute.
-
-## Important disclosures
-
-- **All data is synthetic.** Every household, supplier, price, and pickup site is invented.
-  No real people, no customers, no traction.
-- **No payments.** Pool models commitment, allocation, cost, and approval. No money moves;
-  checkout is labelled as simulated.
-- **Cloud deployment is unverified.** No AWS credentials were available during development.
-  The infrastructure is written and synthesizes cleanly but has never been applied to a live
-  account. The README carries a per-component status table.
-- **Built with heavy AI coding assistance**, with every result validated by running it.
+---
 
 ## Built with
 
-`strands-agents` `amazon-bedrock` `bedrock-agentcore` `dynamodb` `eventbridge`
-`amazon-location-service` `aws-lambda` `api-gateway` `cloudfront` `aws-cdk` `python`
-`fastapi` `react` `typescript` `vite`
+`python` · `strands-agents` · `amazon-bedrock` · `bedrock-agentcore` · `aws-lambda` ·
+`amazon-dynamodb` · `amazon-api-gateway` · `amazon-eventbridge` · `amazon-location-service` ·
+`amazon-s3` · `amazon-cloudfront` · `aws-cdk` · `fastapi` · `react` · `typescript` ·
+`stripe` · `vite`
+
+---
+
+## Honesty checklist — verify before submitting
+
+| Claim | Status when written |
+| --- | --- |
+| Strands is load-bearing | **True.** The real event loop, twelve real tools. |
+| Bounded agent loop | **True.** Enforced in hooks, covered by tests. |
+| Deterministic truth boundary | **True.** `domain/` has no I/O; tests assert the behaviour. |
+| End-to-end lifecycle works | **True locally.** `make demo`, and asserted by tests. |
+| Payments | **Simulated, or Stripe TEST.** Stripe refuses non-test keys. Never verified against Stripe's servers. |
+| Supplier purchase | **Simulated.** Every record flagged. No supplier contacted. |
+| Bedrock inference | **Implemented, NOT verified.** No credentials were configured. |
+| AgentCore deployment | **Implemented, NOT deployed.** |
+| DynamoDB | **Implemented, NOT verified live.** Pinned by a fake-client test. |
+| Amazon Location | **Implemented, NOT verified.** |
+| Live demo URL | **Does not exist yet.** |
+| Users, savings, traction | **None. All data is synthetic.** |
+
+Do not describe anything in the bottom half as working until it has been observed
+working. Update this table, then the copy — in that order.

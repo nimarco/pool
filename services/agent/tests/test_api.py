@@ -1,157 +1,334 @@
+"""The HTTP surface: shape, safety, and the privacy guarantees it must uphold.
+
+The API is the only thing a browser talks to, so this is where "no address, no email,
+no payment reference ever leaves the server" has to actually hold.
+"""
+
 from __future__ import annotations
+
+import json
 
 import pytest
 from fastapi.testclient import TestClient
 
-from pool.api import app as app_module
+from pool.api import app as api
+from pool.data.seed import COMMUNITY_ID
+from pool.domain.models import PoolStatus
 
 
 @pytest.fixture
-def client(monkeypatch):
-    from pool.adapters.repository import InMemoryRepository
-
-    fresh = InMemoryRepository()
-    monkeypatch.setattr(app_module, "_repo", fresh)
-    return TestClient(app_module.app)
+def client() -> TestClient:
+    # A fresh workspace per test keeps runs isolated, exactly as two judges would be.
+    api._repo.reset("demo")
+    return TestClient(api.app)
 
 
-class TestHealth:
-    def test_health_reports_configuration(self, client):
-        body = client.get("/api/health").json()
-        assert body["ok"] is True
-        assert body["repository"] == "memory"
-        assert body["bounds"]["max_iterations"] > 0
-
-    def test_health_reports_schedules_disabled_by_default(self, client):
-        """Cost safety is visible from the outside."""
-        assert client.get("/api/health").json()["schedules_enabled"] is False
+def _seed(client: TestClient) -> dict:
+    return client.get("/api/state").json()
 
 
-class TestState:
-    def test_state_autoseeds_and_returns_everything(self, client):
-        body = client.get("/api/state?workspace=demo").json()
-        assert body["counts"]["households"] == 25
-        assert body["is_demo_data"] is True
-        assert "metrics" in body and "activity" in body
-
-    def test_invalid_workspace_rejected(self, client):
-        assert client.get("/api/state?workspace=../etc").status_code == 400
-        assert client.get("/api/state?workspace=A_B").status_code == 400
-
-    def test_workspaces_are_isolated(self, client):
-        client.post("/api/agent/run?workspace=alpha", json={"trigger": "t"})
-        alpha = client.get("/api/state?workspace=alpha").json()
-        beta = client.get("/api/state?workspace=beta").json()
-        assert len(alpha["pools"]) == 1
-        assert len(beta["pools"]) == 0
+# --------------------------------------------------------------------------- health
 
 
-class TestAgentRun:
-    def test_run_forms_a_pool(self, client):
-        body = client.post("/api/agent/run?workspace=demo", json={"trigger": "test"}).json()
-        assert body["outcome"] == "pool_created"
-        assert body["iterations"] > 0
-        assert [t["name"] for t in body["tool_calls"]][0] == "list_unmet_demand"
-
-    def test_run_exposes_bounds_and_cost_telemetry(self, client):
-        body = client.post("/api/agent/run?workspace=demo", json={"trigger": "test"}).json()
-        assert body["termination_reason"] == "completed"
-        assert body["model_provider"] == "offline"
-        assert body["input_tokens"] == 0  # offline runs cost nothing
-
-    def test_trace_contains_no_reasoning_text(self, client):
-        run = client.post("/api/agent/run?workspace=demo", json={"trigger": "t"}).json()
-        trace = client.get(f"/api/runs/{run['run_id']}?workspace=demo").json()
-        blob = str(trace).lower()
-        assert "thinking" not in blob and "reasoning" not in blob
-        assert [t["name"] for t in trace["tool_calls"]]
+def test_health_reports_the_active_adapters(client):
+    body = client.get("/api/health").json()
+    assert body["ok"] is True
+    assert body["payment_mode"] in {"simulated", "test"}
+    assert body["purchase_simulated"] is True
+    assert body["schedules_enabled"] is False
 
 
-class TestDecisions:
-    def test_pending_decisions_are_listed_then_answerable(self, client):
-        client.post("/api/agent/run?workspace=demo", json={"trigger": "t"})
-        state = client.get("/api/state?workspace=demo").json()
-        assert state["decisions"], "expected Ask Me households to need approval"
-        d = state["decisions"][0]
-        assert "policy_checks" in d["facts"]
-
-        result = client.post(
-            f"/api/decisions/{d['decision_id']}/respond?workspace=demo", json={"approve": True}
-        ).json()
-        assert result["state"] == "approved"
-
-    def test_unknown_decision_404s(self, client):
-        r = client.post("/api/decisions/nope/respond?workspace=demo", json={"approve": True})
-        assert r.status_code == 404
+def test_health_never_reports_a_live_payment_mode(client):
+    """A live mode here would mean a misconfiguration could charge a real card."""
+    assert client.get("/api/health").json()["payment_mode"] != "live"
 
 
-class TestScenario:
-    def test_full_scenario_endpoint(self, client):
-        body = client.post("/api/demo/scenario?workspace=demo").json()
-        assert body["ok"] is True, body.get("failure")
-        names = [s["name"] for s in body["steps"]]
-        assert names == ["seed", "background_scan", "pool_formed", "approvals",
-                         "dropout", "recovery", "impact"]
-
-    def test_reset_restores_the_starting_state(self, client):
-        client.post("/api/demo/scenario?workspace=demo")
-        assert len(client.get("/api/state?workspace=demo").json()["pools"]) == 1
-        client.post("/api/demo/reset?workspace=demo")
-        assert client.get("/api/state?workspace=demo").json()["pools"] == []
+# --------------------------------------------------------------------------- state
 
 
-class TestPrivacy:
-    def test_map_never_returns_precise_household_coordinates(self, client):
-        """The single most important privacy assertion in the product."""
-        body = client.get("/api/map?workspace=demo").json()
-        assert body["households"]
-        for h in body["households"]:
-            assert h["lat"] == round(h["lat"], 3)
-            assert h["lon"] == round(h["lon"], 3)
-            assert "address" not in h
-            assert "display_name" not in h  # map markers are not identified
-
-    def test_map_only_exposes_public_pickup_sites(self, client):
-        body = client.get("/api/map?workspace=demo").json()
-        assert body["sites"]
-        assert all(s["is_public"] for s in body["sites"])
-
-    def test_pool_members_are_named_but_never_located(self, client):
-        client.post("/api/agent/run?workspace=demo", json={"trigger": "t"})
-        pool = client.get("/api/state?workspace=demo").json()["pools"][0]
-        for m in pool["members"]:
-            assert "lat" not in m and "lon" not in m and "address" not in m
-            assert m["neighborhood"]  # neighbourhood-level context only
+def test_state_seeds_on_first_read_and_is_labelled_demo_data(client):
+    body = _seed(client)
+    assert body["is_demo_data"] is True
+    assert body["community"]["name"] == "Demo University"
+    assert body["community"]["synthetic"] is True
+    assert body["counts"]["members"] > 0
+    assert body["counts"]["needs"] > 0
 
 
-class TestWithdrawAndRecover:
-    def test_withdraw_then_recover_through_the_api(self, client):
-        client.post("/api/agent/run?workspace=demo", json={"trigger": "scan"})
-        state = client.get("/api/state?workspace=demo").json()
-        for d in state["decisions"]:
-            client.post(f"/api/decisions/{d['decision_id']}/respond?workspace=demo",
-                        json={"approve": True})
+def test_an_invalid_workspace_is_rejected(client):
+    assert client.get("/api/state?workspace=../etc").status_code == 400
+    assert client.get("/api/state?workspace=" + "x" * 60).status_code == 400
 
-        pool = client.get("/api/state?workspace=demo").json()["pools"][0]
-        assert pool["status"] == "threshold_met"
-        biggest = max(
-            (m for m in pool["members"] if m["state"] == "committed"),
-            key=lambda m: m["units"],
-        )
-        out = client.post(
-            f"/api/pools/{pool['pool_id']}/withdraw/{biggest['household_id']}?workspace=demo"
-        ).json()
-        assert out["below_threshold"] is True
 
-        run = client.post("/api/agent/run?workspace=demo", json={"trigger": "recovery"}).json()
-        # The scan prompt handles recovery too, but the explicit recovery path is what
-        # the UI uses; either way the pool must come back.
-        after = client.get(f"/api/pools/{pool['pool_id']}?workspace=demo").json()
-        assert after["status"] in {"threshold_met", "recovering"}
-        assert run["outcome"] in {"pool_recovered", "pool_created", "no_action"}
+def test_workspaces_are_isolated(client):
+    client.post("/api/demo/scenario?workspace=one")
+    other = client.get("/api/state?workspace=two").json()
+    assert other["pools"] == []
 
-    def test_withdrawing_a_non_member_404s(self, client):
-        client.post("/api/agent/run?workspace=demo", json={"trigger": "t"})
-        pool = client.get("/api/state?workspace=demo").json()["pools"][0]
-        r = client.post(f"/api/pools/{pool['pool_id']}/withdraw/ghost?workspace=demo")
-        assert r.status_code == 404
+
+# --------------------------------------------------------------------------- privacy
+
+
+def test_no_endpoint_leaks_contact_details_or_payment_references(client):
+    """The three things that must never reach a browser (§82, AGENTS.md §4)."""
+    client.post("/api/demo/scenario")
+    payloads = [
+        client.get("/api/state").text,
+        client.get("/api/map").text,
+        client.get("/api/needs").text,
+        client.get("/api/operator").text,
+    ]
+    pool_id = client.get("/api/state").json()["pools"][0]["pool_id"]
+    payloads.append(client.get(f"/api/pools/{pool_id}").text)
+    payloads.append(client.get(f"/api/pools/{pool_id}/checklist").text)
+    combined = "".join(payloads)
+    assert "@demo.invalid" not in combined
+    assert "pm_sim_" not in combined
+    assert "contact_email" not in combined
+
+
+def test_member_positions_are_coarse_and_carry_no_address(client):
+    body = client.get("/api/map").json()
+    assert body["position_precision_m"] == 110
+    for member in body["members"]:
+        assert round(member["lat"], 3) == member["lat"]
+        assert round(member["lon"], 3) == member["lon"]
+        assert "address" not in member
+
+
+def test_a_member_view_exposes_a_boolean_not_a_payment_reference(client):
+    _seed(client)
+    body = client.get("/api/members/hh_okafor").json()
+    assert body["has_payment_method"] is True
+    assert "payment_method_ref" not in body
+    assert "contact_email" not in body
+
+
+def test_pickup_sites_carry_an_honest_permission_status(client):
+    body = client.get("/api/pickup-sites").json()
+    assert body["sites"]
+    # Nothing in the demo claims a real space authorised commercial pickup.
+    assert all(s["permission"] == "demo" for s in body["sites"])
+
+
+# --------------------------------------------------------------------------- agent
+
+
+def test_a_run_returns_a_trace_with_no_reasoning_text(client):
+    _seed(client)
+    body = client.post("/api/agent/run", json={"trigger": "test"}).json()
+    assert body["outcome"] in {
+        "pool_created", "pool_advanced", "pool_recovered", "no_action"
+    }
+    assert isinstance(body["tool_calls"], list)
+    assert body["model_provider"] == "offline"
+    assert "reasoning" not in body
+    assert "prompt" not in body
+
+
+def test_the_full_run_record_is_retrievable(client):
+    _seed(client)
+    run_id = client.post("/api/agent/run", json={"trigger": "test"}).json()["run_id"]
+    body = client.get(f"/api/runs/{run_id}").json()
+    assert body["id"] == run_id
+    assert body["duration_ms"] is not None
+    assert set(body["tool_calls"][0]) == {"name", "arguments_digest", "ok", "summary", "at"}
+
+
+def test_an_unknown_run_is_a_404(client):
+    assert client.get("/api/runs/run_nope").status_code == 404
+
+
+# --------------------------------------------------------------------------- flow
+
+
+def test_the_scenario_endpoint_runs_the_whole_lifecycle(client):
+    body = client.post("/api/demo/scenario").json()
+    assert body["ok"] is True, body["failure"]
+    names = [s["name"] for s in body["steps"]]
+    assert "latent_demand_discovered" in names
+    assert "host_accepted" in names
+    assert "final_offer" in names
+    assert "locked_and_captured" in names
+    assert "pickup" in names
+
+
+def test_pool_detail_exposes_economics_hosts_and_viability(client):
+    client.post("/api/demo/scenario")
+    pool_id = client.get("/api/state").json()["pools"][0]["pool_id"]
+    body = client.get(f"/api/pools/{pool_id}").json()
+    assert body["members"]
+    assert body["host"]["display_name"]
+    assert body["economics"]["all_in_cents"] > 0
+    assert "viability" in body
+    assert body["host_candidates"]
+
+
+def test_an_unknown_pool_is_a_404(client):
+    assert client.get("/api/pools/pool_nope").status_code == 404
+
+
+def test_withdrawing_after_lock_is_a_conflict_not_a_silent_success(client):
+    client.post("/api/demo/scenario")
+    state = client.get("/api/state").json()
+    pool = state["pools"][0]
+    detail = client.get(f"/api/pools/{pool['pool_id']}").json()
+    buyer = detail["members"][0]["household_id"]
+    response = client.post(f"/api/pools/{pool['pool_id']}/withdraw/{buyer}")
+    assert response.status_code == 409
+    assert "locked" in response.json()["detail"]
+
+
+def test_volunteering_to_host_does_not_claim_the_job(client):
+    _seed(client)
+    client.post("/api/agent/run", json={"trigger": "scan"})
+    pools = client.get("/api/state").json()["pools"]
+    if not pools:
+        pytest.skip("no pool formed in this scan")
+    pool_id = pools[0]["pool_id"]
+    body = client.post(
+        f"/api/pools/{pool_id}/host-offer/hh_okafor",
+        json={"has_vehicle": True, "minimum_compensation_cents": 0},
+    ).json()
+    assert "candidate set" in body["note"]
+    assert body["candidates"]
+
+
+def test_the_operator_console_shows_offers_payments_and_purchases(client):
+    client.post("/api/demo/scenario")
+    body = client.get("/api/operator").json()
+    assert body["offers"]
+    assert any(o["source"] == "synthetic" for o in body["offers"])
+    pool = body["pools"][0]
+    assert pool["payments"]
+    assert pool["purchase"]["simulated"] is True
+    assert body["metrics"]["is_demo_data"] is True
+
+
+def test_an_operator_can_record_a_manually_verified_offer(client):
+    _seed(client)
+    response = client.post(
+        "/api/operator/offers",
+        json={
+            "offer_id": "off_manual_1",
+            "supplier_id": "sup_riverbend",
+            "product_id": "prod_coffee_beans",
+            "unit_price_cents": 1500,
+            "case_units": 6,
+            "moq_amount": 12,
+            "supplier_reference": "phoned 2026-08-15",
+        },
+    )
+    body = response.json()
+    assert body["source"] == "manual_verified"
+    assert body["verified_at"]
+
+
+def test_an_operator_offer_for_an_unknown_product_is_rejected(client):
+    _seed(client)
+    response = client.post(
+        "/api/operator/offers",
+        json={
+            "offer_id": "off_x", "supplier_id": "sup_riverbend",
+            "product_id": "nope", "unit_price_cents": 100,
+        },
+    )
+    assert response.status_code == 400
+
+
+def test_disabling_an_offer_takes_it_out_of_circulation(client):
+    _seed(client)
+    body = client.post("/api/operator/offers/off_whey_bulk/disable").json()
+    assert body["active"] is False
+
+
+# --------------------------------------------------------------------------- pickup
+
+
+def test_a_pickup_credential_is_returned_once_and_works_once(client):
+    client.post("/api/demo/scenario")
+    state = client.get("/api/state").json()
+    pool_id = state["pools"][0]["pool_id"]
+    allocations = client.get(f"/api/pools/{pool_id}/allocations").json()
+    assert allocations["picked_up"] == len(allocations["allocations"])
+    # Every credential in the scenario has already been redeemed, so re-issuing is
+    # refused rather than quietly minting a second way in.
+    buyer = allocations["allocations"][0]["household_id"]
+    response = client.post(f"/api/pools/{pool_id}/pickup-credential/{buyer}")
+    assert response.status_code == 400
+
+
+def test_redeeming_a_forged_credential_fails(client):
+    client.post("/api/demo/scenario")
+    pool_id = client.get("/api/state").json()["pools"][0]["pool_id"]
+    body = client.post(
+        f"/api/pools/{pool_id}/redeem", json={"value": "definitely-not-a-token"}
+    ).json()
+    assert body["ok"] is False
+
+
+def test_an_operator_override_requires_a_reason(client):
+    client.post("/api/demo/scenario")
+    pool_id = client.get("/api/state").json()["pools"][0]["pool_id"]
+    response = client.post(
+        f"/api/pools/{pool_id}/override/hh_okafor", json={"reason": "x"}
+    )
+    assert response.status_code == 422  # too short for the validator
+
+
+# --------------------------------------------------------------------------- webhook
+
+
+def test_the_webhook_is_unavailable_without_a_configured_secret(client):
+    response = client.post("/api/webhooks/payments", content="{}")
+    assert response.status_code == 503
+
+
+def test_an_unsigned_webhook_is_rejected(client, monkeypatch):
+    import dataclasses
+
+    monkeypatch.setattr(
+        api, "_settings",
+        dataclasses.replace(api._settings, stripe_webhook_secret="whsec_test_x"),
+    )
+    response = client.post(
+        "/api/webhooks/payments",
+        content=json.dumps({"id": "evt_1", "type": "x", "data": {"object": {"id": "pi_1"}}}),
+        headers={"stripe-signature": "t=1,v1=nope"},
+    )
+    assert response.status_code == 400
+
+
+# --------------------------------------------------------------------------- reset
+
+
+def test_reset_returns_a_workspace_to_its_starting_state(client):
+    client.post("/api/demo/scenario")
+    assert client.get("/api/state").json()["pools"]
+    counts = client.post("/api/demo/reset").json()
+    assert counts["reset"] is True
+    assert counts["seeded"]["members"] > 0
+    assert client.get("/api/state").json()["pools"] == []
+
+
+def test_needs_expose_both_timing_numbers(client):
+    _seed(client)
+    needs = client.get("/api/needs").json()["needs"]
+    assert needs
+    sample = needs[0]
+    assert "flexibility_days" in sample and "routine_lead_days" in sample
+    assert sample["earliest_purchase_date"] <= sample["latest_purchase_date"]
+
+
+def test_state_reports_the_communitys_own_schedule(client):
+    body = _seed(client)
+    schedule = body["community"]["schedule"]
+    assert schedule["distribution_weekday"] == 5
+    assert schedule["distribution_start_hour"] < schedule["distribution_end_hour"]
+
+
+def test_pool_status_values_are_canonical(client):
+    client.post("/api/demo/scenario")
+    statuses = {p["status"] for p in client.get("/api/state").json()["pools"]}
+    assert statuses <= {s.value for s in PoolStatus}
+    assert client.get("/api/state").json()["community"]["id"] == COMMUNITY_ID

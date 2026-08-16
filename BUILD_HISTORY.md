@@ -187,14 +187,10 @@ Tracked so they are not silently assumed. Move each to an entry when resolved.
 | Q6 | Re-verify hackathon requirements before submission. | Snapshot in `AGENTS.md` §2 is dated 2026-08-15. | **Open** — still required before submitting, and specifically before publishing any Builder Center article (the blog-post wording changed mid-event). |
 | Q7 | Does the deterministic routing model resemble real travel times? | The demo shows travel minutes as if they were real. | **Open** — blocked on live AWS. Until then the provider is labelled in the API response and the UI. |
 | Q8 | What is the actual per-run Bedrock cost at the configured bounds? | Determines whether a 6-hourly schedule is affordable. | **Open** — blocked on live AWS. |
-
---- | --- | --- | --- |
-| Q1 | Which Bedrock model tier is sufficient for the coordination loop? | Cost vs. reasoning quality; §3.3 says do not over-buy. | Open |
-| Q2 | What state belongs in DynamoDB vs. AgentCore Memory? | `AGENTS.md` §6 sets the principle; the boundary is undecided. | Open |
-| Q3 | Is AgentCore Runtime the right deployment target, or is plain Lambda sufficient? | Favorable for judging, but must be justified, not decorative. | Open |
-| Q4 | Do we need a real routing/geocoding provider, or do synthetic distances suffice for the demo? | Live routing is a per-request paid call (§3.4). | Open |
-| Q5 | How does a household express preauthorization (Smart Join) in a machine-verifiable way? | Core of Article 3; must not be an informal LLM judgment. | Open |
-| Q6 | Re-verify hackathon requirements before submission. | Snapshot in `AGENTS.md` §2 is dated 2026-08-15. | Open |
+| Q9 | Does the Stripe PaymentIntent manual-capture flow behave as documented? | The whole payment lifecycle rests on it, and it has never touched Stripe's servers. | **Open** — needs TEST keys. Re-read the current official docs first; the shapes were written from documentation, not from a response. |
+| Q10 | Is the platform fee mode (10% of gross savings) defensible as a business model? | It is provisional business configuration, not domain truth. | **Open** — aligned by construction (no saving, no fee) and transparent, but untested against anyone's willingness to pay. |
+| Q11 | Does the case-fitting solver stay fast with realistic community sizes? | It is a bounded DP; bounded is not the same as fast at scale. | **Open** — trivially fast at demo scale (tens of members). Needs a benchmark at a few hundred before a pilot. |
+| Q12 | What actually happens to unclaimed paid-for goods? | The lifecycle deliberately stops at operator review. | **Open** — a policy question with legal edges. See `docs/PILOT_READINESS.md`. |
 
 ---
 
@@ -795,3 +791,430 @@ before the build.
 
 **Relevant commits / files**
 `README.md`, `docs/*`
+
+---
+
+### #0011 — [2026-08-16] — Community as a first-class boundary, and the canonical lifecycle
+`[ARCH]` `[PRODUCT]` `[ARTICLE-1]`
+
+**Goal / user intent**
+Take Pool from a polished neighbourhood prototype to the canonical product: a
+collective-purchasing coordinator with Communities, a paid fulfilment side, real financial
+commitment, purchase execution, and physical handoff.
+
+**Starting state**
+A working v1: `Household` / `NeedDeclaration` / `Offer` / `Pool` / `Membership`, a
+`CANDIDATE → INVITING → THRESHOLD_MET → CONFIRMED` lifecycle, Smart Join, dropout recovery,
+198 app tests + 21 infra tests passing, lint clean. Verified by running the baseline before
+touching anything, rather than trusting the previous run's summary.
+
+**Decision**
+Extend rather than rebuild. Map the old concepts into the canonical model:
+
+| Old | Canonical |
+| --- | --- |
+| `Household` | kept — it *is* the account unit; a Community membership is a separate entity |
+| implicit "neighbourhood" | `Community` + `CommunityMembership` + verification providers |
+| `PoolStatus` (8 states) | 13-state canonical lifecycle |
+| `MembershipState` | `ParticipationState` — provisional vs funded is now explicit |
+| `allocation.py` | `economics.py` — complete landed cost, not merchandise-only |
+
+Deleted `domain/allocation.py` outright rather than keeping a second pricing path. Two
+sources of truth about what something costs is the failure mode most worth avoiding here.
+
+**Why**
+The brief's non-negotiable is that Community, not campus, is the domain concept. Keeping
+`Household` as the account entity avoided a rename that would have churned 198 tests for no
+semantic gain — a dorm room is a household. `CommunityMembership` is keyed
+`(community_id, household_id)` so one account belonging to several Communities is a schema
+fact rather than a future migration.
+
+**Implementation**
+`domain/models.py` rewritten (~1,200 lines: 25 entities, 20 enums, 4 config dataclasses).
+New: `economics.py`, `viability.py`, `hosting.py`, `timing.py`, `substitution.py`,
+`pickup.py`. `state.py` rewritten around the canonical adjacency. Status: **tested**.
+
+**AWS / external services touched**
+None.
+
+**Cost-relevant activity**
+None. Everything ran offline.
+
+**Validation**
+443 application tests + 24 infrastructure tests passing, all offline. The state machine has
+property tests rather than a restatement of the table: nothing reaches `LOCKED` except from
+`FUNDING`/`RECOVERING`, and nothing rewinds out of a captured state.
+
+**Failures / dead ends**
+First attempt kept `allocation.py` alongside `economics.py` "for compatibility". Within an
+hour there were two functions that could disagree about a price. Deleted it.
+
+**What we learned**
+The single most useful artifact was the two-column table of *what the model may decide* vs
+*what deterministic code must determine*. It made the tool surface, the module boundaries,
+and the test list all fall out. Writing it before the code would have saved a rewrite.
+
+**Article fodder**
+Article 1 — mapping an existing domain onto a larger canonical one without forking it.
+
+**Relevant commits / files**
+`services/agent/pool/domain/*`
+
+---
+
+### #0012 — [2026-08-16] — Complete landed economics, and two circular definitions
+`[ECONOMICS]` `[ARTICLE-1]` `[ARTICLE-3]`
+
+**Goal / user intent**
+Make the buyer-facing price include every modelled cost — merchandise, host pay, card
+processing, and Pool's own fee — so Smart Join is evaluated against net savings rather than
+a headline number with the operating costs hidden.
+
+**Decision**
+Fix an explicit computation order, because two components are circular if computed naively:
+
+1. merchandise and host compensation (independent of fees)
+2. **platform fee = share of *gross* savings** — defined without referring to the total it
+   belongs to
+3. split across buyers by units, largest-remainder
+4. **processing grossed up per buyer**: `charge = ceil((share + fixed) × 10000 / (10000 − bps))`
+5. all-in = the sum; net savings = retail − all-in
+
+**Why**
+A percentage-of-savings fee aligns incentives (no saving, no fee) and reads honestly on an
+offer. But savings depend on the total, which includes the fee — so the fee is drawn from
+*gross* savings instead, which is well-defined and monotone.
+
+Processing is the subtler one. The processor takes a cut of the amount you charge,
+*including* the processing itself. Computing the fee on the pre-fee share under-recovers by
+roughly 3% of the fee — a few cents per buyer. Nobody would notice, and it is a silent
+platform subsidy, which the brief explicitly forbids.
+
+**Implementation**
+`domain/economics.py`. Every value is integer cents; floats never touch money.
+Status: **tested**.
+
+**Validation**
+`test_economics.py` asserts buyer lines sum to exactly the all-in total, that each component
+split sums to its own total, and that the gross-up never under-recovers. Demo output:
+$756.00 merchandise + $44.68 host + $28.06 processing + $32.70 fee = $861.44 against
+$1127.76 retail — 23.6% net.
+
+**What we learned**
+"Include all costs" sounds like an accounting requirement. It is actually two small algebra
+problems, and getting either wrong produces a system whose real unit economics differ from
+the ones it displays.
+
+**Article fodder**
+Article 1 (why transparency is a design constraint), Article 3 (the subsidy failure mode).
+
+**Relevant commits / files**
+`services/agent/pool/domain/economics.py`, `tests/test_economics.py`
+
+---
+
+### #0013 — [2026-08-16] — Zero speculative surplus became a solver, not a refusal
+`[ECONOMICS]` `[PRODUCT]` `[ARTICLE-1]`
+
+**Goal / user intent**
+Honour the rule that Pool never quietly buys the leftovers of a part-filled case.
+
+**Starting state**
+The first implementation was a *check*: if case rounding left surplus, refuse to lock. Ran
+the demo and the pool refused — 29 units against 12-unit cases leaves 7 unallocated. The
+rule was working and the product was unusable.
+
+**Decision**
+Make it a solver. `fit_to_cases` chooses the buyer subset whose quantities sum to a multiple
+of the case size and clear the minimum — a bounded exact search over reachable totals,
+capped a few cases above the minimum, preferring members whose need is already due over
+demand pulled forward from the future.
+
+**Why**
+"Do not buy speculative stock" is only half a rule. The other half is "so choose a buyer set
+that doesn't require any". Rejecting is honest; solving is a product.
+
+This also turned the flexible-future-demand mechanic from decoration into load-bearing
+machinery. In the demo, current demand is 18 units against a 24-unit minimum and a 12-unit
+case size — the *only* way to a viable pool is pulling forward exactly six units from
+members who authorised an early purchase.
+
+**Implementation**
+`fit_to_cases` in `domain/economics.py`, wired into `evaluate_opportunity`.
+Status: **tested**.
+
+**Validation**
+`test_economics.py` covers exact fill, priority preference, refusal when nothing lands on a
+boundary, refusal below the minimum, and determinism across repeated runs. The end-to-end
+scenario now produces exactly 2 cases, 24 units, 0 surplus.
+
+**Failures / dead ends**
+Considered "allow explicit extra-unit decisions" (ask a buyer to take a spare). Rejected for
+v1: it is a real product option but it puts a question in front of a human to solve a
+problem the system can solve itself, which is backwards.
+
+**What we learned**
+A constraint that only ever rejects is usually a constraint you have not finished
+implementing.
+
+**Relevant commits / files**
+`services/agent/pool/domain/economics.py`
+
+---
+
+### #0014 — [2026-08-16] — The fulfilment side: candidates, ranking, and refusing politely
+`[HOSTS]` `[PRODUCT]` `[ARTICLE-1]`
+
+**Goal / user intent**
+Model fulfilment as a real economic side: recruited, ranked, paid, and refusable.
+
+**Decision**
+- Candidates come from **two** sources: standing hosts, and pool members who click "offer to
+  host" on this specific pool. A buyer needs no prior registration.
+- Offering is **not** claiming. Several people may offer; a deterministic evaluator filters
+  and ranks; the top eligible candidate receives an offer; decline or expiry moves to the
+  next. No first-come-first-served path exists in the code.
+- Eligibility is **factual and fails closed**: availability, vehicle, capacity, weight,
+  supplier travel, pickup-site suitability, and their own minimum compensation. A candidate
+  who breaks one is ineligible with a stated reason, not merely lower-ranked.
+- Ranking optimises the **whole transaction** — buyer travel is weighted more heavily than
+  host cost, because buyers outnumber the host.
+- Compensation scales with work and splits into **earned** (the run) and **contingent** (the
+  handoff), so a buyer no-show cannot erase pay for work already done.
+
+**Why**
+A host who is paid the same for 5 orders and 30 will stop showing up. And a system that
+lets someone claim a job by clicking first optimises for reflexes rather than for the group.
+
+**Implementation**
+`domain/hosting.py` (evaluation, ranking), `services/hosting.py` (recruit, offer, accept,
+decline, expire, assign). Status: **tested**.
+
+**Validation**
+`test_hosting.py` covers every refusal reason individually plus the "pricier but more
+central host wins" case. In the demo, four candidates are evaluated: two eligible, one
+refused for wanting more than the job pays, one refused for having no vehicle for a 55 kg
+load.
+
+**What we learned**
+Exposing the score *components* rather than just the score turned an opaque decision into
+something a judge can read off the screen — and made a ranking bug obvious during
+development, because the component that was wrong was visible.
+
+**Relevant commits / files**
+`services/agent/pool/domain/hosting.py`, `services/agent/pool/services/hosting.py`
+
+---
+
+### #0015 — [2026-08-16] — Payments: authorise late, capture at lock, and refuse live keys
+`[PAYMENTS]` `[SECURITY]` `[ARTICLE-3]`
+
+**Goal / user intent**
+Real financial commitment semantics without any possibility of real money moving.
+
+**Decision**
+- `PaymentProvider` abstraction with a deterministic in-process simulated provider and a
+  Stripe **TEST-only** provider.
+- `StripePaymentProvider` **refuses to construct** with anything that is not an `sk_test_`
+  key. No flag, no environment override, no argument relaxes it.
+- Saving a payment method is separate from authorising a pool charge. Nobody's card is
+  touched when they add a recurring need.
+- Authorise **after** the host is selected and the quote refreshed; capture **at lock**.
+- Explicit internal payment states mapped to provider states. There is no `paid = true`
+  anywhere in the system.
+- Webhook signatures verified with Stripe's documented scheme using only `hmac`, with
+  event-id deduplication and timestamp tolerance.
+
+**Why**
+The hackathon environment must not be able to silently fall back to live Stripe. Making that
+a construction-time exception rather than a runtime check means a misconfigured environment
+fails loudly before it can do anything.
+
+Implementing signature verification ourselves rather than via the SDK keeps it testable
+offline with no secret in the repository — and it is thirty lines.
+
+**Implementation**
+`adapters/payments.py`, `services/payments.py`. The simulated provider declines any method
+reference containing a marker string, which is how the failure branch is triggered
+deterministically rather than waited for. Status: **tested** (simulated),
+**implemented-unverified** (Stripe — never contacted Stripe's servers).
+
+**AWS / external services touched**
+None. No Stripe API call has ever been made from this repository.
+
+**Validation**
+`test_payments.py` — 43 tests including live-key refusal, duplicate capture, capture
+failure, replay rejection, stale-timestamp rejection, and a late authorisation event failing
+to walk a capture backwards. An infra test asserts no Stripe marker appears in the
+synthesized CloudFormation template.
+
+**What we learned**
+"Never use live keys" as a documented rule is worth much less than one unconditional
+`raise` in a constructor. The rule cannot be forgotten, mis-configured, or overridden by a
+future well-meaning change.
+
+**Article fodder**
+Article 3 — safety properties that are structural rather than procedural.
+
+**Relevant commits / files**
+`services/agent/pool/adapters/payments.py`, `services/agent/pool/services/payments.py`
+
+---
+
+### #0016 — [2026-08-16] — Recovery was over-recruiting, and reporting its own success wrong
+`[BUG]` `[AGENT]` `[ARTICLE-3]`
+
+**Goal / user intent**
+Make payment-failure recovery real: when an authorisation fails, find compatible replacement
+demand and restore the order.
+
+**Starting state**
+The first implementation computed the shortfall as `threshold − funded_units`. Ran the
+scenario: recovery recruited three replacements for a two-unit gap, taking the pool from 24
+units to 29 — against a 12-unit case size, which then correctly refused to lock on surplus.
+
+**Decision**
+Two fixes, both conceptual:
+
+1. **Distinguish lost demand from pending demand.** A buyer who has not yet answered their
+   final offer has not left. Only failed authorisations, withdrawals, and declines are a
+   hole. `in_play_units` counts funded *plus* awaiting-decision; `lost_units` is the gap
+   against that.
+2. **Replacements must sum to *exactly* the gap.** "At least enough" reintroduces the
+   speculative-surplus problem the case-fitting solver exists to prevent. Implemented as a
+   small bounded exact-sum search; when nothing sums to the gap, recovery fails honestly.
+
+Then a third, found by a test: recovery still reported `recovered=False` when the pool was
+whole, because success was measured against *funded* units — which cannot be complete while
+humans are still deciding. Recovery's job is to fill the hole, not to finish the pool.
+
+**Why**
+Over-recruiting trades a funding problem for an inventory problem. And an operation measured
+against something it does not control will misreport its own outcome in a way that tests
+happily pass.
+
+**Implementation**
+`services/coordination.py` — `in_play_units`, `lost_units`, `_select_replacements`, and the
+`recovered` criterion. Also propagated into the agent's work-queue tool so the planner acts
+on lost units rather than on a raw threshold gap. Status: **tested**.
+
+**Validation**
+`test_coordination.py::test_recovery_replaces_exactly_what_was_lost` and
+`test_an_unanswered_buyer_is_not_treated_as_a_hole_to_fill`. The end-to-end scenario now
+goes 24 → 22 (a card declines) → 24 (exact replacement), never above 24.
+
+**Failures / dead ends**
+The greedy "largest contributors first until covered" selection from the v1 dropout recovery
+was carried over unchanged and was exactly wrong for a case-boundary world. It had been
+correct when surplus cost was simply shared across buyers.
+
+**What we learned**
+The best bug in the project so far. Two systems that were individually right — recover the
+shortfall, never buy surplus — combined into something wrong, and only an end-to-end run
+surfaced it. Neither unit test suite could have.
+
+**Article fodder**
+Article 3, prominently. This is the concrete story for "the failure modes of an agent system
+are mostly at the seams".
+
+**Relevant commits / files**
+`services/agent/pool/services/coordination.py`
+
+---
+
+### #0017 — [2026-08-16] — Pickup credentials, and a planner that watches what it did
+`[FULFILLMENT]` `[SECURITY]` `[AGENT]`
+
+**Goal / user intent**
+Physical handoff that is proved rather than asserted, and an agent loop that can move a pool
+through several steps in one run.
+
+**Decision — credentials**
+Each buyer allocation gets a one-time credential: a long token for the QR and a short
+human-readable code for when scanning is awkward. **Only hashes are stored.** The plaintext
+exists exactly once, in the response that issued it; re-issuing invalidates the previous
+pair. Verification is constant-time. The short-code alphabet excludes I, L, O, U, 0 and 1 so
+a code read aloud at a pickup table cannot be mistyped into someone else's allocation.
+
+A host cannot mark an order collected without a credential. The only other route is an
+operator override that requires a stated reason, preserves the previous state in the audit
+record, and revokes any outstanding credential.
+
+**Decision — planner**
+The offline planner re-reads its work queue after acting, capped at twice per run.
+
+**Why**
+Storing plaintext credentials would mean a database dump is a free-goods coupon book.
+Hashing costs nothing and makes re-issue meaningful.
+
+On the planner: a loop that reads its queue once, acts, then decides from a stale view will
+never notice that the pool it just repaired has become lockable. But unbounded re-reading is
+polling with extra steps — hence the cap, which is also below the duplicate-call bound that
+would have caught it anyway.
+
+**Implementation**
+`domain/pickup.py`, `services/fulfillment.py`, `agent/offline_model.py`.
+Status: **tested**.
+
+**Validation**
+`test_fulfillment.py` covers single use, wrong-pool rejection with a distinct reason,
+unknown-credential rejection, re-issue invalidation, and the absence of any host-facing
+"mark all collected" path. The scenario re-scans one used credential on purpose and it is
+rejected.
+
+**Failures / dead ends**
+First version of the scenario replayed *every* credential to prove the property. It worked,
+and it buried the activity feed under ten rejection events. Now it proves it once; the
+exhaustive coverage lives in the test suite. Demonstrating a property and testing it are
+different jobs.
+
+**What we learned**
+"Observe after acting, at most twice" turned out to be the whole difference between a
+planner that needs three separate invocations and one that can carry a pool from final offer
+to lock in a single bounded run.
+
+**Relevant commits / files**
+`services/agent/pool/domain/pickup.py`, `services/agent/pool/services/fulfillment.py`,
+`services/agent/pool/agent/offline_model.py`
+
+---
+
+### #0018 — [2026-08-16] — Four surfaces, and a transcript that told the truth in the wrong order
+`[UX]` `[DEMO]`
+
+**Goal / user intent**
+Buyer, host, operator, and judge experiences on the canonical API, plus a demo transcript a
+judge can follow without reading code.
+
+**Implementation**
+`apps/web/src/{api,views,App}.tsx` rebuilt on the new API. Six views: community dashboard
+with Decision Inbox, pool detail with the cost breakdown and the eleven viability checks,
+needs, host job with a working code scanner, operator console, agent trace, impact.
+Status: **tested** (typecheck, build, and driven in a real browser).
+
+**Validation**
+Ran the full scenario from the UI in a browser: all six views render, no console errors, no
+horizontal overflow at 375 px on any view, dark mode correct. Screenshots of the cost
+breakdown and host ranking captured for the demo.
+
+**Failures / dead ends**
+Three real fixes came out of browser QA that no test would have caught:
+
+1. The demo transcript reported `funded_units` *after* recovery had already run, so the
+   payment-failure step showed a number that contradicted its own narrative. The steps were
+   in the wrong order. Fixed by capturing the failure snapshot before the inbox step and by
+   sourcing the recovery evidence from the activity log rather than assuming which run did
+   it — the agent legitimately recovers in whichever run notices first.
+2. A stale pool id in a client that had outlived a server restart produced an alarming error
+   banner. A missing pool now just refreshes the list.
+3. The needs table showed identical values in the "restock lead" and "will buy early"
+   columns, because the seed set them equal — hiding the exact distinction the copy was
+   explaining.
+
+**What we learned**
+The transcript bug is the interesting one. Every individual number was true; the *order*
+made them read as a contradiction. A demo that reports live state at render time rather than
+at the moment things happened will eventually tell a true story dishonestly.
+
+**Relevant commits / files**
+`apps/web/src/*`, `services/agent/pool/services/demo.py`, `services/agent/pool/data/seed.py`

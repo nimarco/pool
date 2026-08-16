@@ -13,7 +13,7 @@ export JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION := 1
 
 .PHONY: help
 help: ## Show this help
-	@echo "Pool — autonomous neighbourhood group-buying coordinator"
+	@echo "Pool — autonomous collective-purchasing coordinator"
 	@echo
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 	  | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -53,6 +53,13 @@ test: ## Run the full test suite (offline, no AWS, no model tokens)
 test-demo: ## Prove the showcase scenario end to end
 	cd $(AGENT) && .venv/bin/python -m pytest tests/test_demo_scenario.py -v
 
+.PHONY: test-safety
+test-safety: ## Run only the safety-critical suites (bounds, payments, policy, viability)
+	cd $(AGENT) && .venv/bin/python -m pytest \
+	  tests/test_agent_bounds.py tests/test_payments.py \
+	  tests/test_policy.py tests/test_viability.py -q
+	cd $(INFRA) && .venv/bin/python -m pytest test_stack.py -q
+
 .PHONY: demo
 demo: ## Run the showcase scenario and print the transcript
 	cd $(AGENT) && .venv/bin/python -m pool.scripts.demo
@@ -72,6 +79,11 @@ build: ## Build the web app for production
 .PHONY: secret-scan
 secret-scan: ## Scan the repo for anything that looks like a credential
 	@bash scripts/secret_scan.sh
+
+.PHONY: diagram
+diagram: ## Re-render the architecture diagram from its Mermaid source
+	npx -y @mermaid-js/mermaid-cli@11 -i docs/architecture.mmd -o docs/architecture.svg -b transparent
+	@echo "→ docs/architecture.svg"
 
 .PHONY: qa
 qa: lint typecheck test build secret-scan ## Everything CI would run

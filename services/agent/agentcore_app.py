@@ -25,10 +25,13 @@ from typing import Any
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
+from pool.adapters.payments import build_payment_provider
+from pool.adapters.purchase import build_purchase_executor
 from pool.adapters.repository import build_repository
 from pool.adapters.routing import build_routing
 from pool.agent.coordinator import PoolCoordinator
 from pool.config import get_settings
+from pool.data.seed import COMMUNITY_ID, seed
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("pool.agentcore")
@@ -42,9 +45,24 @@ _repo = build_repository(_settings.repository, _settings.dynamodb_table, _settin
 _routing = build_routing(
     _settings.routing_provider, _settings.aws_region, _settings.max_route_matrix_cells
 )
-_coordinator = PoolCoordinator(_repo, settings=_settings, routing=_routing)
+_coordinator = PoolCoordinator(
+    _repo,
+    settings=_settings,
+    routing=_routing,
+    # Same adapters as every other entrypoint: simulated payments unless a TEST-mode
+    # Stripe key is configured, and the clearly-labelled simulated purchase executor.
+    payments=build_payment_provider(_settings.payment_provider, _settings.stripe_api_key),
+    purchaser=build_purchase_executor(_settings.purchase_executor),
+)
 
-ALLOWED_TRIGGERS = {"scheduled_scan", "manual", "dropout_recovery", "event", "smoke_test"}
+ALLOWED_TRIGGERS = {
+    "scheduled_scan",
+    "manual",
+    "advance_pools",
+    "dropout_recovery",
+    "event",
+    "smoke_test",
+}
 
 
 @app.entrypoint
@@ -55,6 +73,7 @@ def invoke(payload: dict[str, Any], context: Any = None) -> dict[str, Any]:
 
         {
           "workspace": "primary",          # optional, defaults to $POOL_WORKSPACE or "primary"
+          "community_id": "comm_...",      # optional, defaults to the demo Community
           "trigger": "scheduled_scan",     # optional, must be a known trigger
           "instruction": "..."             # optional override of the run instruction
         }
@@ -76,8 +95,19 @@ def invoke(payload: dict[str, Any], context: Any = None) -> dict[str, Any]:
     if instruction is not None:
         instruction = str(instruction)[:2000]
 
+    community_id = str(payload.get("community_id") or COMMUNITY_ID)
+
+    # A cold workspace has no Community, so a run would have nothing to coordinate.
+    # Seeding the synthetic dataset here keeps a scheduled invocation meaningful without
+    # a separate bootstrap step — and the data is the same synthetic set as everywhere.
+    if not _repo.list_communities(workspace):
+        counts = seed(_repo, workspace)
+        logger.info("seeded empty workspace=%s %s", workspace, counts)
+
     logger.info("coordination run starting workspace=%s trigger=%s", workspace, trigger)
-    run = _coordinator.run(workspace, trigger=trigger, instruction=instruction)
+    run = _coordinator.run(
+        workspace, trigger=trigger, instruction=instruction, community_id=community_id
+    )
     logger.info(
         "coordination run finished run_id=%s outcome=%s iterations=%d tools=%d reason=%s",
         run.id, run.outcome.value, run.iterations, len(run.tool_calls), run.termination_reason,

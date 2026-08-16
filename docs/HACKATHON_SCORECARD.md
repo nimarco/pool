@@ -1,10 +1,14 @@
 # Hackathon scorecard
 
-Maps Pool to the five judging categories. **Nothing here is marked complete unless it
-actually is.** Requirements verified against <https://agentsforhumans.devpost.com/> on
-2026-08-15 — re-verify before submitting.
+Maps Pool to the five judging categories. **Nothing is marked complete unless it actually
+is.** Requirements verified against <https://agentsforhumans.devpost.com/> on 2026-08-15 —
+re-verify before submitting.
 
 Legend: ✅ done · 🟡 partial · ⬜ not started · ❌ blocked
+
+Evidence is labelled by where it lives: **local** (runs here, verified), **ready**
+(implemented, never run against the real service), **cloud-verified** (observed working on
+AWS). Nothing is currently cloud-verified.
 
 ---
 
@@ -12,177 +16,218 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ❌ blocked
 
 | Requirement | Status | Notes |
 | --- | :-: | --- |
-| Built with Strands Agents SDK | ✅ | `strands-agents 1.52.0`. Core loop, tool surface, and the bounds hook are all Strands primitives — not a wrapper |
+| Built with Strands Agents SDK | ✅ | Core loop, twelve-tool surface, and the bounds hook are Strands primitives. Remove Strands and nothing runs |
 | Newly created in the submission period | ✅ | Repo initialised 2026-08-15; full git history |
-| Public repository | ⬜ | Not yet pushed to GitHub |
-| MIT or Apache license visible | ✅ | [`LICENSE`](../LICENSE) — MIT |
+| Public repository | ⬜ | Remote configured, not yet pushed |
+| MIT or Apache licence visible | ✅ | [`LICENSE`](../LICENSE) — MIT |
 | README | ✅ | [`README.md`](../README.md) |
 | Architecture diagram | ✅ | [`architecture.svg`](architecture.svg), source [`architecture.mmd`](architecture.mmd) |
 | Demo video ≤ 5 min | ⬜ | Script written: [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md). Not recorded |
 | AWS Builder ID | ⬜ | User action — account signup |
-| Live demo URL | ❌ | Infrastructure written and synth-verified; no AWS credentials available to deploy |
+| Live demo URL | ❌ | Stack written and synth-verified; **no AWS credentials configured**, so nothing is deployed |
 | Project description | ✅ | Draft: [`DEVPOST_DRAFT.md`](DEVPOST_DRAFT.md) |
-| Testing instructions | ✅ | README → Testing; `make test`, `make test-demo` |
-| Good Neighbor track positioning | ✅ | Explicit in README, landing page, and Devpost draft |
+| Testing instructions | ✅ | README → Run it. `make qa`, `make demo` |
+| Good Neighbor framing | ✅ | Explicit in README, landing page, demo script, Devpost draft |
 
 ---
 
 ## 1. Technological Implementation
 
-**Strongest evidence:**
+**Strongest evidence (all local, all verified):**
 
-- **Strands is load-bearing.** The agent loop, the seven typed tools, and the safety
-  system are all Strands primitives. `BoundedRun` is a real `HookProvider` subscribing to
+- **Strands is load-bearing.** `BoundedRun` is a real `HookProvider` subscribing to
   `BeforeModelCallEvent`, `BeforeToolCallEvent`, `AfterToolCallEvent`, and
-  `AfterModelCallEvent`. Remove Strands and the project does not run.
-- **A genuinely adaptive loop.** The agent chooses which product to investigate, which
-  pickup site, whether a result is worth acting on, whether to recover a broken pool, and
-  when to stop with no action. It is not `if quantity > 80: create_pool()`.
-- **A hard AI/deterministic boundary.** Money, quantities, thresholds, allocations, routes,
-  and authorization are computed in pure modules that cannot import a model client.
+  `AfterModelCallEvent`. The tool surface is twelve `@tool` functions. This is not a
+  wrapper around code that would work identically without it.
+- **A genuinely adaptive loop.** The agent chooses which product to investigate, whether
+  the result is worth acting on, whether to recruit a host, when to price exactly, which
+  pool to repair, when to lock, and when to stop having done nothing. It re-reads its work
+  queue after acting so it can see the consequences of its own decisions — capped, so
+  alternation never becomes polling.
+- **A hard AI/deterministic boundary that is structural, not stylistic.** `domain/`
+  performs no I/O and imports no adapter. Money, quantities, package maths, host
+  eligibility, Smart Join, and viability are pure functions. A model client cannot reach
+  them.
+- **Non-trivial deterministic work.** Exact-cent arithmetic with largest-remainder splits;
+  a per-buyer processing gross-up so nobody is silently subsidised; a bounded exact search
+  that picks the buyer set filling whole cases; a two-stage viability engine.
 - **Bounded autonomy, enforced not requested.** 8 iterations, 25 tool calls, duplicate
-  detection, 3 retries, 120 s wall clock, 100-cell route matrix — all configurable, all
-  tested by driving a deliberately-looping model through the real event loop.
-- **Idempotency.** Duplicate create, withdraw, approve, and recover are each tested by
-  calling them twice.
-- **Observability.** Every run stores trigger, tool sequence, iteration count, termination
-  reason, duration, and token usage — with no model reasoning text.
-- **219 tests**, all offline and free.
+  detection, 120 s wall clock, 100-cell route matrix — all configurable, all proven by
+  driving deliberately misbehaving models through the real event loop.
+- **Idempotency everywhere it matters.** Duplicate pool creation, authorisation, capture,
+  withdrawal, purchase, and webhook delivery are each tested by doing them twice.
+- **Payment state machine with real failure paths.** Authorise → capture at lock, with
+  declines, capture failures, cancellations, replays, and stale-authorisation handling.
+- **Observability.** Every run records trigger, tool sequence, iterations, termination
+  reason, duration, and token usage — with no model reasoning text, and arguments stored
+  as hashes so a run log cannot leak member details.
+- **469 tests** (445 application + 24 infrastructure), all offline and free.
 
-| Item | Status |
-| --- | :-: |
-| Strands foundational | ✅ |
-| Non-trivial adaptive agent loop | ✅ |
-| Typed, narrow tools | ✅ |
-| Deterministic domain separation | ✅ |
-| Bounded autonomy | ✅ |
-| Idempotency and invariants | ✅ |
-| Tests | ✅ 219 passing |
-| AgentCore Runtime deployment | 🟡 entrypoint written to the official contract; not deployed |
-| Live demo | ❌ blocked on AWS credentials |
-| Real Bedrock invocation | ❌ blocked on AWS credentials |
-| Real Amazon Location call | ❌ blocked; response parsing tested against the service model |
+| Item | Status | Evidence |
+| --- | :-: | --- |
+| Strands foundational | ✅ | local |
+| Adaptive, non-scripted agent loop | ✅ | local |
+| Twelve typed narrow tools, no escape hatch | ✅ | local |
+| Deterministic domain separation | ✅ | local |
+| Bounded autonomy | ✅ | local, `test_agent_bounds.py` |
+| Idempotency and invariants | ✅ | local |
+| Payment lifecycle | ✅ | local (simulated provider) |
+| Webhook verification and replay safety | ✅ | local |
+| Quote freshness enforcement | ✅ | local |
+| One-time pickup confirmation | ✅ | local |
+| Comprehensive tests | ✅ | 469 passing |
+| Bedrock real inference | 🟡 | **ready**, never invoked |
+| AgentCore Runtime | 🟡 | **ready** (`agentcore_app.py`), never deployed |
+| DynamoDB | 🟡 | **ready**, pinned by a fake-client test, never live |
+| EventBridge background path | 🟡 | **ready**, ships disabled |
+| Amazon Location | 🟡 | **ready**, never called |
+| Real cloud trace | ⬜ | Needs credentials |
 
-**Honest gap:** every AWS integration is written and unit-tested, but none has run against
-a live account. That is the single biggest thing standing between this and full marks here.
+**Exact next action:** configure a non-root AWS identity, grant Bedrock model access, then
+work down the verification order in the README.
+
+---
 
 ## 2. Design
 
 **Strongest evidence:**
 
-- A coherent consumer product, not a dashboard: landing page, neighbourhood view, pool
-  detail, decision inbox, needs table, map, agent activity, impact.
-- **Not a chatbot.** There is no chat box anywhere. The agent's output is a decision inbox
-  and an activity feed.
-- A real design system: paper-and-ink palette with one warm and one cool accent, serif
-  display type against a sans UI face, tabular numerals throughout. Explicitly avoids the
-  purple-gradient-and-sparkles AI house style.
-- Dark mode, responsive down to mobile, `prefers-reduced-motion` honoured, skip link,
-  focus-visible rings, ARIA progressbar on the threshold meter, keyboard-usable throughout.
-- Empty, loading, error, disabled and busy states all designed.
-- Microcopy carries the product thesis: *"Nothing needs you — Pool is working in the
-  background."*
+- **Four surfaces, each shaped for its user.** Buyer (needs, candidate pools, decision
+  inbox, final offer, pickup code), host (opportunity, live checklist, earnings
+  breakdown), operator (offers, payments, purchases, issues), judge (landing page, one
+  button that runs the whole story).
+- **Judge Mode is frictionless.** No signup, no verification, no configuration. Enter,
+  press one button, watch the entire lifecycle.
+- **The money is the interface.** "Where the money goes" shows merchandise, host pay,
+  processing, and Pool's fee as separate lines against the retail baseline. Hiding
+  operating costs behind a headline discount would be the easy version; this is the honest
+  one.
+- **Reasoning is legible, not decorative.** Host candidates show their score components
+  and the factual reason anyone is ineligible. The viability panel shows all eleven checks
+  with their details, passed or failed.
+- **Calm by default.** No polling, no badges, no engagement mechanics. The Decision Inbox
+  is usually empty, and says so.
+- **Deliberate visual language.** Paper and ink, one warm accent for "a human is needed",
+  one cool accent for "Pool acted alone". No gradient-and-sparkle AI house style.
+- **Verified responsive and dark-mode correct**, with no horizontal overflow at 375 px on
+  any view.
 
 | Item | Status |
 | --- | :-: |
-| Coherent consumer product | ✅ |
-| No chatbot dependency | ✅ |
-| Needs / map / pool lifecycle / inbox / activity / impact | ✅ |
-| Smart Join visible and explained | ✅ |
-| Responsive, accessible, dark mode | ✅ |
-| Empty / loading / error states | ✅ |
-| Smart Join *editing* UI | 🟡 policies are displayed and enforced; editing is API-only |
+| Frictionless judge mode | ✅ |
+| Buyer UX | ✅ |
+| Host UX | ✅ |
+| Operator UX | ✅ |
+| Decision Inbox | ✅ |
+| Transparent landed economics | ✅ |
+| Agent trace visible | ✅ |
+| Mobile responsive | ✅ |
+| Dark mode | ✅ |
+| Deployed and reachable | ❌ needs credentials |
+
+---
 
 ## 3. Potential Impact
 
 **Strongest evidence:**
 
-- A specific, real problem with a named cause: bulk pricing is inaccessible to households
-  because coordination labour, not software, is the bottleneck.
-- A specific audience: neighbourhoods, apartment buildings, campuses, food banks, schools,
-  small local organisations — the Good Neighbor track's actual subject.
-- Quantified from computed state: $99.00 saved across 9 households (42.3%), 7 commitments
-  made without interrupting anyone, 2 questions asked, 1 pool repaired.
-- A credible path beyond the demo: supplier portal, negotiated offers, pickup-host
-  compensation, and eventually direct demand aggregation with distributors.
-- Limitations stated plainly in the README rather than hidden.
+- **The behaviour already exists.** Informal campus bulk-buying is real and its failure
+  mode is well understood; Pool automates the part that makes it stop.
+- **A truthful impact claim.** Bulk pricing favours whoever can afford a larger upfront
+  purchase and has somewhere to put it. Pool lets several people reach that pricing
+  without each carrying the capital, quantity, storage, and coordination alone. No
+  charitable claim, no invented socioeconomic metric.
+- **Precommitment instead of speculative inventory.** The goods are sold before they are
+  bought. Nobody underwrites stock and hopes.
+- **A paid fulfilment role**, priced by the work actually done, funded by buyers rather
+  than subsidised.
+- **Metrics computed from records**, labelled as synthetic demo data, and never presented
+  as traction.
+- **A plausible pilot path** documented in [`PILOT_READINESS.md`](PILOT_READINESS.md),
+  with the unresolved questions named as legal rather than technical.
 
 | Item | Status |
 | --- | :-: |
-| Specific problem and audience | ✅ |
-| Savings computed, not asserted | ✅ |
-| Coordination burden quantified | ✅ |
-| Concrete demo scenario | ✅ |
-| Plausible commercial path | ✅ |
-| Realistic limitations documented | ✅ |
+| Real, observed problem | ✅ |
+| Honest impact framing | ✅ |
+| Campus wedge, community-general architecture | ✅ |
+| No speculative inventory | ✅ |
+| Transparent net savings | ✅ |
+| Plausible supplier path | ✅ documented |
+| Plausible controlled pilot | ✅ documented |
+| Real users | ⬜ none, and none claimed |
+
+---
 
 ## 4. Creativity & Originality
 
 **Strongest evidence:**
 
-- **Latent demand discovery.** The system searches a space nobody asked about. There is no
-  "create a group" button, by design — that flow would be a product failure.
-- **The organiser becomes the agent.** Group buying is old; making the coordination layer
-  itself autonomous is the new part.
-- **Autonomous dropout recovery** that repairs the group without disturbing the people who
-  did nothing wrong — "form tight, repair wide."
-- **Machine-verifiable autonomy policy.** Smart Join is a pure function with a six-rule
-  audit trail, not an LLM judging whether something feels close enough.
-- **A genuine HITL subtlety:** if a recovery would push an existing member's share past
-  their own cap, Pool asks instead of silently repricing them.
+- **Latent-demand discovery.** Nobody creates the group. That single inversion is the
+  product, and it is what makes this an agent problem rather than a marketplace.
+- **The organiser is the thing being automated** — not the shopping.
+- **Three-sided coordination.** Buyers, bulk supply, and local fulfilment labour, in one
+  transaction that only exists if all of them work.
+- **Timing-aware demand pull-forward** with per-member authority. The agent decides
+  whether to investigate; the deterministic engine decides who is actually eligible.
+- **Case-boundary fitting as a solver**, not a validation. "Zero speculative surplus"
+  becomes something the system can *achieve* rather than merely refuse.
+- **Payment-failure recovery that replaces exactly what was lost**, because
+  over-recruiting would trade a funding hole for surplus stock.
+- **A three-verdict autonomy boundary** where `NOT_ALLOWED` is reserved for situations no
+  prompt can fix.
+- **The agent does something end to end** — discovery through physical handoff — rather
+  than chatting about it.
 
 | Item | Status |
 | --- | :-: |
-| Latent demand discovery | ✅ |
-| Autonomous group formation | ✅ |
-| Automatic recovery | ✅ |
+| Latent demand, no manual group creation | ✅ |
+| Autonomous organiser replacement | ✅ |
+| Three-sided coordination | ✅ |
+| Timing-aware pull-forward | ✅ |
+| Host recruitment and ranking | ✅ |
 | Deterministic autonomy boundaries | ✅ |
-| Not a recommender or chat wrapper | ✅ |
+| Payment-failure recovery | ✅ |
+| Pickup completion | ✅ |
+| End-to-end, not conversational | ✅ |
 
-No "world's first" claims are made anywhere.
+---
 
 ## 5. Presentation
 
-| Item | Status |
-| --- | :-: |
-| Repeatable demo (`make demo`, one command) | ✅ |
-| End-to-end scenario asserted by tests | ✅ |
-| Architecture diagram | ✅ |
-| Clear narrative | ✅ |
-| Real agent trace visible in the UI | ✅ |
-| Clean UI | ✅ |
-| Demo script | ✅ written, ⬜ not recorded |
-| Devpost submission | 🟡 draft written, not submitted |
+| Item | Status | Notes |
+| --- | :-: | --- |
+| README explains the thesis | ✅ | |
+| Architecture doc and diagram | ✅ | Diagram shows only what is built |
+| Demo script | ✅ | [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md), timed to five minutes |
+| Devpost draft | ✅ | With an honesty checklist attached |
+| Pilot readiness | ✅ | [`PILOT_READINESS.md`](PILOT_READINESS.md) |
+| Startup thesis | ✅ | [`STARTUP_THESIS.md`](STARTUP_THESIS.md) |
+| Build history | ✅ | [`BUILD_HISTORY.md`](../BUILD_HISTORY.md) |
+| Article notes | ✅ | [`ARTICLE_NOTES.md`](ARTICLE_NOTES.md) |
+| Video recorded | ⬜ | |
+| Public repo pushed | ⬜ | |
+| Live URL in the video | ❌ | Needs credentials |
 
 ---
 
-## Bonus — Builder Center articles
+## Bonus: Builder Center article
 
-Up to +0.6 (0.2 each, max three). **All unpublished.** Material is captured as it happens in
-[`ARTICLE_NOTES.md`](ARTICLE_NOTES.md) and `BUILD_HISTORY.md`.
-
-**Requirement verified 2026-08-15:**
-
-> "Publish a post on builder.aws.com covering your **build journey and use of AWS** for this
-> hackathon. **Use Agents for Humans in your title.**"
-
-Two hard gates: the literal phrase *Agents for Humans* in the title, and content that is
-genuinely a build-journey-and-AWS piece rather than a product essay. All three articles were
-re-anchored on 2026-08-15 to satisfy the second gate.
-
-| # | Title | Blocked on | Status |
-| --- | --- | --- | :-: |
-| 1 | *Agents for Humans:* what I learned building an autonomous group-buying coordinator with Strands | nothing — writable now | ⬜ |
-| 2 | *Agents for Humans:* deploying a Strands agent to Bedrock AgentCore, and what broke | **real deployment** | ⬜ |
-| 3 | *Agents for Humans:* bounding an agent loop so it can't burn your AWS credits | nothing — writable now | ⬜ |
-
-⚠️ Re-check the wording before publishing — it changed once already during the event.
+Up to +0.6. Three drafts planned; see [`ARTICLE_NOTES.md`](ARTICLE_NOTES.md). Re-verify
+the current title and content requirements before publishing.
 
 ---
 
-## The honest summary
+## Honest summary
 
-Everything that can be built and proven without an AWS account is done and tested. The
-remaining gap is a single category: **nothing has run in the cloud.** Closing it needs AWS
-credentials, Bedrock model access, and roughly an hour — see *Remaining blockers* in the
-handoff notes.
+**Strong:** the agent architecture, the deterministic boundary, the economics, the
+lifecycle, the safety bounds, the test suite, the four UX surfaces, and the honesty of the
+documentation.
+
+**Weak, and only for one reason:** nothing has run on AWS. Bedrock, AgentCore, DynamoDB,
+EventBridge, and Amazon Location are all implemented and none is verified. There is no
+live demo URL, and no video.
+
+**The single highest-value unblock** is an AWS identity with Bedrock model access. Every
+🟡 in this document becomes a ✅ or a specific known failure within an hour of that
+existing — and a specific known failure would itself be worth writing about.

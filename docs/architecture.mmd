@@ -1,89 +1,99 @@
-%% Pool — system architecture
-%% Only services that are actually implemented appear here.
+%% Pool — implemented architecture.
+%% Everything on this diagram exists in the repository. Nothing aspirational appears
+%% here; future work is listed in ARCHITECTURE.md and PILOT_READINESS.md instead.
 %% Render: npx -y @mermaid-js/mermaid-cli -i docs/architecture.mmd -o docs/architecture.svg
 flowchart TB
-    subgraph client["Browser"]
-        WEB["Pool web app<br/>React + TypeScript<br/><i>no AWS credentials</i>"]
+    classDef people fill:#f8ece3,stroke:#e5c4a9,color:#1c1a17
+    classDef edge fill:#e8eef5,stroke:#b6c8dd,color:#1c1a17
+    classDef agent fill:#e6efe7,stroke:#b9d2be,color:#1c1a17
+    classDef pure fill:#ffffff,stroke:#cfc7ba,color:#1c1a17
+    classDef ext fill:#f2efe9,stroke:#cfc7ba,color:#5d5850
+    classDef off fill:#f2efe9,stroke:#cfc7ba,color:#8b857b,stroke-dasharray: 4 3
+
+    subgraph HUMANS[" "]
+        direction LR
+        BUYER["Buyer<br/><i>declares recurring needs</i>"]:::people
+        HOST["Host / runner<br/><i>paid fulfilment</i>"]:::people
+        OP["Operator<br/><i>offers, issues, overrides</i>"]:::people
     end
 
-    subgraph edge["Delivery"]
-        CF["CloudFront + S3<br/><i>static hosting</i>"]
-        APIGW["API Gateway HTTP API"]
+    WEB["React app<br/>buyer · host · operator · judge"]:::edge
+    CDN["S3 + CloudFront"]:::ext
+    API["FastAPI<br/>uvicorn local · Lambda + API Gateway cloud"]:::edge
+
+    subgraph SVC["services/ — orchestration"]
+        direction LR
+        COORD["coordination<br/>discover · form · price · lock"]:::agent
+        HOSTS["hosting<br/>recruit · rank · offer"]:::agent
+        PAY["payments<br/>authorise · capture · webhooks"]:::agent
+        FULF["fulfillment<br/>purchase · pickup · issues"]:::agent
+        COMMS["communication<br/>updates · exceptions"]:::agent
     end
 
-    subgraph compute["Application layer"]
-        API["Pool API — Lambda<br/>FastAPI + Mangum"]
-        AC["PoolCoordinator on<br/>Bedrock AgentCore Runtime"]
+    subgraph AGENT["agent/ — Strands"]
+        direction LR
+        LOOP["PoolCoordinator<br/>one bounded run"]:::agent
+        TOOLS["12 typed tools"]:::agent
+        BOUNDS["BoundedRun hooks<br/>iterations · calls · duplicates · clock"]:::agent
+        PLAN["Offline planner<br/><i>local only, zero tokens</i>"]:::off
     end
 
-    subgraph agent["Agent loop — Strands Agents SDK"]
-        LOOP["PoolCoordinator<br/>single agent"]
-        BOUNDS["BoundedRun hook<br/>iterations · tool calls · duplicates · wall clock"]
-        BR["Amazon Bedrock<br/><i>model reasons about which tool to call</i>"]
+    subgraph DOMAIN["domain/ — pure, no I/O"]
+        direction LR
+        ECON["economics<br/>landed price · host reward · case fitting"]:::pure
+        VIA["viability<br/>four-party gate"]:::pure
+        POL["policy<br/>Smart Join"]:::pure
+        MATCH["matching · timing · substitution"]:::pure
+        STATE["state machine · money · pickup"]:::pure
     end
 
-    subgraph tools["Typed tools — deterministic"]
-        T1["list_unmet_demand"]
-        T2["evaluate_opportunity"]
-        T3["create_buying_pool"]
-        T4["list_pools_needing_attention"]
-        T5["recover_pool"]
-        T6["record_no_action"]
+    subgraph ADAPT["adapters/"]
+        direction LR
+        REPO["repository"]:::pure
+        ROUTE["routing"]:::pure
+        PAYP["payment provider"]:::pure
+        PURCH["purchase executor"]:::pure
+        SRC["sourcing"]:::pure
+        VER["verification"]:::pure
     end
 
-    subgraph domain["Deterministic domain — source of truth"]
-        MATCH["matching<br/>compatibility · timing · geography"]
-        ALLOC["allocation<br/>integer-cent money · exact splits"]
-        POLICY["Smart Join policy engine<br/>machine-verifiable"]
-        FSM["pool state machine<br/>validated transitions"]
-    end
+    BEDROCK["Amazon Bedrock<br/><i>model inference</i>"]:::ext
+    AGENTCORE["Bedrock AgentCore Runtime<br/><i>agentcore_app.py</i>"]:::ext
+    DDB[("DynamoDB<br/>single table · on-demand · TTL")]:::ext
+    LOC["Amazon Location<br/>geo-routes"]:::ext
+    EB["EventBridge<br/><i>created DISABLED</i>"]:::off
+    CW["CloudWatch<br/>run records · 14-day retention"]:::ext
+    STRIPE["Stripe<br/><b>TEST mode only</b>"]:::ext
+    SIMBUY["Simulated purchase<br/><i>no supplier contacted</i>"]:::off
 
-    subgraph aws["AWS services"]
-        DDB[("DynamoDB<br/>authoritative state<br/><i>on-demand · TTL</i>")]
-        LOC["Amazon Location<br/>geo-routes matrix"]
-        EB["EventBridge rule<br/><b>disabled by default</b>"]
-        CW["CloudWatch Logs<br/><i>14-day retention</i>"]
-    end
-
-    subgraph out["Outputs"]
-        INBOX["Decision Inbox<br/><i>only what needs a human</i>"]
-        ACT["Activity feed<br/><i>structured audit</i>"]
-        TRACE["Agent trace<br/><i>tools + counters, no reasoning</i>"]
-    end
-
-    WEB --> CF
-    WEB -->|"REST"| APIGW --> API
-    EB -->|"scheduled scan"| API
+    BUYER --> WEB
+    HOST --> WEB
+    OP --> WEB
+    CDN --> WEB
+    WEB --> API
+    API --> SVC
     API --> LOOP
-    AC --> LOOP
 
-    LOOP <-->|"reason → tool choice"| BR
-    BOUNDS -.->|"enforces limits,<br/>cancels or terminates"| LOOP
-    LOOP --> T1 & T2 & T3 & T4 & T5 & T6
+    LOOP --> BOUNDS
+    LOOP --> TOOLS
+    LOOP -.->|"MODEL_PROVIDER=offline"| PLAN
+    LOOP -->|"MODEL_PROVIDER=bedrock"| BEDROCK
+    AGENTCORE --> LOOP
+    EB -.->|"manual trigger by default"| API
 
-    T2 --> MATCH & ALLOC & POLICY
-    T3 --> ALLOC & POLICY & FSM
-    T5 --> MATCH & ALLOC & POLICY & FSM
+    TOOLS --> SVC
+    SVC --> DOMAIN
+    SVC --> ADAPT
 
-    MATCH --> DDB
-    ALLOC --> DDB
-    FSM --> DDB
-    T2 --> LOC
-    T5 --> LOC
-
+    REPO --> DDB
+    ROUTE --> LOC
+    PAYP --> STRIPE
+    PURCH --> SIMBUY
     LOOP --> CW
-    AC --> CW
 
-    T3 --> INBOX
-    FSM --> ACT
-    BOUNDS --> TRACE
-
-    classDef det fill:#e6efe7,stroke:#3f6b4f,color:#1c1a17
-    classDef ai fill:#f8ece3,stroke:#a8562c,color:#1c1a17
-    classDef awsc fill:#e8eef5,stroke:#37506b,color:#1c1a17
-    classDef guard fill:#fdf1ef,stroke:#8f3222,color:#1c1a17
-
-    class MATCH,ALLOC,POLICY,FSM,T1,T2,T3,T4,T5,T6 det
-    class BR,LOOP ai
-    class DDB,LOC,EB,CW,APIGW,CF,API,AC awsc
-    class BOUNDS guard
+    COORD -.- ECON
+    COORD -.- VIA
+    COORD -.- POL
+    HOSTS -.- ECON
+    PAY -.- STATE
+    FULF -.- STATE

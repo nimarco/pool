@@ -1,204 +1,296 @@
-# Pool — architecture
+# Architecture
 
-![Pool architecture](architecture.svg)
+What is actually built. Anything not implemented is in the clearly-marked future section
+at the end, or in `PILOT_READINESS.md` — never on the diagram.
 
-Source: [`architecture.mmd`](architecture.mmd). Regenerate with:
+---
 
-```bash
-npx -y @mermaid-js/mermaid-cli@11 -i docs/architecture.mmd -o docs/architecture.svg -b transparent
+## The shape
+
+```
+                    ┌──────────────────────────────────────────┐
+   browser ────────▶│  FastAPI  (uvicorn local · Lambda cloud)  │
+                    └───────────────────┬──────────────────────┘
+                                        │
+                          ┌─────────────▼─────────────┐
+                          │      services/            │  orchestration:
+                          │  coordination · hosting   │  everything the agent
+                          │  payments · fulfillment   │  can *do* to the world
+                          │  communication · demo     │
+                          └─────────────┬─────────────┘
+                                        │
+              ┌─────────────────────────┼─────────────────────────┐
+              │                         │                         │
+      ┌───────▼────────┐      ┌─────────▼─────────┐      ┌────────▼────────┐
+      │    domain/     │      │     adapters/     │      │     agent/      │
+      │  no I/O at all │      │  the outside world│      │  Strands loop   │
+      │                │      │                   │      │                 │
+      │ economics      │      │ repository        │      │ coordinator     │
+      │ viability      │      │ routing           │      │ tools (×12)     │
+      │ policy         │      │ payments          │      │ bounds          │
+      │ hosting        │      │ purchase          │      │ offline planner │
+      │ matching       │      │ sourcing          │      └─────────────────┘
+      │ timing         │      │ verification      │
+      │ substitution   │      └───────────────────┘
+      │ pickup · money │
+      │ state          │
+      └────────────────┘
 ```
 
-Only services Pool actually uses appear in the diagram. There is no AgentCore Browser, no
-web search, no vector database, and no message queue, because none of them solve a problem
-Pool has.
+The layering is the point, and it is one rule: **`domain/` performs no I/O and imports no
+adapter.** Everything that must be *correct* — cents, quantities, package maths, policy
+verdicts, viability — is a pure function of its inputs. That is why the whole domain layer
+is testable without a fixture, and why swapping in DynamoDB, Bedrock, or Stripe changes
+nothing about what a price is.
 
 ---
 
-## The organising principle
+## AI decides what to do. Deterministic code determines what is true.
 
-> **AI decides what to do. Deterministic systems decide what is true.**
-
-This is not a slogan; it is the reason the codebase is shaped the way it is. Pool handles
-other people's money. A model that can invent a price, a quantity, or a threshold is a
-model that will eventually tell a household it owes $18.40 when it owes $24.60 — and the
-error is invisible until someone is out of pocket.
-
-So the split is enforced structurally:
-
-- **The agent** receives structured facts and chooses the next action.
-- **The tools** compute, validate, and persist. They are pure functions over stored state
-  wherever possible.
-- **Anything a household is shown** originates in a tool result, never in generated text.
-
-Concretely, `pool/agent/tools.py` returns JSON produced by `pool/services/coordination.py`,
-which in turn calls `pool/domain/{money,allocation,matching,policy,state}.py`. None of
-those modules import an LLM client. They cannot be influenced by a model at all.
-
----
-
-## Layers
-
-### 1. Domain (`services/agent/pool/domain/`)
-
-Pure Python. No I/O, no AWS, no model. Fully unit tested.
-
-| Module | Responsibility | Why it matters |
-| --- | --- | --- |
-| `money.py` | Integer-cent arithmetic; largest-remainder allocation; basis-point savings | Float money is a rounding bug waiting to become a wrong number in a message |
-| `matching.py` | Product compatibility, substitution consent, timing windows, geographic filters | This is where *latent* demand is discovered — the core insight |
-| `allocation.py` | Case-based bulk pricing, exact per-household splits, surplus accounting | Buying whole cases means real surplus; the maths shows it rather than hiding it |
-| `policy.py` | Smart Join evaluation; the autonomous/consequential action split | The autonomy boundary, as a pure function |
-| `state.py` | Pool state machine with an explicit legal-transition table | The model can request a transition; this decides if it is legal |
-| `models.py` | Entities with explicit `to_dict`/`from_dict` | One shape travels to DynamoDB, the API, and tool results |
-
-**Money design note.** `allocate_cost` uses the largest-remainder method so per-household
-shares always sum to exactly the group total — no cent is created or lost, and the split
-is deterministic and order-stable so two households comparing notes see consistent
-figures.
-
-**Pricing design note.** A bulk offer sells whole cases. To serve 155 lb the pool buys
-`ceil(155/25) = 7` cases (175 lb) and pays for all of them. That surplus cost is shared
-across the units households actually requested, which is what happens in a real
-split-a-case buy. Savings are always measured against the retail baseline each household
-would have paid alone.
-
-### 2. Services (`services/agent/pool/services/`)
-
-`coordination.py` is the only module that mutates the world. Every consequential operation
-is idempotent by explicit key, because agent systems retry:
-
-| Operation | Idempotency mechanism |
+| The model may decide | Deterministic code determines |
 | --- | --- |
-| `create_pool` | `idempotency_key = product:site:pickup_date`; a repeat returns the existing pool |
-| `withdraw_household` | Already-withdrawn membership returns `already_withdrawn` without re-subtracting |
-| `respond_to_decision` | A non-pending decision short-circuits; a contradictory second answer is ignored |
-| `recover_pool` | Replacements are keyed by `(pool, household)`, so a retry overwrites rather than adding |
-| `refresh_threshold` | Pure recomputation; safe to call any number of times |
+| which latent demand deserves investigation | cents, quantities, package maths |
+| whether to search or refresh supplier offers | MOQ, allocations, offer freshness |
+| whether a candidate pool is worth forming | timing eligibility, product compatibility |
+| whether to recruit a host | host eligibility, ranking, compensation |
+| which recovery strategy to attempt | buyer landed price, platform fee, funding state |
+| whether to surface a human decision | pickup-credential validity, state transitions |
+| when there is nothing worth doing | Smart Join verdicts, final viability |
 
-### 3. Adapters (`services/agent/pool/adapters/`)
+The model never invents a value from the right column. If a number reaches a human, it
+came from a tool. The tools return structured results, and what is stored and displayed is
+the tool's value — not the model's paraphrase of it.
 
-One interface, two implementations each — so tests are free and the cloud path is real.
+### The tool surface
 
-```
-Repository        → InMemoryRepository | DynamoDBRepository
-RoutingService    → DeterministicRouting | AmazonLocationRouting   (both behind CachingRouting)
-Model             → DeterministicPlannerModel | BedrockModel
-```
+Twelve narrow, typed tools. No shell, no arbitrary query, no generic mutation.
 
-**Routing.** Pool uses the `geo-routes` Routes API rather than the older `location`
-service specifically because geo-routes needs **no provisioned route calculator** — one
-less billable resource to create, forget, and pay for. Matrix size is checked *before* any
-call, because a route matrix is `origins × destinations` cells and is billed per cell. If
-the API fails, the adapter **raises**; it never substitutes a plausible-looking number. A
-hallucinated route is precisely the failure this architecture exists to prevent.
-
-**DynamoDB.** Single table, `pk = "<workspace>#<TYPE>"`, `sk = "<entity id>"`. Listing a
-type is one Query; a pool's memberships use a composite sort key so they are a
-`begins_with` query rather than a scan. Workspaces isolate demo visitors from each other
-and carry a TTL.
-
-### 4. Agent (`services/agent/pool/agent/`)
-
-**One agent, not a swarm.** Pricing, matching, routing, and policy are tools, not agents,
-because they need to be *correct*, not *creative*. Inventing a `PricingAgent` would add
-latency, cost, and a new way for a number to be wrong, in exchange for nothing.
-
-`coordinator.py` builds a Strands `Agent` with the tool set, the system prompt, and the
-bounds hook, then runs it once and records the outcome. The same method serves the
-EventBridge schedule, the AgentCore entrypoint, the demo button, and the tests — there is
-no separate demo path.
-
-**`bounds.py`** is the interesting part. It is a Strands `HookProvider`:
-
-| Hook | Bound | Behaviour on breach |
-| --- | --- | --- |
-| `BeforeModelCallEvent` | max iterations, wall clock | **raises** — the run unwinds into a recorded `loop_fault` |
-| `BeforeToolCallEvent` | max tool calls, duplicate calls | sets `cancel_tool` with an explanation the model can act on |
-| `AfterToolCallEvent` | — | records tool name, ok/failed, and a truncated summary |
-| `AfterModelCallEvent` | — | accumulates token usage |
-
-Tool-level bounds cancel gracefully so the model can wind down; run-level bounds raise,
-because at that point the run is no longer trusted to stop itself.
-
-Two implementation findings, both recorded in `BUILD_HISTORY.md`:
-
-1. Strands wraps a hook exception in `EventLoopException`, so `except BoundExceeded` never
-   fires at the caller. The coordinator walks the `__cause__`/`__context__` chain instead.
-   Misclassifying a fired bound as a crash would have hidden the thing we most need to see.
-2. Token usage is not on `stop_response.usage`; it rides in
-   `stop_response.message["metadata"]["usage"]`. Reading it per model call (rather than
-   from `AgentResult` at the end) means an aborted run still records what it spent — and an
-   aborted run is exactly the one whose cost matters.
-
-**`offline_model.py`** implements the Strands `Model` interface with a deterministic
-planner. It replaces the LLM and nothing else: the real event loop, tools, domain math,
-state machine, and approval boundary all execute. Runs using it are labelled
-`model_provider="offline"` in the run record and the UI, so a demo can always distinguish
-model-driven runs from free ones.
-
-### 5. API and web
-
-FastAPI under uvicorn locally and Lambda via Mangum in the cloud. The browser never holds
-AWS credentials and never calls an AWS service directly.
-
-Privacy is enforced at the boundary, not by convention: `coarse()` snaps coordinates to a
-~110 m grid before they leave the process, and `test_api.py` asserts the map endpoint can
-never return a precise household position.
-
----
-
-## Request flows
-
-### Background scan
-
-```
-EventBridge (disabled by default) ──▶ Lambda ──▶ PoolCoordinator.run()
-                                                      │
-                    ┌─────────────────────────────────┘
-                    ▼
-              Strands event loop  ◀──▶  Bedrock (choose next tool)
-                    │                        ▲
-                    │                        │ BoundedRun hook enforces limits
-                    ▼
-              list_unmet_demand ──▶ evaluate_opportunity ──▶ create_buying_pool
-                                          │                        │
-                              matching + allocation +      state machine + policy
-                              routing + policy                     │
-                                          ▼                        ▼
-                                      DynamoDB              Decision Inbox
-```
-
-### Dropout recovery
-
-```
-withdraw_household ──▶ refresh_threshold ──▶ status: recovering
-                                                   │
-PoolCoordinator.run("recover…") ───────────────────┘
-        │
-        ├─ list_pools_needing_attention   (finds the shortfall)
-        └─ recover_pool
-                ├─ widen the search radius (2 km → 8 km)
-                ├─ rank candidates: largest first, then nearest  ← fewest people disturbed
-                ├─ re-price the whole pool with replacements included
-                ├─ auto-join only where Smart Join deterministically passes
-                ├─ re-price existing members — but if a share rises past someone's own
-                │  cap, ask rather than silently changing their commitment
-                └─ refresh_threshold ──▶ threshold_met
-```
-
-The radius asymmetry is deliberate and is the reason the scenario works: **form tight,
-repair wide.** The initial pool stays close so travel burden is low; only a repair widens
-the net, and even then every candidate is still bounded by their own travel policy.
-
----
-
-## What is deliberately absent
-
-| Not used | Why |
+| Tool | Kind |
 | --- | --- |
-| Multi-agent swarm | Deterministic domains are tools. More agents would add cost and failure modes, not capability |
-| AgentCore Browser / Web Search | No product need. Synthetic supplier data demonstrates the coordination claim; scraping demonstrates scraping |
-| Vector database / RAG | Nothing here is a semantic retrieval problem |
-| Route calculator resource | `geo-routes` needs none — one less billable thing to forget |
-| Payments | Pool models commitment and approval. Real charging is not the innovation and would make a public demo unsafe |
-| EC2 / RDS / NAT / load balancer | Bills continuously. Asserted absent in `infra/test_stack.py` |
+| `list_latent_demand` | read |
+| `evaluate_pool_economics` | read |
+| `inspect_pool` | read |
+| `list_pools_needing_attention` | read |
+| `create_candidate_pool` | consequential — commits no money |
+| `find_host_candidates` | read |
+| `request_host_acceptance` | consequential |
+| `issue_final_offer` | consequential — refreshes the quote, authorises or asks |
+| `recover_pool` | consequential |
+| `lock_pool` | consequential — irreversible for buyers |
+| `execute_purchase` | consequential — simulated in this build |
+| `record_no_action` | terminal |
+
+Every consequential tool is idempotent by an explicit key, because agent systems retry and
+a retried `create_candidate_pool` must not produce two pools.
+
+---
+
+## The lifecycle
+
+One diagram, generated from one adjacency table
+([`domain/state.py`](../services/agent/pool/domain/state.py)). There is no second copy to
+drift.
+
+```
+FORMING ──▶ HOST_RECRUITING ──▶ HOST_SELECTED ──▶ FINAL_OFFER ──▶ FUNDING ──▶ LOCKED
+   │              │  ▲                │               │             │           │
+   │              │  └────────────────┘               │             │           ▼
+   │              ▼                                   ▼             ▼    PURCHASE_READY
+   │          FORMING                            RECOVERING ◀───────┘           │
+   │                                                  │                         ▼
+   │                                                  └──▶ FUNDING · LOCKED  PURCHASED
+   │                                                       FINAL_OFFER          │
+   │                                                       HOST_RECRUITING      ▼
+   └──────────────────────▶ FAILED · EXPIRED ◀──────────────────────────  DISTRIBUTING
+                                                                                │
+                                                                                ▼
+                                                                            COMPLETED
+```
+
+Two properties are asserted by tests rather than assumed:
+
+- Nothing reaches `LOCKED` except from `FUNDING` or `RECOVERING` — a pool cannot lock
+  before authorisations exist.
+- Nothing rewinds out of a post-capture state into a forming one. Once the money is
+  captured and the supplier order is committed, there is no undo.
+
+### Why the order is fixed
+
+Host selection must precede the final offer, because host compensation is part of the
+buyer's price. Quote refresh must precede the final offer, because a final price may never
+rest on a quote nobody re-checked. Authorisation must precede lock, because funded demand
+is what makes a pool viable. Capture happens at lock and not before.
+
+```
+host accepts → quote refreshed → exact landed cost → final offer
+  → buyer policy evaluated → authorisation → funded → viability → LOCK → capture
+```
+
+---
+
+## Economics
+
+Computed in [`domain/economics.py`](../services/agent/pool/domain/economics.py), in this
+order, because two components would otherwise be circular.
+
+```
+1.  merchandise        = cases × case price          (cases chosen to fill exactly)
+2.  host compensation  = base + per-order + distance + excess weight + optional handoff
+3.  platform fee       = share of GROSS savings      (retail − merchandise − host)
+4.  split (1+2+3) across buyers by units, largest-remainder
+5.  processing         = per-buyer gross-up: ceil((share + fixed) × 10000 / (10000 − bps))
+6.  all-in             = merchandise + host + fee + processing
+7.  net savings        = retail baseline − all-in
+```
+
+**Step 3** defines the fee against gross savings so it does not refer to the total it
+belongs to. Pool earns only when the group is genuinely better off.
+
+**Step 5** grosses up so the buyer's charge covers the processor's cut *of that charge*.
+Computing the fee on the pre-fee share instead under-recovers by a few cents per buyer —
+a silent platform subsidy, and precisely what the model forbids.
+
+Everything is integer cents. Floats never touch money.
+
+### Case fitting
+
+Cases do not divide evenly into demand, so `fit_to_cases` chooses the buyer subset whose
+quantities sum to a multiple of the case size and clear the minimum. It is a bounded exact
+search over reachable totals, capped a few cases above the minimum, preferring members
+whose need is already due over demand pulled forward from the future.
+
+If no combination lands on a case boundary, the pool does not lock and says so. Pool does
+not buy stock nobody ordered.
+
+### The viability engine
+
+One evaluator, two stages, every check run (never short-circuited) so the UI and the agent
+trace can show *every* reason a pool is not viable:
+
+```
+supplier_moq · offer_active · quote_fresh · package_allocation
+host_assigned · host_compensation · buyer_savings · buyer_authorisation
+platform_economics · timing · pickup_site
+                                   + funding, buyer_decisions_settled  (FINAL_LOCK only)
+```
+
+`PRE_FUNDING` asks "is this worth issuing a final offer for". `FINAL_LOCK` asks "may we
+take these people's money", runs against stored facts, and is the only gate to a capture.
+
+---
+
+## Data
+
+DynamoDB, single table, on-demand, TTL on demo workspaces.
+
+```
+pk = "<workspace>#<TYPE>"     sk = "<entity id>"
+```
+
+Listing a type is one query on `pk`. Children use a composite sort key
+(`"<pool_id>#<household_id>"`), so a pool's members, host candidates, allocations, and
+credentials are each a `begins_with` query rather than a scan.
+
+Workspaces isolate each demo visitor, so two judges cannot corrupt each other's run, and a
+TTL sweeps them away.
+
+Entities: `COMMUNITY` · `COMMUNITY_MEMBERSHIP` · `HOUSEHOLD` · `PRODUCT` · `NEED` ·
+`SUPPLIER` · `OFFER` · `SITE` · `POOL` · `MEMBERSHIP` · `HOST_PROFILE` · `HOST_CANDIDATE` ·
+`HOST_ASSIGNMENT` · `PAYMENT` · `PURCHASE` · `FULFILLMENT_RUN` · `ALLOCATION` ·
+`PICKUP_TOKEN` · `ANNOUNCEMENT` · `THREAD` · `MESSAGE` · `ISSUE` · `DECISION` · `ACTIVITY` ·
+`RUN`.
+
+**Application state is authoritative.** Agent memory is never authoritative for balances,
+commitments, quantities, membership, deadlines, payments, or permissions. Stripe is
+authoritative for provider payment facts; what Pool stores is its explicit mapping of them.
+
+Floats do not round-trip through the resource API's serialiser, so coordinates are stored
+as tagged strings and restored on read. Money is already integer cents and stores exactly.
+
+---
+
+## Bounds
+
+Enforced in the Strands event loop as a hook provider, not by asking the model nicely.
+
+| Bound | Default | On hit |
+| --- | --- | --- |
+| `MAX_AGENT_ITERATIONS` | 8 | Raises → run recorded as `loop_fault` |
+| `MAX_TOOL_CALLS_PER_RUN` | 25 | Cancels the tool with an explanatory result |
+| `MAX_DUPLICATE_TOOL_CALLS` | 2 | Identical name+args cancelled as a loop |
+| `WORKFLOW_TIMEOUT_SECONDS` | 120 | Raises |
+| `MAX_ROUTE_MATRIX_CELLS` | 100 | Checked *before* the call is made and billed |
+
+Tool-level bounds cancel so the model can wind down cleanly; run-level bounds raise,
+because at that point the run is no longer trusted to wind itself down. Every run ends in
+a recorded outcome — there is no path where it simply stops.
+
+Tool arguments are stored as a hash, not as text, so a run record can never carry a
+member's details into an artifact that gets published.
+
+---
+
+## Security and privacy
+
+- **No response contains a precise location.** Coordinates are snapped to a ~110 m grid
+  before leaving the process.
+- **No response contains a phone number, email, or payment reference.** Members appear to
+  each other as display names. A test asserts this across every read endpoint.
+- **Pickup credentials are stored as hashes only.** The plaintext exists once, in the
+  response that issued it. Re-issuing invalidates the previous pair. Verification is
+  constant-time.
+- **Webhooks are verified before they are parsed**, deduplicated by event id, and a replay
+  is a no-op. A client-submitted "payment succeeded" is never trusted.
+- **The Stripe adapter refuses any key that is not `sk_test_`**, unconditionally.
+- **Secrets never enter the CDK template**, because that would put them in `cdk.out` and
+  possibly in version control. An infra test asserts it.
+- **The model reaches the world through twelve typed tools** and nothing else.
+
+---
+
+## Local and cloud
+
+| Concern | Local (default) | Cloud |
+| --- | --- | --- |
+| Model | Deterministic planner, real Strands loop | Bedrock via Strands |
+| State | In-memory | DynamoDB |
+| Routing | Pure function of coordinates | Amazon Location `geo-routes` |
+| Payments | Simulated provider | Stripe **TEST** |
+| Purchase | Simulated executor | Simulated executor |
+| API | uvicorn | API Gateway + Lambda (Mangum) |
+| Web | Vite dev server | S3 + CloudFront |
+| Agent host | In-process | AgentCore Runtime |
+| Background | Manual trigger only | EventBridge, **created disabled** |
+
+The offline planner replaces the LLM and only the LLM: the same Strands event loop, the
+same tools, the same domain maths, the same state machine, the same policy engine. It
+exists so the entire suite runs for free — and cheap tests are tests that actually get run.
+It is never presented as evidence that Bedrock works; every run records its
+`model_provider`.
+
+### AWS status
+
+Implemented and synthesizing. **Not verified against a live account** — no credentials
+were configured. Nothing here claims a deployment that has not happened.
+
+Not in the CDK stack, deliberately:
+
+- **AgentCore Runtime** — deployed with its own official tooling, which owns the container
+  build and IAM. Duplicating that in CDK would be the fragile custom path.
+- **A route calculator** — `geo-routes` needs none, so there is one less billable resource
+  to create and forget.
+
+---
+
+## Future — not built
+
+Kept separate so the diagram above stays honest.
+
+- Supplier self-service portal and negotiated direct quotes
+- Stripe Connect host payouts (an internal compensation ledger exists instead)
+- Multi-hub fulfilment and multi-pool runs batched into one supplier trip
+  (`FulfillmentRun` holds a list of pools so this stays possible)
+- Institutional SSO verification
+- Account authentication (likely Cognito, kept separate from Community membership)
+- Cross-community pooling
+- Operator-placed and supplier-direct purchase executors

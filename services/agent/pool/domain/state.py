@@ -3,11 +3,15 @@
 The set of legal transitions is fixed here. The agent may *request* a transition
 through a tool, but this module decides whether it is allowed — an LLM never moves
 a pool into a state that violates an invariant (AGENTS.md §5).
+
+The adjacency below is the canonical lifecycle of §18. There is exactly one such
+diagram in this repository; the architecture doc renders this table rather than
+maintaining a second copy that can drift.
 """
 
 from __future__ import annotations
 
-from .models import TERMINAL_POOL_STATUSES, PoolStatus
+from .models import COMMITTED_POOL_STATUSES, TERMINAL_POOL_STATUSES, PoolStatus
 
 
 class IllegalTransition(ValueError):
@@ -20,27 +24,66 @@ class IllegalTransition(ValueError):
 
 
 # Explicit adjacency. Anything not listed is illegal by construction.
+#
+# Two properties are load-bearing and asserted in tests:
+#   * Nothing can reach LOCKED except through FUNDING or RECOVERING — a pool cannot
+#     be locked before authorisations exist.
+#   * Nothing can leave the post-capture states back into a forming state — once
+#     money is captured and the supplier order is committed, the pool cannot rewind.
 ALLOWED: dict[PoolStatus, frozenset[PoolStatus]] = {
-    PoolStatus.CANDIDATE: frozenset(
-        {PoolStatus.INVITING, PoolStatus.THRESHOLD_MET, PoolStatus.FAILED, PoolStatus.EXPIRED}
+    PoolStatus.FORMING: frozenset(
+        {PoolStatus.HOST_RECRUITING, PoolStatus.FAILED, PoolStatus.EXPIRED}
     ),
-    PoolStatus.INVITING: frozenset(
-        {PoolStatus.THRESHOLD_MET, PoolStatus.FAILED, PoolStatus.EXPIRED}
+    PoolStatus.HOST_RECRUITING: frozenset(
+        # Back to FORMING when demand drops below MOQ again while recruiting.
+        {PoolStatus.HOST_SELECTED, PoolStatus.FORMING, PoolStatus.FAILED, PoolStatus.EXPIRED}
     ),
-    PoolStatus.THRESHOLD_MET: frozenset(
-        {PoolStatus.CONFIRMED, PoolStatus.RECOVERING, PoolStatus.INVITING, PoolStatus.EXPIRED}
+    PoolStatus.HOST_SELECTED: frozenset(
+        # A host can fall through before the final offer is issued.
+        {PoolStatus.FINAL_OFFER, PoolStatus.HOST_RECRUITING, PoolStatus.FAILED, PoolStatus.EXPIRED}
     ),
-    # A dropout after confirmation still has to be repairable.
-    PoolStatus.CONFIRMED: frozenset(
-        {PoolStatus.RECOVERING, PoolStatus.COMPLETED, PoolStatus.EXPIRED}
+    PoolStatus.FINAL_OFFER: frozenset(
+        {PoolStatus.FUNDING, PoolStatus.RECOVERING, PoolStatus.FAILED, PoolStatus.EXPIRED}
+    ),
+    PoolStatus.FUNDING: frozenset(
+        {PoolStatus.LOCKED, PoolStatus.RECOVERING, PoolStatus.FAILED, PoolStatus.EXPIRED}
     ),
     PoolStatus.RECOVERING: frozenset(
-        {PoolStatus.THRESHOLD_MET, PoolStatus.INVITING, PoolStatus.FAILED, PoolStatus.EXPIRED}
+        # Recovery may need a new host, a fresh quote, or simply more funded demand.
+        {
+            PoolStatus.FUNDING,
+            PoolStatus.LOCKED,
+            PoolStatus.FINAL_OFFER,
+            PoolStatus.HOST_RECRUITING,
+            PoolStatus.FAILED,
+            PoolStatus.EXPIRED,
+        }
     ),
+    PoolStatus.LOCKED: frozenset({PoolStatus.PURCHASE_READY, PoolStatus.FAILED}),
+    PoolStatus.PURCHASE_READY: frozenset({PoolStatus.PURCHASED, PoolStatus.FAILED}),
+    PoolStatus.PURCHASED: frozenset({PoolStatus.DISTRIBUTING, PoolStatus.FAILED}),
+    PoolStatus.DISTRIBUTING: frozenset({PoolStatus.COMPLETED, PoolStatus.FAILED}),
     PoolStatus.FAILED: frozenset(),
     PoolStatus.EXPIRED: frozenset(),
     PoolStatus.COMPLETED: frozenset(),
 }
+
+#: Statuses in which more provisional demand can still join.
+OPEN_TO_JOINING = frozenset(
+    {PoolStatus.FORMING, PoolStatus.HOST_RECRUITING, PoolStatus.RECOVERING}
+)
+
+#: Statuses in which a supplier quote may still be refreshed and re-priced.
+REPRICEABLE = frozenset(
+    {
+        PoolStatus.FORMING,
+        PoolStatus.HOST_RECRUITING,
+        PoolStatus.HOST_SELECTED,
+        PoolStatus.FINAL_OFFER,
+        PoolStatus.FUNDING,
+        PoolStatus.RECOVERING,
+    }
+)
 
 
 def can_transition(current: PoolStatus, requested: PoolStatus) -> bool:
@@ -60,3 +103,12 @@ def assert_transition(current: PoolStatus, requested: PoolStatus) -> PoolStatus:
 
 def is_terminal(status: PoolStatus) -> bool:
     return status in TERMINAL_POOL_STATUSES
+
+
+def is_committed(status: PoolStatus) -> bool:
+    """True once buyers have been charged and the supplier order is committed (§59)."""
+    return status in COMMITTED_POOL_STATUSES
+
+
+def is_open_to_joining(status: PoolStatus) -> bool:
+    return status in OPEN_TO_JOINING

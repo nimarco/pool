@@ -64,23 +64,43 @@ better spreadsheets. The organiser is the bottleneck, and the organiser is unpai
 
 ### Material captured
 
-- **The economics, concretely.** Retail jasmine rice $1.35/lb. Wholesale $0.69/lb in 25 lb
-  bags with a 150 lb minimum. One household needing 15 lb cannot reach it. Eight households
-  needing 155 lb clear it easily and save 42.3%. The gap between those two facts *is* the
-  entire product.
+- **The economics, concretely.** Campus retail whey protein $46.99/tub. Wholesale $31.50
+  in 12-tub cases with a 24-unit minimum. One student needing two tubs cannot reach it. Ten
+  students needing twenty-four clear it exactly — and after host pay, card processing, and
+  Pool's own fee they still land 23.6% below retail. The gap between those two facts *is*
+  the entire product, and the fact that the saving survives the honest costs is the part
+  worth writing about.
 - **Why it's agent-shaped, not CRUD-shaped.** The opportunity is latent — nobody says
-  "let's buy rice together", they separately buy rice. Discovering a viable group requires
+  "let's buy protein powder together", they separately buy protein powder. Discovering a
+  viable group requires
   searching a space no one requested. That is the distinguishing property.
 - **The design constraint that follows.** A "create a group and invite your neighbours"
   flow is a *product failure*, not a feature. If a human has to notice the opportunity
   first, we built the wrong thing. This single rule shaped the whole UI: there is no
   create-a-pool button anywhere.
-- **The demand shape that makes it work.** 25 synthetic households, 29 standing
-  declarations. The eight-household rice pool emerges from declarations that were never
-  coordinated.
+- **The demand shape that makes it work.** 24 synthetic members, 33 standing declarations.
+  The ten-student protein pool emerges from declarations that were never coordinated — and
+  it only *reaches* the minimum because two students had authorised buying early.
+- **The best beat in the whole demo, and it was almost an accident.** Current demand is 18
+  units against a 24-unit minimum. The supplier sells 12-unit cases. So the pool needs
+  exactly six more units, from people whose need isn't due yet, who explicitly said they'd
+  buy early. Three constraints that could each have been decoration turn out to interlock:
+  minimum, case boundary, and per-person timing authority. Nothing about that was designed
+  top-down; it fell out of taking each rule seriously.
 - **Quiet by default.** Every notification spends the attention the product exists to
   conserve. A Pool that pings you six times to assemble one order has reproduced the
-  problem. Measured outcome in the demo: 7 commitments, 2 questions.
+  problem. Measured outcome in the demo: 8 commitments made without asking, 3 questions
+  asked in total.
+- **The third side nobody models.** Most group-buying writing covers buyers and suppliers
+  and stops. Somebody still has to physically collect thirty kilos and hand it out. Making
+  that a *paid role priced by the work done* — and refusing to let the host front the
+  purchase — is what turns a favour into something repeatable. Half the domain model exists
+  because of that one decision.
+- **Refusing to hide a cost is a design constraint, not a virtue signal.** The naive
+  processing-fee calculation under-recovers by a few cents per buyer. Nobody would notice.
+  It is also a silent platform subsidy, which means the unit economics you're showing
+  people aren't the ones you have. Grossing it up properly took twenty minutes and one
+  test.
 
 ### Good Neighbor framing
 
@@ -216,7 +236,7 @@ can put in front of someone's money.
   compatible latent demand beats broadcasting to the whole pool. The measurable claim:
   during recovery, zero existing members were contacted. There's a test asserting nobody
   else was re-invited.
-- **Form tight, repair wide.** The formation radius is 2 km; the recovery radius is 8 km.
+- **Form tight, repair wide.** The formation radius is 1.6 km; the recovery radius is 4 km.
   Deliberate asymmetry: keep the initial travel burden low, widen only to repair — and even
   then every candidate is still bounded by their own travel policy.
 - **Explainability without chain-of-thought.** Run records store tool names, counters,
@@ -226,6 +246,33 @@ can put in front of someone's money.
   iteration cap stopped it and recorded a `loop_fault`. Two lessons worth writing: the
   safety net must fail *loudly* (a silent truncation would have looked like a normal empty
   result), and a system that relies on its safety net every run has a bug, not a design.
+- **Three verdicts, not two.** The obvious autonomy design is a boolean: may I act, or must
+  I ask? That is wrong, because some situations *no prompt can fix*. A product outside
+  someone's stated substitution authority, or a pickup day they cannot make, is not a
+  question — it is a disqualification. Splitting `NOT_ALLOWED` out from
+  `HUMAN_APPROVAL_REQUIRED` removed a whole category of "asking someone something pointless"
+  and simplified the pricing loop, because ineligible buyers are removed and the price
+  recomputed rather than left pending forever.
+- **The agent needs to see the consequences of its own actions.** A planner that reads its
+  work queue once, acts, and then decides from the stale view will never notice that the
+  pool it just repaired has become lockable. Re-reading after acting fixes it — but
+  unbounded re-reading is just polling with extra steps, so the alternation is capped, and
+  the duplicate-call guard would catch it anyway. "Observe after acting, at most twice" is
+  a small pattern that made the whole loop work.
+- **The bug I'd write a whole section about: recovery over-recruited.** The first version
+  computed the funding gap as "threshold minus authorised units", which silently counted
+  buyers who simply hadn't answered their final offer yet. So it recruited replacements for
+  people who hadn't left, filled a hole that wasn't there, and left the pool oversubscribed
+  — trading a funding problem for exactly the speculative-stock problem the product exists
+  to prevent. The fix is conceptual, not mechanical: **distinguish demand that is *lost*
+  from demand that is *pending*.** Only failed authorisations, withdrawals, and declines are
+  a hole. And replacements must sum to *exactly* the gap, because "at least enough" breaks
+  the case boundary.
+- **The corollary about honest reporting.** Once that was fixed, recovery still reported
+  `recovered=False` when the pool was whole — because success was measured against *funded*
+  units, which cannot be complete while humans are still deciding. Recovery's job is to fill
+  the hole, not to finish the pool. Measuring an operation against something it does not
+  control produces a system that lies about its own outcomes in a way tests happily pass.
 
 ### Structure sketch
 
@@ -247,10 +294,13 @@ can put in front of someone's money.
 | Screenshot: decision inbox with "why you're being asked" | 1, 3 | ⬜ |
 | Screenshot: activity feed showing the automatic recovery | 1, 3 | ⬜ |
 | Screenshot: agent trace with tool sequence and termination reason | 2, 3 | ⬜ |
-| Screenshot: neighbourhood map showing approximate positions | 1 | ⬜ |
+| Screenshot: community map showing approximate positions | 1 | ⬜ |
+| Screenshot: "where the money goes" cost breakdown | 1, 3 | ⬜ |
+| Screenshot: host candidates with score components and refusal reasons | 1, 3 | ⬜ |
+| Screenshot: viability panel, all eleven checks | 3 | ⬜ |
 | Real Bedrock run: latency, tokens, cost | 2 | ⬜ blocked |
 | Real AgentCore deployment output and trace | 2 | ⬜ blocked |
 | Real vs. deterministic routing comparison | 2 | ⬜ blocked |
 | `make demo` terminal transcript | all | ✅ reproducible any time |
-| Test output: 219 passing | 2 | ✅ |
+| Test output: 469 passing (445 app + 24 infra) | 2 | ✅ |
 | Synthesized CloudFormation showing the disabled schedule | 2 | ✅ |

@@ -1,13 +1,15 @@
-"""The agent's tool surface.
+"""The agent's tool surface (§95).
 
 Narrow, typed, and structured. Each tool is either a *read* (safe, unlimited) or a
 single *consequential* operation with idempotency and an approval boundary baked in.
 There is no generic "run SQL" or "update anything" escape hatch — the model reaches
-the world only through these seven doors (AGENTS.md §4).
+the world only through these doors (AGENTS.md §4).
 
 Every tool returns a JSON string. The numbers inside come from the deterministic
-services layer; the agent's job is to decide which door to open next, never to
-compute or restate a value (AGENTS.md §5).
+services layer; the agent's job is to decide which door to open next, never to compute
+or restate a value (AGENTS.md §5). In particular, the model can ask *whether* a host is
+eligible, *whether* a pool is viable, and *whether* a buyer's policy passes — it can
+never decide any of those things.
 """
 
 from __future__ import annotations
@@ -18,60 +20,64 @@ from typing import Any
 
 from strands import tool
 
-from ..adapters.repository import Repository
-from ..adapters.routing import RoutingService
 from ..domain.matching import haversine_km
-from ..domain.models import MembershipState, PoolStatus, RunOutcome
+from ..domain.models import (
+    DecisionState,
+    ParticipationState,
+    PoolStatus,
+    RunOutcome,
+)
 from ..domain.money import bps_to_pct_str, format_cents
+from ..domain.viability import ViabilityStage
 from ..services import coordination as coord
+from ..services import fulfillment as fulfil
+from ..services import hosting
+from ..services.context import PoolContext
 
 
 @dataclass
 class ToolContext:
     """Everything the tools are allowed to touch, and the run they belong to."""
 
-    repo: Repository
-    ws: str
-    routing: RoutingService
-    run_id: str
+    pool: PoolContext
+    community_id: str
     outcome: RunOutcome = RunOutcome.NO_ACTION
     created_pool_ids: list[str] = field(default_factory=list)
+    advanced_pool_ids: list[str] = field(default_factory=list)
     recovered_pool_ids: list[str] = field(default_factory=list)
     decisions_created: int = 0
     no_action_reason: str = ""
+
+    @property
+    def repo(self):
+        return self.pool.repo
+
+    @property
+    def ws(self) -> str:
+        return self.pool.ws
 
 
 def _json(payload: dict[str, Any]) -> str:
     return json.dumps(payload, default=str)
 
 
-def _pooled_household_ids(repo: Repository, ws: str, product_id: str) -> set[str]:
-    """Households already inside a live pool for this product — do not re-recruit them."""
-    out: set[str] = set()
-    for pool in repo.list_pools(ws):
-        if pool.product_id != product_id:
-            continue
-        if pool.status in {PoolStatus.FAILED, PoolStatus.EXPIRED}:
-            continue
-        for m in repo.list_memberships(ws, pool.id):
-            if m.state in {MembershipState.COMMITTED, MembershipState.INVITED}:
-                out.add(m.household_id)
-    return out
+def _suggest_site(ctx: ToolContext, household_ids: list[str]) -> tuple[str, str]:
+    """Pick the public pickup site that serves the most interested members.
 
+    Coverage first, then total travel: the best site is the one with the most people
+    inside the formation radius, breaking ties on aggregate distance. A centroid would
+    drift toward outliers and pick a site convenient for nobody.
 
-def _suggest_site(repo: Repository, ws: str, household_ids: list[str]) -> tuple[str, str]:
-    """Pick the public pickup site that serves the most interested households.
-
-    Coverage first, then total travel: the best site is the one with the most
-    households inside the formation radius, breaking ties on aggregate distance. A
-    centroid would drift toward outliers and pick a site convenient for nobody.
-
-    Public sites only. Naming a private residence is a consequential action needing
-    its owner's approval, so the agent is never handed one as a default (AGENTS.md §5).
+    Public sites only. Naming a private residence is a consequential action needing its
+    owner's approval, so the agent is never handed one as a default (AGENTS.md §5).
     """
-    households = {h.id: h for h in repo.list_households(ws)}
+    households = {h.id: h for h in ctx.repo.list_households(ctx.ws)}
     points = [households[h] for h in household_ids if h in households]
-    sites = [s for s in repo.list_sites(ws) if s.is_public]
+    sites = [
+        s
+        for s in ctx.repo.list_sites(ctx.ws)
+        if s.is_public and s.community_id == ctx.community_id
+    ]
     if not sites:
         return "", ""
     if not points:
@@ -80,7 +86,7 @@ def _suggest_site(repo: Repository, ws: str, household_ids: list[str]) -> tuple[
     def score(site) -> tuple[int, float, str]:
         distances = [haversine_km(p.lat, p.lon, site.lat, site.lon) for p in points]
         covered = sum(1 for d in distances if d <= coord.FORMATION_RADIUS_KM)
-        # Negative coverage so a plain min() prefers more households.
+        # Negative coverage so a plain min() prefers more members.
         return (-covered, sum(d for d in distances if d <= coord.FORMATION_RADIUS_KM), site.id)
 
     best = min(sites, key=score)
@@ -91,111 +97,113 @@ def build_tools(ctx: ToolContext) -> list:
     """Construct the tool set bound to one run's context."""
 
     @tool
-    def list_unmet_demand() -> str:
-        """List declared household needs that no active buying pool is currently serving.
+    def list_latent_demand() -> str:
+        """List recurring needs in this community that no active pool is serving.
 
-        Read-only. Returns candidate products ranked by how much aggregate demand is
-        going unserved, each with a suggested public pickup site. Use this first to
-        find out where an opportunity might exist.
+        Read-only. This is where the product's core claim lives: nobody declared a
+        group, so the opportunity has to be discovered from standing declarations.
+        Returns candidate products ranked by how much aggregate demand is unserved,
+        each with a suggested public pickup site.
         """
-        repo, ws = ctx.repo, ctx.ws
-        products = {p.id: p for p in repo.list_products(ws)}
+        products = {p.id: p for p in ctx.repo.list_products(ctx.ws)}
         buckets: dict[str, list] = {}
-        for need in repo.list_needs(ws):
-            if not need.active:
+        for need in ctx.repo.list_needs(ctx.ws):
+            if not need.active or need.community_id != ctx.community_id:
                 continue
             product = products.get(need.product_id)
             if product is None:
                 continue
-            # Group by substitute family so related products surface together.
             buckets.setdefault(product.substitute_group or product.id, []).append(need)
 
         opportunities = []
         for group, needs in buckets.items():
-            representative = products[needs[0].product_id]
-            # Prefer the product with the most demand inside the family.
             by_product: dict[str, int] = {}
             for n in needs:
                 by_product[n.product_id] = by_product.get(n.product_id, 0) + n.quantity
             target_id = max(by_product.items(), key=lambda kv: (kv[1], kv[0]))[0]
             representative = products[target_id]
 
-            already = _pooled_household_ids(repo, ws, target_id)
+            already = coord.pooled_household_ids(ctx.pool, ctx.community_id, target_id)
             open_needs = [n for n in needs if n.household_id not in already]
             if not open_needs:
                 continue
-            household_ids = [n.household_id for n in open_needs]
-            site_id, site_name = _suggest_site(repo, ws, household_ids)
+            site_id, site_name = _suggest_site(ctx, [n.household_id for n in open_needs])
             opportunities.append(
                 {
                     "product_id": target_id,
                     "product_name": representative.name,
                     "substitute_group": group,
                     "unserved_units": sum(n.quantity for n in open_needs),
-                    "household_count": len({n.household_id for n in open_needs}),
+                    "member_count": len({n.household_id for n in open_needs}),
                     "suggested_pickup_site_id": site_id,
                     "suggested_pickup_site_name": site_name,
                 }
             )
 
-        opportunities.sort(key=lambda o: (-o["household_count"], -o["unserved_units"], o["product_id"]))
+        opportunities.sort(
+            key=lambda o: (-o["member_count"], -o["unserved_units"], o["product_id"])
+        )
         return _json({"opportunities": opportunities, "count": len(opportunities)})
 
     @tool
-    def evaluate_opportunity(product_id: str, pickup_site_id: str, pickup_in_days: int = 14) -> str:
-        """Evaluate whether a worthwhile bulk buying opportunity exists for one product.
+    def evaluate_pool_economics(
+        product_id: str, pickup_site_id: str, include_future_demand: bool = True
+    ) -> str:
+        """Evaluate whether a worthwhile bulk opportunity exists for one product.
 
         Read-only and safe to call freely: it contacts nobody and commits nothing.
-        Computes compatible demand, the best bulk offer, exact per-household costs and
-        savings, real travel times to the pickup site, and each household's Smart Join
-        eligibility.
+        Computes compatible demand, the best bulk tier, complete landed economics
+        (merchandise + host pay + processing + Pool fee), real travel times, and each
+        member's Smart Join eligibility against the estimated price.
 
         Args:
-            product_id: The product to evaluate, e.g. from list_unmet_demand.
-            pickup_site_id: Candidate pickup location.
-            pickup_in_days: How many days out to schedule pickup. Default 14.
+            product_id: The product to evaluate, e.g. from list_latent_demand.
+            pickup_site_id: Candidate public pickup location.
+            include_future_demand: Whether to consider members who authorised an early
+                purchase. Their timing rules still decide who is actually eligible.
         """
         assessment = coord.evaluate_opportunity(
-            repo=ctx.repo,
-            ws=ctx.ws,
-            routing=ctx.routing,
+            ctx=ctx.pool,
+            community_id=ctx.community_id,
             product_id=product_id,
             pickup_site_id=pickup_site_id,
-            pickup_in_days=pickup_in_days,
-            exclude_household_ids=frozenset(_pooled_household_ids(ctx.repo, ctx.ws, product_id)),
+            include_future_demand=include_future_demand,
+            exclude_household_ids=frozenset(
+                coord.pooled_household_ids(ctx.pool, ctx.community_id, product_id)
+            ),
         )
         payload = assessment.to_dict()
-        if assessment.viable and assessment.pricing:
+        if assessment.viable and assessment.economics:
+            econ = assessment.economics
             payload["headline"] = (
-                f"{len(assessment.candidates)} households, "
-                f"{assessment.pricing.total_units} units, "
-                f"{bps_to_pct_str(assessment.pricing.total_savings_bps)} below retail, "
+                f"{len(assessment.candidates)} members, {econ.packages.total_units} units, "
+                f"{bps_to_pct_str(econ.net_savings_bps)} below retail after all costs, "
                 f"avg {assessment.avg_travel_minutes} min to {assessment.pickup_site_name}"
             )
         return _json(payload)
 
     @tool
-    def create_buying_pool(product_id: str, pickup_site_id: str, pickup_in_days: int = 14) -> str:
-        """Form a candidate buying pool from a viable opportunity.
+    def create_candidate_pool(product_id: str, pickup_site_id: str) -> str:
+        """Form a candidate pool from a viable opportunity.
 
-        Consequential. Households whose Smart Join policy deterministically passes are
-        committed automatically; everyone else receives an approval request rather than
-        being committed. Idempotent: calling twice for the same product, site, and
-        pickup date returns the existing pool instead of creating a duplicate.
+        Consequential, but it commits no money: members join **provisionally**, the
+        savings shown are an estimate, and fulfilment is still being recruited. No card
+        is touched until a host is selected and the exact final price is known.
+        Idempotent — calling twice for the same product, site, and distribution day
+        returns the existing pool.
 
         Args:
             product_id: Product to pool.
-            pickup_site_id: Pickup location.
-            pickup_in_days: Days until pickup. Default 14.
+            pickup_site_id: Public pickup location.
         """
         assessment = coord.evaluate_opportunity(
-            repo=ctx.repo,
-            ws=ctx.ws,
-            routing=ctx.routing,
+            ctx=ctx.pool,
+            community_id=ctx.community_id,
             product_id=product_id,
             pickup_site_id=pickup_site_id,
-            pickup_in_days=pickup_in_days,
-            exclude_household_ids=frozenset(_pooled_household_ids(ctx.repo, ctx.ws, product_id)),
+            exclude_household_ids=frozenset(
+                coord.pooled_household_ids(ctx.pool, ctx.community_id, product_id)
+            ),
         )
         if not assessment.viable:
             return _json(
@@ -203,18 +211,15 @@ def build_tools(ctx: ToolContext) -> list:
                  "product_id": product_id}
             )
 
-        key = f"{product_id}:{pickup_site_id}:{assessment.pickup_by}"
-        pool, created = coord.create_pool(
-            repo=ctx.repo, ws=ctx.ws, assessment=assessment,
-            run_id=ctx.run_id, idempotency_key=key,
+        key = f"{ctx.community_id}:{product_id}:{pickup_site_id}:{assessment.distribution_day}"
+        pool, created = coord.create_candidate_pool(
+            ctx=ctx.pool, assessment=assessment, idempotency_key=key
         )
-        members = ctx.repo.list_memberships(ctx.ws, pool.id)
-        pending = sum(1 for m in members if m.state == MembershipState.INVITED)
         if created:
             ctx.outcome = RunOutcome.POOL_CREATED
             ctx.created_pool_ids.append(pool.id)
-            ctx.decisions_created += pending
-        assert assessment.pricing is not None
+        econ = assessment.economics
+        assert econ is not None
         return _json(
             {
                 "created": created,
@@ -222,65 +227,197 @@ def build_tools(ctx: ToolContext) -> list:
                 "product_id": product_id,
                 "product_name": assessment.product_name,
                 "status": pool.status.value,
-                "member_count": len(members),
-                "committed_without_asking": sum(
-                    1 for m in members if m.state == MembershipState.COMMITTED
-                ),
-                "approval_requested": pending,
-                "total_units": assessment.pricing.total_units,
+                "member_count": len(assessment.candidates),
+                "provisional_units": econ.packages.total_units,
+                "current_units": assessment.current_units,
+                "future_units_pulled_forward": assessment.future_units,
                 "threshold_units": pool.threshold_units,
-                "group_savings": format_cents(assessment.pricing.total_savings_cents),
-                "savings_pct": bps_to_pct_str(assessment.pricing.total_savings_bps),
+                "estimated_group_savings": format_cents(econ.net_savings_cents),
+                "estimated_savings_pct": bps_to_pct_str(econ.net_savings_bps),
                 "pickup_site": assessment.pickup_site_name,
-                "pickup_by": assessment.pickup_by,
+                "distribution_day": assessment.distribution_day,
+                "host_status": "not yet recruited",
+            }
+        )
+
+    @tool
+    def find_host_candidates(pool_id: str) -> str:
+        """Evaluate who could fulfil this pool, and why.
+
+        Read-only. Candidates come from standing hosts and from pool members who
+        offered to host this specific pool. Returns each candidate's eligibility, the
+        factual reasons anyone is ineligible, their score components, and their
+        deterministic compensation — so a selection can be explained rather than
+        asserted.
+
+        Args:
+            pool_id: The pool that needs fulfilment.
+        """
+        hosting.open_host_recruiting(ctx=ctx.pool, pool_id=pool_id)
+        result = hosting.evaluate_host_candidates(ctx=ctx.pool, pool_id=pool_id)
+        return _json(result.to_dict())
+
+    @tool
+    def request_host_acceptance(pool_id: str) -> str:
+        """Offer the fulfilment job to the best-ranked eligible host candidate.
+
+        Consequential. Exactly one offer is outstanding at a time; offering does not
+        assign the job, and the candidate must accept. If an outstanding offer has
+        expired it is expired first and the next candidate is offered. If nobody
+        eligible remains and the host deadline has passed, the pool fails honestly
+        rather than cycling.
+
+        Args:
+            pool_id: The pool that needs a host.
+        """
+        hosting.open_host_recruiting(ctx=ctx.pool, pool_id=pool_id)
+        result = hosting.offer_to_next_host(ctx=ctx.pool, pool_id=pool_id)
+        if result.offered_household_id:
+            ctx.decisions_created += 1
+            if ctx.outcome == RunOutcome.NO_ACTION:
+                ctx.outcome = RunOutcome.POOL_ADVANCED
+            if pool_id not in ctx.advanced_pool_ids:
+                ctx.advanced_pool_ids.append(pool_id)
+        return _json(result.to_dict())
+
+    @tool
+    def issue_final_offer(pool_id: str) -> str:
+        """Refresh the supplier quote and issue exact final prices to buyers.
+
+        Consequential and order-dependent: it requires an accepted host, re-verifies
+        the supplier price, computes complete landed economics, then authorises the
+        buyers whose own Smart Join rules pass and asks everyone else. Buyers whose
+        rules cannot accept the final price are removed and the price is recomputed.
+        Refuses to proceed if case rounding would leave unallocated units — Pool does
+        not buy speculative stock.
+
+        Args:
+            pool_id: The pool to price and offer.
+        """
+        result = coord.issue_final_offer(ctx=ctx.pool, pool_id=pool_id)
+        if result.issued:
+            ctx.decisions_created += len(result.awaiting_decision)
+            if ctx.outcome == RunOutcome.NO_ACTION:
+                ctx.outcome = RunOutcome.POOL_ADVANCED
+            if pool_id not in ctx.advanced_pool_ids:
+                ctx.advanced_pool_ids.append(pool_id)
+        return _json(result.to_dict())
+
+    @tool
+    def inspect_pool(pool_id: str) -> str:
+        """Read one pool's current state: funding, host, timing, and viability.
+
+        Read-only. The viability verdict is the deterministic engine's, including every
+        check that failed and why.
+
+        Args:
+            pool_id: The pool to inspect.
+        """
+        pool = ctx.repo.get_pool(ctx.ws, pool_id)
+        if pool is None:
+            return _json({"error": "unknown pool", "pool_id": pool_id})
+        assignment = ctx.repo.get_host_assignment(ctx.ws, pool_id)
+        members = ctx.repo.list_memberships(ctx.ws, pool_id)
+        stage = (
+            ViabilityStage.FINAL_LOCK
+            if pool.status in {PoolStatus.FUNDING, PoolStatus.RECOVERING}
+            else ViabilityStage.PRE_FUNDING
+        )
+        verdict = coord.check_viability(ctx=ctx.pool, pool_id=pool_id, stage=stage)
+        return _json(
+            {
+                "pool_id": pool_id,
+                "status": pool.status.value,
+                "product_id": pool.product_id,
+                "threshold_units": pool.threshold_units,
+                "provisional_units": coord.provisional_units(ctx.pool, pool_id),
+                "funded_units": coord.funded_units(ctx.pool, pool_id),
+                "host_household_id": assignment.household_id if assignment else "",
+                "has_final_offer": pool.has_final_offer,
+                "quote_verified_at": pool.quote_verified_at,
+                "timing": pool.timing.to_dict(),
+                "members": {
+                    "total": len(members),
+                    "authorized": sum(1 for m in members if m.counts_as_funded),
+                    "awaiting_decision": sum(
+                        1 for m in members if m.state == ParticipationState.FINAL_OFFERED
+                    ),
+                    "authorization_failed": sum(
+                        1 for m in members
+                        if m.state == ParticipationState.AUTHORIZATION_FAILED
+                    ),
+                },
+                "pending_decisions": sum(
+                    1
+                    for d in ctx.repo.list_decisions(ctx.ws)
+                    if d.pool_id == pool_id and d.state == DecisionState.PENDING
+                ),
+                "viability": verdict.to_dict(),
             }
         )
 
     @tool
     def list_pools_needing_attention() -> str:
-        """List pools that have fallen below their supplier minimum and need repair.
+        """List pools that cannot currently proceed, and what is blocking each one.
 
-        Read-only. Typically used after a participant withdraws.
+        Read-only. This is the agent's work queue: pools short of demand, without a
+        host, with a stale quote, with a failed authorisation, or ready to lock.
         """
         out = []
         for pool in ctx.repo.list_pools(ctx.ws):
-            if pool.status in {PoolStatus.FAILED, PoolStatus.EXPIRED, PoolStatus.COMPLETED}:
+            if pool.community_id != ctx.community_id:
                 continue
-            committed = coord.committed_units(ctx.repo, ctx.ws, pool.id)
-            if committed >= pool.threshold_units:
+            if pool.status in {
+                PoolStatus.FAILED, PoolStatus.EXPIRED, PoolStatus.COMPLETED,
+                PoolStatus.PURCHASED, PoolStatus.DISTRIBUTING,
+            }:
                 continue
+            funded = coord.funded_units(ctx.pool, pool.id)
+            provisional = coord.provisional_units(ctx.pool, pool.id)
+            # Buyers who have not answered yet are not a hole to be filled, so the
+            # shortfall the agent acts on counts only demand that is genuinely gone.
+            lost = coord.lost_units(ctx.pool, pool.id)
+            assignment = ctx.repo.get_host_assignment(ctx.ws, pool.id)
             product = ctx.repo.get_product(ctx.ws, pool.product_id)
+            stage = (
+                ViabilityStage.FINAL_LOCK
+                if pool.status in {PoolStatus.FUNDING, PoolStatus.RECOVERING}
+                else ViabilityStage.PRE_FUNDING
+            )
+            verdict = coord.check_viability(ctx=ctx.pool, pool_id=pool.id, stage=stage)
             out.append(
                 {
                     "pool_id": pool.id,
-                    "product_id": pool.product_id,
                     "product_name": product.name if product else pool.product_id,
                     "status": pool.status.value,
-                    "committed_units": committed,
+                    "provisional_units": provisional,
+                    "funded_units": funded,
                     "threshold_units": pool.threshold_units,
-                    "shortfall_units": pool.threshold_units - committed,
-                    "deadline": pool.deadline.isoformat(),
+                    "lost_units": lost,
+                    "awaiting_decision_units": coord.in_play_units(ctx.pool, pool.id) - funded,
+                    "has_host": assignment is not None,
+                    "has_final_offer": pool.has_final_offer,
+                    "ready_to_lock": verdict.viable and stage == ViabilityStage.FINAL_LOCK,
+                    "blocking_reason": verdict.blocking_reason,
+                    "failed_checks": verdict.failed,
                 }
             )
-        out.sort(key=lambda p: (-p["shortfall_units"], p["pool_id"]))
+        out.sort(key=lambda p: (not p["ready_to_lock"], -p["lost_units"], p["pool_id"]))
         return _json({"pools": out, "count": len(out)})
 
     @tool
     def recover_pool(pool_id: str) -> str:
-        """Attempt to restore a pool that has dropped below its supplier minimum.
+        """Repair a pool that lost funded demand.
 
-        Consequential. Searches the wider neighbourhood for compatible unserved demand,
-        auto-joins only households whose own Smart Join policy permits it, and asks
-        everyone else. Existing members are left undisturbed unless their own share
-        materially changed, in which case they are asked rather than silently repriced.
+        Consequential. Searches the wider community for compatible unserved demand,
+        authorises only members whose own Smart Join policy accepts the current final
+        price, and asks everyone else. Existing buyers are never silently re-priced: a
+        buyer whose share rises past their own cap is asked rather than charged.
 
         Args:
             pool_id: The pool to repair.
         """
-        result = coord.recover_pool(
-            repo=ctx.repo, ws=ctx.ws, routing=ctx.routing,
-            pool_id=pool_id, run_id=ctx.run_id,
-        )
+        result = coord.recover_pool(ctx=ctx.pool, pool_id=pool_id)
         if result.recovered:
             ctx.outcome = RunOutcome.POOL_RECOVERED
             ctx.recovered_pool_ids.append(pool_id)
@@ -288,25 +425,74 @@ def build_tools(ctx: ToolContext) -> list:
         return _json(result.to_dict())
 
     @tool
+    def lock_pool(pool_id: str) -> str:
+        """Run the final viability check and, if it passes, lock and capture.
+
+        Consequential and irreversible for buyers. The check runs against stored facts:
+        supplier minimum, quote freshness, package allocation, host assignment and pay,
+        buyer authorisation, platform economics, timing, pickup site, and funding. If
+        any of them fails, nothing is captured and the reason is returned.
+
+        Args:
+            pool_id: The pool to lock.
+        """
+        result = coord.lock_pool(ctx=ctx.pool, pool_id=pool_id)
+        if result.get("locked"):
+            if ctx.outcome in {RunOutcome.NO_ACTION, RunOutcome.POOL_ADVANCED}:
+                ctx.outcome = RunOutcome.POOL_ADVANCED
+            if pool_id not in ctx.advanced_pool_ids:
+                ctx.advanced_pool_ids.append(pool_id)
+        return _json(result)
+
+    @tool
+    def execute_purchase(pool_id: str) -> str:
+        """Place the bulk order for a pool whose payments have been captured.
+
+        Consequential. In this build the executor is clearly simulated and every record
+        it writes is flagged as such — no supplier is contacted and no money moves.
+        Idempotent: a pool that already has a purchase record is not ordered twice.
+
+        Args:
+            pool_id: The purchase-ready pool.
+        """
+        result = fulfil.execute_purchase(ctx=ctx.pool, pool_id=pool_id)
+        if result.get("purchased") and pool_id not in ctx.advanced_pool_ids:
+            ctx.advanced_pool_ids.append(pool_id)
+            if ctx.outcome == RunOutcome.NO_ACTION:
+                ctx.outcome = RunOutcome.POOL_ADVANCED
+        return _json(result)
+
+    @tool
     def record_no_action(reason: str) -> str:
         """Conclude the run with no action taken, recording why.
 
-        Use this when no opportunity is worth pursuing. Terminating quietly is a
-        success: households should only hear from Pool when there is a real decision
-        for them.
+        Use this when nothing is worth pursuing. Terminating quietly is a success:
+        members should only hear from Pool when there is a real decision for them.
 
         Args:
             reason: Why no action was warranted.
         """
-        ctx.outcome = RunOutcome.NO_ACTION
+        # The reason is always worth recording, but the *outcome* is not overwritten when
+        # this run already did something. A run that locked a pool and placed an order and
+        # then concluded there was nothing further to do did not take "no action" — and a
+        # record saying otherwise would misreport real work.
         ctx.no_action_reason = reason
-        return _json({"acknowledged": True, "reason": reason})
+        acted = bool(ctx.created_pool_ids or ctx.advanced_pool_ids or ctx.recovered_pool_ids)
+        if not acted:
+            ctx.outcome = RunOutcome.NO_ACTION
+        return _json({"acknowledged": True, "reason": reason, "prior_actions_this_run": acted})
 
     return [
-        list_unmet_demand,
-        evaluate_opportunity,
-        create_buying_pool,
+        list_latent_demand,
+        evaluate_pool_economics,
+        create_candidate_pool,
+        find_host_candidates,
+        request_host_acceptance,
+        issue_final_offer,
+        inspect_pool,
         list_pools_needing_attention,
         recover_pool,
+        lock_pool,
+        execute_purchase,
         record_no_action,
     ]

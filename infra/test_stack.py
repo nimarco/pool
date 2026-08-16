@@ -10,6 +10,8 @@ Runs offline: ``cdk synth`` needs no AWS credentials.
 
 from __future__ import annotations
 
+import json
+
 import aws_cdk as cdk
 import pytest
 from aws_cdk.assertions import Match, Template
@@ -115,6 +117,35 @@ class TestSecurity:
                 assert not any(b in key.upper() for b in banned), f"suspicious env var {key}"
                 if isinstance(value, str):
                     assert not value.startswith("AKIA"), "an AWS access key id is present"
+
+    def test_no_stripe_credential_is_baked_into_the_template(self, template: Template):
+        """A key in the stack ends up in cdk.out and possibly in git (AGENTS.md §4).
+
+        Stripe credentials are set on the deployed function out of band instead, so the
+        synthesized template must contain no trace of one.
+        """
+        rendered = json.dumps(template.to_json())
+        for marker in ("sk_test_", "sk_live_", "whsec_", "STRIPE_API_KEY",
+                       "STRIPE_WEBHOOK_SECRET"):
+            assert marker not in rendered, f"{marker} must not appear in the template"
+
+    def test_the_deployed_default_is_the_free_simulated_payment_provider(
+        self, template: Template
+    ):
+        """A deploy must never quietly turn on a real processor."""
+        for fn in template.find_resources("AWS::Lambda::Function").values():
+            env = fn["Properties"].get("Environment", {}).get("Variables", {})
+            if "PAYMENT_PROVIDER" in env:
+                assert env["PAYMENT_PROVIDER"] == "simulated"
+
+    def test_purchase_execution_is_pinned_to_the_simulated_executor(
+        self, template: Template
+    ):
+        """No supplier is contacted and no money moves from a deployed stack."""
+        for fn in template.find_resources("AWS::Lambda::Function").values():
+            env = fn["Properties"].get("Environment", {}).get("Variables", {})
+            if "PURCHASE_EXECUTOR" in env:
+                assert env["PURCHASE_EXECUTOR"] == "simulated"
 
     def test_iam_grants_are_scoped_not_wildcard_admin(self, template: Template):
         for policy in template.find_resources("AWS::IAM::Policy").values():

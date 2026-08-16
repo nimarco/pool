@@ -2,21 +2,23 @@
 
 DynamoDB is the authoritative store for everything transactional — pool membership,
 commitments, money, quantities, deadlines, and explicit policies. Agent memory is
-never authoritative for any of it (AGENTS.md §6).
+never authoritative for any of it (AGENTS.md §6). Stripe remains authoritative for
+provider payment facts; what we store is our mapping of them (§84).
 
 Two implementations behind one protocol:
 
 * ``InMemoryRepository`` — used by every test and by local runs. Free.
 * ``DynamoDBRepository`` — on-demand billing, single table, TTL on demo workspaces.
 
-Table design (single table, on-demand):
+Table design (single table, on-demand)::
 
     pk = "<workspace>#<TYPE>"     sk = "<entity id>"
 
-Listing a type is one Query on ``pk``; memberships use a composite sort key
-(``<pool_id>#<household_id>``) so a pool's members are a ``begins_with`` query rather
-than a scan. Workspaces give each demo visitor an isolated dataset that a TTL sweeps
-away, which keeps two judges from corrupting each other's demo.
+Listing a type is one Query on ``pk``. Entities that belong to a parent use a
+composite sort key (``"<pool_id>#<household_id>"``) so a pool's members, host
+candidates, allocations, and tokens are each a ``begins_with`` query rather than a
+scan. Workspaces give each demo visitor an isolated dataset that a TTL sweeps away,
+which keeps two judges from corrupting each other's demo (§92).
 """
 
 from __future__ import annotations
@@ -28,14 +30,29 @@ from typing import Any, Protocol, runtime_checkable
 from ..domain.models import (
     ActivityEvent,
     AgentRun,
+    Announcement,
+    Community,
+    CommunityMembership,
     DecisionRequest,
+    FulfillmentRun,
+    HostAssignment,
+    HostCandidate,
+    HostProfile,
     Household,
+    IssueCase,
     Membership,
+    Message,
+    MessageThread,
     NeedDeclaration,
     Offer,
+    PaymentRecord,
+    PickupAllocation,
     PickupSite,
+    PickupToken,
     Pool,
     Product,
+    PurchaseRecord,
+    Supplier,
 )
 
 DEFAULT_WORKSPACE = "demo"
@@ -46,13 +63,28 @@ DEMO_TTL_SECONDS = 60 * 60 * 24  # ephemeral demo workspaces expire after a day
 class Store:
     """The whole world for one workspace."""
 
+    communities: dict[str, Community] = field(default_factory=dict)
+    community_memberships: dict[str, CommunityMembership] = field(default_factory=dict)
     households: dict[str, Household] = field(default_factory=dict)
     products: dict[str, Product] = field(default_factory=dict)
     needs: dict[str, NeedDeclaration] = field(default_factory=dict)
+    suppliers: dict[str, Supplier] = field(default_factory=dict)
     offers: dict[str, Offer] = field(default_factory=dict)
     sites: dict[str, PickupSite] = field(default_factory=dict)
     pools: dict[str, Pool] = field(default_factory=dict)
-    memberships: dict[str, Membership] = field(default_factory=dict)  # "pool#household"
+    memberships: dict[str, Membership] = field(default_factory=dict)
+    host_profiles: dict[str, HostProfile] = field(default_factory=dict)
+    host_candidates: dict[str, HostCandidate] = field(default_factory=dict)
+    host_assignments: dict[str, HostAssignment] = field(default_factory=dict)
+    payments: dict[str, PaymentRecord] = field(default_factory=dict)
+    purchases: dict[str, PurchaseRecord] = field(default_factory=dict)
+    fulfillment_runs: dict[str, FulfillmentRun] = field(default_factory=dict)
+    allocations: dict[str, PickupAllocation] = field(default_factory=dict)
+    pickup_tokens: dict[str, PickupToken] = field(default_factory=dict)
+    announcements: dict[str, Announcement] = field(default_factory=dict)
+    threads: dict[str, MessageThread] = field(default_factory=dict)
+    messages: dict[str, Message] = field(default_factory=dict)
+    issues: dict[str, IssueCase] = field(default_factory=dict)
     decisions: dict[str, DecisionRequest] = field(default_factory=dict)
     activity: list[ActivityEvent] = field(default_factory=list)
     runs: dict[str, AgentRun] = field(default_factory=dict)
@@ -60,6 +92,20 @@ class Store:
 
 @runtime_checkable
 class Repository(Protocol):
+    # -- community
+    def list_communities(self, ws: str) -> list[Community]: ...
+    def get_community(self, ws: str, cid: str) -> Community | None: ...
+    def put_community(self, ws: str, c: Community) -> None: ...
+
+    def list_community_memberships(
+        self, ws: str, community_id: str | None = None
+    ) -> list[CommunityMembership]: ...
+    def get_community_membership(
+        self, ws: str, community_id: str, household_id: str
+    ) -> CommunityMembership | None: ...
+    def put_community_membership(self, ws: str, m: CommunityMembership) -> None: ...
+
+    # -- accounts and catalogue
     def list_households(self, ws: str) -> list[Household]: ...
     def get_household(self, ws: str, hid: str) -> Household | None: ...
     def put_household(self, ws: str, h: Household) -> None: ...
@@ -72,6 +118,10 @@ class Repository(Protocol):
     def get_need(self, ws: str, nid: str) -> NeedDeclaration | None: ...
     def put_need(self, ws: str, n: NeedDeclaration) -> None: ...
 
+    def list_suppliers(self, ws: str) -> list[Supplier]: ...
+    def get_supplier(self, ws: str, sid: str) -> Supplier | None: ...
+    def put_supplier(self, ws: str, s: Supplier) -> None: ...
+
     def list_offers(self, ws: str) -> list[Offer]: ...
     def get_offer(self, ws: str, oid: str) -> Offer | None: ...
     def put_offer(self, ws: str, o: Offer) -> None: ...
@@ -80,6 +130,7 @@ class Repository(Protocol):
     def get_site(self, ws: str, sid: str) -> PickupSite | None: ...
     def put_site(self, ws: str, s: PickupSite) -> None: ...
 
+    # -- pools
     def list_pools(self, ws: str) -> list[Pool]: ...
     def get_pool(self, ws: str, pid: str) -> Pool | None: ...
     def put_pool(self, ws: str, p: Pool) -> None: ...
@@ -88,6 +139,62 @@ class Repository(Protocol):
     def get_membership(self, ws: str, pool_id: str, household_id: str) -> Membership | None: ...
     def put_membership(self, ws: str, m: Membership) -> None: ...
 
+    # -- hosting
+    def list_host_profiles(self, ws: str, community_id: str | None = None) -> list[HostProfile]: ...
+    def get_host_profile(
+        self, ws: str, community_id: str, household_id: str
+    ) -> HostProfile | None: ...
+    def put_host_profile(self, ws: str, p: HostProfile) -> None: ...
+
+    def list_host_candidates(self, ws: str, pool_id: str | None = None) -> list[HostCandidate]: ...
+    def get_host_candidate(
+        self, ws: str, pool_id: str, household_id: str
+    ) -> HostCandidate | None: ...
+    def put_host_candidate(self, ws: str, c: HostCandidate) -> None: ...
+
+    def get_host_assignment(self, ws: str, pool_id: str) -> HostAssignment | None: ...
+    def put_host_assignment(self, ws: str, a: HostAssignment) -> None: ...
+    def list_host_assignments(self, ws: str) -> list[HostAssignment]: ...
+
+    # -- money and goods
+    def list_payments(self, ws: str, pool_id: str | None = None) -> list[PaymentRecord]: ...
+    def get_payment(self, ws: str, payment_id: str) -> PaymentRecord | None: ...
+    def put_payment(self, ws: str, p: PaymentRecord) -> None: ...
+
+    def list_purchases(self, ws: str) -> list[PurchaseRecord]: ...
+    def get_purchase_for_pool(self, ws: str, pool_id: str) -> PurchaseRecord | None: ...
+    def put_purchase(self, ws: str, p: PurchaseRecord) -> None: ...
+
+    def list_fulfillment_runs(self, ws: str) -> list[FulfillmentRun]: ...
+    def put_fulfillment_run(self, ws: str, r: FulfillmentRun) -> None: ...
+
+    def list_allocations(self, ws: str, pool_id: str | None = None) -> list[PickupAllocation]: ...
+    def get_allocation(
+        self, ws: str, pool_id: str, household_id: str
+    ) -> PickupAllocation | None: ...
+    def put_allocation(self, ws: str, a: PickupAllocation) -> None: ...
+
+    def list_pickup_tokens(self, ws: str, pool_id: str | None = None) -> list[PickupToken]: ...
+    def get_pickup_token(self, ws: str, pool_id: str, household_id: str) -> PickupToken | None: ...
+    def put_pickup_token(self, ws: str, t: PickupToken) -> None: ...
+
+    # -- communication
+    def list_announcements(self, ws: str, pool_id: str | None = None) -> list[Announcement]: ...
+    def put_announcement(self, ws: str, a: Announcement) -> None: ...
+
+    def list_threads(self, ws: str, pool_id: str | None = None) -> list[MessageThread]: ...
+    def get_thread(self, ws: str, thread_id: str) -> MessageThread | None: ...
+    def get_thread_for(self, ws: str, pool_id: str, buyer_id: str) -> MessageThread | None: ...
+    def put_thread(self, ws: str, t: MessageThread) -> None: ...
+
+    def list_messages(self, ws: str, thread_id: str) -> list[Message]: ...
+    def put_message(self, ws: str, m: Message) -> None: ...
+
+    def list_issues(self, ws: str) -> list[IssueCase]: ...
+    def get_issue(self, ws: str, issue_id: str) -> IssueCase | None: ...
+    def put_issue(self, ws: str, i: IssueCase) -> None: ...
+
+    # -- agent + audit
     def list_decisions(self, ws: str) -> list[DecisionRequest]: ...
     def get_decision(self, ws: str, did: str) -> DecisionRequest | None: ...
     def put_decision(self, ws: str, d: DecisionRequest) -> None: ...
@@ -114,61 +221,179 @@ class InMemoryRepository:
     def workspaces(self) -> list[str]:
         return sorted(self._ws.keys())
 
-    # ---- households
+    @staticmethod
+    def _filtered(items, attr: str, value: str | None):
+        return [i for i in items if value is None or getattr(i, attr) == value]
+
+    # ---- community
+    def list_communities(self, ws): return sorted(self.store(ws).communities.values(), key=lambda c: c.id)
+    def get_community(self, ws, cid): return self.store(ws).communities.get(cid)
+    def put_community(self, ws, c): self.store(ws).communities[c.id] = c
+
+    def list_community_memberships(self, ws, community_id=None):
+        items = self._filtered(self.store(ws).community_memberships.values(), "community_id", community_id)
+        return sorted(items, key=lambda m: m.key)
+
+    def get_community_membership(self, ws, community_id, household_id):
+        return self.store(ws).community_memberships.get(f"{community_id}#{household_id}")
+
+    def put_community_membership(self, ws, m): self.store(ws).community_memberships[m.key] = m
+
+    # ---- accounts and catalogue
     def list_households(self, ws): return sorted(self.store(ws).households.values(), key=lambda h: h.id)
     def get_household(self, ws, hid): return self.store(ws).households.get(hid)
     def put_household(self, ws, h): self.store(ws).households[h.id] = h
 
-    # ---- products
     def list_products(self, ws): return sorted(self.store(ws).products.values(), key=lambda p: p.id)
     def get_product(self, ws, pid): return self.store(ws).products.get(pid)
     def put_product(self, ws, p): self.store(ws).products[p.id] = p
 
-    # ---- needs
     def list_needs(self, ws): return sorted(self.store(ws).needs.values(), key=lambda n: n.id)
     def get_need(self, ws, nid): return self.store(ws).needs.get(nid)
     def put_need(self, ws, n): self.store(ws).needs[n.id] = n
 
-    # ---- offers
+    def list_suppliers(self, ws): return sorted(self.store(ws).suppliers.values(), key=lambda s: s.id)
+    def get_supplier(self, ws, sid): return self.store(ws).suppliers.get(sid)
+    def put_supplier(self, ws, s): self.store(ws).suppliers[s.id] = s
+
     def list_offers(self, ws): return sorted(self.store(ws).offers.values(), key=lambda o: o.id)
     def get_offer(self, ws, oid): return self.store(ws).offers.get(oid)
     def put_offer(self, ws, o): self.store(ws).offers[o.id] = o
 
-    # ---- sites
     def list_sites(self, ws): return sorted(self.store(ws).sites.values(), key=lambda s: s.id)
     def get_site(self, ws, sid): return self.store(ws).sites.get(sid)
     def put_site(self, ws, s): self.store(ws).sites[s.id] = s
 
     # ---- pools
-    def list_pools(self, ws): return sorted(self.store(ws).pools.values(), key=lambda p: p.created_at)
+    def list_pools(self, ws): return sorted(self.store(ws).pools.values(), key=lambda p: (p.created_at, p.id))
     def get_pool(self, ws, pid): return self.store(ws).pools.get(pid)
     def put_pool(self, ws, p): self.store(ws).pools[p.id] = p
 
-    # ---- memberships
     def list_memberships(self, ws, pool_id=None):
-        items = self.store(ws).memberships.values()
-        if pool_id is not None:
-            items = [m for m in items if m.pool_id == pool_id]
+        items = self._filtered(self.store(ws).memberships.values(), "pool_id", pool_id)
         return sorted(items, key=lambda m: (m.pool_id, m.household_id))
 
     def get_membership(self, ws, pool_id, household_id):
         return self.store(ws).memberships.get(f"{pool_id}#{household_id}")
 
-    def put_membership(self, ws, m):
-        self.store(ws).memberships[f"{m.pool_id}#{m.household_id}"] = m
+    def put_membership(self, ws, m): self.store(ws).memberships[m.key] = m
 
-    # ---- decisions
-    def list_decisions(self, ws): return sorted(self.store(ws).decisions.values(), key=lambda d: d.created_at)
+    # ---- hosting
+    def list_host_profiles(self, ws, community_id=None):
+        items = self._filtered(self.store(ws).host_profiles.values(), "community_id", community_id)
+        return sorted(items, key=lambda p: p.household_id)
+
+    def get_host_profile(self, ws, community_id, household_id):
+        return self.store(ws).host_profiles.get(f"{community_id}#{household_id}")
+
+    def put_host_profile(self, ws, p): self.store(ws).host_profiles[p.key] = p
+
+    def list_host_candidates(self, ws, pool_id=None):
+        items = self._filtered(self.store(ws).host_candidates.values(), "pool_id", pool_id)
+        return sorted(items, key=lambda c: (c.pool_id, -c.score, c.household_id))
+
+    def get_host_candidate(self, ws, pool_id, household_id):
+        return self.store(ws).host_candidates.get(f"{pool_id}#{household_id}")
+
+    def put_host_candidate(self, ws, c): self.store(ws).host_candidates[c.key] = c
+
+    def get_host_assignment(self, ws, pool_id): return self.store(ws).host_assignments.get(pool_id)
+    def put_host_assignment(self, ws, a): self.store(ws).host_assignments[a.pool_id] = a
+
+    def list_host_assignments(self, ws):
+        return sorted(self.store(ws).host_assignments.values(), key=lambda a: a.pool_id)
+
+    # ---- money and goods
+    def list_payments(self, ws, pool_id=None):
+        items = self._filtered(self.store(ws).payments.values(), "pool_id", pool_id)
+        return sorted(items, key=lambda p: p.id)
+
+    def get_payment(self, ws, payment_id): return self.store(ws).payments.get(payment_id)
+    def put_payment(self, ws, p): self.store(ws).payments[p.id] = p
+
+    def list_purchases(self, ws): return sorted(self.store(ws).purchases.values(), key=lambda p: p.id)
+
+    def get_purchase_for_pool(self, ws, pool_id):
+        for p in self.store(ws).purchases.values():
+            if p.pool_id == pool_id:
+                return p
+        return None
+
+    def put_purchase(self, ws, p): self.store(ws).purchases[p.id] = p
+
+    def list_fulfillment_runs(self, ws):
+        return sorted(self.store(ws).fulfillment_runs.values(), key=lambda r: r.id)
+
+    def put_fulfillment_run(self, ws, r): self.store(ws).fulfillment_runs[r.id] = r
+
+    def list_allocations(self, ws, pool_id=None):
+        items = self._filtered(self.store(ws).allocations.values(), "pool_id", pool_id)
+        return sorted(items, key=lambda a: (a.pool_id, a.household_id))
+
+    def get_allocation(self, ws, pool_id, household_id):
+        return self.store(ws).allocations.get(f"{pool_id}#{household_id}")
+
+    def put_allocation(self, ws, a): self.store(ws).allocations[a.key] = a
+
+    def list_pickup_tokens(self, ws, pool_id=None):
+        items = self._filtered(self.store(ws).pickup_tokens.values(), "pool_id", pool_id)
+        return sorted(items, key=lambda t: t.key)
+
+    def get_pickup_token(self, ws, pool_id, household_id):
+        return self.store(ws).pickup_tokens.get(f"{pool_id}#{household_id}")
+
+    def put_pickup_token(self, ws, t): self.store(ws).pickup_tokens[t.key] = t
+
+    # ---- communication
+    def list_announcements(self, ws, pool_id=None):
+        items = self._filtered(self.store(ws).announcements.values(), "pool_id", pool_id)
+        return sorted(items, key=lambda a: a.created_at, reverse=True)
+
+    def put_announcement(self, ws, a): self.store(ws).announcements[a.id] = a
+
+    def list_threads(self, ws, pool_id=None):
+        items = self._filtered(self.store(ws).threads.values(), "pool_id", pool_id)
+        return sorted(items, key=lambda t: t.created_at)
+
+    def get_thread(self, ws, thread_id):
+        for t in self.store(ws).threads.values():
+            if t.id == thread_id:
+                return t
+        return None
+
+    def get_thread_for(self, ws, pool_id, buyer_id):
+        return self.store(ws).threads.get(f"{pool_id}#{buyer_id}")
+
+    def put_thread(self, ws, t): self.store(ws).threads[t.key] = t
+
+    def list_messages(self, ws, thread_id):
+        return sorted(
+            (m for m in self.store(ws).messages.values() if m.thread_id == thread_id),
+            key=lambda m: m.at,
+        )
+
+    def put_message(self, ws, m): self.store(ws).messages[m.id] = m
+
+    def list_issues(self, ws): return sorted(self.store(ws).issues.values(), key=lambda i: i.created_at)
+    def get_issue(self, ws, issue_id): return self.store(ws).issues.get(issue_id)
+    def put_issue(self, ws, i): self.store(ws).issues[i.id] = i
+
+    # ---- agent + audit
+    def list_decisions(self, ws):
+        return sorted(self.store(ws).decisions.values(), key=lambda d: (d.created_at, d.id))
+
     def get_decision(self, ws, did): return self.store(ws).decisions.get(did)
     def put_decision(self, ws, d): self.store(ws).decisions[d.id] = d
 
-    # ---- activity
     def append_activity(self, ws, e): self.store(ws).activity.append(e)
 
     def list_activity(self, ws, limit=100):
-        return sorted(self.store(ws).activity, key=lambda e: e.at, reverse=True)[:limit]
+        # Newest first, with insertion order as the tiebreak so events written inside
+        # the same millisecond still read in the order they actually happened.
+        items = list(enumerate(self.store(ws).activity))
+        items.sort(key=lambda pair: (pair[1].at, pair[0]), reverse=True)
+        return [e for _, e in items[:limit]]
 
-    # ---- runs
     def put_run(self, ws, r): self.store(ws).runs[r.id] = r
     def get_run(self, ws, rid): return self.store(ws).runs.get(rid)
 
@@ -181,17 +406,34 @@ class InMemoryRepository:
 # --------------------------------------------------------------------- DynamoDB
 
 
-_TYPES = {
-    "HOUSEHOLD": (Household, "households"),
-    "PRODUCT": (Product, "products"),
-    "NEED": (NeedDeclaration, "needs"),
-    "OFFER": (Offer, "offers"),
-    "SITE": (PickupSite, "sites"),
-    "POOL": (Pool, "pools"),
-    "MEMBERSHIP": (Membership, "memberships"),
-    "DECISION": (DecisionRequest, "decisions"),
-    "ACTIVITY": (ActivityEvent, "activity"),
-    "RUN": (AgentRun, "runs"),
+#: type name -> domain class. Drives both persistence and workspace reset, so a new
+#: entity cannot be added to one and forgotten in the other.
+_TYPES: dict[str, Any] = {
+    "COMMUNITY": Community,
+    "COMMUNITY_MEMBERSHIP": CommunityMembership,
+    "HOUSEHOLD": Household,
+    "PRODUCT": Product,
+    "NEED": NeedDeclaration,
+    "SUPPLIER": Supplier,
+    "OFFER": Offer,
+    "SITE": PickupSite,
+    "POOL": Pool,
+    "MEMBERSHIP": Membership,
+    "HOST_PROFILE": HostProfile,
+    "HOST_CANDIDATE": HostCandidate,
+    "HOST_ASSIGNMENT": HostAssignment,
+    "PAYMENT": PaymentRecord,
+    "PURCHASE": PurchaseRecord,
+    "FULFILLMENT_RUN": FulfillmentRun,
+    "ALLOCATION": PickupAllocation,
+    "PICKUP_TOKEN": PickupToken,
+    "ANNOUNCEMENT": Announcement,
+    "THREAD": MessageThread,
+    "MESSAGE": Message,
+    "ISSUE": IssueCase,
+    "DECISION": DecisionRequest,
+    "ACTIVITY": ActivityEvent,
+    "RUN": AgentRun,
 }
 
 
@@ -199,8 +441,8 @@ def _to_item(obj: Any) -> dict:
     """Serialise a domain object to a DynamoDB-safe dict.
 
     Floats are not natively storable by the resource API's default serialiser, so
-    coordinates are stored as strings and restored on read. Money is already integer
-    cents and stores exactly.
+    coordinates are stored as tagged strings and restored on read. Money is already
+    integer cents and stores exactly.
     """
     d = obj.to_dict() if hasattr(obj, "to_dict") else dict(obj.__dict__)
     return _floats_to_str(d)
@@ -290,7 +532,25 @@ class DynamoDBRepository:
             return cls.from_dict(restored)
         return cls(**restored)
 
-    # ---- entity methods
+    # ---- community
+    def list_communities(self, ws): return self._query(ws, "COMMUNITY", Community)
+    def get_community(self, ws, cid): return self._get(ws, "COMMUNITY", cid, Community)
+    def put_community(self, ws, c): self._put(ws, "COMMUNITY", c.id, c)
+
+    def list_community_memberships(self, ws, community_id=None):
+        return self._query(
+            ws, "COMMUNITY_MEMBERSHIP", CommunityMembership,
+            f"{community_id}#" if community_id else None,
+        )
+
+    def get_community_membership(self, ws, community_id, household_id):
+        return self._get(
+            ws, "COMMUNITY_MEMBERSHIP", f"{community_id}#{household_id}", CommunityMembership
+        )
+
+    def put_community_membership(self, ws, m): self._put(ws, "COMMUNITY_MEMBERSHIP", m.key, m)
+
+    # ---- accounts and catalogue
     def list_households(self, ws): return self._query(ws, "HOUSEHOLD", Household)
     def get_household(self, ws, hid): return self._get(ws, "HOUSEHOLD", hid, Household)
     def put_household(self, ws, h): self._put(ws, "HOUSEHOLD", h.id, h)
@@ -303,6 +563,10 @@ class DynamoDBRepository:
     def get_need(self, ws, nid): return self._get(ws, "NEED", nid, NeedDeclaration)
     def put_need(self, ws, n): self._put(ws, "NEED", n.id, n)
 
+    def list_suppliers(self, ws): return self._query(ws, "SUPPLIER", Supplier)
+    def get_supplier(self, ws, sid): return self._get(ws, "SUPPLIER", sid, Supplier)
+    def put_supplier(self, ws, s): self._put(ws, "SUPPLIER", s.id, s)
+
     def list_offers(self, ws): return self._query(ws, "OFFER", Offer)
     def get_offer(self, ws, oid): return self._get(ws, "OFFER", oid, Offer)
     def put_offer(self, ws, o): self._put(ws, "OFFER", o.id, o)
@@ -311,6 +575,7 @@ class DynamoDBRepository:
     def get_site(self, ws, sid): return self._get(ws, "SITE", sid, PickupSite)
     def put_site(self, ws, s): self._put(ws, "SITE", s.id, s)
 
+    # ---- pools
     def list_pools(self, ws): return self._query(ws, "POOL", Pool)
     def get_pool(self, ws, pid): return self._get(ws, "POOL", pid, Pool)
     def put_pool(self, ws, p): self._put(ws, "POOL", p.id, p)
@@ -321,9 +586,105 @@ class DynamoDBRepository:
     def get_membership(self, ws, pool_id, household_id):
         return self._get(ws, "MEMBERSHIP", f"{pool_id}#{household_id}", Membership)
 
-    def put_membership(self, ws, m):
-        self._put(ws, "MEMBERSHIP", f"{m.pool_id}#{m.household_id}", m)
+    def put_membership(self, ws, m): self._put(ws, "MEMBERSHIP", m.key, m)
 
+    # ---- hosting
+    def list_host_profiles(self, ws, community_id=None):
+        return self._query(
+            ws, "HOST_PROFILE", HostProfile, f"{community_id}#" if community_id else None
+        )
+
+    def get_host_profile(self, ws, community_id, household_id):
+        return self._get(ws, "HOST_PROFILE", f"{community_id}#{household_id}", HostProfile)
+
+    def put_host_profile(self, ws, p): self._put(ws, "HOST_PROFILE", p.key, p)
+
+    def list_host_candidates(self, ws, pool_id=None):
+        return self._query(
+            ws, "HOST_CANDIDATE", HostCandidate, f"{pool_id}#" if pool_id else None
+        )
+
+    def get_host_candidate(self, ws, pool_id, household_id):
+        return self._get(ws, "HOST_CANDIDATE", f"{pool_id}#{household_id}", HostCandidate)
+
+    def put_host_candidate(self, ws, c): self._put(ws, "HOST_CANDIDATE", c.key, c)
+
+    def get_host_assignment(self, ws, pool_id):
+        return self._get(ws, "HOST_ASSIGNMENT", pool_id, HostAssignment)
+
+    def put_host_assignment(self, ws, a): self._put(ws, "HOST_ASSIGNMENT", a.pool_id, a)
+    def list_host_assignments(self, ws): return self._query(ws, "HOST_ASSIGNMENT", HostAssignment)
+
+    # ---- money and goods
+    def list_payments(self, ws, pool_id=None):
+        items = self._query(ws, "PAYMENT", PaymentRecord)
+        return [p for p in items if pool_id is None or p.pool_id == pool_id]
+
+    def get_payment(self, ws, payment_id): return self._get(ws, "PAYMENT", payment_id, PaymentRecord)
+    def put_payment(self, ws, p): self._put(ws, "PAYMENT", p.id, p)
+
+    def list_purchases(self, ws): return self._query(ws, "PURCHASE", PurchaseRecord)
+
+    def get_purchase_for_pool(self, ws, pool_id):
+        for p in self.list_purchases(ws):
+            if p.pool_id == pool_id:
+                return p
+        return None
+
+    def put_purchase(self, ws, p): self._put(ws, "PURCHASE", p.id, p)
+
+    def list_fulfillment_runs(self, ws): return self._query(ws, "FULFILLMENT_RUN", FulfillmentRun)
+    def put_fulfillment_run(self, ws, r): self._put(ws, "FULFILLMENT_RUN", r.id, r)
+
+    def list_allocations(self, ws, pool_id=None):
+        return self._query(ws, "ALLOCATION", PickupAllocation, f"{pool_id}#" if pool_id else None)
+
+    def get_allocation(self, ws, pool_id, household_id):
+        return self._get(ws, "ALLOCATION", f"{pool_id}#{household_id}", PickupAllocation)
+
+    def put_allocation(self, ws, a): self._put(ws, "ALLOCATION", a.key, a)
+
+    def list_pickup_tokens(self, ws, pool_id=None):
+        return self._query(ws, "PICKUP_TOKEN", PickupToken, f"{pool_id}#" if pool_id else None)
+
+    def get_pickup_token(self, ws, pool_id, household_id):
+        return self._get(ws, "PICKUP_TOKEN", f"{pool_id}#{household_id}", PickupToken)
+
+    def put_pickup_token(self, ws, t): self._put(ws, "PICKUP_TOKEN", t.key, t)
+
+    # ---- communication
+    def list_announcements(self, ws, pool_id=None):
+        items = self._query(ws, "ANNOUNCEMENT", Announcement)
+        items = [a for a in items if pool_id is None or a.pool_id == pool_id]
+        return sorted(items, key=lambda a: a.created_at, reverse=True)
+
+    def put_announcement(self, ws, a): self._put(ws, "ANNOUNCEMENT", a.id, a)
+
+    def list_threads(self, ws, pool_id=None):
+        return self._query(ws, "THREAD", MessageThread, f"{pool_id}#" if pool_id else None)
+
+    def get_thread(self, ws, thread_id):
+        for t in self.list_threads(ws):
+            if t.id == thread_id:
+                return t
+        return None
+
+    def get_thread_for(self, ws, pool_id, buyer_id):
+        return self._get(ws, "THREAD", f"{pool_id}#{buyer_id}", MessageThread)
+
+    def put_thread(self, ws, t): self._put(ws, "THREAD", t.key, t)
+
+    def list_messages(self, ws, thread_id):
+        items = self._query(ws, "MESSAGE", Message, f"{thread_id}#")
+        return sorted(items, key=lambda m: m.at)
+
+    def put_message(self, ws, m): self._put(ws, "MESSAGE", f"{m.thread_id}#{m.at}#{m.id}", m)
+
+    def list_issues(self, ws): return self._query(ws, "ISSUE", IssueCase)
+    def get_issue(self, ws, issue_id): return self._get(ws, "ISSUE", issue_id, IssueCase)
+    def put_issue(self, ws, i): self._put(ws, "ISSUE", i.id, i)
+
+    # ---- agent + audit
     def list_decisions(self, ws): return self._query(ws, "DECISION", DecisionRequest)
     def get_decision(self, ws, did): return self._get(ws, "DECISION", did, DecisionRequest)
     def put_decision(self, ws, d): self._put(ws, "DECISION", d.id, d)

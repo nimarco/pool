@@ -86,12 +86,25 @@ class Settings:
     # LLM — zero token cost. "bedrock" is the real model. See pool/agent/offline_model.py.
     model_provider: str = "offline"  # offline | bedrock
 
+    # Payments. "simulated" is free, offline, and deterministic; "stripe" is TEST mode
+    # only and refuses to construct with a non-test key (brief §12, §54).
+    payment_provider: str = "simulated"  # simulated | stripe
+    stripe_api_key: str = ""
+    stripe_webhook_secret: str = ""
+    # Purchase execution. Only the clearly-labelled simulated executor exists (§63).
+    purchase_executor: str = "simulated"
+
     # AWS resource names (only read when the corresponding adapter is active)
     dynamodb_table: str = "pool-state"
     location_route_calculator: str = ""
 
     # Routing bound: a route matrix is origins x destinations, so cap it (AGENTS.md §3.4).
     max_route_matrix_cells: int = 100
+
+    @property
+    def stripe_configured(self) -> bool:
+        """True only for a usable TEST-mode key. A live key is never usable here."""
+        return self.stripe_api_key.startswith("sk_test_")
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -104,6 +117,10 @@ class Settings:
             routing_provider=os.environ.get("ROUTING_PROVIDER", "deterministic"),
             repository=os.environ.get("POOL_REPOSITORY", "memory"),
             model_provider=os.environ.get("MODEL_PROVIDER", "offline"),
+            payment_provider=os.environ.get("PAYMENT_PROVIDER", "simulated"),
+            stripe_api_key=os.environ.get("STRIPE_API_KEY", ""),
+            stripe_webhook_secret=os.environ.get("STRIPE_WEBHOOK_SECRET", ""),
+            purchase_executor=os.environ.get("PURCHASE_EXECUTOR", "simulated"),
             dynamodb_table=os.environ.get("DYNAMODB_TABLE", "pool-state"),
             location_route_calculator=os.environ.get("LOCATION_ROUTE_CALCULATOR", ""),
             max_route_matrix_cells=_int_env("MAX_ROUTE_MATRIX_CELLS", 100),

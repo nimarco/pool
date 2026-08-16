@@ -51,8 +51,9 @@ PROJECT_TAGS = {
     "Environment": os.environ.get("POOL_ENV", "dev"),
 }
 
-# Slow on purpose. Neighbourhood demand changes on the scale of days, so scanning more
-# often would buy nothing and cost model invocations (AGENTS.md §3.2).
+# Slow on purpose. Recurring demand changes on the scale of days and a Community's
+# Pool Day comes round once a week, so scanning more often would buy nothing and cost
+# model invocations (AGENTS.md §3.2).
 SCAN_SCHEDULE = events.Schedule.rate(Duration.hours(6))
 
 
@@ -99,6 +100,23 @@ class PoolStack(Stack):
             "ROUTING_PROVIDER": os.environ.get("ROUTING_PROVIDER", "deterministic"),
             "MODEL_PROVIDER": os.environ.get("MODEL_PROVIDER", "offline"),
             "BEDROCK_MODEL_ID": os.environ.get("BEDROCK_MODEL_ID", ""),
+            # Payments default to the free simulated provider. Switching to Stripe is a
+            # deliberate act, and the application refuses to construct the Stripe
+            # provider with anything but a `sk_test_` key regardless of what is set here.
+            "PAYMENT_PROVIDER": os.environ.get("PAYMENT_PROVIDER", "simulated"),
+            # Only the clearly-labelled simulated executor exists in this build: no
+            # supplier is contacted and no money moves.
+            "PURCHASE_EXECUTOR": "simulated",
+            #
+            # STRIPE_API_KEY and STRIPE_WEBHOOK_SECRET are deliberately NOT set here.
+            # A secret placed in a CDK stack ends up in the synthesized template, in
+            # cdk.out, and potentially in version control (AGENTS.md §4). Set them on the
+            # deployed function out of band instead:
+            #
+            #   aws lambda update-function-configuration --function-name <name> \
+            #     --environment "Variables={...,STRIPE_API_KEY=sk_test_...}"
+            #
+            # A pilot should move them to Secrets Manager and read them at cold start.
             "SCHEDULES_ENABLED": "false",
             # Bounds travel as configuration so they can be tightened without a deploy.
             "MAX_AGENT_ITERATIONS": "8",
@@ -238,7 +256,7 @@ stack = PoolStack(
         account=os.environ.get("CDK_DEFAULT_ACCOUNT"),
         region=os.environ.get("CDK_DEFAULT_REGION", "us-east-1"),
     ),
-    description="Pool — autonomous neighbourhood group-buying coordinator (hackathon demo)",
+    description="Pool — autonomous collective-purchasing coordinator (hackathon demo)",
 )
 
 app.synth()

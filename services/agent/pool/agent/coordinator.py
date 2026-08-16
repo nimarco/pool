@@ -86,6 +86,21 @@ class PoolCoordinator:
 
     # -- model -------------------------------------------------------------
 
+    def _boto_session(self):
+        """A boto3 session for the configured profile, or None for the default chain.
+
+        Local development authenticates with a named profile; Lambda and AgentCore
+        authenticate with an execution role and must use the default chain. Returning
+        ``None`` when no profile is set keeps both true without a second code path.
+        """
+        if not self.settings.aws_profile:
+            return None
+        import boto3
+
+        return boto3.Session(
+            profile_name=self.settings.aws_profile, region_name=self.settings.aws_region
+        )
+
     def _build_model(self) -> tuple[Any, str, str]:
         """Return ``(model, model_id, provider)``."""
         if self._model_override is not None:
@@ -107,12 +122,24 @@ class PoolCoordinator:
         if self.settings.model_provider == "bedrock":
             from strands.models import BedrockModel
 
+            # `BedrockModel` takes its configuration as **kwargs, not as a `model_config`
+            # dict. Passing a dict silently lands in the config under a key nothing reads,
+            # leaving `model_id` unset — so Strands falls back to *its* default model and
+            # BEDROCK_MODEL_ID is quietly ignored. Found on the first real invocation;
+            # there is no way to catch this offline, because the offline path never
+            # constructs a BedrockModel.
+            # `BedrockModel` rejects `region_name` and `boto_session` together, because a
+            # session already carries a region. Pass whichever one applies.
+            session = self._boto_session()
+            location = (
+                {"boto_session": session}
+                if session is not None
+                else {"region_name": self.settings.aws_region}
+            )
             model = BedrockModel(
-                region_name=self.settings.aws_region,
-                model_config={
-                    "model_id": self.settings.bedrock_model_id,
-                    "max_tokens": self.settings.model_max_tokens,
-                },
+                model_id=self.settings.bedrock_model_id,
+                max_tokens=self.settings.model_max_tokens,
+                **location,
             )
             return model, self.settings.bedrock_model_id, "bedrock"
 

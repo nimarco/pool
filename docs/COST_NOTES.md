@@ -4,9 +4,14 @@ Pool runs on a student's promotional AWS credits. Exhausting them ends the proje
 cost safety is enforced in code and asserted by tests rather than written down as an
 intention.
 
-**Nothing in this repository has yet spent a cent of AWS credit.** No AWS credentials were
-available during development; every run so far used the in-memory store, deterministic
-routing, and the offline planner.
+**Real AWS spend to date: 18 Bedrock `ConverseStream` calls on Nova Lite** (three
+verification runs, entry #0019 — roughly 107k input and 1.3k output tokens in total).
+Nothing else. No resource has been created, so nothing is accruing cost right now and
+there is nothing to shut off.
+
+Every other run — the full test suite, `make demo`, all UI development — used the
+in-memory store, deterministic routing, simulated payments, and the offline planner, and
+cost nothing.
 
 ---
 
@@ -35,13 +40,25 @@ One coordination run at defaults:
 
 | Resource | Worst case per run | Notes |
 | --- | --- | --- |
-| Bedrock invocations | ≤ 8 | Iteration cap. Prompts are compact structured state, not transcripts |
+| Bedrock invocations | ≤ 8 | Iteration cap. **Measured: 6 calls for a discovery run** |
 | Lambda | 1 invocation, ≤ 60 s | 1024 MB |
 | DynamoDB | tens of on-demand reads/writes | Small demo dataset |
 | Location `geo-routes` | ≤ 1 matrix call, ≤ 100 cells | Cached per run so repeated tool calls cannot re-bill |
 | CloudWatch | a few KB | 14-day retention |
 
 The demo scenario is three runs. In offline mode all three cost **zero**.
+
+### Measured, not estimated (#0019)
+
+A discovery run against `us.amazon.nova-lite-v1:0`: **6 ConverseStream calls, ~35.7k input
+tokens, ~420 output tokens, ~6 s**. Consistent across three runs.
+
+The input figure deserves attention: it is **85× the output**. Strands resends the whole
+conversation each turn, and `evaluate_pool_economics` alone returns ~2,250 tokens of
+structured JSON, so every large tool result is re-billed on every subsequent call — and it
+scales with community size. Negligible on Nova Lite; roughly fifty times more on a
+frontier model. Tracked as Q13 in `BUILD_HISTORY.md`; deliberately not "fixed" as a
+drive-by change, because trimming what the model sees alters agent behaviour.
 
 ## Infrastructure choices, and why
 

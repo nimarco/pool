@@ -72,6 +72,10 @@ class AgentBounds:
 @dataclass(frozen=True)
 class Settings:
     aws_region: str = "us-east-1"
+    #: Named AWS profile for local development. Empty means the default credential
+    #: chain, which is what Lambda and AgentCore use via their execution roles — so the
+    #: same code path serves both without a branch.
+    aws_profile: str = ""
     bedrock_model_id: str = DEFAULT_BEDROCK_MODEL_ID
     model_max_tokens: int = 2048
 
@@ -110,6 +114,7 @@ class Settings:
     def from_env(cls) -> Settings:
         return cls(
             aws_region=os.environ.get("AWS_REGION", "us-east-1"),
+            aws_profile=os.environ.get("AWS_PROFILE", ""),
             bedrock_model_id=os.environ.get("BEDROCK_MODEL_ID", DEFAULT_BEDROCK_MODEL_ID),
             model_max_tokens=_int_env("MODEL_MAX_TOKENS", 2048),
             schedules_enabled=_bool_env("SCHEDULES_ENABLED", False),

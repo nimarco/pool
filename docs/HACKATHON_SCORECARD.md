@@ -8,7 +8,10 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ❌ blocked
 
 Evidence is labelled by where it lives: **local** (runs here, verified), **ready**
 (implemented, never run against the real service), **cloud-verified** (observed working on
-AWS). Nothing is currently cloud-verified.
+AWS).
+
+**Cloud-verified so far: real Bedrock inference driving the real Strands loop and the real
+Pool tools** (entry #0019, three runs). Everything else on AWS remains unverified.
 
 ---
 
@@ -76,15 +79,17 @@ AWS). Nothing is currently cloud-verified.
 | Quote freshness enforcement | ✅ | local |
 | One-time pickup confirmation | ✅ | local |
 | Comprehensive tests | ✅ | 469 passing |
-| Bedrock real inference | 🟡 | **ready**, never invoked |
+| Bedrock real inference | ✅ | **cloud-verified** — `us.amazon.nova-lite-v1:0`, 6 ConverseStream calls per run, 5 Pool tools called, wire-level evidence, 3/3 runs |
 | AgentCore Runtime | 🟡 | **ready** (`agentcore_app.py`), never deployed |
 | DynamoDB | 🟡 | **ready**, pinned by a fake-client test, never live |
 | EventBridge background path | 🟡 | **ready**, ships disabled |
 | Amazon Location | 🟡 | **ready**, never called |
 | Real cloud trace | ⬜ | Needs credentials |
 
-**Exact next action:** configure a non-root AWS identity, grant Bedrock model access, then
-work down the verification order in the README.
+**Exact next action:** the model leg is proven end to end. Next is DynamoDB
+(`POOL_REPOSITORY=dynamodb` against a deployed table), then AgentCore, then a public URL.
+Verifying the harder agent branches (recovery, lock) on Bedrock is cheap and worth doing
+first — only discovery has run against a real model.
 
 ---
 

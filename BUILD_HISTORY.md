@@ -159,6 +159,10 @@ carry an explicit reason for remaining. Review this before ending any session th
 | --- | --- | --- | --- | --- | --- |
 | _(none)_ | | | | | |
 
+**Still empty, and that is accurate.** Entry #0019 made real Bedrock calls, but an
+on-demand model invocation creates no resource: it is billed per token and there is
+nothing to destroy, forget, or leave running. Account 860325090409, `us-east-1`.
+
 ### Recurring / scheduled (highest risk — review every session)
 
 | Resource | Schedule | Enabled? | Created | Kill switch | Destroy by |
@@ -179,18 +183,20 @@ Tracked so they are not silently assumed. Move each to an entry when resolved.
 
 | # | Question | Why it matters | Status |
 | --- | --- | --- | --- |
-| Q1 | Which Bedrock model tier is sufficient for the coordination loop? | Cost vs. reasoning quality; §3.3 says do not over-buy. | **Open** — a cost-efficient tool-use model is the documented default, but the exact inference-profile id is unverified against a live account. |
+| Q1 | Which Bedrock model tier is sufficient for the coordination loop? | Cost vs. reasoning quality; §3.3 says do not over-buy. | **Largely resolved (#0019)** — `us.amazon.nova-lite-v1:0` drove the full canonical tool sequence correctly and cheaply, three runs out of three. The documented default `us.anthropic.claude-haiku-4-5-20251001-v1:0` was confirmed to exist as an inference profile in the account but has not been run. Open sub-question: whether Nova Lite stays reliable on the harder branches (recovery, lock) — only the discovery path has been exercised. |
 | Q2 | What state belongs in DynamoDB vs. AgentCore Memory? | `AGENTS.md` §6 sets the principle; the boundary is undecided. | **Resolved (#0004, #0008)** — AgentCore Memory is *not used*. Every piece of state Pool holds is transactional (commitments, money, quantities, membership, deadlines, policies), which §6 forbids putting in agent memory. Adding it would have been logo-collecting. Revisit only if durable learned preferences appear. |
 | Q3 | Is AgentCore Runtime the right deployment target, or is plain Lambda sufficient? | Favorable for judging, but must be justified, not decorative. | **Partly resolved (#0009)** — both are implemented: Lambda serves the API, AgentCore hosts the coordinator via the official toolkit. Neither is deployed, so the operational comparison is still unmade. |
 | Q4 | Do we need a real routing/geocoding provider, or do synthetic distances suffice for the demo? | Live routing is a per-request paid call (§3.4). | **Resolved (#0003)** — deterministic routing is the default so tests and demos are free; the Amazon Location `geo-routes` adapter is implemented and its parsing tested against the real service model. It has not been called live. |
 | Q5 | How does a household express preauthorization (Smart Join) in a machine-verifiable way? | Core of Article 3; must not be an informal LLM judgment. | **Resolved (#0004)** — six numeric/boolean rules evaluated by a pure function returning a full audit trail. Stricter-of-policy-and-need wins. Every rule has a test proving it can block an auto-join. |
 | Q6 | Re-verify hackathon requirements before submission. | Snapshot in `AGENTS.md` §2 is dated 2026-08-15. | **Open** — still required before submitting, and specifically before publishing any Builder Center article (the blog-post wording changed mid-event). |
 | Q7 | Does the deterministic routing model resemble real travel times? | The demo shows travel minutes as if they were real. | **Open** — blocked on live AWS. Until then the provider is labelled in the API response and the UI. |
-| Q8 | What is the actual per-run Bedrock cost at the configured bounds? | Determines whether a 6-hourly schedule is affordable. | **Open** — blocked on live AWS. |
+| Q8 | What is the actual per-run Bedrock cost at the configured bounds? | Determines whether a 6-hourly schedule is affordable. | **Measured (#0019)** — a discovery run is 6 ConverseStream calls, ~35.7k input / ~420 output tokens, ~6 s. Dollar cost not asserted: the current Bedrock rate has not been checked. On Nova Lite this is trivially affordable at a 6-hourly cadence. |
 | Q9 | Does the Stripe PaymentIntent manual-capture flow behave as documented? | The whole payment lifecycle rests on it, and it has never touched Stripe's servers. | **Open** — needs TEST keys. Re-read the current official docs first; the shapes were written from documentation, not from a response. |
 | Q10 | Is the platform fee mode (10% of gross savings) defensible as a business model? | It is provisional business configuration, not domain truth. | **Open** — aligned by construction (no saving, no fee) and transparent, but untested against anyone's willingness to pay. |
 | Q11 | Does the case-fitting solver stay fast with realistic community sizes? | It is a bounded DP; bounded is not the same as fast at scale. | **Open** — trivially fast at demo scale (tens of members). Needs a benchmark at a few hundred before a pilot. |
 | Q12 | What actually happens to unclaimed paid-for goods? | The lifecycle deliberately stops at operator review. | **Open** — a policy question with legal edges. See `docs/PILOT_READINESS.md`. |
+| Q13 | Should tool results be trimmed before they reach the model? | Measured 85:1 input-to-output tokens (#0019). `evaluate_pool_economics` alone returns ~2,250 tokens and is re-sent every turn, so the cost grows with community size. | **Open** — a behavioural change to the agent, deliberately not made during a verification. Likely shape: return a compact summary plus an id the model can use to fetch detail only if it needs it. Must not weaken the rule that displayed numbers come from tools. |
+| Q14 | Does the agent handle the harder branches on a small model? | Only discovery has run on Bedrock. Recovery, final offer, and lock involve more state and more careful ordering. | **Open** — next verification step, and cheap to answer. |
 
 ---
 
@@ -1218,3 +1224,146 @@ at the moment things happened will eventually tell a true story dishonestly.
 
 **Relevant commits / files**
 `apps/web/src/*`, `services/agent/pool/services/demo.py`, `services/agent/pool/data/seed.py`
+
+---
+
+### #0019 — [2026-08-16] — First real Bedrock inference, and the bug that only a live call could find
+`[AWS]` `[AGENT]` `[COST]` `[ARTICLE-2]`
+
+**Goal / user intent**
+The smallest honest proof that the chain is real: Bedrock model → Strands agent → an
+existing typed Pool tool → deterministic result → recorded outcome. No AgentCore, no
+persistent resources, no scaffolding of a second agent.
+
+**Starting state**
+AWS authenticated for the first time: profile `pool-dev`, region `us-east-1`, non-root
+IAM user `pool-admin` (account 860325090409). A direct Converse call to
+`amazon.nova-lite-v1:0` had already succeeded (9 in / 6 out / 314 ms). Everything in this
+repository had run offline until this point; `MODEL_PROVIDER=bedrock` had never executed.
+
+**Decision**
+Change only the model leg. Keep the production `PoolCoordinator`, the twelve existing
+tools, every bound, and every other adapter (in-memory store, deterministic routing,
+simulated payments) exactly as they were.
+
+**Implementation**
+Three changes, all in the model/provider path:
+
+1. **`agent/coordinator.py` — fixed a real bug.** `BedrockModel` was being constructed as
+   `BedrockModel(region_name=..., model_config={"model_id": ..., "max_tokens": ...})`.
+   It takes its configuration as **keyword arguments**, not as a `model_config` dict. The
+   dict was accepted into the config under a key nothing reads, `model_id` was never set,
+   and Strands fell back to *its own* default (`global.anthropic.claude-sonnet-4-6`). So
+   `BEDROCK_MODEL_ID` was silently ignored — a configured model that would never have been
+   the model actually invoked.
+2. **`agent/coordinator.py` — profile support.** Added `_boto_session()`: a named profile
+   for local development, `None` for the default credential chain that Lambda and
+   AgentCore use via execution roles. `BedrockModel` rejects `region_name` and
+   `boto_session` together, so whichever applies is passed, never both.
+3. **`config.py`** — added `aws_profile`, read from `AWS_PROFILE`, defaulting to empty.
+
+**AWS / external services touched**
+- `sts:GetCallerIdentity` — confirmed non-root before anything else.
+- `bedrock:ListFoundationModels`, `bedrock:ListInferenceProfiles` — read-only.
+- `bedrock-runtime:ConverseStream` — **18 real streaming calls across 3 verification runs**
+  (6 per run). Model: `us.amazon.nova-lite-v1:0`.
+
+**No resource was created.** No DynamoDB table, no Lambda, no AgentCore runtime, no
+schedule. The AWS resource ledger stays empty. No Stripe call was made and payment
+behaviour was untouched.
+
+**Cost-relevant activity**
+Per run, consistently across three runs:
+
+| Metric | Run 1 | Run 2 | Run 3 |
+| --- | --- | --- | --- |
+| ConverseStream calls | 6 | 6 | 6 |
+| Input tokens | 35,706 | ~35,700 | 35,836 |
+| Output tokens | 418 | ~430 | 439 |
+| Wall clock | 6.4 s | — | 5.6 s |
+| Iterations (bound 8) | 6 | 6 | 6 |
+
+Roughly **107k input / 1.3k output tokens total** on Nova Lite. Not priced here, because
+the current rate has not been checked against the Bedrock price list and a guessed figure
+is worse than none — but Nova Lite is the cheapest text model in the account and the
+absolute spend is small.
+
+**The number that matters is the ratio, not the total.** 35.7k input tokens for 418 output
+tokens is 85:1. The cause is measured, not assumed: `evaluate_pool_economics` returns
+**9,015 characters (~2,250 tokens)** of structured JSON, `list_latent_demand` returns
+1,311, and Strands resends the whole conversation on every turn — so each large tool
+result is re-billed on every subsequent call. This is precisely what `AGENTS.md` §3.3
+warns about ("do not resend enormous histories when compact structured state will do"),
+and it would have stayed invisible forever on the offline path, which charges nothing for
+verbosity. On Nova Lite it is pocket change; on a frontier model the same run would cost
+roughly fifty times more, and it grows with community size because the payload carries
+every candidate.
+
+Deliberately **not** fixed in this entry — trimming what the model sees is a behavioural
+change to the agent and deserves its own decision, not a drive-by edit during a
+verification. Logged as Q13.
+
+**Agent behavior**
+Model `us.amazon.nova-lite-v1:0` · 12 tools available · 5 called, in this order:
+
+```
+list_latent_demand → evaluate_pool_economics → create_candidate_pool
+  → find_host_candidates → request_host_acceptance
+```
+
+That is the canonical workflow, chosen by the model. Nothing scripted it, and the
+sequence was identical across all three runs. 6 iterations against a bound of 8; no bound
+fired; terminated `completed` with outcome `pool_created`.
+
+The deterministic half did its own job underneath: a real pool formed at
+`host_recruiting` with 10 members against a 24-unit threshold, and four activity events
+were written — including the host ranking that offered the job to `hh_marchetti`.
+
+**Validation**
+`pool/scripts/verify_bedrock.py`, run three times. It asserts twelve properties including
+*real bedrock-runtime HTTPS calls observed in botocore's own endpoint log* — wire-level
+evidence rather than our own logging claiming a call happened. All twelve passed each
+time.
+
+Then offline: **445 application tests + 24 infrastructure tests passing**, lint clean. The
+offline path is unaffected.
+
+Six new regression tests (`TestBedrockModelConstruction`) assert the configured model id
+and token ceiling actually reach the model, that no unknown config key is silently
+accepted, and that region and session are never passed together. They need **no
+credentials** — verified by running them with `HOME` and every AWS variable stripped.
+
+**Failures / dead ends**
+1. **`boto3` could not resolve the profile at all**: `MissingDependencyException — using
+   the login credential provider requires botocore[crt]`. The profile uses the newer
+   `login_session` flow. Fixed by installing `botocore[crt]` into the local venv. It is a
+   *local development* dependency only — Lambda and AgentCore authenticate with execution
+   roles and never touch that provider — so it was deliberately not added to the runtime
+   dependencies.
+2. **`ValueError: Cannot specify both region_name and boto_session`** on the first
+   corrected construction. The session already carries a region.
+
+**What we learned**
+The offline planner is excellent for testing everything *except the thing it replaces*.
+A whole configuration path — construction, credentials, region, model id — had never
+executed, and it was wrong in a way that no amount of offline testing could surface: the
+system would have run happily against a model nobody chose. The lesson is not "test with
+real calls"; it is that a substituted component leaves a *specific shaped hole*, and that
+hole is exactly where the untested code lives. One real call cost pennies and found two
+bugs and a dependency gap.
+
+**Article fodder**
+Article 2, and it is now unblocked for its first section. Three concrete findings: the
+`model_config` kwargs bug, the `region_name`/`boto_session` exclusivity, and the
+`botocore[crt]` requirement for the login credential provider. Plus the 85:1
+input-to-output ratio, which is the most transferable cost lesson in the project so far.
+
+**Evidence worth preserving**
+`pool/scripts/verify_bedrock.py` output — it prints the botocore wire calls, the tool
+sequence with argument digests, the resulting stored state, and the token counts, and it
+is re-runnable for a screenshot.
+
+**Relevant commits / files**
+`services/agent/pool/agent/coordinator.py`, `services/agent/pool/config.py`,
+`services/agent/pool/scripts/verify_bedrock.py`,
+`services/agent/tests/test_agent_bounds.py`

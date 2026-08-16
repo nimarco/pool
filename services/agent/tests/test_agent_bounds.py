@@ -213,3 +213,85 @@ class TestErrorHandling:
         assert run.outcome == RunOutcome.ERROR
         assert run.termination_reason == "error"
         assert any("model unavailable" in n for n in run.notes)
+
+
+class TestBedrockModelConstruction:
+    """The Bedrock path is unreachable offline, so its wiring needs its own guard.
+
+    A real invocation on 2026-08-16 showed `BedrockModel` had been constructed with a
+    `model_config={...}` dict. It takes its configuration as keyword arguments, so the
+    dict landed under a key nothing reads, `model_id` was never set, and Strands silently
+    fell back to *its* default model — meaning BEDROCK_MODEL_ID was ignored entirely.
+    Nothing in the offline suite could catch that, because the offline path never builds
+    a BedrockModel. These tests do, without needing credentials or making a call.
+    """
+
+    @staticmethod
+    def _coordinator(**overrides):
+        settings = Settings(
+            model_provider="bedrock",
+            routing_provider="deterministic",
+            repository="memory",
+            **overrides,
+        )
+        return PoolCoordinator(InMemoryRepository(), settings=settings)
+
+    def test_the_configured_model_id_actually_reaches_the_model(self):
+        coordinator = self._coordinator(bedrock_model_id="us.amazon.nova-lite-v1:0")
+        model, model_id, provider = coordinator._build_model()
+        assert provider == "bedrock"
+        assert model_id == "us.amazon.nova-lite-v1:0"
+        # The real assertion: the model itself must be configured with it, not merely
+        # reported as using it.
+        assert model.get_config()["model_id"] == "us.amazon.nova-lite-v1:0"
+
+    def test_the_token_ceiling_reaches_the_model(self):
+        coordinator = self._coordinator(model_max_tokens=1234)
+        model, _, _ = coordinator._build_model()
+        assert model.get_config()["max_tokens"] == 1234
+
+    def test_no_unknown_config_key_is_silently_accepted(self):
+        """A stray key is how the original bug hid: accepted, stored, never read."""
+        from strands.models.bedrock import BedrockModel
+
+        coordinator = self._coordinator()
+        model, _, _ = coordinator._build_model()
+        known = set(BedrockModel.BedrockConfig.__annotations__)
+        assert set(model.get_config()) <= known
+
+    def test_a_named_profile_is_used_when_configured(self, monkeypatch):
+        """Local development uses a profile; Lambda and AgentCore use the default chain."""
+        captured = {}
+
+        class FakeSession:
+            def __init__(self, profile_name=None, region_name=None):
+                captured["profile"] = profile_name
+                captured["region"] = region_name
+
+        import boto3
+
+        monkeypatch.setattr(boto3, "Session", FakeSession)
+        coordinator = self._coordinator(aws_profile="pool-dev", aws_region="us-east-1")
+        session = coordinator._boto_session()
+        assert isinstance(session, FakeSession)
+        assert captured == {"profile": "pool-dev", "region": "us-east-1"}
+
+    def test_no_profile_means_the_default_credential_chain(self):
+        assert self._coordinator(aws_profile="")._boto_session() is None
+
+    def test_region_and_session_are_never_passed_together(self, monkeypatch):
+        """Strands rejects both at once — the session already carries a region."""
+        import boto3
+
+        real_session = boto3.Session
+
+        def _session(profile_name=None, region_name=None):
+            # A profile that does not exist would raise; use a bare session instead.
+            return real_session(region_name=region_name)
+
+        monkeypatch.setattr(boto3, "Session", _session)
+        # Constructing with a profile set must not raise ValueError.
+        model, _, _ = self._coordinator(
+            aws_profile="anything", aws_region="us-east-1"
+        )._build_model()
+        assert model.get_config()["model_id"]

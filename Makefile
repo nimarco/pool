@@ -95,6 +95,11 @@ qa: lint typecheck test build secret-scan ## Everything CI would run
 whoami: ## (cloud) Show which AWS principal is configured — run before anything else
 	@bash scripts/aws_preflight.sh
 
+.PHONY: verify-bedrock
+verify-bedrock: ## (COSTS MONEY, a little) Prove Bedrock -> Strands -> Pool tools for real
+	@bash scripts/aws_preflight.sh
+	cd $(AGENT) && .venv/bin/python -m pool.scripts.verify_bedrock
+
 .PHONY: synth
 synth: ## Synthesize the CloudFormation template (offline, no credentials needed)
 	cd $(INFRA) && .venv/bin/python app.py && echo "→ infra/cdk.out/PoolStack.template.json"

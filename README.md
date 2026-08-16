@@ -293,13 +293,14 @@ the offers, the money, and the purchase. No goods move. No traction is claimed.
 
 ## AWS
 
-Implemented and synthesizing; **not yet verified against a live account** — no
-credentials were configured when this was written. Nothing in this repository claims a
-deployment that has not happened.
+**Bedrock inference is verified**: a real model drives the real Strands loop and the real
+Pool tools (`make verify-bedrock`). Everything else is implemented and synthesizing but
+**not yet verified against a live account**. Nothing in this repository claims a deployment
+that has not happened.
 
 | Service | Role | Status |
 | --- | --- | --- |
-| Bedrock | Model inference via Strands | Implemented, unverified |
+| Bedrock | Model inference via Strands | **Verified** — `us.amazon.nova-lite-v1:0`, 5 Pool tools called from a real run |
 | AgentCore Runtime | Hosted agent entrypoint | `agentcore_app.py`, deployed with the official toolkit |
 | DynamoDB | Authoritative application state, single table, on-demand, TTL | Implemented, pinned by a fake-client test |
 | API Gateway + Lambda | Public API | In the CDK stack |

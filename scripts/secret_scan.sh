@@ -6,13 +6,25 @@ cd "$(dirname "$0")/.."
 EXCLUDES=(--exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.venv
           --exclude-dir=dist --exclude-dir=cdk.out --exclude-dir=cdk.out.test
           --exclude-dir=__pycache__ --exclude-dir=.pytest_cache
-          --exclude=secret_scan.sh --exclude=package-lock.json)
+          --exclude=secret_scan.sh --exclude=secret_scan_selftest.sh
+          --exclude=package-lock.json)
+
+# The AgentCore CLI's CodeZip staging tree: ~120 MB of vendored third-party wheels,
+# rebuilt by every `agentcore deploy` synth and never committed. Scanning it only ever
+# reports other people's documentation fixtures — botocore's AKIA…EXAMPLE keys, the PEM
+# header constant in `cryptography` — never ours.
+#
+# Pruned by exact rooted path, not by directory name. `--exclude-dir` deliberately is
+# not used for this: it matches a basename, so `--exclude-dir=.cache` would blind the
+# scanner to every `.cache` directory anywhere in the repository. Filtering afterwards
+# costs about half a second on the whole tree and keeps the exemption to this one path.
+GENERATED_CACHE='^\./agentcore/\.cache/'
 
 FAIL=0
 scan() {
   local label="$1" pattern="$2"
   local hits
-  hits=$(grep -rInE "${EXCLUDES[@]}" "$pattern" . 2>/dev/null || true)
+  hits=$(grep -rInE "${EXCLUDES[@]}" "$pattern" . 2>/dev/null | grep -vE "$GENERATED_CACHE" || true)
   if [[ -n "$hits" ]]; then
     echo "✗ $label"
     echo "$hits" | head -8

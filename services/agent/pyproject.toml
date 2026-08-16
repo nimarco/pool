@@ -10,6 +10,15 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "pydantic>=2.9.0",
     "mangum>=0.19.0",
+    # AgentCore Runtime. `agentcore_app.py` imports BedrockAgentCoreApp from this, and
+    # the CodeZip packager installs the runtime image straight from this file — so a
+    # dependency that is only in the Makefile is a dependency the deployed runtime
+    # would not have.
+    "bedrock-agentcore>=1.1.0",
+    # Required because the runtime is configured with `instrumentation.enableOtel`,
+    # which starts the entrypoint under `opentelemetry-instrument`. Without it the
+    # container's start command fails, not just the tracing.
+    "aws-opentelemetry-distro>=0.10.0",
 ]
 
 [project.optional-dependencies]

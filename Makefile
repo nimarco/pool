@@ -24,9 +24,18 @@ help: ## Show this help
 
 .PHONY: install
 install: ## Install all dependencies (Python agent, web, infra)
-	cd $(AGENT) && uv venv --python 3.13 && uv pip install -e ".[dev]" bedrock-agentcore
+	cd $(AGENT) && uv venv --python 3.13 && uv pip install -e ".[dev]"
 	cd $(WEB) && npm install
 	cd $(INFRA) && uv venv --python 3.13 && uv pip install --python .venv/bin/python -r requirements.txt pytest
+
+.PHONY: install-agentcore
+install-agentcore: ## Install the AgentCore CLI, then build its generated CDK project
+	npm install -g @aws/agentcore
+	@$(MAKE) agentcore-cdk
+
+.PHONY: agentcore-cdk
+agentcore-cdk: ## Rebuild agentcore/cdk/ from the installed AgentCore CLI (generated, not committed)
+	@bash scripts/agentcore_cdk_init.sh
 
 # ----------------------------------------------------------------- run
 
@@ -70,7 +79,7 @@ typecheck: ## Typecheck the web app
 
 .PHONY: lint
 lint: ## Lint Python
-	cd $(AGENT) && .venv/bin/python -m ruff check pool tests
+	cd $(AGENT) && .venv/bin/python -m ruff check pool tests agentcore_app.py
 
 .PHONY: build
 build: ## Build the web app for production
@@ -79,6 +88,10 @@ build: ## Build the web app for production
 .PHONY: secret-scan
 secret-scan: ## Scan the repo for anything that looks like a credential
 	@bash scripts/secret_scan.sh
+
+.PHONY: secret-scan-selftest
+secret-scan-selftest: ## Prove the secret scanner still detects planted secrets
+	@bash scripts/secret_scan_selftest.sh
 
 .PHONY: diagram
 diagram: ## Re-render the architecture diagram from its Mermaid source
@@ -118,10 +131,19 @@ deploy: ## (COSTS MONEY) Deploy the serverless stack
 deploy-web: build ## (COSTS MONEY) Upload the built web app to S3 and invalidate CloudFront
 	@bash scripts/deploy_web.sh
 
+.PHONY: agent-validate
+agent-validate: ## Validate the AgentCore project config (offline, free)
+	agentcore validate
+
+.PHONY: agent-dry-run
+agent-dry-run: ## (cloud, read-only) Synthesize the AgentCore deployment without creating anything
+	@bash scripts/aws_preflight.sh
+	agentcore deploy --dry-run
+
 .PHONY: deploy-agent
 deploy-agent: ## (COSTS MONEY) Deploy the coordinator to Bedrock AgentCore Runtime
 	@bash scripts/aws_preflight.sh
-	cd $(AGENT) && agentcore configure --entrypoint agentcore_app.py && agentcore launch
+	agentcore deploy
 
 .PHONY: smoke
 smoke: ## (cloud) Smoke-test a deployed API — pass API_URL=https://…
@@ -147,5 +169,6 @@ cost-check: ## (cloud) List this project's AWS resources and flag anything recur
 .PHONY: clean
 clean: ## Remove local build artifacts
 	rm -rf $(WEB)/dist $(WEB)/node_modules/.vite $(INFRA)/cdk.out $(INFRA)/cdk.out.test
+	rm -rf agentcore/.cache agentcore/cdk/cdk.out agentcore/cdk/dist
 	find . -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
 	find . -name .pytest_cache -type d -prune -exec rm -rf {} + 2>/dev/null || true

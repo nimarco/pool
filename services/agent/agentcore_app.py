@@ -1,11 +1,15 @@
 """Amazon Bedrock AgentCore Runtime entrypoint for the Pool coordinator.
 
-Deployed with the official AgentCore starter toolkit rather than a hand-rolled
-container path:
+Deployed with the official AgentCore CLI (``@aws/agentcore``) rather than a hand-rolled
+container path. The project config lives in ``agentcore/`` at the repository root and
+points its ``codeLocation`` at this directory, so the file is deployed where it sits:
 
-    cd services/agent
-    agentcore configure --entrypoint agentcore_app.py
-    agentcore launch
+    agentcore validate
+    agentcore deploy --dry-run
+    agentcore deploy
+
+The older starter-toolkit flow (``agentcore configure`` / ``agentcore launch``) is
+retired; that CLI is legacy and shares the ``agentcore`` command name with this one.
 
 The entrypoint is deliberately thin. It validates the incoming payload, selects a
 workspace, and hands off to :class:`~pool.agent.coordinator.PoolCoordinator` — the same
@@ -32,6 +36,7 @@ from pool.adapters.routing import build_routing
 from pool.agent.coordinator import PoolCoordinator
 from pool.config import get_settings
 from pool.data.seed import COMMUNITY_ID, seed
+from pool.domain.models import ToolCallRecord
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("pool.agentcore")
@@ -54,6 +59,26 @@ _coordinator = PoolCoordinator(
     payments=build_payment_provider(_settings.payment_provider, _settings.stripe_api_key),
     purchaser=build_purchase_executor(_settings.purchase_executor),
 )
+
+def tool_call_view(record: ToolCallRecord) -> dict[str, Any]:
+    """One tool call, reduced to what an operator needs from outside the runtime.
+
+    `ok` and `summary` are the fields that separate work the coordinator actually did
+    from a call deterministic code refused before touching any state. Without them a
+    `recover_pool` rejected for an invented pool id is indistinguishable, in the
+    response, from one that repaired a pool — which is precisely the Q16 behaviour a
+    deployed run has to be able to prove (BUILD_HISTORY #0021).
+
+    Deliberately excluded: `arguments_digest`, which is a hash and tells a reader
+    nothing, and `at`, which duplicates the run's own timing. No model reasoning text
+    ever reaches this dict (AGENTS.md §9). `summary` is the coordinator's own one-line
+    result description, already capped at 180 characters at the point it is recorded.
+
+    Same shape as the API's run detail (`pool/api/app.py`), so the hosted runtime and
+    the local API describe a run identically.
+    """
+    return {"name": record.name, "ok": record.ok, "summary": record.summary}
+
 
 ALLOWED_TRIGGERS = {
     "scheduled_scan",
@@ -109,8 +134,10 @@ def invoke(payload: dict[str, Any], context: Any = None) -> dict[str, Any]:
         workspace, trigger=trigger, instruction=instruction, community_id=community_id
     )
     logger.info(
-        "coordination run finished run_id=%s outcome=%s iterations=%d tools=%d reason=%s",
-        run.id, run.outcome.value, run.iterations, len(run.tool_calls), run.termination_reason,
+        "coordination run finished run_id=%s outcome=%s iterations=%d tools=%d "
+        "refused=%d reason=%s",
+        run.id, run.outcome.value, run.iterations, len(run.tool_calls),
+        sum(1 for t in run.tool_calls if not t.ok), run.termination_reason,
     )
 
     # Structured, safe to log and to show a judge: tool names and counters, never
@@ -120,7 +147,7 @@ def invoke(payload: dict[str, Any], context: Any = None) -> dict[str, Any]:
         "workspace": workspace,
         "outcome": run.outcome.value,
         "iterations": run.iterations,
-        "tool_calls": [t.name for t in run.tool_calls],
+        "tool_calls": [tool_call_view(t) for t in run.tool_calls],
         "termination_reason": run.termination_reason,
         "model_provider": run.model_provider,
         "model_id": run.model_id,

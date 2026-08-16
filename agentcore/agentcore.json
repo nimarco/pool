@@ -1,0 +1,52 @@
+{
+  "name": "Pool",
+  "version": 1,
+  "tags": {
+    "agentcore:created-by": "agentcore-cli",
+    "agentcore:project-name": "Pool",
+    "Project": "Pool",
+    "Hackathon": "AgentsForHumans",
+    "Environment": "dev"
+  },
+  "runtimes": [
+    {
+      "name": "PoolCoordinator",
+      "description": "Pool autonomous collective-purchasing coordinator (Strands + Bedrock)",
+      "build": "CodeZip",
+      "entrypoint": "agentcore_app.py",
+      "codeLocation": "services/agent/",
+      "runtimeVersion": "PYTHON_3_13",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP",
+      "authorizerType": "AWS_IAM",
+      "instrumentation": {
+        "enableOtel": true
+      },
+      "lifecycleConfiguration": {
+        "idleRuntimeSessionTimeout": 60,
+        "maxLifetime": 300
+      },
+      "envVars": [
+        { "name": "MODEL_PROVIDER", "value": "bedrock" },
+        { "name": "BEDROCK_MODEL_ID", "value": "us.amazon.nova-lite-v1:0" },
+        { "name": "MODEL_MAX_TOKENS", "value": "2048" },
+        { "name": "POOL_REPOSITORY", "value": "memory" },
+        { "name": "ROUTING_PROVIDER", "value": "deterministic" },
+        { "name": "PAYMENT_PROVIDER", "value": "simulated" },
+        { "name": "PURCHASE_EXECUTOR", "value": "simulated" },
+        { "name": "SCHEDULES_ENABLED", "value": "false" },
+        { "name": "MAX_AGENT_ITERATIONS", "value": "8" },
+        { "name": "MAX_TOOL_CALLS_PER_RUN", "value": "25" },
+        { "name": "MAX_TOOL_RETRIES", "value": "3" },
+        { "name": "MAX_DUPLICATE_TOOL_CALLS", "value": "2" },
+        { "name": "WORKFLOW_TIMEOUT_SECONDS", "value": "120" },
+        { "name": "MAX_ROUTE_MATRIX_CELLS", "value": "100" },
+        { "name": "LOG_LEVEL", "value": "INFO" }
+      ]
+    }
+  ],
+  "memories": [],
+  "credentials": [],
+  "evaluators": [],
+  "onlineEvalConfigs": []
+}

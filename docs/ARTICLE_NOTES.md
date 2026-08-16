@@ -181,7 +181,8 @@ they added)
 ### Missing — blocks publication
 
 - [ ] A real Bedrock invocation: latency, token counts, actual cost per run
-- [ ] A real AgentCore Runtime deployment: what `agentcore configure`/`launch` actually did
+- [ ] A real AgentCore Runtime deployment: what `agentcore deploy` actually did (the
+      starter toolkit's `configure`/`launch` is retired — the current CLI is CDK-based)
 - [ ] A real CloudWatch/AgentCore trace screenshot
 - [ ] A real Amazon Location route matrix response vs. the deterministic estimate — how
       wrong was the great-circle model?

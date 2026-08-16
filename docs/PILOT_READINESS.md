@@ -61,7 +61,7 @@ because no credentials were configured. Nothing here is claimed as verified.
 | First real inference | One direct Bedrock call, then one Strands tool run, before anything larger. |
 | DynamoDB | `POOL_REPOSITORY=dynamodb`. Table shape is pinned by a fake-client test; the live round trip is unverified. |
 | Amazon Location | `ROUTING_PROVIDER=aws_location`. Uses `geo-routes`, so no calculator resource to provision. |
-| AgentCore Runtime | `agentcore configure --entrypoint agentcore_app.py && agentcore launch`. |
+| AgentCore Runtime | `agentcore deploy` (official `@aws/agentcore` CLI; config in `agentcore/`). Requires a CDK bootstrap in the account first. |
 | EventBridge background scan | Ships **disabled**. Enabling it starts recurring model invocations. |
 | Public deployment | `make deploy` then `make deploy-web`. |
 

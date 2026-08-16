@@ -43,6 +43,19 @@ node_modules/.cache/serverless/
 deploy-output.json
 stack-outputs.json
 
+# AgentCore CLI (@aws/agentcore). The two committed files are agentcore/agentcore.json
+# and agentcore/aws-targets.json — everything else under agentcore/ is generated.
+# Every pattern below is rooted with a leading slash so it matches only the CLI's own
+# project directory: an unrelated `cdk/` or `.cache/` elsewhere in this repository (for
+# example under infra/ or services/) is still tracked normally.
+/agentcore/.cli/
+/agentcore/.env.local
+/agentcore/.env
+# Rebuild with `make agentcore-cdk`, which copies the installed CLI's bundled assets.
+/agentcore/cdk/
+# CodeZip staging: ~120 MB of vendored wheels, rebuilt on every synth.
+/agentcore/.cache/
+
 # =============================================================================
 # Python
 # =============================================================================

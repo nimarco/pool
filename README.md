@@ -303,7 +303,7 @@ that has not happened.
 | Service | Role | Status |
 | --- | --- | --- |
 | Bedrock | Model inference via Strands | **Verified** — `us.amazon.nova-lite-v1:0`; discovery, recovery, and lock branches all driven by real runs |
-| AgentCore Runtime | Hosted agent entrypoint | `agentcore_app.py`, deployed with the official toolkit |
+| AgentCore Runtime | Hosted agent entrypoint | `agentcore_app.py`, configured in `agentcore/` for the official `@aws/agentcore` CLI. **Dry-run only** — synthesizes to one runtime + one execution role; nothing deployed |
 | DynamoDB | Authoritative application state, single table, on-demand, TTL | Implemented, pinned by a fake-client test |
 | API Gateway + Lambda | Public API | In the CDK stack |
 | S3 + CloudFront | Public web app | In the CDK stack |
@@ -318,6 +318,28 @@ make deploy   # (COSTS MONEY)
 make cost-check
 make destroy
 ```
+
+### AgentCore
+
+The hosted coordinator is deployed with the official `@aws/agentcore` CLI, whose project
+config lives in `agentcore/`. Only `agentcore.json` and `aws-targets.json` are committed;
+the CDK app the CLI deploys through is generated, per that CLI's own convention. From a
+fresh clone:
+
+```bash
+make install-agentcore   # installs the CLI, then rebuilds agentcore/cdk/
+make agent-validate      # config check — offline and free
+make agent-dry-run       # synthesizes the stack; creates nothing
+make deploy-agent        # (COSTS MONEY)
+```
+
+`make agentcore-cdk` rebuilds `agentcore/cdk/` on its own by copying the installed CLI's
+bundled assets. It refuses to overwrite an existing directory unless passed `--force`, and
+warns if the installed CLI is not the version this repository was verified against.
+
+The first `agentcore deploy` needs a CDK bootstrap in the account — a separate,
+account-wide step that grants `AdministratorAccess` to a CloudFormation execution role.
+It is deliberately not automated here (`AGENTS.md` §3.5).
 
 See [`docs/COST_NOTES.md`](docs/COST_NOTES.md) for the resource ledger and
 [`AGENTS.md`](AGENTS.md) §3 for the cost rules every change is held to.

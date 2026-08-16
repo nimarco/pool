@@ -161,7 +161,17 @@ carry an explicit reason for remaining. Review this before ending any session th
 
 **Still empty, and that is accurate.** Entries #0019, #0020 and #0021 made real Bedrock
 calls, but an on-demand model invocation creates no resource: it is billed per token and
-there is nothing to destroy, forget, or leave running. Account 860325090409, `us-east-1`.
+there is nothing to destroy, forget, or leave running. #0022 prepared the AgentCore
+deployment and stopped at a dry run, creating nothing at all — the account holds no
+CloudFormation stack, no runtime, no bucket, no ECR repository, and no role beyond three
+AWS service-linked ones. Account 860325090409, `us-east-1`.
+
+**Pending approval, not yet created.** The first real `agentcore deploy` will require a
+CDK bootstrap (`CDKToolkit`: an S3 staging bucket, an ECR repository, an SSM parameter,
+and five `cdk-*` roles, one holding `AdministratorAccess`) before the four-resource Pool
+stack. Both belong in the table above the moment they exist. Note that the runtime's
+CloudWatch log group is created by the service *outside* the stack and has no retention
+policy, so `agentcore destroy` will not remove it — see #0022.
 
 ### Recurring / scheduled (highest risk — review every session)
 
@@ -185,7 +195,7 @@ Tracked so they are not silently assumed. Move each to an entry when resolved.
 | --- | --- | --- | --- |
 | Q1 | Which Bedrock model tier is sufficient for the coordination loop? | Cost vs. reasoning quality; §3.3 says do not over-buy. | **Resolved (#0019, #0021)** — `us.amazon.nova-lite-v1:0` drove discovery correctly three runs of three, and the consequential recovery + lock branch correctly six runs of six, well inside every bound. One known rough edge, characterised in #0021 and tracked as Q16: in 1 of 12 coordinator runs it opened a turn with an invented pool identifier, which deterministic code refused without touching state. The documented default `us.anthropic.claude-haiku-4-5-20251001-v1:0` exists as an inference profile in the account but has still not been run. |
 | Q2 | What state belongs in DynamoDB vs. AgentCore Memory? | `AGENTS.md` §6 sets the principle; the boundary is undecided. | **Resolved (#0004, #0008)** — AgentCore Memory is *not used*. Every piece of state Pool holds is transactional (commitments, money, quantities, membership, deadlines, policies), which §6 forbids putting in agent memory. Adding it would have been logo-collecting. Revisit only if durable learned preferences appear. |
-| Q3 | Is AgentCore Runtime the right deployment target, or is plain Lambda sufficient? | Favorable for judging, but must be justified, not decorative. | **Partly resolved (#0009)** — both are implemented: Lambda serves the API, AgentCore hosts the coordinator via the official toolkit. Neither is deployed, so the operational comparison is still unmade. |
+| Q3 | Is AgentCore Runtime the right deployment target, or is plain Lambda sufficient? | Favorable for judging, but must be justified, not decorative. | **Partly resolved (#0009, #0022)** — both are implemented: Lambda serves the API, AgentCore hosts the coordinator. #0022 replaced the retired starter-toolkit path with the official `@aws/agentcore` CLI and took it to a verified dry run: **4 resources**, one runtime plus its execution role, no ECR and no CodeBuild under `CodeZip`. Both paths are now CDK-based, so the comparison is narrower than it looked. Still not deployed — the operational comparison waits on a CDK bootstrap. |
 | Q4 | Do we need a real routing/geocoding provider, or do synthetic distances suffice for the demo? | Live routing is a per-request paid call (§3.4). | **Resolved (#0003)** — deterministic routing is the default so tests and demos are free; the Amazon Location `geo-routes` adapter is implemented and its parsing tested against the real service model. It has not been called live. |
 | Q5 | How does a household express preauthorization (Smart Join) in a machine-verifiable way? | Core of Article 3; must not be an informal LLM judgment. | **Resolved (#0004)** — six numeric/boolean rules evaluated by a pure function returning a full audit trail. Stricter-of-policy-and-need wins. Every rule has a test proving it can block an auto-join. |
 | Q6 | Re-verify hackathon requirements before submission. | Snapshot in `AGENTS.md` §2 is dated 2026-08-15. | **Open** — still required before submitting, and specifically before publishing any Builder Center article (the blog-post wording changed mid-event). |
@@ -198,7 +208,7 @@ Tracked so they are not silently assumed. Move each to an entry when resolved.
 | Q13 | Should tool results be trimmed before they reach the model? | Measured 85:1 input-to-output tokens (#0019). `evaluate_pool_economics` alone returns ~2,250 tokens and is re-sent every turn, so the cost grows with community size. | **Resolved (#0020)** — yes, by projection, not by summarization. `pool/agent/projection.py` gives the model the decision-critical facts and keeps the complete deterministic result for the API, auditing, and tests. Re-measured on the same model, seed, scenario and bounds: **35.8k → 19.2k input tokens (−46%)**, identical tool sequence and outcome. The "fetch detail on demand" shape was rejected: a thirteenth tool costs schema bytes on every turn and buys an extra paid iteration. |
 | Q14 | Does the agent handle the harder branches on a small model? | Only discovery has run on Bedrock. Recovery, final offer, and lock involve more state and more careful ordering. | **Resolved for recovery and lock (#0021)** — six real-model runs of the payment-failure recovery branch, shaped so lost demand (2 units) and merely-unanswered demand (4 units) are different numbers. Every run repaired exactly the hole, left the pending buyers alone, preserved the case boundary, and did not lock; three of six *attempted* the lock and were refused by the viability engine. Then locked correctly once the humans answered. `issue_final_offer` was never reached on a pool that already had one, so that ordering rule is still only proven offline. |
 | Q15 | Are the tool schemas worth 6.8 KB of context on every turn? | After #0020 compacted the results, the twelve tool schemas are **62% of the model's remaining context** — 6,805 bytes re-sent per turn. | **Open** — measured, deliberately not acted on. The docstrings are what lets a small model pick the right tool, so trimming them trades selection quality for tokens. Answering it needs an A/B on the real model, not a byte count. #0021 is a point against trimming: tool selection was correct in 12 of 12 runs. |
-| Q16 | Should consequential tool docstrings state that identifiers must come from a read tool? | #0021 observed the real model opening a turn with `recover_pool(pool_id="short_of_demand_pool")` — an invented identifier passed to a money-adjacent tool. Refused before touching state, and the model recovered, but it happened in 1 of 12 runs. | **Open, deliberately** — the safety property is proven and regression-tested (all seven consequential tools refuse an invented id before reading or writing anything). The candidate mitigation is one sentence per docstring; it is a *behavioural* change to tool selection, so adopting it means re-running the paid verification and it should be its own decision, not a drive-by edit during a verification. See Q15 — it also adds schema bytes to every turn. |
+| Q16 | Should consequential tool docstrings state that identifiers must come from a read tool? | #0021 observed the real model opening a turn with `recover_pool(pool_id="short_of_demand_pool")` — an invented identifier passed to a money-adjacent tool. Refused before touching state, and the model recovered, but it happened in 1 of 12 runs. | **Open, deliberately** — the safety property is proven and regression-tested (all seven consequential tools refuse an invented id before reading or writing anything). The candidate mitigation is one sentence per docstring; it is a *behavioural* change to tool selection, so adopting it means re-running the paid verification and it should be its own decision, not a drive-by edit during a verification. See Q15 — it also adds schema bytes to every turn. **#0022 made the refusal observable** without touching model behaviour: the hosted entrypoint now reports `ok` and `summary` per tool call, so a deployed run can prove an invented id was *rejected* rather than merely showing that `recover_pool` was called. That was a prerequisite for testing this on AgentCore at all — with `POOL_REPOSITORY=memory` the run record dies with the microVM, so the response and the logs are the only evidence. |
 
 ---
 
@@ -1748,3 +1758,169 @@ refused the lock → humans answer → locked and captured $861.44.
 `services/agent/pool/scripts/recovery_scenario.py` (new),
 `services/agent/pool/scripts/verify_recovery_bedrock.py` (new),
 `services/agent/tests/test_recovery_lifecycle.py` (new), `Makefile`
+
+### #0022 — [2026-08-16] — The deployment CLI had been replaced, and a refusal you could not see
+`[AWS]` `[ARCHITECTURE]` `[COST]` `[AGENT]` `[ARTICLE-2]`
+
+**Goal / user intent**
+Prepare an Amazon Bedrock AgentCore deployment and take it as far as a dry run, without
+provisioning anything. Then harden three things the dry run exposed before asking for
+approval to bootstrap CDK and deploy for real.
+
+**Starting state**
+The local implementation was complete and Bedrock-verified (#0019–#0021). AgentCore had
+never been deployed and no AWS resource had ever been created. `Makefile`,
+`docs/PILOT_READINESS.md` and the entrypoint docstring all documented the deployment as
+`agentcore configure --entrypoint agentcore_app.py && agentcore launch`.
+
+**Decision**
+Adapt to the current CLI rather than preserve the repository's assumption, and keep the
+existing coordinator and entrypoint exactly as they are.
+
+**Why**
+`bedrock-agentcore-starter-toolkit` — the CLI every one of those commands belongs to — is
+now marked **legacy**. AWS ships `@aws/agentcore` (npm) instead, which binds the same
+`agentcore` command name, so having both installed is itself a documented hazard. The
+commands in this repository would not have failed with "deprecated"; they would have run
+whichever CLI happened to be on `PATH`.
+
+The new CLI is CDK-based and wants a project directory. `agentcore create` is the only
+official way to make one, and it scaffolds a *replacement* — its own `agentcore.json`,
+its own `aws-targets.json`, and an `app/<AgentName>/main.py` agent next to the real
+coordinator. So the project config was hand-written against the published schema instead,
+pointing `codeLocation` at `services/agent/` so the entrypoint deploys where it already
+lives. `CodeZip` over `Container`: no Dockerfile, no ECR repository, no CodeBuild project,
+and no local container runtime — the smaller and cheaper of the two (§3.5, §3.7).
+
+**Implementation**
+Implemented and tested; **not deployed**.
+
+1. **`agentcore/agentcore.json`, `agentcore/aws-targets.json`** (new, committed) — one
+   runtime, `PYTHON_3_13`, `PUBLIC`, `HTTP`, `AWS_IAM` inbound auth, fifteen environment
+   variables carrying the model id and every bound.
+2. **`agentcore_app.py` — unchanged in substance.** The runtime HTTP contract did not
+   move: `BedrockAgentCoreApp`, `@app.entrypoint`, `POST /invocations`, `GET /ping`. The
+   only edits are the docstring and the tool-call reporting below.
+3. **`services/agent/pyproject.toml`** — `bedrock-agentcore` and
+   `aws-opentelemetry-distro` moved into runtime dependencies. CodeZip installs the image
+   straight from this file, and the synthesized start command is
+   `["opentelemetry-instrument", "agentcore_app.py"]` — so a missing OTel distro fails the
+   container at start, not merely its tracing.
+4. **`scripts/agentcore_cdk_init.sh`** (new) + `make agentcore-cdk` — rebuilds the
+   generated `agentcore/cdk/` from the installed CLI's own bundled assets. Refuses to
+   overwrite without `--force`, warns when the installed CLI is not the verified version.
+5. **Tool-call reporting** — the entrypoint returned `[t.name for t in run.tool_calls]`.
+   It now returns `{"name", "ok", "summary"}` per call, the same shape the API already
+   used for run detail. Output only: no tool description, schema, prompt, or domain
+   semantics changed.
+6. **`scripts/secret_scan.sh`** — the AgentCore staging cache is pruned by exact rooted
+   path, plus `scripts/secret_scan_selftest.sh` (new) to prove the prune is that narrow.
+
+**AWS / external services touched**
+`sts:GetCallerIdentity`, `cloudformation:DescribeStacks`/`ListStacks`,
+`bedrock-agentcore-control:ListAgentRuntimes`, `s3:ListBuckets`,
+`ecr:DescribeRepositories`, `iam:ListRoles`, `codebuild:ListProjects` — all read-only,
+all used to confirm the account was and stayed empty.
+
+**No resource was created.** No CDK bootstrap, no runtime, no bucket, no role. The ledger
+stays empty and the account still holds nothing but three AWS service-linked roles. No
+Stripe call was made; no Stripe-related resource appears anywhere in the synthesized
+template.
+
+**Cost-relevant activity**
+No model tokens were spent. Every local verification ran on the offline planner, because
+the Bedrock leg was already verified in #0019–#0021 and re-running it would have proved
+nothing new.
+
+Two cost decisions are baked into the config. `lifecycleConfiguration` sets
+`idleRuntimeSessionTimeout: 60` and `maxLifetime: 300` against API defaults of **900 s and
+8 h**. AgentCore Runtime bills memory per second across a session's life and CPU only
+while processing, so the default would have billed a fifteen-minute idle memory tail after
+every invocation of a workflow already bounded at 120 s — exactly the "long-running
+AgentCore sessions" risk in §3.4.
+
+Two costs the first real deployment will introduce, both recorded now so they are not
+discovered later: the CDK bootstrap creates a persistent S3 staging bucket that
+accumulates ~44 MB per deployed artifact version, and the runtime's CloudWatch log group
+is created by the service outside the stack with **no retention policy** — unlike
+`PoolStack`, which caps everything at 14 days.
+
+**Agent behavior**
+Unchanged by design, and that is the point of item 5. A run still selects tools, still
+terminates on a deterministic condition, still refuses invented identifiers. What changed
+is that the refusal is now visible from outside the runtime.
+
+**Validation**
+- `agentcore validate` → `Valid`. `agentcore deploy --dry-run` reaches
+  `Synthesize CloudFormation` and stops at `Check bootstrap status`, which is a hard gate
+  before the plan summary — clearing it needs `--yes`, which auto-bootstraps, so the
+  dry run cannot print its own plan on an unbootstrapped account. The synthesized template
+  is the authoritative answer instead: **4 resources** — one
+  `AWS::BedrockAgentCore::Runtime`, one execution role, one inline policy, CDK metadata.
+- The execution role's inline policy is Bedrock invoke on inference profiles and
+  foundation models, CloudWatch Logs scoped to `/aws/bedrock-agentcore/runtimes/*`, and
+  X-Ray. No DynamoDB, S3, or Location access — correct for this configuration.
+- **The built artifact was inspected, not assumed**: 43.7 MB zipped / 107.5 MB unpacked
+  against a 250 MB limit, containing `pool/`, the entrypoint, Strands, and OTel — and no
+  `.env`, `.venv`, `.git`, or AWS config.
+- **`agentcore/cdk/` was deleted and rebuilt from scratch** to prove a fresh clone works:
+  the dry run failed exactly as documented, `make agentcore-cdk` reconstructed it, and
+  validation and synthesis both succeeded again. The resource set was byte-identical apart
+  from the code asset hash, which moved because the entrypoint changed.
+- **499 application tests + 24 infrastructure tests**, lint clean, typecheck and web build
+  clean. Nine of those tests are new and credential-free.
+- **The deployed start command was run locally** — `opentelemetry-instrument` wrapping the
+  entrypoint — serving `/ping` and `/invocations`, with the AgentCore session id threaded
+  through to the SDK's own logs.
+- `make secret-scan-selftest` plants fake AWS and Stripe credentials in seven locations
+  and asserts each is caught, including one inside a `.cache` directory elsewhere in the
+  repository, then asserts only `agentcore/.cache/` is exempt.
+
+**Failures / dead ends**
+1. **The first dry run failed on a missing `agentcore/cdk/`**, and the CLI's advice —
+   "Run 'agentcore create' first" — is the one command that would have overwritten Pool.
+   Resolved by taking the CLI's own assets, which turned out to contain no template
+   placeholders at all, so copying them is deterministic rather than an approximation.
+2. **The second failed on `sh: tsc: command not found`.** The CLI's "Sync CDK
+   dependencies" step completed in 2 ms without installing anything: it expects
+   `node_modules` to already exist, because `create` normally runs `npm install`.
+3. **The 120 MB staging cache broke `make secret-scan`** — on botocore's own
+   `AKIA…EXAMPLE` documentation and the PEM header constant inside `cryptography`. The
+   first fix, `--exclude-dir=.cache`, was too broad: `--exclude-dir` matches a basename, so
+   it would have blinded the scanner to every `.cache` directory in the repository. Now
+   pruned by exact rooted path, at a cost of about half a second.
+
+**What we learned**
+Two things, and the second is the more useful.
+
+A deployment path that has never been executed can rot without anyone touching it. The
+commands in this repository were correct when written and had since been replaced by a
+different tool with the same name. Nothing failed, because nothing had ever run.
+
+And **a safety property that cannot be observed from outside the system is not yet a
+safety property you can demonstrate.** #0021 proved that an invented pool identifier is
+refused before any state moves, and regression tests pin it. But the hosted entrypoint
+reported only tool *names* — so a `recover_pool` rejected for an invented id and a
+`recover_pool` that repaired a pool produced identical output. With `POOL_REPOSITORY=memory`
+the run record dies with the microVM, so there would have been nothing to query afterwards
+either. The guard was real; the evidence was not reaching anyone.
+
+**Article fodder**
+Article 2, strongly. Three findings that transfer: a legacy CLI that shares its successor's
+command name; a dry run that cannot complete without a provisioning step, which is worth
+naming honestly rather than papering over; and the observability lesson above, which is
+really an argument about what "verified" means once code is somewhere you cannot reach.
+
+**Evidence worth preserving**
+The synthesized `AgentCore-Pool-default.template.json` (four resources, and the execution
+role's policy). The `make agentcore-cdk` reconstruction transcript. The
+`make secret-scan-selftest` output — it reads as a table of what the scanner does and does
+not look at. And a `/invocations` response showing `ok` and `summary` per tool call.
+
+**Relevant commits / files**
+`agentcore/agentcore.json` (new), `agentcore/aws-targets.json` (new),
+`scripts/agentcore_cdk_init.sh` (new), `scripts/secret_scan_selftest.sh` (new),
+`services/agent/tests/test_agentcore_entrypoint.py` (new),
+`services/agent/agentcore_app.py`, `services/agent/pyproject.toml`,
+`scripts/secret_scan.sh`, `Makefile`, `.gitignore`, `README.md`,
+`docs/PILOT_READINESS.md`, `docs/ARTICLE_NOTES.md`

@@ -154,6 +154,16 @@ destroy: ## (cloud) Destroy the Pool stack. Scoped to this stack only.
 	@bash scripts/aws_preflight.sh
 	cd $(INFRA) && npx aws-cdk@2 destroy --force
 
+.PHONY: destroy-agent
+destroy-agent: ## (cloud) Delete the AgentCore stack. CLI 0.27.0 has no destroy command.
+	@bash scripts/aws_preflight.sh
+	aws cloudformation delete-stack --stack-name AgentCore-Pool-default
+	aws cloudformation wait stack-delete-complete --stack-name AgentCore-Pool-default
+	@echo "✓ AgentCore-Pool-default deleted."
+	@echo "  NOT removed by this: the runtime log group, /aws/application-signals/data,"
+	@echo "  aws/spans, the workload identity, or X-Ray Transaction Search."
+	@echo "  See the resource ledger in BUILD_HISTORY.md for each one's own command."
+
 .PHONY: schedule-off
 schedule-off: ## (cloud) Disable the background scan schedule
 	@bash scripts/schedule.sh disable

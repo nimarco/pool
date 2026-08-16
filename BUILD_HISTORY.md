@@ -155,23 +155,56 @@ carry an explicit reason for remaining. Review this before ending any session th
 
 ### Active
 
+All of the below was created on **2026-08-16** by entry #0023, in account 860325090409,
+`us-east-1`. Everything was enumerated by querying AWS after deployment, not by reading the
+synthesized template — which is how rows 17–21 were found at all.
+
+**CDK bootstrap — `CDKToolkit` stack (11 resources)**
+
 | Resource | Service | Created | Purpose | Recurring cost? | Destroy by |
 | --- | --- | --- | --- | --- | --- |
-| _(none)_ | | | | | |
+| `CDKToolkit` | CloudFormation | 2026-08-16 | Bootstrap stack, version 32 | No | Manual (see #0023) |
+| `cdk-hnb659fds-assets-860325090409-us-east-1` | S3 | 2026-08-16 | Deploy staging bucket — **holds 2 objects, 41.7 MiB** | **Yes — S3 storage, ~$0.001/mo at current size** | Empty + delete before stack |
+| `cdk-hnb659fds-container-assets-860325090409-us-east-1` | ECR | 2026-08-16 | Bootstrap image repo — **empty, 0 images** (CodeZip needs none) | No (empty) | With CDKToolkit |
+| `/cdk-bootstrap/hnb659fds/version` | SSM Parameter | 2026-08-16 | Bootstrap version marker (`32`) | No (standard tier) | With CDKToolkit |
+| `cdk-hnb659fds-cfn-exec-role-…` | IAM Role | 2026-08-16 | CFN execution — **holds `AdministratorAccess`** | No | With CDKToolkit |
+| `cdk-hnb659fds-deploy-role-…` | IAM Role | 2026-08-16 | CDK deploy role | No | With CDKToolkit |
+| `cdk-hnb659fds-file-publishing-role-…` | IAM Role | 2026-08-16 | Asset upload | No | With CDKToolkit |
+| `cdk-hnb659fds-image-publishing-role-…` | IAM Role | 2026-08-16 | Image push (unused) | No | With CDKToolkit |
+| `cdk-hnb659fds-lookup-role-…` | IAM Role | 2026-08-16 | Context lookups | No | With CDKToolkit |
+| `CDKTo-FileP-dzcpx8KgZqLP` | IAM Policy | 2026-08-16 | File-publishing inline policy | No | With CDKToolkit |
+| `CDKTo-Image-k0IS5jGSmRaE` | IAM Policy | 2026-08-16 | Image-publishing inline policy | No | With CDKToolkit |
+| `cdk-hnb659fds-assets-…` bucket policy | S3 BucketPolicy | 2026-08-16 | Staging bucket access | No | With CDKToolkit |
 
-**Still empty, and that is accurate.** Entries #0019, #0020 and #0021 made real Bedrock
-calls, but an on-demand model invocation creates no resource: it is billed per token and
-there is nothing to destroy, forget, or leave running. #0022 prepared the AgentCore
-deployment and stopped at a dry run, creating nothing at all — the account holds no
-CloudFormation stack, no runtime, no bucket, no ECR repository, and no role beyond three
-AWS service-linked ones. Account 860325090409, `us-east-1`.
+**Pool AgentCore — `AgentCore-Pool-default` stack (4 resources, exactly as reviewed)**
 
-**Pending approval, not yet created.** The first real `agentcore deploy` will require a
-CDK bootstrap (`CDKToolkit`: an S3 staging bucket, an ECR repository, an SSM parameter,
-and five `cdk-*` roles, one holding `AdministratorAccess`) before the four-resource Pool
-stack. Both belong in the table above the moment they exist. Note that the runtime's
-CloudWatch log group is created by the service *outside* the stack and has no retention
-policy, so `agentcore destroy` will not remove it — see #0022.
+| Resource | Service | Created | Purpose | Recurring cost? | Destroy by |
+| --- | --- | --- | --- | --- | --- |
+| `AgentCore-Pool-default` | CloudFormation | 2026-08-16 | Pool runtime stack | No | `make destroy-agent` |
+| `Pool_PoolCoordinator-TmVqSN9H56` | Bedrock AgentCore Runtime | 2026-08-16 | Deployed coordinator, status `READY` | **No — billed per invocation only.** No always-on compute; idle session 60 s, max lifetime 300 s | `make destroy-agent` |
+| `AgentCore-Pool-default-ApplicationAgentPoolCoordina-Ad6KX4akMhNd` | IAM Role | 2026-08-16 | Runtime execution role | No | `make destroy-agent` |
+| `Agent-Appli-6NpmisJ95ByC` | IAM Policy | 2026-08-16 | Inline policy: Bedrock invoke, scoped Logs, X-Ray, config bundles | No | `make destroy-agent` |
+
+**Created *outside* both stacks — `make destroy-agent` will NOT remove these**
+
+| Resource | Service | Created | Purpose | Recurring cost? | Destroy by |
+| --- | --- | --- | --- | --- | --- |
+| `…runtime/Pool_PoolCoordinator-TmVqSN9H56/runtime-endpoint/DEFAULT` | AgentCore | 2026-08-16 | Default endpoint, `READY` | No | With runtime |
+| `…workload-identity-directory/default/workload-identity/Pool_PoolCoordinator-TmVqSN9H56` | AgentCore | 2026-08-16 | Runtime workload identity | No | Manual |
+| `/aws/bedrock-agentcore/runtimes/Pool_PoolCoordinator-TmVqSN9H56-DEFAULT` | CloudWatch Logs | 2026-08-16 | Runtime logs — **retention set to 14 days** (#0023 step E) | Yes — log storage, KB-scale | Manual `delete-log-group` |
+| `/aws/application-signals/data` | CloudWatch Logs | 2026-08-16 | Created by Transaction Search — **was unbounded, set to 14 days** | Yes — ingestion + storage | Manual `delete-log-group` |
+| `aws/spans` | CloudWatch Logs | 2026-08-16 | Transaction Search span store — 30 d (AWS default, finite) | Yes — ingestion + storage | Manual `delete-log-group` |
+| **X-Ray Transaction Search** | X-Ray / CloudWatch | 2026-08-16 | **Account-level setting enabled by the AgentCore CLI, not by our template.** Destination `CloudWatchLogs`, indexing rule `Default` at **100 % sampling** | **Yes — per-GB span ingestion, account-wide** | `aws xray update-trace-segment-destination --destination XRay` |
+
+**The last row is the one to watch.** It is the only thing here that was not in the reviewed
+four-resource plan: `agentcore deploy` turned on X-Ray Transaction Search account-wide at
+100 % sampling as a side effect, printing only a one-line note. It survives
+`make destroy-agent`. At Pool's invocation volume the cost is negligible, but it is an
+account-level, always-on ingestion path that nothing in `agentcore/agentcore.json` asked
+for. See #0023.
+
+**No always-on compute exists.** The runtime bills only while an invocation is in flight;
+six invocations totalling ~30 s of processing is the entire compute spend so far.
 
 ### Recurring / scheduled (highest risk — review every session)
 
@@ -195,12 +228,12 @@ Tracked so they are not silently assumed. Move each to an entry when resolved.
 | --- | --- | --- | --- |
 | Q1 | Which Bedrock model tier is sufficient for the coordination loop? | Cost vs. reasoning quality; §3.3 says do not over-buy. | **Resolved (#0019, #0021)** — `us.amazon.nova-lite-v1:0` drove discovery correctly three runs of three, and the consequential recovery + lock branch correctly six runs of six, well inside every bound. One known rough edge, characterised in #0021 and tracked as Q16: in 1 of 12 coordinator runs it opened a turn with an invented pool identifier, which deterministic code refused without touching state. The documented default `us.anthropic.claude-haiku-4-5-20251001-v1:0` exists as an inference profile in the account but has still not been run. |
 | Q2 | What state belongs in DynamoDB vs. AgentCore Memory? | `AGENTS.md` §6 sets the principle; the boundary is undecided. | **Resolved (#0004, #0008)** — AgentCore Memory is *not used*. Every piece of state Pool holds is transactional (commitments, money, quantities, membership, deadlines, policies), which §6 forbids putting in agent memory. Adding it would have been logo-collecting. Revisit only if durable learned preferences appear. |
-| Q3 | Is AgentCore Runtime the right deployment target, or is plain Lambda sufficient? | Favorable for judging, but must be justified, not decorative. | **Partly resolved (#0009, #0022)** — both are implemented: Lambda serves the API, AgentCore hosts the coordinator. #0022 replaced the retired starter-toolkit path with the official `@aws/agentcore` CLI and took it to a verified dry run: **4 resources**, one runtime plus its execution role, no ECR and no CodeBuild under `CodeZip`. Both paths are now CDK-based, so the comparison is narrower than it looked. Still not deployed — the operational comparison waits on a CDK bootstrap. |
+| Q3 | Is AgentCore Runtime the right deployment target, or is plain Lambda sufficient? | Favorable for judging, but must be justified, not decorative. | **Resolved (#0009, #0022, #0023)** — both are implemented: Lambda serves the API, AgentCore hosts the coordinator. #0023 deployed it for real: **4 resources**, `READY` in 84 s, and six live invocations proving AgentCore Runtime → Pool entrypoint → Strands → Bedrock → Pool tools. AgentCore earns its place for the coordinator specifically — per-invocation billing with no always-on compute, session-scoped microVMs, and OTel tracing that shows tool spans without any code of ours. The honest caveat is that it cost a CDK bootstrap with an `AdministratorAccess` execution role and switched on account-wide Transaction Search unasked, neither of which plain Lambda would have. |
 | Q4 | Do we need a real routing/geocoding provider, or do synthetic distances suffice for the demo? | Live routing is a per-request paid call (§3.4). | **Resolved (#0003)** — deterministic routing is the default so tests and demos are free; the Amazon Location `geo-routes` adapter is implemented and its parsing tested against the real service model. It has not been called live. |
 | Q5 | How does a household express preauthorization (Smart Join) in a machine-verifiable way? | Core of Article 3; must not be an informal LLM judgment. | **Resolved (#0004)** — six numeric/boolean rules evaluated by a pure function returning a full audit trail. Stricter-of-policy-and-need wins. Every rule has a test proving it can block an auto-join. |
 | Q6 | Re-verify hackathon requirements before submission. | Snapshot in `AGENTS.md` §2 is dated 2026-08-15. | **Open** — still required before submitting, and specifically before publishing any Builder Center article (the blog-post wording changed mid-event). |
 | Q7 | Does the deterministic routing model resemble real travel times? | The demo shows travel minutes as if they were real. | **Open** — blocked on live AWS. Until then the provider is labelled in the API response and the UI. |
-| Q8 | What is the actual per-run Bedrock cost at the configured bounds? | Determines whether a 6-hourly schedule is affordable. | **Measured (#0019, re-measured #0020, extended #0021)** — a discovery run is 6 ConverseStream calls, ~19.2k input / ~490 output tokens, ~5.5 s after the tool-result projection (was ~35.7k / ~420 / ~6 s). A recovery run is 4–5 calls and 11.3k–14.5k input tokens; a lock run 3–6 calls and 7.1k–17.0k. The consequential branches are **cheaper** than discovery — they read a 468-byte work queue instead of evaluating economics across the community. Dollar cost still not asserted: the current Bedrock rate has not been checked. |
+| Q8 | What is the actual per-run Bedrock cost at the configured bounds? | Determines whether a 6-hourly schedule is affordable. | **Measured (#0019, re-measured #0020, extended #0021)** — a discovery run is 6 ConverseStream calls, ~19.2k input / ~490 output tokens, ~5.5 s after the tool-result projection (was ~35.7k / ~420 / ~6 s). A recovery run is 4–5 calls and 11.3k–14.5k input tokens; a lock run 3–6 calls and 7.1k–17.0k. The consequential branches are **cheaper** than discovery — they read a 468-byte work queue instead of evaluating economics across the community. Dollar cost still not asserted: the current Bedrock rate has not been checked. **#0023 confirmed the shape in the cloud** — a deployed discovery run is 6 Bedrock calls, ~19.1k input / ~473 output tokens, ~5 s of agent time inside ~12 s wall clock including cold start. The per-call breakdown is now visible in traces (2111→4131 input as context accumulates), so the growth is observable per turn rather than only in aggregate. |
 | Q9 | Does the Stripe PaymentIntent manual-capture flow behave as documented? | The whole payment lifecycle rests on it, and it has never touched Stripe's servers. | **Open** — needs TEST keys. Re-read the current official docs first; the shapes were written from documentation, not from a response. |
 | Q10 | Is the platform fee mode (10% of gross savings) defensible as a business model? | It is provisional business configuration, not domain truth. | **Open** — aligned by construction (no saving, no fee) and transparent, but untested against anyone's willingness to pay. |
 | Q11 | Does the case-fitting solver stay fast with realistic community sizes? | It is a bounded DP; bounded is not the same as fast at scale. | **Open** — trivially fast at demo scale (tens of members). Needs a benchmark at a few hundred before a pilot. |
@@ -208,7 +241,9 @@ Tracked so they are not silently assumed. Move each to an entry when resolved.
 | Q13 | Should tool results be trimmed before they reach the model? | Measured 85:1 input-to-output tokens (#0019). `evaluate_pool_economics` alone returns ~2,250 tokens and is re-sent every turn, so the cost grows with community size. | **Resolved (#0020)** — yes, by projection, not by summarization. `pool/agent/projection.py` gives the model the decision-critical facts and keeps the complete deterministic result for the API, auditing, and tests. Re-measured on the same model, seed, scenario and bounds: **35.8k → 19.2k input tokens (−46%)**, identical tool sequence and outcome. The "fetch detail on demand" shape was rejected: a thirteenth tool costs schema bytes on every turn and buys an extra paid iteration. |
 | Q14 | Does the agent handle the harder branches on a small model? | Only discovery has run on Bedrock. Recovery, final offer, and lock involve more state and more careful ordering. | **Resolved for recovery and lock (#0021)** — six real-model runs of the payment-failure recovery branch, shaped so lost demand (2 units) and merely-unanswered demand (4 units) are different numbers. Every run repaired exactly the hole, left the pending buyers alone, preserved the case boundary, and did not lock; three of six *attempted* the lock and were refused by the viability engine. Then locked correctly once the humans answered. `issue_final_offer` was never reached on a pool that already had one, so that ordering rule is still only proven offline. |
 | Q15 | Are the tool schemas worth 6.8 KB of context on every turn? | After #0020 compacted the results, the twelve tool schemas are **62% of the model's remaining context** — 6,805 bytes re-sent per turn. | **Open** — measured, deliberately not acted on. The docstrings are what lets a small model pick the right tool, so trimming them trades selection quality for tokens. Answering it needs an A/B on the real model, not a byte count. #0021 is a point against trimming: tool selection was correct in 12 of 12 runs. |
-| Q16 | Should consequential tool docstrings state that identifiers must come from a read tool? | #0021 observed the real model opening a turn with `recover_pool(pool_id="short_of_demand_pool")` — an invented identifier passed to a money-adjacent tool. Refused before touching state, and the model recovered, but it happened in 1 of 12 runs. | **Open, deliberately** — the safety property is proven and regression-tested (all seven consequential tools refuse an invented id before reading or writing anything). The candidate mitigation is one sentence per docstring; it is a *behavioural* change to tool selection, so adopting it means re-running the paid verification and it should be its own decision, not a drive-by edit during a verification. See Q15 — it also adds schema bytes to every turn. **#0022 made the refusal observable** without touching model behaviour: the hosted entrypoint now reports `ok` and `summary` per tool call, so a deployed run can prove an invented id was *rejected* rather than merely showing that `recover_pool` was called. That was a prerequisite for testing this on AgentCore at all — with `POOL_REPOSITORY=memory` the run record dies with the microVM, so the response and the logs are the only evidence. |
+| Q16 | Should consequential tool docstrings state that identifiers must come from a read tool? | #0021 observed the real model opening a turn with `recover_pool(pool_id="short_of_demand_pool")` — an invented identifier passed to a money-adjacent tool. Refused before touching state, and the model recovered, but it happened in 1 of 12 runs. | **Open, deliberately** — the safety property is proven and regression-tested (all seven consequential tools refuse an invented id before reading or writing anything). The candidate mitigation is one sentence per docstring; it is a *behavioural* change to tool selection, so adopting it means re-running the paid verification and it should be its own decision, not a drive-by edit during a verification. See Q15 — it also adds schema bytes to every turn. **#0022 made the refusal observable** without touching model behaviour: the hosted entrypoint now reports `ok` and `summary` per tool call, so a deployed run can prove an invented id was *rejected* rather than merely showing that `recover_pool` was called. That was a prerequisite for testing this on AgentCore at all — with `POOL_REPOSITORY=memory` the run record dies with the microVM, so the response and the logs are the only evidence. **#0023 looked for it in the cloud and did not find it.** Six deployed runs, 30 tool calls, `ok=true` on every one and `refused=0` in every log line. Two deliberate probes fed a real-but-stale pool id into a fresh session — the second instructing `recover_pool` as the first action — and both times the model ran normal discovery instead. So the reporting shape is proven and the refusal is not: `ok=false` has never been observed outside the local suite. Reproducing it needs a session carrying a pool already in a recoverable state, which takes multiple invocations in one session to build. Still deliberately unmitigated. |
+| Q17 | Does the `instruction` payload field actually steer a run? | The AgentCore entrypoint documents it as "optional override of the run instruction", and `coordinator.run()` substitutes it for the entire prompt — but on Nova Lite it did not change behaviour. | **Open (#0023)** — two deployed runs passed an explicit instruction naming a tool and an id, including one saying "do not run discovery"; both ran discovery anyway, because `SYSTEM_PROMPT`'s lifecycle framing dominates on a small model. Safety-positive in this instance: an injected instruction did not steer the agent into a consequential tool. But it means any caller relying on `instruction` to select a branch silently gets discovery. Either the field should be documented as advisory, or branch selection should be deterministic (trigger → work queue) rather than prompt-borne. |
+| Q18 | Should X-Ray Transaction Search stay enabled at 100 % sampling? | `agentcore deploy` turned it on account-wide without it appearing in any config or template, and `make destroy-agent` will not turn it off (#0023). | **Open (#0023)** — left enabled because it is what produced the tool-level span evidence, and at Pool's volume the ingestion is negligible. But it is an account-level always-on billing path that no Pool file requests, and 100 % sampling does not scale. Decide before any sustained or scheduled workload: `aws xray update-trace-segment-destination --destination XRay` turns it off. |
 
 ---
 
@@ -1924,3 +1959,114 @@ not look at. And a `/invocations` response showing `ok` and `summary` per tool c
 `services/agent/agentcore_app.py`, `services/agent/pyproject.toml`,
 `scripts/secret_scan.sh`, `Makefile`, `.gitignore`, `README.md`,
 `docs/PILOT_READINESS.md`, `docs/ARTICLE_NOTES.md`
+
+---
+
+### #0023 — [2026-08-16] — Deployed for real, and the observability it switched on without asking
+`[AWS]` `[ARCHITECTURE]` `[COST]` `[AGENT]` `[ARTICLE-2]`
+
+**Goal / user intent**
+With explicit approval, perform the two operations #0022 stopped short of: the standard CDK
+bootstrap for 860325090409/us-east-1, and the first real deployment of the already-reviewed
+AgentCore stack. Then prove the deployed path end to end with the smallest live test that
+could prove it, and leave the runtime standing for review.
+
+**Starting state**
+Account empty apart from three AWS service-linked roles. AgentCore CLI 0.27.0, config
+`Valid`, synthesized stack reviewed at four resources, never deployed, never bootstrapped.
+
+**Decision**
+Bootstrap with the default `hnb659fds` qualifier and the default `AdministratorAccess`
+execution policy, then deploy the existing stack unchanged. No custom execution policy —
+the approval said standard unless standard failed, and it did not fail.
+
+**Why**
+The synthesized stack requires bootstrap version 6; the standard bootstrap writes 32. A
+hand-scoped CFN execution policy is real work to get right and would have had to be
+re-derived on every future resource change, for a hackathon account that holds nothing
+else. The cheap correct thing was the documented one.
+
+**Implementation**
+Pre-flight first, because the approval was conditional on it: `sts:GetCallerIdentity`
+returned `arn:aws:iam::860325090409:user/pool-admin` — a non-root IAM user — in
+`us-east-1`. `agentcore/cdk/` already existed and the CLI was the verified 0.27.0, so it
+was not rebuilt; `cdk.out` *was* deleted and re-synthesized from scratch. The regenerated
+template was the same four resources, and the code asset hash came back byte-identical
+(`ab8ae6b7…c8147`), which is the reproducibility claim in #0022 holding up.
+
+1. **`cdk bootstrap`** → `CDKToolkit`, `CREATE_COMPLETE`, **11 resources**, ~48 s.
+2. **`agentcore deploy --yes`** → `AgentCore-Pool-default`, `CREATE_COMPLETE`, **4
+   resources**, **84 s** wall clock. Runtime `Pool_PoolCoordinator-TmVqSN9H56`, `READY`.
+3. **Retention set immediately**, per the approval and `docs/COST_NOTES.md`'s "14 days
+   everywhere": the runtime log group had none, and so did a second log group the deploy
+   created without mentioning it.
+
+**AWS / external services touched**
+CloudFormation, S3, ECR, SSM, IAM, Bedrock AgentCore (control + data plane), Bedrock
+(`us.amazon.nova-lite-v1:0`), CloudWatch Logs, X-Ray. **No Stripe call. No DynamoDB, no
+EventBridge, no Amazon Location, no AgentCore Memory/Gateway/Browser/Code-Interpreter** —
+confirmed empty by API, not by assumption: `list-gateways`, `list-memories`,
+`list-browsers`, `list-code-interpreters` all returned zero. `PoolStack` was not deployed.
+
+Every created resource is in the ledger at the top of this file.
+
+**Cost-relevant activity**
+Six live invocations, ~114k input / ~2.9k output tokens on Nova Lite, ~30 s total runtime
+processing. No always-on compute: the runtime bills per invocation, and idle sessions are
+capped at 60 s by the `lifecycleConfiguration` chosen in #0022.
+
+**The one thing that was not in the plan.** `agentcore deploy` enabled **X-Ray Transaction
+Search account-wide, at 100 % sampling**, and said so in a single trailing note. It is not
+in `agentcore.json`, not in the synthesized template, and not removed by
+`make destroy-agent`. It created two log groups — `aws/spans` (30 d, AWS default) and
+`/aws/application-signals/data` (**no retention at all**, now 14 d). This is exactly the
+"large observability or log ingestion" surface `AGENTS.md` §3.4 names, switched on by a
+tool rather than by a decision. Left enabled deliberately — it is what made the trace
+evidence below possible — but it is now a ledger row with a documented off switch.
+
+**Agent behavior**
+Six runs, 30 tool calls, **`ok=true` on every one**; the entrypoint's own log line reports
+`refused=0` for all six. The smoke path proved the whole chain: `POST /invocations` →
+`invoke_agent Strands Agents` → 6 × `chat us.amazon.nova-lite-v1:0` → five `execute_tool`
+spans in lifecycle order → `pool_created`, terminating on `completed`, not on a bound.
+
+**Session state behaves exactly as `POOL_REPOSITORY=memory` implies, and it is worth being
+precise about it.** Same session id twice: the second run saw the first run's pool, found
+the whey demand already served, and correctly recorded `no_action`. A different session id:
+fresh microVM, fresh repository, re-seeded, and a *new* pool id. **No identifier ever
+crossed a session boundary** — no run referenced a pool it had not created.
+
+**Q16 did not reproduce, and that is reported rather than manufactured.** Two deliberate
+probes fed a genuinely stale pool id (`pool_46d8fafb319d`, real, from session A) into a
+fresh session, the second explicitly instructing `recover_pool` as the first action. Both
+times the model ignored the instruction and ran normal discovery. So the deployed refusal
+path returning `ok=false` has **still never been observed in the cloud** — it remains
+proven only by the local regression suite. The `{name, ok, summary}` shape from #0022 works
+and is visible; every value it has ever carried in the cloud is `true`.
+
+**Failures / dead ends**
+1. **`agentcore` refuses to run outside the project root**, and the shell working directory
+   persists between commands. Two invocations failed in <1 s with a path error and never
+   reached AWS. Cost: nothing. Worth knowing before it looks like a runtime failure.
+2. **The first five runs produced no spans at all.** Transaction Search was `PENDING`
+   throughout them and only became `ACTIVE` afterwards, so their spans were dropped. A
+   sixth invocation after it went active produced 25 span records including per-call token
+   usage. The CLI's "~10 minutes" note is load-bearing: traces from a deploy-then-invoke
+   sequence are silently lost, which would read as broken instrumentation.
+3. **The `instruction` payload field does not do what its docstring says on this model.**
+   `coordinator.run()` substitutes it for the whole prompt, yet `SYSTEM_PROMPT`'s
+   discovery-first framing won both times. Safety-positive here — an injected instruction
+   naming a consequential tool did not steer the agent into calling it — but any future
+   caller that relies on `instruction` to drive a specific branch would silently get
+   discovery instead. Not fixed; recorded as Q17.
+
+**Evidence worth preserving**
+Runtime ARN `arn:aws:bedrock-agentcore:us-east-1:860325090409:runtime/Pool_PoolCoordinator-TmVqSN9H56`.
+Trace ids `6a8214f62a45c87e017b1aab3b031e89` (run 1) and `6a8215c441587ca2103d0b4264c5dc19`
+(run 5). Per-call Nova Lite usage from spans: 2111/74, 2624/94, 3089/123, 3415/71, 3770/67,
+4131/44 — summing to the 19,140/473 the response reported, so the trace and the response
+agree.
+
+**Relevant commits / files**
+`BUILD_HISTORY.md` (ledger + this entry), `docs/COST_NOTES.md`. No source change: the
+deployed artifact is the reviewed one.

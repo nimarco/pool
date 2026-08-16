@@ -4,10 +4,17 @@ Pool runs on a student's promotional AWS credits. Exhausting them ends the proje
 cost safety is enforced in code and asserted by tests rather than written down as an
 intention.
 
-**Real AWS spend to date: 18 Bedrock `ConverseStream` calls on Nova Lite** (three
-verification runs, entry #0019 — roughly 107k input and 1.3k output tokens in total).
-Nothing else. No resource has been created, so nothing is accruing cost right now and
-there is nothing to shut off.
+**Real AWS spend to date:** Bedrock `ConverseStream` on Nova Lite across entries #0019–#0021
+(local verification) and #0023 (six live invocations from the deployed runtime, ~114k input
+/ ~2.9k output tokens), plus — since **2026-08-16** — the first provisioned infrastructure
+this project has ever had.
+
+**Resources now exist and some of them accrue.** A CDK bootstrap (`CDKToolkit`) and the
+deployed AgentCore runtime (`AgentCore-Pool-default`) are live. There is **no always-on
+compute**: the runtime bills per invocation only. What does accrue quietly is storage and
+log ingestion — the CDK staging bucket, three CloudWatch log groups, and account-wide X-Ray
+Transaction Search. Every one of them is enumerated with its own teardown command in the
+resource ledger at the top of [`BUILD_HISTORY.md`](../BUILD_HISTORY.md).
 
 Every other run — the full test suite, `make demo`, all UI development — used the
 in-memory store, deterministic routing, simulated payments, and the offline planner, and
@@ -76,6 +83,32 @@ JSON blindly at 200 characters, and summarizing compression would spend an extra
 call to put an LLM paraphrase of deterministic numbers into context — which AGENTS.md §5
 forbids. See #0020.
 
+### What the first real deployment actually cost, and what it left running (#0023)
+
+A deployed discovery run against `us.amazon.nova-lite-v1:0` matched the local measurement:
+**6 Bedrock calls, ~19.1k input / ~473 output tokens, ~5 s of agent time** inside ~12 s
+wall clock including microVM cold start. Traces now expose the per-call breakdown —
+2111 → 2624 → 3089 → 3415 → 3770 → 4131 input tokens as context accumulates — so the
+re-send growth is visible per turn, not just in the total.
+
+Deploying introduced three persistent surfaces that no per-run figure captures:
+
+| Surface | Cost shape | Note |
+| --- | --- | --- |
+| CDK staging bucket | S3 storage, **41.7 MiB per deployed artifact version** | Accumulates on every redeploy. Not garbage-collected |
+| AgentCore runtime | **Per-invocation only** | No idle compute. Idle session capped at 60 s, lifetime at 300 s |
+| **X-Ray Transaction Search** | **Per-GB span ingestion, account-wide, 100 % sampling** | Enabled by `agentcore deploy` itself — not by any Pool config — and **not** removed by `make destroy-agent` |
+
+The third is the one worth remembering: a tool switched on an account-level billing path
+as a side effect and announced it in one line of output. It also created
+`/aws/application-signals/data` **with no retention policy at all**. Both that group and
+the runtime's own log group are created outside the CloudFormation stack, so neither is
+destroyed with it, and both had to be given 14-day retention by hand.
+
+Turn Transaction Search off with:
+
+    aws xray update-trace-segment-destination --destination XRay
+
 ## Infrastructure choices, and why
 
 | Choice | Reason |
@@ -117,25 +150,44 @@ Ranked by how easy it is to forget:
 1. **An enabled EventBridge rule.** Ships disabled. `make schedule-off` disables it again;
    `make schedule-on` requires typing `ENABLE` to confirm.
 2. **A deployed AgentCore Runtime.** Deployed by its own tooling, so it is *not* removed by
-   `cdk destroy`. `make cost-check` lists runtimes explicitly for this reason.
-3. **A CloudFront distribution.** Minimal at zero traffic but non-zero. Removed by
+   `cdk destroy`. `make cost-check` lists runtimes explicitly for this reason. **Live since
+   2026-08-16.** Per-invocation billing, so it costs nothing while idle.
+3. **X-Ray Transaction Search.** Enabled account-wide at 100 % sampling by `agentcore
+   deploy` itself (#0023), not by anything in this repository, and not removed by tearing
+   the stack down. Per-GB span ingestion.
+4. **Orphaned CloudWatch log groups.** No longer hypothetical: the AgentCore runtime's log
+   group and `/aws/application-signals/data` are both created *outside* CloudFormation and
+   both arrived with **no retention policy**. Set to 14 days by hand in #0023. Nothing
+   destroys them for you.
+5. **The CDK staging bucket.** ~41.7 MiB per deployed artifact version, accumulating across
+   redeploys. Must be emptied before `CDKToolkit` can be deleted.
+6. **A CloudFront distribution.** Minimal at zero traffic but non-zero. Removed by
    `make destroy`.
-4. **DynamoDB storage.** Negligible at this data volume; demo workspaces self-expire.
-5. **Orphaned CloudWatch log groups.** Avoided by declaring the log group explicitly.
+7. **DynamoDB storage.** Negligible at this data volume; demo workspaces self-expire.
 
 ## Cleanup
 
 ```bash
 make cost-check     # list project resources; flag anything recurring
 make schedule-off   # stop scheduled runs without tearing anything down
-make destroy        # remove the CDK stack
+make destroy        # remove the PoolStack CDK stack
+make destroy-agent  # remove the AgentCore stack (the CLI has no destroy command)
 ```
 
-Plus, separately, because AgentCore is not part of the CDK stack:
+Then the things no stack owns, in this order:
 
 ```bash
-aws bedrock-agentcore-control list-agent-runtimes
-aws bedrock-agentcore-control delete-agent-runtime --agent-runtime-id <id>
+aws logs delete-log-group --log-group-name /aws/bedrock-agentcore/runtimes/<runtime-id>-DEFAULT
+aws logs delete-log-group --log-group-name /aws/application-signals/data
+aws logs delete-log-group --log-group-name aws/spans
+aws xray update-trace-segment-destination --destination XRay
+```
+
+And, only when finished with CDK in this account entirely:
+
+```bash
+aws s3 rm s3://cdk-hnb659fds-assets-860325090409-us-east-1 --recursive
+aws cloudformation delete-stack --stack-name CDKToolkit
 ```
 
 Every resource is tagged `Project=Pool`, `Hackathon=AgentsForHumans`, `Environment=dev`,
@@ -148,8 +200,10 @@ single workspace partition and has a test proving it cannot reach another worksp
 
 ## Live AWS resource ledger
 
-See the ledger at the top of [`BUILD_HISTORY.md`](../BUILD_HISTORY.md). It is currently
-**empty** — no AWS resource has been created.
+See the ledger at the top of [`BUILD_HISTORY.md`](../BUILD_HISTORY.md). As of **2026-08-16**
+it lists **22 live rows** across three groups: the `CDKToolkit` bootstrap and its 11
+resources (12), the `AgentCore-Pool-default` stack and its 3 resources (4), and **six
+things created outside both stacks** that no teardown command removes for you.
 
 ## Development practices that keep this cheap
 

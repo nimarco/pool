@@ -97,13 +97,36 @@ Deploying introduced three persistent surfaces that no per-run figure captures:
 | --- | --- | --- |
 | CDK staging bucket | S3 storage, **41.7 MiB per deployed artifact version** | Accumulates on every redeploy. Not garbage-collected |
 | AgentCore runtime | **Per-invocation only** | No idle compute. Idle session capped at 60 s, lifetime at 300 s |
-| **X-Ray Transaction Search** | **Per-GB span ingestion, account-wide, 100 % sampling** | Enabled by `agentcore deploy` itself — not by any Pool config — and **not** removed by `make destroy-agent` |
+| **X-Ray Transaction Search** | **Per-GB span ingestion, account-wide** | Enabled by `agentcore deploy` itself — not by any Pool config — and **not** removed by `make destroy-agent` |
 
 The third is the one worth remembering: a tool switched on an account-level billing path
 as a side effect and announced it in one line of output. It also created
 `/aws/application-signals/data` **with no retention policy at all**. Both that group and
 the runtime's own log group are created outside the CloudFormation stack, so neither is
 destroyed with it, and both had to be given 14-day retention by hand.
+
+#### Three different percentages, which are easy to conflate
+
+The phrase "100 % sampling" was used loosely in the first write-up of #0023. There are
+three separate numbers here and only two of them are at 100 %:
+
+| # | Layer | What it controls | Current value | Who set it |
+| :-: | --- | --- | :-: | --- |
+| 1 | **Transaction Search span ingestion** | Every span written to CloudWatch Logs (`aws/spans`, and the runtime's own `spans` stream). **Not a configurable percentage** — it is 100 % by construction whenever Transaction Search is enabled | **100 %, inherent** | Implied by `UpdateTraceSegmentDestination` |
+| 2 | **X-Ray trace-summary indexing** | What fraction of *traceIds* become searchable trace summaries — the X-Ray Traces console, `get-trace-summaries`, ServiceLens. AWS's default is **1 %** | **100 %** | **Explicitly set by AgentCore CLI 0.27.0** |
+| 3 | **X-Ray centralized head sampling** | Classic X-Ray SDK sampling. Rule `Default`, `FixedRate 0.05`, reservoir 1, `ModifiedAt` epoch 0 — the AWS built-in, **never modified** | **5 %, and unused** | Nobody |
+
+**Number 3 is inert on this path.** The AgentCore OTel pipeline does not appear to consult
+X-Ray centralized sampling: every runtime log line carried `trace_sampled=True`, and a
+single run exported all 25 of its span records — consistent with an always-on OTel sampler,
+not a 5 % one.
+
+**Only number 1 is the money.** Ingestion is the dominant Transaction Search charge, and
+the indexing percentage in number 2 does not reduce it. So lowering indexing to 1 % would
+save essentially nothing while making the handful of hackathon traces invisible in
+X-Ray/ServiceLens. Measured span volume is **138.9 KiB per run** (25 records, ~5.7 KiB
+each) — 1,000 runs is ~0.13 GB. The real lever is Transaction Search on/off, not the
+percentage. See Q18.
 
 Turn Transaction Search off with:
 
@@ -152,9 +175,12 @@ Ranked by how easy it is to forget:
 2. **A deployed AgentCore Runtime.** Deployed by its own tooling, so it is *not* removed by
    `cdk destroy`. `make cost-check` lists runtimes explicitly for this reason. **Live since
    2026-08-16.** Per-invocation billing, so it costs nothing while idle.
-3. **X-Ray Transaction Search.** Enabled account-wide at 100 % sampling by `agentcore
-   deploy` itself (#0023), not by anything in this repository, and not removed by tearing
-   the stack down. Per-GB span ingestion.
+3. **X-Ray Transaction Search.** Enabled account-wide by `agentcore deploy` itself (#0023),
+   not by anything in this repository, and not removed by tearing the stack down. Per-GB
+   span ingestion at 100 % — inherent to it being on, not a setting. The same CLI call
+   sequence also raised the account-level `Default` **indexing** rule from 1 % to 100 %,
+   which is a different number and costs nothing extra. Retained through the hackathon by
+   Q18; revisit when the runtime is no longer needed.
 4. **Orphaned CloudWatch log groups.** No longer hypothetical: the AgentCore runtime's log
    group and `/aws/application-signals/data` are both created *outside* CloudFormation and
    both arrived with **no retention policy**. Set to 14 days by hand in #0023. Nothing
@@ -201,8 +227,8 @@ single workspace partition and has a test proving it cannot reach another worksp
 ## Live AWS resource ledger
 
 See the ledger at the top of [`BUILD_HISTORY.md`](../BUILD_HISTORY.md). As of **2026-08-16**
-it lists **22 live rows** across three groups: the `CDKToolkit` bootstrap and its 11
-resources (12), the `AgentCore-Pool-default` stack and its 3 resources (4), and **six
+it lists **23 live rows** across three groups: the `CDKToolkit` bootstrap and its 11
+resources (12), the `AgentCore-Pool-default` stack and its 3 resources (4), and **seven
 things created outside both stacks** that no teardown command removes for you.
 
 ## Development practices that keep this cheap

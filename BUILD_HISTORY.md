@@ -194,14 +194,18 @@ synthesized template — which is how rows 17–21 were found at all.
 | `/aws/bedrock-agentcore/runtimes/Pool_PoolCoordinator-TmVqSN9H56-DEFAULT` | CloudWatch Logs | 2026-08-16 | Runtime logs — **retention set to 14 days** (#0023 step E) | Yes — log storage, KB-scale | Manual `delete-log-group` |
 | `/aws/application-signals/data` | CloudWatch Logs | 2026-08-16 | Created by Transaction Search — **was unbounded, set to 14 days** | Yes — ingestion + storage | Manual `delete-log-group` |
 | `aws/spans` | CloudWatch Logs | 2026-08-16 | Transaction Search span store — 30 d (AWS default, finite) | Yes — ingestion + storage | Manual `delete-log-group` |
-| **X-Ray Transaction Search** | X-Ray / CloudWatch | 2026-08-16 | **Account-level setting enabled by the AgentCore CLI, not by our template.** Destination `CloudWatchLogs`, indexing rule `Default` at **100 % sampling** | **Yes — per-GB span ingestion, account-wide** | `aws xray update-trace-segment-destination --destination XRay` |
+| **X-Ray Transaction Search** | X-Ray / CloudWatch | 2026-08-16 | **Account-level, set by AgentCore CLI 0.27.0, not by our template.** Destination `CloudWatchLogs` → **100 % span ingestion** (inherent, not configurable) | **Yes — per-GB span ingestion, account-wide.** The dominant charge | `aws xray update-trace-segment-destination --destination XRay` |
+| **X-Ray `Default` indexing rule** | X-Ray | 2026-08-16 | **Separate account-level change by the same CLI call sequence.** `DesiredSamplingPercentage` raised **1 % → 100 %** for trace-summary indexing. Retained through the hackathon (Q18) | No separate ingestion charge; indexed-trace dimension only | `aws xray update-indexing-rule` (post-hackathon — see Q18) |
 
-**The last row is the one to watch.** It is the only thing here that was not in the reviewed
-four-resource plan: `agentcore deploy` turned on X-Ray Transaction Search account-wide at
-100 % sampling as a side effect, printing only a one-line note. It survives
-`make destroy-agent`. At Pool's invocation volume the cost is negligible, but it is an
-account-level, always-on ingestion path that nothing in `agentcore/agentcore.json` asked
-for. See #0023.
+**The last two rows are the ones to watch.** They are the only things here that were not in
+the reviewed four-resource plan: as a side effect of `agentcore deploy`, AgentCore CLI
+0.27.0 enabled Transaction Search *and* raised the account-level `Default` X-Ray indexing
+rule to `DesiredSamplingPercentage: 100.0`, printing one line about it. Both survive
+`make destroy-agent`, and nothing in `agentcore/agentcore.json` asked for either.
+CloudTrail timestamps both calls at **2026-08-16T19:50:23Z** — see Q18 for the full record
+and for why they are deliberately retained through the hackathon. At Pool's invocation
+volume the cost is negligible; the objection is that a deploy tool changed account-level
+configuration, not the money. See #0023.
 
 **No always-on compute exists.** The runtime bills only while an invocation is in flight;
 six invocations totalling ~30 s of processing is the entire compute spend so far.
@@ -243,7 +247,7 @@ Tracked so they are not silently assumed. Move each to an entry when resolved.
 | Q15 | Are the tool schemas worth 6.8 KB of context on every turn? | After #0020 compacted the results, the twelve tool schemas are **62% of the model's remaining context** — 6,805 bytes re-sent per turn. | **Open** — measured, deliberately not acted on. The docstrings are what lets a small model pick the right tool, so trimming them trades selection quality for tokens. Answering it needs an A/B on the real model, not a byte count. #0021 is a point against trimming: tool selection was correct in 12 of 12 runs. |
 | Q16 | Should consequential tool docstrings state that identifiers must come from a read tool? | #0021 observed the real model opening a turn with `recover_pool(pool_id="short_of_demand_pool")` — an invented identifier passed to a money-adjacent tool. Refused before touching state, and the model recovered, but it happened in 1 of 12 runs. | **Open, deliberately** — the safety property is proven and regression-tested (all seven consequential tools refuse an invented id before reading or writing anything). The candidate mitigation is one sentence per docstring; it is a *behavioural* change to tool selection, so adopting it means re-running the paid verification and it should be its own decision, not a drive-by edit during a verification. See Q15 — it also adds schema bytes to every turn. **#0022 made the refusal observable** without touching model behaviour: the hosted entrypoint now reports `ok` and `summary` per tool call, so a deployed run can prove an invented id was *rejected* rather than merely showing that `recover_pool` was called. That was a prerequisite for testing this on AgentCore at all — with `POOL_REPOSITORY=memory` the run record dies with the microVM, so the response and the logs are the only evidence. **#0023 looked for it in the cloud and did not find it.** Six deployed runs, 30 tool calls, `ok=true` on every one and `refused=0` in every log line. Two deliberate probes fed a real-but-stale pool id into a fresh session — the second instructing `recover_pool` as the first action — and both times the model ran normal discovery instead. So the reporting shape is proven and the refusal is not: `ok=false` has never been observed outside the local suite. Reproducing it needs a session carrying a pool already in a recoverable state, which takes multiple invocations in one session to build. Still deliberately unmitigated. |
 | Q17 | Does the `instruction` payload field actually steer a run? | The AgentCore entrypoint documents it as "optional override of the run instruction", and `coordinator.run()` substitutes it for the entire prompt — but on Nova Lite it did not change behaviour. | **Open (#0023)** — two deployed runs passed an explicit instruction naming a tool and an id, including one saying "do not run discovery"; both ran discovery anyway, because `SYSTEM_PROMPT`'s lifecycle framing dominates on a small model. Safety-positive in this instance: an injected instruction did not steer the agent into a consequential tool. But it means any caller relying on `instruction` to select a branch silently gets discovery. Either the field should be documented as advisory, or branch selection should be deterministic (trigger → work queue) rather than prompt-borne. |
-| Q18 | Should X-Ray Transaction Search stay enabled at 100 % sampling? | `agentcore deploy` turned it on account-wide without it appearing in any config or template, and `make destroy-agent` will not turn it off (#0023). | **Open (#0023)** — left enabled because it is what produced the tool-level span evidence, and at Pool's volume the ingestion is negligible. But it is an account-level always-on billing path that no Pool file requests, and 100 % sampling does not scale. Decide before any sustained or scheduled workload: `aws xray update-trace-segment-destination --destination XRay` turns it off. |
+| Q18 | Should X-Ray Transaction Search stay enabled, and at what indexing percentage? | `agentcore deploy` turned it on account-wide without it appearing in any config or template, and `make destroy-agent` will not turn it off (#0023). | **Resolved for the hackathon (#0023, read-only verification 2026-08-16)** — **leave Transaction Search `ACTIVE` and indexing at 100 %.** Not because 100 % is inherently required, but because Pool's trace volume is tiny (**138.9 KiB of spans per run**, so 1,000 runs ≈ 0.13 GB), because **reducing the indexing percentage would not reduce span-ingestion cost** — ingestion is 100 % by construction whenever Transaction Search is enabled, and it is the dominant charge — and because at ~6 traces, 1 % indexing would index approximately none, leaving the X-Ray/ServiceLens views empty for a judge who opens them. **CloudTrail proof of what the CLI did:** `UpdateIndexingRule` and `UpdateTraceSegmentDestination`, both at **2026-08-16T19:50:23Z**, `userIdentity arn:aws:iam::860325090409:user/pool-admin`, `userAgent aws-sdk-js/3.1037.0 … nodejs` (the AgentCore CLI, not the AWS CLI), five seconds after stack `CREATE_COMPLETE`, with `requestParameters {"name":"Default","rule":{"probabilistic":{"desiredSamplingPercentage":100.0}}}` — so **AgentCore CLI 0.27.0 explicitly raised the account-level `Default` indexing rule from AWS's 1 % default to 100 %**, outside the synthesized Pool stack. `ActualSamplingPercentage` is a real field in `ProbabilisticRuleValue` but AWS **did not return it**; only `DesiredSamplingPercentage: 100.0` came back. **Post-hackathon:** reconsider or disable when the deployed runtime is no longer needed — `aws xray update-trace-segment-destination --destination XRay`, and note that the on/off switch, not the percentage, is the real cost lever. |
 
 ---
 
@@ -2015,14 +2019,26 @@ Six live invocations, ~114k input / ~2.9k output tokens on Nova Lite, ~30 s tota
 processing. No always-on compute: the runtime bills per invocation, and idle sessions are
 capped at 60 s by the `lifecycleConfiguration` chosen in #0022.
 
-**The one thing that was not in the plan.** `agentcore deploy` enabled **X-Ray Transaction
-Search account-wide, at 100 % sampling**, and said so in a single trailing note. It is not
-in `agentcore.json`, not in the synthesized template, and not removed by
-`make destroy-agent`. It created two log groups — `aws/spans` (30 d, AWS default) and
-`/aws/application-signals/data` (**no retention at all**, now 14 d). This is exactly the
-"large observability or log ingestion" surface `AGENTS.md` §3.4 names, switched on by a
-tool rather than by a decision. Left enabled deliberately — it is what made the trace
-evidence below possible — but it is now a ledger row with a documented off switch.
+**The one thing that was not in the plan.** `agentcore deploy` made **two** account-level
+X-Ray changes and mentioned them in a single trailing note: it enabled **Transaction
+Search** (`UpdateTraceSegmentDestination` → `CloudWatchLogs`), and it **raised the
+account-level `Default` X-Ray indexing rule to `DesiredSamplingPercentage: 100.0`**
+(`UpdateIndexingRule`), up from AWS's 1 % default. Neither is in `agentcore.json`, neither
+is in the synthesized template, and neither is removed by `make destroy-agent`. It also
+created two log groups — `aws/spans` (30 d, AWS default) and `/aws/application-signals/data`
+(**no retention at all**, now 14 d). This is exactly the "large observability or log
+ingestion" surface `AGENTS.md` §3.4 names, switched on by a tool rather than by a decision.
+
+**Two different 100 % figures, which the first draft of this entry ran together.** Span
+*ingestion* into CloudWatch Logs is 100 % by construction whenever Transaction Search is
+on, and is the dominant charge. Trace-summary *indexing* is a separate, configurable
+percentage that the CLI set to 100 %. A third number — the built-in X-Ray centralized
+head-sampling rule at `FixedRate 0.05` — was never touched and does not appear to be used
+by the AgentCore OTel path at all. See `docs/COST_NOTES.md` and Q18 for the separation, and
+Q18 for the CloudTrail record of the call.
+
+Left enabled deliberately — it is what made the trace evidence below possible — but it is
+now a ledger row with a documented off switch.
 
 **Agent behavior**
 Six runs, 30 tool calls, **`ok=true` on every one**; the entrypoint's own log line reports

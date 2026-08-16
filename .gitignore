@@ -131,6 +131,8 @@ traces/raw/
 # =============================================================================
 # Editors and OS
 # =============================================================================
+# Local agent instructions — intentionally kept out of the public repository
+AGENTS.md
 .DS_Store
 .DS_Store?
 ._*

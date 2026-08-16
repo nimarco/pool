@@ -190,13 +190,14 @@ Tracked so they are not silently assumed. Move each to an entry when resolved.
 | Q5 | How does a household express preauthorization (Smart Join) in a machine-verifiable way? | Core of Article 3; must not be an informal LLM judgment. | **Resolved (#0004)** — six numeric/boolean rules evaluated by a pure function returning a full audit trail. Stricter-of-policy-and-need wins. Every rule has a test proving it can block an auto-join. |
 | Q6 | Re-verify hackathon requirements before submission. | Snapshot in `AGENTS.md` §2 is dated 2026-08-15. | **Open** — still required before submitting, and specifically before publishing any Builder Center article (the blog-post wording changed mid-event). |
 | Q7 | Does the deterministic routing model resemble real travel times? | The demo shows travel minutes as if they were real. | **Open** — blocked on live AWS. Until then the provider is labelled in the API response and the UI. |
-| Q8 | What is the actual per-run Bedrock cost at the configured bounds? | Determines whether a 6-hourly schedule is affordable. | **Measured (#0019)** — a discovery run is 6 ConverseStream calls, ~35.7k input / ~420 output tokens, ~6 s. Dollar cost not asserted: the current Bedrock rate has not been checked. On Nova Lite this is trivially affordable at a 6-hourly cadence. |
+| Q8 | What is the actual per-run Bedrock cost at the configured bounds? | Determines whether a 6-hourly schedule is affordable. | **Measured (#0019, re-measured #0020)** — a discovery run is 6 ConverseStream calls, ~19.2k input / ~490 output tokens, ~5.5 s after the tool-result projection (was ~35.7k / ~420 / ~6 s). Dollar cost not asserted: the current Bedrock rate has not been checked. On Nova Lite this is trivially affordable at a 6-hourly cadence. |
 | Q9 | Does the Stripe PaymentIntent manual-capture flow behave as documented? | The whole payment lifecycle rests on it, and it has never touched Stripe's servers. | **Open** — needs TEST keys. Re-read the current official docs first; the shapes were written from documentation, not from a response. |
 | Q10 | Is the platform fee mode (10% of gross savings) defensible as a business model? | It is provisional business configuration, not domain truth. | **Open** — aligned by construction (no saving, no fee) and transparent, but untested against anyone's willingness to pay. |
 | Q11 | Does the case-fitting solver stay fast with realistic community sizes? | It is a bounded DP; bounded is not the same as fast at scale. | **Open** — trivially fast at demo scale (tens of members). Needs a benchmark at a few hundred before a pilot. |
 | Q12 | What actually happens to unclaimed paid-for goods? | The lifecycle deliberately stops at operator review. | **Open** — a policy question with legal edges. See `docs/PILOT_READINESS.md`. |
-| Q13 | Should tool results be trimmed before they reach the model? | Measured 85:1 input-to-output tokens (#0019). `evaluate_pool_economics` alone returns ~2,250 tokens and is re-sent every turn, so the cost grows with community size. | **Open** — a behavioural change to the agent, deliberately not made during a verification. Likely shape: return a compact summary plus an id the model can use to fetch detail only if it needs it. Must not weaken the rule that displayed numbers come from tools. |
-| Q14 | Does the agent handle the harder branches on a small model? | Only discovery has run on Bedrock. Recovery, final offer, and lock involve more state and more careful ordering. | **Open** — next verification step, and cheap to answer. |
+| Q13 | Should tool results be trimmed before they reach the model? | Measured 85:1 input-to-output tokens (#0019). `evaluate_pool_economics` alone returns ~2,250 tokens and is re-sent every turn, so the cost grows with community size. | **Resolved (#0020)** — yes, by projection, not by summarization. `pool/agent/projection.py` gives the model the decision-critical facts and keeps the complete deterministic result for the API, auditing, and tests. Re-measured on the same model, seed, scenario and bounds: **35.8k → 19.2k input tokens (−46%)**, identical tool sequence and outcome. The "fetch detail on demand" shape was rejected: a thirteenth tool costs schema bytes on every turn and buys an extra paid iteration. |
+| Q14 | Does the agent handle the harder branches on a small model? | Only discovery has run on Bedrock. Recovery, final offer, and lock involve more state and more careful ordering. | **Open** — next verification step, and cheap to answer. One post-#0020 run reached `issue_final_offer` unprompted and was correctly refused by the tools, which is a fragment of the answer, not the answer. |
+| Q15 | Are the tool schemas worth 6.8 KB of context on every turn? | After #0020 compacted the results, the twelve tool schemas are **62% of the model's remaining context** — 6,805 bytes re-sent per turn. | **Open** — measured, deliberately not acted on. The docstrings are what lets a small model pick the right tool, so trimming them trades selection quality for tokens. Answering it needs an A/B on the real model, not a byte count. |
 
 ---
 
@@ -1367,3 +1368,183 @@ is re-runnable for a screenshot.
 `services/agent/pool/agent/coordinator.py`, `services/agent/pool/config.py`,
 `services/agent/pool/scripts/verify_bedrock.py`,
 `services/agent/tests/test_agent_bounds.py`
+
+### #0020 — [2026-08-16] — The model was paying to re-read what it already knew
+`[AWS]` `[AGENT]` `[COST]` `[ARCHITECTURE]` `[ARTICLE-2]`
+
+**Goal / user intent**
+Close Q13. The first real Bedrock run spent 35.7k input tokens to produce 418 output
+tokens, and the cause was a measured one: large tool results re-sent on every turn.
+Reduce what the model *sees* without moving any fact out of deterministic code.
+
+**Starting state**
+The canonical local implementation, fully tested, with three consistent real Bedrock
+discovery runs on `us.amazon.nova-lite-v1:0`. Tool results went to the model exactly as
+the services computed them — `assessment.to_dict()` and friends, in full.
+
+**Decision**
+Add a **projection layer** between the deterministic result and the model:
+`pool/agent/projection.py`. Tools call the same services, retain the complete
+authoritative result on `ToolContext.full_results`, and return a compact view to the
+model. Projections are pure selection and aggregation — they compute no money, no
+quantity, no verdict.
+
+**Why**
+Three alternatives were considered and rejected:
+
+1. **A "fetch the detail" tool** (the shape sketched when Q13 was opened). A thirteenth
+   tool costs schema bytes on *every* turn, and any run that used it would spend an
+   extra paid iteration to get back what it should have been handed the first time.
+2. **Strands context management.** Evaluated against the installed version,
+   `strands-agents 1.52.0`. The default `SlidingWindowConversationManager(window_size=40)`
+   is already active and never engages: a discovery run produces ~13 messages. Its
+   truncation is *reactive* — it fires on `ContextWindowOverflowException`, keeping the
+   first and last 200 characters of a tool result, which cuts JSON mid-structure and
+   could remove the blocking reason or viability verdict the model needs.
+   `SummarizingConversationManager` and proactive compression generate the summary *with
+   a model*: an extra paid call, and an LLM paraphrase of deterministic numbers becomes
+   the model's version of the truth. That is the exact failure AGENTS.md §5 exists to
+   prevent. Not adopted. It is the right tool for long open-ended conversations, and
+   this is a bounded 6-turn workflow.
+3. **Trimming the domain objects.** Rejected outright — the per-household lines and the
+   host reward breakdown are what the operator UI and the audit trail are made of.
+
+**Implementation** — implemented and tested.
+
+Measured first, then cut. Instrumenting the `messages` list handed to `stream()` on
+every turn gave the actual amplification, rather than an assumption about which payload
+was worst:
+
+| Tool result | Bytes | Re-sent | Amplified | Share |
+| --- | --- | --- | --- | --- |
+| `evaluate_pool_economics` | 9,015 | ×4 | 36,060 | 71% |
+| `list_latent_demand` | 1,311 | ×5 | 6,555 | 13% |
+| `find_host_candidates` | 2,241 | ×2 | 4,482 | 9% |
+| `request_host_acceptance` | 2,283 | ×1 | 2,283 | 4% |
+| `create_candidate_pool` | 446 | ×3 | 1,338 | 3% |
+
+Inside the 9,015 bytes: `candidates` 4,596 (one record per household) and
+`economics.lines` 3,673 (a second record per household). Both scale with community size;
+neither is decision-critical. Across the rest of the lifecycle the same measurement found
+`issue_final_offer` at 4,048 bytes, `inspect_pool` at 2,079, and `lock_pool` at 1,746 —
+each dominated by per-household lists or the roster of viability checks that *passed*.
+
+What each projection keeps is the shape of the decision it supports: the verdict, the
+blocking reason, the identifiers the next tool call takes, the magnitudes that make an
+opportunity worth pursuing, package/surplus status, and counts of the humans involved.
+
+| Tool result | Before | After | Change |
+| --- | --- | --- | --- |
+| `evaluate_pool_economics` (viable) | 9,015 | 841 | −90.7% |
+| `evaluate_pool_economics` (refusal) | 697 | 356 | −48.9% |
+| `issue_final_offer` | 4,048 | 534 | −86.8% |
+| `request_host_acceptance` | 2,283 | 736 | −67.8% |
+| `find_host_candidates` | 2,241 | 694 | −69.0% |
+| `inspect_pool` | 2,079 | 977 | −53.0% |
+| `lock_pool` | 1,746 | 302 | −82.7% |
+| `list_latent_demand` | 1,311 | 1,140 | −13.0% |
+| `create_candidate_pool`, `recover_pool`, `execute_purchase`, `list_pools_needing_attention` | ≤ 468 | unchanged | measurement did not justify touching them |
+
+A side effect worth naming: no tool takes a household id as an argument, so the ten
+household identifiers per turn were never actionable. They are now counts. That is a
+privacy improvement (§4) that happened to be free.
+
+**AWS / external services touched**
+`bedrock-runtime:ConverseStream` — **40 real streaming calls**: 14 baseline (2 runs on
+the stashed pre-change code, so the comparison is same-session and same-environment), 20
+after (5 runs), and 6 confirming the shipped code after two tool docstrings were corrected
+to describe what the projections actually return. Model `us.amazon.nova-lite-v1:0`,
+profile `pool-dev`, `us-east-1`, non-root IAM. **No resource was created**; the ledger
+stays empty. AgentCore was not deployed. No Stripe call was made and payment behaviour was
+untouched.
+
+**Cost-relevant activity**
+
+| Discovery run | Before | After | Change |
+| --- | --- | --- | --- |
+| Input tokens (6-iteration runs) | 35,929 · 35,706 · 35,836 | 19,179 · 19,327 · 19,062 · 19,314 · 19,434 | **−46.2%** |
+| Input tokens (8-iteration runs) | 54,710 | 28,148 | **−48.5%** |
+| Output tokens | ~430–505 | 444–589 | +14% |
+| Input:output ratio | 85:1 | 39:1 | |
+| Wall clock | 5.7–7.3 s | 5.1–6.9 s | −8% |
+| ConverseStream calls | 1 per iteration | unchanged | |
+
+Offline, where the whole context is measurable rather than inferred: amplified tool-result
+bytes across a discovery run fell **35,464 → 8,711 (−75.4%)**, and total context sent
+across all turns fell **84,417 → 55,025 bytes (−34.8%)**.
+
+**Agent behavior**
+Same model, same seed, same scenario, same bounds. Five of six runs produced the exact
+canonical sequence in six iterations:
+
+```
+list_latent_demand → evaluate_pool_economics → create_candidate_pool
+  → find_host_candidates → request_host_acceptance
+```
+
+The sixth went to eight iterations, adding `issue_final_offer` (which the tools correctly
+refused — "no host has accepted this pool yet") and `list_pools_needing_attention`. **This
+is pre-existing variance, not a regression**: one of the two baseline runs did exactly the
+same thing, which is why the baseline was re-run rather than quoted from #0019. Every run
+ended `completed` with outcome `pool_created`, a pool at `host_recruiting` with 10 members
+against a 24-unit threshold, and four activity events. Final state identical before and
+after.
+
+**Validation**
+`pool/scripts/verify_bedrock.py` — all twelve checks passed on all six post-change runs,
+including wire-level evidence of real `bedrock-runtime` requests in botocore's endpoint
+log.
+
+Offline: **472 application tests + 24 infrastructure tests passing**, lint clean, secret
+scan clean. 21 of those tests are new (`tests/test_agent_projection.py`) and need no
+credentials: they assert that each projection keeps the identifiers the next tool call
+takes, that every surviving figure equals the service's own value rather than a re-derived
+one, that refusals keep their reasons, that the authoritative result — per-household
+lines, reward breakdowns, full check rosters — is still reachable behind the projection,
+and that no tool result in the full lifecycle exceeds a 1,500-byte budget. That last one
+is the regression guard: it fails the moment someone reintroduces a 9 KB payload.
+
+**Failures / dead ends**
+The first draft of the opportunity projection renamed the refusal field to
+`blocking_reason`. The offline planner reads `reason` when composing its no-action
+message, so the run would have recorded an empty explanation — silently, because nothing
+asserts the *content* of that string. Keeping the authoritative field name fixed it. The
+lesson generalises: a projection that renames is a projection that breaks a consumer you
+forgot about.
+
+**What we learned**
+The expensive thing was not the payload — it was the payload times the number of turns
+that followed it. Re-reading is where an agent's money goes, and it is invisible until
+something bills you per token. Measuring the amplification rather than the size changed
+what got cut: `list_latent_demand` is a seventh the size of `evaluate_pool_economics` but
+is re-sent more often, and the two rank far closer than their byte counts suggest.
+
+The second lesson is where the fix belongs. Context management, truncation, and
+summarization all operate *after* the waste exists. Not generating it is cheaper, exact,
+and cannot delete the one field the model needed. The framework's tools were built for
+long open-ended conversations; a bounded workflow with typed tools should fix this at the
+source.
+
+**Architectural finding**
+With the results compact, the largest single term in the model's context is now the **tool
+schemas: 6,805 bytes re-sent every turn, 62% of what remains**. Twelve tools with careful
+docstrings — the same docstrings that make a small model pick the right tool. Trimming
+them trades tool-selection quality for tokens, which is a very different bet from dropping
+an audit detail, so it was measured and left alone. Logged as Q15.
+
+**Article fodder**
+Article 2, and it is the best cost story in the project: a measured 85:1 ratio, a
+measurement that contradicted the obvious culprit ranking, a fix at the source rather than
+in the framework, and a 46% reduction verified on the real model with the behaviour
+unchanged. Also Article 3, for the boundary it defends: the model is given less, not
+trusted with more.
+
+**Evidence worth preserving**
+Five post-change and two baseline `verify_bedrock.py` outputs, same session and same
+environment, showing tool sequence, token counts, and final state. The per-turn context
+measurement table above.
+
+**Relevant commits / files**
+`services/agent/pool/agent/projection.py` (new),
+`services/agent/pool/agent/tools.py`, `services/agent/pool/agent/coordinator.py`,
+`services/agent/tests/test_agent_projection.py` (new), `docs/COST_NOTES.md`

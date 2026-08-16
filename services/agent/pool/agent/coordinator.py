@@ -83,6 +83,9 @@ class PoolCoordinator:
         self.purchaser = purchaser or build_purchase_executor(self.settings.purchase_executor)
         self.sourcing = sourcing or SyntheticCatalogProvider()
         self._model_override = model
+        #: The tool context of the most recent run, carrying the complete authoritative
+        #: results behind the compact projections the model was shown.
+        self.last_tool_context: ToolContext | None = None
 
     # -- model -------------------------------------------------------------
 
@@ -180,6 +183,10 @@ class PoolCoordinator:
             ),
             community_id=community_id,
         )
+        # The model sees compact projections of the larger tool results; the complete
+        # authoritative results stay on the context, reachable after the run for the
+        # operator UI, auditing, and tests (AGENTS.md §6, §9).
+        self.last_tool_context = ctx
         tools = build_tools(ctx)
 
         record = AgentRun(

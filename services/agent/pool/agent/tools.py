@@ -10,6 +10,12 @@ services layer; the agent's job is to decide which door to open next, never to c
 or restate a value (AGENTS.md §5). In particular, the model can ask *whether* a host is
 eligible, *whether* a pool is viable, and *whether* a buyer's policy passes — it can
 never decide any of those things.
+
+The larger results are *projected* before they reach the model (see ``projection.py``):
+the model receives the decision-critical facts, and the complete authoritative result is
+kept on :class:`ToolContext` for the API, the operator UI, auditing, and tests. This is
+a cost boundary, not a truth boundary — the projection selects and aggregates fields
+that deterministic code already computed, and never recomputes one (AGENTS.md §3.3).
 """
 
 from __future__ import annotations
@@ -33,6 +39,20 @@ from ..services import coordination as coord
 from ..services import fulfillment as fulfil
 from ..services import hosting
 from ..services.context import PoolContext
+from . import projection as proj
+
+#: Full results retained per run. One per tool call, so the tool-call bound already caps
+#: it; the ceiling exists so a mis-set bound cannot grow this without limit.
+MAX_RETAINED_FULL_RESULTS = 64
+
+
+@dataclass
+class FullToolResult:
+    """The complete, unprojected result a tool computed, kept for the record."""
+
+    tool: str
+    arguments: dict[str, Any]
+    result: dict[str, Any]
 
 
 @dataclass
@@ -47,6 +67,9 @@ class ToolContext:
     recovered_pool_ids: list[str] = field(default_factory=list)
     decisions_created: int = 0
     no_action_reason: str = ""
+    #: Authoritative results in call order, for auditing and any consumer that needs
+    #: the detail the model is deliberately not shown.
+    full_results: list[FullToolResult] = field(default_factory=list)
 
     @property
     def repo(self):
@@ -55,6 +78,20 @@ class ToolContext:
     @property
     def ws(self) -> str:
         return self.pool.ws
+
+    def record_full(
+        self, tool: str, arguments: dict[str, Any], result: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Retain a complete tool result and return it unchanged."""
+        if len(self.full_results) < MAX_RETAINED_FULL_RESULTS:
+            self.full_results.append(FullToolResult(tool, arguments, result))
+        return result
+
+    def last_full_result(self, tool: str) -> dict[str, Any] | None:
+        for entry in reversed(self.full_results):
+            if entry.tool == tool:
+                return entry.result
+        return None
 
 
 def _json(payload: dict[str, Any]) -> str:
@@ -143,7 +180,9 @@ def build_tools(ctx: ToolContext) -> list:
         opportunities.sort(
             key=lambda o: (-o["member_count"], -o["unserved_units"], o["product_id"])
         )
-        return _json({"opportunities": opportunities, "count": len(opportunities)})
+        full = {"opportunities": opportunities, "count": len(opportunities)}
+        ctx.record_full("list_latent_demand", {}, full)
+        return _json(proj.demand_view(opportunities))
 
     @tool
     def evaluate_pool_economics(
@@ -153,8 +192,8 @@ def build_tools(ctx: ToolContext) -> list:
 
         Read-only and safe to call freely: it contacts nobody and commits nothing.
         Computes compatible demand, the best bulk tier, complete landed economics
-        (merchandise + host pay + processing + Pool fee), real travel times, and each
-        member's Smart Join eligibility against the estimated price.
+        (merchandise + host pay + processing + Pool fee), real travel times, and how
+        many members' Smart Join rules accept the estimated price.
 
         Args:
             product_id: The product to evaluate, e.g. from list_latent_demand.
@@ -180,7 +219,16 @@ def build_tools(ctx: ToolContext) -> list:
                 f"{bps_to_pct_str(econ.net_savings_bps)} below retail after all costs, "
                 f"avg {assessment.avg_travel_minutes} min to {assessment.pickup_site_name}"
             )
-        return _json(payload)
+        ctx.record_full(
+            "evaluate_pool_economics",
+            {
+                "product_id": product_id,
+                "pickup_site_id": pickup_site_id,
+                "include_future_demand": include_future_demand,
+            },
+            payload,
+        )
+        return _json(proj.opportunity_view(payload))
 
     @tool
     def create_candidate_pool(product_id: str, pickup_site_id: str) -> str:
@@ -245,17 +293,17 @@ def build_tools(ctx: ToolContext) -> list:
         """Evaluate who could fulfil this pool, and why.
 
         Read-only. Candidates come from standing hosts and from pool members who
-        offered to host this specific pool. Returns each candidate's eligibility, the
-        factual reasons anyone is ineligible, their score components, and their
-        deterministic compensation — so a selection can be explained rather than
-        asserted.
+        offered to host this specific pool. Returns each candidate's eligibility, rank,
+        deterministic pay, and the factual reasons anyone is ineligible — so a selection
+        can be explained rather than asserted.
 
         Args:
             pool_id: The pool that needs fulfilment.
         """
         hosting.open_host_recruiting(ctx=ctx.pool, pool_id=pool_id)
         result = hosting.evaluate_host_candidates(ctx=ctx.pool, pool_id=pool_id)
-        return _json(result.to_dict())
+        full = ctx.record_full("find_host_candidates", {"pool_id": pool_id}, result.to_dict())
+        return _json(proj.host_evaluation_view(full))
 
     @tool
     def request_host_acceptance(pool_id: str) -> str:
@@ -278,7 +326,8 @@ def build_tools(ctx: ToolContext) -> list:
                 ctx.outcome = RunOutcome.POOL_ADVANCED
             if pool_id not in ctx.advanced_pool_ids:
                 ctx.advanced_pool_ids.append(pool_id)
-        return _json(result.to_dict())
+        full = ctx.record_full("request_host_acceptance", {"pool_id": pool_id}, result.to_dict())
+        return _json(proj.host_evaluation_view(full))
 
     @tool
     def issue_final_offer(pool_id: str) -> str:
@@ -301,7 +350,8 @@ def build_tools(ctx: ToolContext) -> list:
                 ctx.outcome = RunOutcome.POOL_ADVANCED
             if pool_id not in ctx.advanced_pool_ids:
                 ctx.advanced_pool_ids.append(pool_id)
-        return _json(result.to_dict())
+        full = ctx.record_full("issue_final_offer", {"pool_id": pool_id}, result.to_dict())
+        return _json(proj.final_offer_view(full))
 
     @tool
     def inspect_pool(pool_id: str) -> str:
@@ -324,7 +374,9 @@ def build_tools(ctx: ToolContext) -> list:
             else ViabilityStage.PRE_FUNDING
         )
         verdict = coord.check_viability(ctx=ctx.pool, pool_id=pool_id, stage=stage)
-        return _json(
+        full = ctx.record_full(
+            "inspect_pool",
+            {"pool_id": pool_id},
             {
                 "pool_id": pool_id,
                 "status": pool.status.value,
@@ -353,8 +405,9 @@ def build_tools(ctx: ToolContext) -> list:
                     if d.pool_id == pool_id and d.state == DecisionState.PENDING
                 ),
                 "viability": verdict.to_dict(),
-            }
+            },
         )
+        return _json(proj.pool_view(full))
 
     @tool
     def list_pools_needing_attention() -> str:
@@ -442,7 +495,8 @@ def build_tools(ctx: ToolContext) -> list:
                 ctx.outcome = RunOutcome.POOL_ADVANCED
             if pool_id not in ctx.advanced_pool_ids:
                 ctx.advanced_pool_ids.append(pool_id)
-        return _json(result)
+        full = ctx.record_full("lock_pool", {"pool_id": pool_id}, result)
+        return _json(proj.lock_view(full))
 
     @tool
     def execute_purchase(pool_id: str) -> str:

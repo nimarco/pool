@@ -83,6 +83,27 @@ Twelve narrow, typed tools. No shell, no arbitrary query, no generic mutation.
 Every consequential tool is idempotent by an explicit key, because agent systems retry and
 a retried `create_candidate_pool` must not produce two pools.
 
+### What the model is shown, and what is kept
+
+The larger results are **projected** before they reach the model
+([`agent/projection.py`](../services/agent/pool/agent/projection.py)). Strands resends the
+whole conversation every turn, so a tool result is billed once per remaining turn — the
+first real Bedrock run spent 35.7k input tokens for 418 output tokens, and
+`evaluate_pool_economics` alone was 9,015 bytes of per-household detail (#0019, #0020).
+
+A projection keeps the verdict, the blocking reason, the identifiers the next tool call
+takes, the magnitudes that make the decision, and counts of the humans involved. It drops
+per-household rosters, score components, reward breakdowns, and the list of viability
+checks that passed. The **complete authoritative result is retained** on the tool context
+for the API, the operator UI, auditing, and tests.
+
+This is a cost boundary, not a truth boundary. Projections select and aggregate values
+deterministic code already computed; they compute nothing. Notably, this is *not* LLM
+summarization — a model-written summary of a price would make the model the source of
+truth, which is the one thing the layering above exists to prevent. Measured effect on the
+same model, seed, scenario and bounds: **35.8k → 19.2k input tokens, identical tool
+sequence and outcome.**
+
 ---
 
 ## The lifecycle

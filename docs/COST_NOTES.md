@@ -48,17 +48,33 @@ One coordination run at defaults:
 
 The demo scenario is three runs. In offline mode all three cost **zero**.
 
-### Measured, not estimated (#0019)
+### Measured, not estimated (#0019, #0020)
 
 A discovery run against `us.amazon.nova-lite-v1:0`: **6 ConverseStream calls, ~35.7k input
 tokens, ~420 output tokens, ~6 s**. Consistent across three runs.
 
-The input figure deserves attention: it is **85× the output**. Strands resends the whole
-conversation each turn, and `evaluate_pool_economics` alone returns ~2,250 tokens of
-structured JSON, so every large tool result is re-billed on every subsequent call — and it
-scales with community size. Negligible on Nova Lite; roughly fifty times more on a
-frontier model. Tracked as Q13 in `BUILD_HISTORY.md`; deliberately not "fixed" as a
-drive-by change, because trimming what the model sees alters agent behaviour.
+The input figure deserved attention: it was **85× the output**. Strands resends the whole
+conversation each turn, so every large tool result is re-billed on every subsequent call
+— and `evaluate_pool_economics` alone returned 9,015 bytes, growing with community size.
+
+**Fixed in #0020 by projecting tool results** (`pool/agent/projection.py`). The model now
+receives the decision-critical facts; the complete deterministic result is retained for
+the API, the operator UI, auditing, and tests. Re-measured on the same model, seed,
+scenario and bounds:
+
+| Discovery run (6 iterations) | Before | After | Change |
+| --- | --- | --- | --- |
+| Input tokens | ~35.8k | ~19.2k | **−46%** |
+| Output tokens | ~430 | ~490 | +14% |
+| Input:output ratio | 85:1 | 39:1 | |
+| Wall clock | ~6.0 s | ~5.5 s | −8% |
+| Tool sequence and outcome | canonical, `pool_created` | unchanged | — |
+
+Strands' own context management was evaluated and **not** adopted: the default sliding
+window (40 messages) never engages in a run this short, its reactive truncation cuts tool
+JSON blindly at 200 characters, and summarizing compression would spend an extra model
+call to put an LLM paraphrase of deterministic numbers into context — which AGENTS.md §5
+forbids. See #0020.
 
 ## Infrastructure choices, and why
 

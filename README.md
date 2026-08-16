@@ -340,7 +340,7 @@ services/agent/pool/
     state.py         the lifecycle adjacency table
   services/        orchestration over the domain — everything the agent can *do*
   adapters/        repository, routing, payments, purchase, sourcing, verification
-  agent/           Strands coordinator, tools, bounds, offline planner
+  agent/           Strands coordinator, tools, bounds, result projection, offline planner
   api/             FastAPI
   data/seed.py     the synthetic Demo University dataset
 apps/web/          React app: buyer, host, operator, judge

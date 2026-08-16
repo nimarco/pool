@@ -64,7 +64,7 @@ Pool tools** (entry #0019, three runs). Everything else on AWS remains unverifie
 - **Observability.** Every run records trigger, tool sequence, iterations, termination
   reason, duration, and token usage — with no model reasoning text, and arguments stored
   as hashes so a run log cannot leak member details.
-- **469 tests** (445 application + 24 infrastructure), all offline and free.
+- **514 tests** (490 application + 24 infrastructure), all offline and free.
 
 | Item | Status | Evidence |
 | --- | :-: | --- |

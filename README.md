@@ -293,14 +293,16 @@ the offers, the money, and the purchase. No goods move. No traction is claimed.
 
 ## AWS
 
-**Bedrock inference is verified**: a real model drives the real Strands loop and the real
-Pool tools (`make verify-bedrock`). Everything else is implemented and synthesizing but
+**Bedrock inference is verified** on both the discovery path (`make verify-bedrock`) and
+the consequential recovery-and-lock path (`make verify-recovery`): a real model drives the
+real Strands loop and the real Pool tools, and the deterministic viability engine refuses
+the lock it is not allowed to take. Everything else is implemented and synthesizing but
 **not yet verified against a live account**. Nothing in this repository claims a deployment
 that has not happened.
 
 | Service | Role | Status |
 | --- | --- | --- |
-| Bedrock | Model inference via Strands | **Verified** — `us.amazon.nova-lite-v1:0`, 5 Pool tools called from a real run |
+| Bedrock | Model inference via Strands | **Verified** — `us.amazon.nova-lite-v1:0`; discovery, recovery, and lock branches all driven by real runs |
 | AgentCore Runtime | Hosted agent entrypoint | `agentcore_app.py`, deployed with the official toolkit |
 | DynamoDB | Authoritative application state, single table, on-demand, TTL | Implemented, pinned by a fake-client test |
 | API Gateway + Lambda | Public API | In the CDK stack |

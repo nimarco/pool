@@ -100,6 +100,11 @@ verify-bedrock: ## (COSTS MONEY, a little) Prove Bedrock -> Strands -> Pool tool
 	@bash scripts/aws_preflight.sh
 	cd $(AGENT) && .venv/bin/python -m pool.scripts.verify_bedrock
 
+.PHONY: verify-recovery
+verify-recovery: ## (COSTS MONEY, a little) Prove the recovery branch against a real model
+	@bash scripts/aws_preflight.sh
+	cd $(AGENT) && .venv/bin/python -m pool.scripts.verify_recovery_bedrock
+
 .PHONY: synth
 synth: ## Synthesize the CloudFormation template (offline, no credentials needed)
 	cd $(INFRA) && .venv/bin/python app.py && echo "→ infra/cdk.out/PoolStack.template.json"

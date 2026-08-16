@@ -298,9 +298,9 @@ can put in front of someone's money.
 | Screenshot: "where the money goes" cost breakdown | 1, 3 | ⬜ |
 | Screenshot: host candidates with score components and refusal reasons | 1, 3 | ⬜ |
 | Screenshot: viability panel, all eleven checks | 3 | ⬜ |
-| Real Bedrock run: latency, tokens, cost | 2 | ⬜ blocked |
+| Real Bedrock run: latency, tokens, cost | 2 | ✅ #0019, #0020, #0021 |
 | Real AgentCore deployment output and trace | 2 | ⬜ blocked |
 | Real vs. deterministic routing comparison | 2 | ⬜ blocked |
 | `make demo` terminal transcript | all | ✅ reproducible any time |
-| Test output: 469 passing (445 app + 24 infra) | 2 | ✅ |
+| Test output: 514 passing (490 app + 24 infra) | 2 | ✅ |
 | Synthesized CloudFormation showing the disabled schedule | 2 | ✅ |

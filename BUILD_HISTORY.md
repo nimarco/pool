@@ -210,19 +210,39 @@ configuration, not the money. See #0023.
 **No always-on compute exists.** The runtime bills only while an invocation is in flight;
 six invocations totalling ~30 s of processing is the entire compute spend so far.
 
-### Reviewed and awaiting approval — NOT created
+**Public judge demo — `PoolDemoStack` (8 resources, deployed 2026-08-16, entry #0025)**
 
-| Resource | Service | Purpose | Recurring cost? | Destroy by |
+**Live URL: <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/>**
+
+| Resource | Service | Actual name | Recurring cost? | Destroy by |
 | --- | --- | --- | --- | --- |
-| `PoolDemoStack` | CloudFormation | Public judge demo, **8 resources**, reviewed by `cdk diff` in #0024 | No | `make destroy-demo` |
-| `DemoApi` | Lambda (1024 MB, 30 s, **reserved concurrency 5**) | Serves the SPA and 14 allowlisted API paths | **No** — per invocation | With the stack |
-| `DemoApi/FunctionUrl` | Lambda Function URL, `AuthType: NONE` | The public URL | No | With the stack |
-| `DemoState` | DynamoDB, PAY_PER_REQUEST, TTL | One partition per anonymous session, 24 h TTL | ~$0 — storage only, self-deleting | With the stack |
-| `DemoLogs` | CloudWatch Logs, **14 days** | Inside the stack, unlike #0023's orphans | Yes — KB-scale | With the stack |
-| `DemoApi/ServiceRole` + policy | IAM | DynamoDB on one table; `InvokeAgentRuntime` on one runtime ARN | No | With the stack |
+| `PoolDemoStack` | CloudFormation | `stack/PoolDemoStack/65684040-99d9-11f1-bfd1-12dcf36da785` | No | `make destroy-demo` |
+| `DemoApi` | Lambda, 1024 MB, 30 s, **no reserved concurrency** (see below) | `PoolDemoStack-DemoApiE67238F8-NRdyivEjgNe9` | **No** — per invocation | With the stack |
+| `DemoApi/FunctionUrl` | Lambda Function URL, `AuthType: NONE` | `https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/` | No | With the stack |
+| `DemoState` | DynamoDB, PAY_PER_REQUEST, TTL `ttl` **ENABLED** | `PoolDemoStack-DemoStateC0AFBE5F-MEYUG6F12SA` | ~$0 — storage only, rows self-delete in 24 h | With the stack |
+| `DemoLogs` | CloudWatch Logs, **14 days** | `PoolDemoStack-DemoLogs66B26719-oLVBNSrBt9aX` | Yes — KB-scale | With the stack |
+| `DemoApi/ServiceRole` | IAM Role | `PoolDemoStack-DemoApiServiceRoleD1A1B4D5-kT16gVvbahFM` | No | With the stack |
+| Role default policy | IAM Policy | `PoolD-DemoA-IgvYHVbqMZn9` — DynamoDB on one table, `InvokeAgentRuntime` on one runtime ARN | No | With the stack |
+| 2 x invoke permission | Lambda Permission | `...-DemoApiinvokefunctionEB041109-WxR1cOdgWRyn`, `...-DemoApiinvokefunctionurl07DCB729-roeUn4lhuRUD` | No | With the stack |
 
-Nothing above exists. Move these rows to *Active* on the day they are created, and note
-that a deploy adds ~28 MB per version to the existing CDK staging bucket.
+**No reserved concurrency, and not by choice.** Lambda enforces
+`account_limit - sum(reserved) >= 10`, and this account's limit **is** 10 — so any
+nonzero reservation is rejected outright. The first deploy failed on exactly that and
+rolled back cleanly, creating nothing. The ceiling still exists one level up: with no
+other function in the account, the account's own limit of 10 caps this function.
+`make demo-kill` (reserve **0**) is unaffected and was verified working — it returns
+429 and deletes nothing.
+
+**Verified after deployment, not assumed:** stack `CREATE_COMPLETE`; TTL `ENABLED` on
+`ttl`, with a ~24 h horizon observed on real rows; log retention 14 days; **no implicit
+`/aws/lambda/...` log group was created**; the X-Ray trace destination is unchanged from
+#0023; no API Gateway, CloudFront, EC2 or RDS anywhere in the account; zero EventBridge
+rules.
+
+**The one growth surface:** the CDK staging bucket went from 2 objects / 41.7 MiB to
+**13 objects / 176.8 MiB** across five deploy attempts (~28 MB zipped per bundle
+version). Not garbage-collected; empty it before deleting `CDKToolkit`.
+
 
 ### Recurring / scheduled (highest risk — review every session)
 
@@ -2287,3 +2307,135 @@ DynamoDB showcase, which is the whole ordering story in two test runs.
 `apps/web/src/styles.css`, `scripts/secret_scan.sh`, `scripts/secret_scan_selftest.sh`,
 `Makefile`, `.gitignore`, `.claude/launch.json`, `README.md`, `docs/COST_NOTES.md`,
 `docs/HACKATHON_SCORECARD.md`
+
+---
+
+### #0025 — [2026-08-16] — The public demo went live, and four things only production knew
+`[AWS]` `[SECURITY]` `[COST]` `[ARCHITECTURE]` `[ARTICLE-2]`
+
+**Goal / user intent**
+With explicit approval limited to the reviewed eight resources, deploy `PoolDemoStack`,
+then verify the real deployed system rather than trusting CloudFormation's own word for
+it. Leave the demo standing.
+
+**Starting state**
+`PoolDemoStack` implemented, 571 application + 62 infrastructure tests green, `cdk diff`
+verified against the account at exactly eight resources. Nothing deployed. Bootstrap at
+version 32 from #0023, reused.
+
+**Decision**
+Deploy as reviewed, then treat every claim made in #0024 as a hypothesis to be tested
+against the live system.
+
+**Why**
+Because the interesting failures were all invisible from here. #0024 ended by naming the
+DynamoDB adapter as the largest risk — verified against a fake table, never against
+AWS. That instinct was right, and the fake was still not faithful enough.
+
+**Implementation**
+Pre-flight: `sts:GetCallerIdentity` → `arn:aws:iam::860325090409:user/pool-admin`,
+non-root, `us-east-1`, bootstrap 32. `cdk diff` re-run on a freshly rebuilt bundle:
+eight resources, all `[+]`.
+
+**Four defects, all found by verification, none by a test:**
+
+1. **Deploy #1 failed and rolled back.** `ReservedConcurrentExecutions: 5` was rejected:
+   Lambda enforces `account_limit − Σreserved ≥ 10` and this account's limit *is* 10, so
+   **no nonzero reservation is possible at all**. The property is now opt-in and the
+   account limit is the ceiling instead. Reserving **0** is still allowed, so
+   `make demo-kill` was unaffected — verified, it returns 429 and deletes nothing.
+
+2. **`/openapi.json` and `/docs` were public.** The allowlist middleware only guards
+   paths under `/api/`, and FastAPI's schema endpoints are not. They returned 200 and
+   documented **all 42 routes**, including the thirty judge mode exists to make
+   unreachable. The routes themselves were still refused — the map was the leak. Now
+   `docs_url=None` in public mode; a local `make dev` keeps its docs.
+
+3. **The first real DynamoDB request returned HTTP 500.** `ValueError: invalid format
+   string`, from `format_cents` doing `f"{cents % 100:02d}"`. **Every DynamoDB number
+   reads back as `decimal.Decimal`**, and `d` is not a valid presentation type for
+   `Decimal`. It survived all the arithmetic silently — `Decimal` and `int` mix fine —
+   and only failed at the display edge. `_from_item` now converts integral `Decimal`
+   back to `int`.
+
+4. **A refused request spent the shared daily budget.** The quota helper checked the
+   *day* cap before the *session* cap, so a request the session cap went on to refuse
+   had already consumed one of everyone's 40 daily live invocations. Observed live:
+   `live-day` went 2 → 3 on a call that returned 429 and never reached Bedrock. One
+   visitor could have closed the live agent button for every other judge, for free.
+   Checking the narrower cap first fixes it; re-verified live, three refused attempts
+   left the day counter unmoved.
+
+Also fixed: the deployed Lambda logged **nothing** from application code. AWS Lambda
+installs a handler on the root logger but leaves the root *level* at WARNING, so every
+`logger.info` was dropped — meaning a judge's live invocation could not be correlated to
+the AgentCore run it triggered. `logging.getLogger("pool").setLevel(INFO)` in judge mode.
+
+**AWS / external services touched**
+CloudFormation, Lambda, Lambda Function URLs, DynamoDB, IAM, CloudWatch Logs,
+`bedrock-agentcore:InvokeAgentRuntime`, Bedrock (`us.amazon.nova-lite-v1:0`) via the
+runtime. **No Stripe. No API Gateway, CloudFront, S3 hosting, EventBridge, or Amazon
+Location** — confirmed absent by API, not assumed. X-Ray's trace destination is
+unchanged from #0023; this deploy touched no account-level setting.
+
+**Cost-relevant activity**
+Three live AgentCore invocations through the deployed bridge (~19.2k–24.3k input,
+469–652 output tokens each). Five deploy attempts grew the CDK staging bucket from
+41.7 MiB to 176.8 MiB. No always-on compute exists: no reserved concurrency, no
+provisioned capacity, no schedule, no distribution.
+
+**Agent behavior**
+Unchanged, and now demonstrable from a browser with no AWS account. One live run:
+`run_94aaa6bdd740`, `pool_created`, 7 iterations, 6 tool calls, `refused=0`, terminating
+on `completed` — the same `run_id` appears in the demo Lambda's log and in the AgentCore
+runtime's log, which is the correlation that fix #5 above bought.
+
+**Validation**
+- **13-step lifecycle through the deployed API on the real table**, reaching
+  `completed`: $861.44 all-in, $266.32 collective saving, 10 pickups confirmed, 1
+  credential replay rejected — **identical to the in-memory run**.
+- **Ordering survived**: host candidates score-descending (−36, −44, −52, −118), runs
+  newest-first, Decision Inbox chronological. These are the five methods #0024 fixed.
+- **Session isolation**: two populated sessions, disjoint pools, and session B got
+  **404** requesting session A's pool by id. Reset cleared A and left B untouched.
+- **TTL observed on real rows**: 86,378 s ahead of now, ≈24 h.
+- **Prompt injection refused** (`400`), 7 consequential endpoints `404`, no
+  `access-control-allow-origin` from a foreign origin, three hardening headers present.
+- **Path traversal contained**: every attempt returned the app shell, never file
+  content.
+- **The served bundle carries no credential, ARN, or account id.**
+- **Caps proven live**: the live-agent cap returned 429 with **zero** AgentCore runs
+  started in the window; quota rows carry TTLs; `_quota` is unreachable as a workspace
+  (400).
+- 580 application + 63 infrastructure tests, lint clean, secret scan clean.
+
+**Failures / dead ends**
+Beyond the four above: **an out-of-band `update-function-configuration` survived
+`cdk deploy`.** A cap tightened by hand for testing was still in force after the next
+deployment, because CloudFormation does not reset a property whose *template* value has
+not changed. Restored by hand. That is also precisely why the kill switch works, so it
+is a property to know rather than to fix — but a temporary tightening has to be undone
+deliberately, and nothing will remind you.
+
+**What we learned**
+Every one of the four defects was invisible to a green test suite, and three of them
+were invisible to a *faithful-looking* fake. The DynamoDB one is the sharpest: the fake
+stored Python objects verbatim, so it guaranteed a type the real service does not. The
+fake now round-trips every item through boto3's own `TypeSerializer`/`TypeDeserializer`
+— and with that change, removing the fix reproduces the exact production traceback.
+
+**A fake is worth exactly its fidelity, and fidelity is not something you can assess by
+reading the fake.** You find out when you deploy.
+
+**Evidence worth preserving**
+The rollback message naming the concurrency arithmetic. The `openapi.json` response
+listing 42 paths. The 500 traceback ending at `money.py:50`. The `live-day` counter
+going 2 → 3 on a 429. And the two log lines, from two different services, carrying the
+same `run_id=run_94aaa6bdd740`.
+
+**Relevant commits / files**
+`services/agent/pool/api/public_demo.py`, `services/agent/pool/api/app.py`,
+`services/agent/pool/adapters/repository.py`,
+`services/agent/tests/test_public_demo.py`, `infra/demo_app.py`,
+`infra/test_demo_stack.py`, `Makefile`, `BUILD_HISTORY.md` (ledger + this entry),
+`docs/COST_NOTES.md`, `docs/HACKATHON_SCORECARD.md`, `README.md`

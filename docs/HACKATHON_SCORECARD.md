@@ -10,8 +10,9 @@ Evidence is labelled by where it lives: **local** (runs here, verified), **ready
 (implemented, never run against the real service), **cloud-verified** (observed working on
 AWS).
 
-**Cloud-verified so far: real Bedrock inference driving the real Strands loop and the real
-Pool tools** (entry #0019, three runs). Everything else on AWS remains unverified.
+**Cloud-verified: real Bedrock inference, the deployed AgentCore Runtime, DynamoDB as the
+live store, and a public demo URL a judge can open with no AWS account** (#0019, #0023,
+#0024, #0025). Still unverified: EventBridge and Amazon Location.
 
 ---
 
@@ -27,7 +28,7 @@ Pool tools** (entry #0019, three runs). Everything else on AWS remains unverifie
 | Architecture diagram | ✅ | [`architecture.svg`](architecture.svg), source [`architecture.mmd`](architecture.mmd) |
 | Demo video ≤ 5 min | ⬜ | Script written: [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md). Not recorded |
 | AWS Builder ID | ⬜ | User action — account signup |
-| Live demo URL | 🟡 | `PoolDemoStack` written, tested, and **dry-run verified against the real account** (`cdk diff`: 8 resources). Awaiting approval to deploy — see #0024 |
+| Live demo URL | ✅ | **<https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/>** — deployed 2026-08-16, 8 resources, verified end to end (#0025) |
 | Project description | ✅ | Draft: [`DEVPOST_DRAFT.md`](DEVPOST_DRAFT.md) |
 | Testing instructions | ✅ | README → Run it. `make qa`, `make demo` |
 | Good Neighbor framing | ✅ | Explicit in README, landing page, demo script, Devpost draft |
@@ -80,16 +81,14 @@ Pool tools** (entry #0019, three runs). Everything else on AWS remains unverifie
 | One-time pickup confirmation | ✅ | local |
 | Comprehensive tests | ✅ | 469 passing |
 | Bedrock real inference | ✅ | **cloud-verified** — `us.amazon.nova-lite-v1:0`, 6 ConverseStream calls per run, 5 Pool tools called, wire-level evidence, 3/3 runs |
-| AgentCore Runtime | 🟡 | **ready** (`agentcore_app.py`), never deployed |
-| DynamoDB | 🟡 | **ready**, pinned by a fake-client test, never live |
+| AgentCore Runtime | ✅ | **cloud-verified** — deployed, and invoked from a public browser through the demo bridge |
+| DynamoDB | ✅ | **cloud-verified** — the full lifecycle on a real table; the first live run found a `Decimal` bug a fake could not (#0025) |
 | EventBridge background path | 🟡 | **ready**, ships disabled |
 | Amazon Location | 🟡 | **ready**, never called |
-| Real cloud trace | ⬜ | Needs credentials |
+| Real cloud trace | ✅ | **cloud-verified** — one `run_id` correlated across the demo Lambda's log and the AgentCore runtime's log |
 
-**Exact next action:** the model leg is proven end to end. Next is DynamoDB
-(`POOL_REPOSITORY=dynamodb` against a deployed table), then AgentCore, then a public URL.
-Verifying the harder agent branches (recovery, lock) on Bedrock is cheap and worth doing
-first — only discovery has run against a real model.
+**Exact next action:** the AWS legs are proven — Bedrock, AgentCore, DynamoDB, and a
+public URL. What remains is the demo video and pushing the public repository.
 
 ---
 
@@ -117,19 +116,18 @@ first — only discovery has run against a real model.
 - **Verified responsive and dark-mode correct**, with no horizontal overflow at 375 px on
   any view.
 
-**The public judge experience** (#0024, implemented and locally verified, not yet
-deployed): one URL, no account, no setup. The API a judge can reach is fourteen paths of
+**The public judge experience** (#0024–#0025, deployed and cloud-verified): one URL, no account, no setup. The API a judge can reach is fourteen paths of
 forty-five; the client cannot send the agent a prompt; every action that costs anything
 is capped per session and per day; anonymous sessions are isolated by DynamoDB partition
 and expire in 24 hours. Almost everything runs deterministically on the server, with
 exactly one clearly labelled action that genuinely invokes the deployed AgentCore
-Runtime — verified twice against real AWS, with a failure path that reports the failure
-rather than faking a run.
+Runtime — invoked from a public browser and correlated by `run_id` across two services'
+logs, with a failure path that reports the failure rather than faking a run.
 
 | Item | Status |
 | --- | :-: |
 | Frictionless judge mode | ✅ |
-| Public demo safe to expose anonymously | ✅ implemented, tested; deployment pending approval |
+| Public demo safe to expose anonymously | ✅ **cloud-verified** — four defects found by probing the deployed system and fixed (#0025) |
 | Buyer UX | ✅ |
 | Host UX | ✅ |
 | Operator UX | ✅ |
@@ -138,7 +136,7 @@ rather than faking a run.
 | Agent trace visible | ✅ |
 | Mobile responsive | ✅ |
 | Dark mode | ✅ |
-| Deployed and reachable | 🟡 stack reviewed and dry-run verified; awaiting approval |
+| Deployed and reachable | ✅ **cloud-verified** |
 
 ---
 
@@ -239,10 +237,11 @@ the current title and content requirements before publishing.
 lifecycle, the safety bounds, the test suite, the four UX surfaces, and the honesty of the
 documentation.
 
-**Weak, and only for one reason:** nothing has run on AWS. Bedrock, AgentCore, DynamoDB,
-EventBridge, and Amazon Location are all implemented and none is verified. There is no
-live demo URL, and no video.
+**Now also strong:** the AWS story. Bedrock, AgentCore Runtime, DynamoDB and a public
+demo URL are all cloud-verified, and the deployment found four real defects that no green
+test suite had — a rejected concurrency reservation, a publicly readable OpenAPI schema, a
+`Decimal` type bug on the first real table write, and a quota that let one visitor spend
+everyone's daily budget. All four are fixed, verified live, and written up in #0025.
 
-**The single highest-value unblock** is an AWS identity with Bedrock model access. Every
-🟡 in this document becomes a ✅ or a specific known failure within an hour of that
-existing — and a specific known failure would itself be worth writing about.
+**Still open:** the demo video, and pushing the public repository. EventBridge and Amazon
+Location remain implemented-but-unverified, deliberately — neither is on the judge path.

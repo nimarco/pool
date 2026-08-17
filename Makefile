@@ -139,6 +139,18 @@ DEMO_STACK  := PoolDemoStack
 DEMO_APP    := npx aws-cdk@2 --app "$(abspath $(INFRA)/.venv/bin/python) demo_app.py" \
                --output cdk.out.demo
 
+# The one runtime the demo's bridge is permitted to invoke, read from the AgentCore
+# CLI's own deployed-state file rather than typed by hand. Passed in the environment
+# because a deploy that forgets it does not fail — it silently ships with the live
+# agent action switched off, which looks like a working demo.
+AGENTCORE_RUNTIME_ARN ?= $(shell python3 -c "import json,pathlib;p=pathlib.Path('agentcore/.cli/deployed-state.json');print(json.loads(p.read_text())['targets']['default']['resources']['runtimes']['PoolCoordinator']['runtimeArn'] if p.exists() else '')" 2>/dev/null)
+export AGENTCORE_RUNTIME_ARN
+
+# `broadening` prompts on any IAM widening, which is the gate we want by default.
+# Override per-invocation (DEMO_APPROVAL=never) only when the exact IAM change has
+# already been reviewed in a `cdk diff`.
+DEMO_APPROVAL ?= broadening
+
 .PHONY: demo-bundle
 demo-bundle: build ## Build the public-demo Lambda bundle (web app + linux deps + pool)
 	@bash scripts/build_demo_bundle.sh
@@ -158,7 +170,8 @@ demo-local: demo-bundle ## Run the public demo exactly as deployed, on :8000 (fr
 .PHONY: deploy-demo
 deploy-demo: demo-bundle ## (COSTS MONEY) Deploy the public judge demo
 	@bash scripts/aws_preflight.sh
-	cd $(INFRA) && $(DEMO_APP) deploy --require-approval broadening
+	@echo "→ live agent action: $(if $(AGENTCORE_RUNTIME_ARN),$(AGENTCORE_RUNTIME_ARN),DISABLED — no deployed runtime found)"
+	cd $(INFRA) && $(DEMO_APP) deploy --require-approval $(DEMO_APPROVAL)
 
 .PHONY: demo-url
 demo-url: ## (cloud) Print the deployed demo URL
@@ -175,10 +188,14 @@ demo-kill: ## (cloud) Stop the public demo answering, without deleting anything
 
 .PHONY: demo-restore
 demo-restore: ## (cloud) Let the public demo answer again
+	@# Removes the reservation rather than setting a number. Restoring to a *nonzero*
+	@# reservation fails on an account whose total concurrency limit is 10, because
+	@# Lambda requires at least 10 unreserved — which is the same constraint that made
+	@# the first deploy roll back. With no reservation, the account limit is the ceiling.
 	@FN=$$(aws cloudformation describe-stacks --stack-name $(DEMO_STACK) \
 	  --query "Stacks[0].Outputs[?OutputKey=='FunctionName'].OutputValue" --output text) && \
-	  aws lambda put-function-concurrency --function-name "$$FN" \
-	    --reserved-concurrent-executions 5 >/dev/null && echo "✓ $$FN restored to 5"
+	  aws lambda delete-function-concurrency --function-name "$$FN" && \
+	  echo "✓ $$FN answering again (no reservation; account limit is the ceiling)"
 
 .PHONY: destroy-demo
 destroy-demo: ## (cloud) Destroy the public demo stack. Scoped to this stack only.

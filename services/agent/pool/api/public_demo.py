@@ -361,8 +361,21 @@ class PublicDemoGuard:
         )
 
     def _spend(self, bucket: str, ws: str, per_session: int, per_day: int, message: str) -> None:
+        """Session cap first, then the shared day cap. **The order is the point.**
+
+        Spending the day counter first meant a request the *session* cap went on to
+        refuse had already consumed a unit of everyone's daily budget — so one visitor
+        could close the live agent button for every other judge with refused requests,
+        without spending a cent at Bedrock. Observed on the deployed stack: `live-day`
+        went 2 → 3 on a call that returned 429 and never reached AWS (#0024).
+
+        Checking the narrower, cheaper cap first means a session can only ever exhaust
+        its own allowance.
+        """
         if not self.enabled:
             return
+        if not self.quota.spend(f"{bucket}-session#{ws}", per_session, _SESSION_TTL):
+            raise HTTPException(429, message)
         if not self.quota.spend(f"{bucket}-day#{_today()}", per_day, _DAY_TTL):
             raise HTTPException(
                 429,
@@ -370,8 +383,6 @@ class PublicDemoGuard:
                 "experience runs locally with `make dev` — nothing here needs an "
                 "AWS account.",
             )
-        if not self.quota.spend(f"{bucket}-session#{ws}", per_session, _SESSION_TTL):
-            raise HTTPException(429, message)
 
     # -- the prompt surface ----------------------------------------------
 
@@ -569,6 +580,15 @@ def install(app: FastAPI, guard: PublicDemoGuard) -> None:
     """
     if not guard.enabled:
         return
+
+    # AWS Lambda installs a log handler on the root logger but leaves the root *level*
+    # at WARNING, so `logger.info` from application code is dropped before it reaches
+    # CloudWatch. The deployed demo logged only START/REPORT and crashes until this was
+    # added — which meant a judge's live agent invocation could not be correlated to
+    # the AgentCore run it triggered (AGENTS.md §9). Scoped to the `pool` tree so it
+    # cannot turn on third-party debug chatter, and only in public mode so a local run
+    # keeps whatever logging the developer configured.
+    logging.getLogger("pool").setLevel(logging.INFO)
 
     @app.middleware("http")
     async def allowlist(request: Request, call_next):  # type: ignore[no-untyped-def]

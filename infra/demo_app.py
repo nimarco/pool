@@ -74,10 +74,22 @@ BUNDLE = os.environ.get("POOL_DEMO_BUNDLE", "../build/demo-lambda")
 #: Empty means the live action ships switched off, which is a valid deployment.
 AGENTCORE_RUNTIME_ARN = os.environ.get("AGENTCORE_RUNTIME_ARN", "")
 
-#: Hard ceiling on parallel executions. The blast radius of an anonymous URL is
-#: whatever it can do per second, so this is the cost control that does not depend on
-#: any application code being correct.
-RESERVED_CONCURRENCY = int(os.environ.get("POOL_DEMO_CONCURRENCY", "5"))
+#: Hard ceiling on parallel executions — the cost control that does not depend on any
+#: application code being correct.
+#:
+#: **Zero means "do not set the property", and zero is the default.** AWS enforces
+#: `account_concurrency_limit - sum(reserved) >= 10`, and this account's limit *is* 10
+#: (the default for a new account, raised by AWS after sustained usage). So any nonzero
+#: reservation is rejected outright — the first deploy failed on exactly this and rolled
+#: back. The ceiling still exists, it is just enforced one level up: with no other
+#: function in the account, the account's own limit of 10 caps this function at 10
+#: concurrent executions. Set POOL_DEMO_CONCURRENCY on an account whose limit has been
+#: raised.
+#:
+#: The kill switch is unaffected: reserving *0* subtracts nothing from the unreserved
+#: pool, so `put-function-concurrency --reserved-concurrent-executions 0` is permitted
+#: and throttles the function to nothing.
+RESERVED_CONCURRENCY = int(os.environ.get("POOL_DEMO_CONCURRENCY", "0"))
 
 
 class PoolDemoStack(Stack):
@@ -200,12 +212,12 @@ class PoolDemoStack(Stack):
                 )
             )
 
-        # Not a suggestion: Lambda refuses to start more than this many executions at
-        # once, so an anonymous URL cannot turn into a bill however the application
-        # behaves. Also the fastest kill switch there is — set it to 0 to stop
-        # everything without deleting anything.
-        cfn_fn = fn.node.default_child
-        cfn_fn.add_property_override("ReservedConcurrentExecutions", RESERVED_CONCURRENCY)
+        # Only when the account can actually accept a reservation — see the constant.
+        # Omitted, the account's own concurrency limit is the ceiling instead.
+        if RESERVED_CONCURRENCY > 0:
+            fn.node.default_child.add_property_override(
+                "ReservedConcurrentExecutions", RESERVED_CONCURRENCY
+            )
 
         url = fn.add_function_url(
             auth_type=lambda_.FunctionUrlAuthType.NONE,

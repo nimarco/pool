@@ -80,11 +80,13 @@ public demo deploys in, served from a single origin on :8000.
 
 ---
 
-## The judge experience
+## The judge experience — live
 
-A judge should need nothing: no AWS account, no CLI, no credentials, no setup. So the
-public demo is a **separate, tiny stack** — one Lambda behind a Function URL, serving
-both the web app and a fourteen-path API, plus one DynamoDB table.
+**<https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/>**
+
+No AWS account, no CLI, no credentials, no setup. The public demo is a **separate, tiny
+stack** — one Lambda behind a Function URL, serving both the web app and a fourteen-path
+API, plus one DynamoDB table.
 
 ```
 browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
@@ -361,8 +363,8 @@ account**. Nothing in this repository claims a deployment that has not happened.
 | --- | --- | --- |
 | Bedrock | Model inference via Strands | **Verified** — `us.amazon.nova-lite-v1:0`; discovery, recovery, and lock branches all driven by real runs |
 | AgentCore Runtime | Hosted agent entrypoint | **Deployed and verified** — `agentcore_app.py`, `READY` in `us-east-1`, live invocations proving AgentCore → Strands → Bedrock → Pool tools |
-| Lambda Function URL | The public judge demo: web app + reduced API | In `infra/demo_app.py`. Synthesized and dry-run verified; **not deployed** |
-| DynamoDB | Authoritative application state, single table, on-demand, TTL | Implemented; the complete lifecycle is exercised through the adapter by a faithful fake table |
+| Lambda Function URL | The public judge demo: web app + reduced API | **Deployed and verified** — full lifecycle on a real DynamoDB table, and a live AgentCore invocation from a public browser |
+| DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified** — the complete 13-step lifecycle runs on the real table with identical economics |
 | API Gateway + Lambda | Pilot-shaped API | In `PoolStack`, which is **not** what the public demo deploys |
 | S3 + CloudFront | Pilot-shaped web hosting | In `PoolStack`. The public demo needs neither |
 | EventBridge | Background scan | In `PoolStack`, **created disabled** |

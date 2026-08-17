@@ -129,6 +129,36 @@ def test_the_payment_webhook_is_unreachable_even_with_a_valid_looking_body(clien
     assert response.status_code == 404
 
 
+@pytest.mark.parametrize("path", ["/openapi.json", "/docs", "/redoc"])
+def test_the_api_publishes_no_map_of_itself(static_api, path):
+    """FastAPI's docs live outside `/api/`, so the allowlist never guarded them.
+
+    On the first deployed URL they returned 200 and documented all 42 routes —
+    including the thirty judge mode exists to make unreachable. The routes were still
+    refused; the schema was the leak. With the SPA mounted these fall through to the
+    app shell, which is the right answer for an unknown path.
+    """
+    client = TestClient(static_api.app)
+    response = client.get(path)
+    body = response.text
+    assert "openapi" not in body.lower()
+    assert "/api/webhooks/payments" not in body
+    assert "swagger" not in body.lower()
+
+
+@pytest.mark.parametrize("path", ["/openapi.json", "/docs", "/redoc"])
+def test_the_schema_endpoints_are_gone_entirely_without_a_web_root(client, path):
+    assert client.get(path).status_code == 404
+
+
+def test_the_local_api_keeps_its_docs():
+    """Judge mode is the only thing that removes them — `make dev` still has /docs."""
+    from pool.api import app as api
+
+    assert api.app.openapi_url == "/openapi.json"
+    assert TestClient(api.app).get("/openapi.json").status_code == 200
+
+
 def test_responses_carry_hardening_headers(client):
     headers = get(client, "/api/health").headers
     assert headers["x-content-type-options"] == "nosniff"
@@ -237,6 +267,31 @@ def test_a_session_cannot_spend_more_than_its_action_allowance(public_api):
     third = post(client, "/api/agent/run", json={"trigger": "manual_scan"})
     assert third.status_code == 429
     # The other judge is unaffected: the cap is per session.
+    assert post(client, "/api/agent/run", ws=OTHER_WS, json={"trigger": "manual_scan"}).status_code == 200
+
+
+def test_a_session_over_its_own_cap_does_not_spend_the_shared_day_budget(public_api):
+    """Otherwise one visitor closes the demo for every other judge, for free.
+
+    Observed on the deployed stack before the check order was swapped: a request the
+    session cap refused had already consumed a unit of the day counter.
+    """
+    guard = public_api._public
+    guard.settings = type(guard.settings)(
+        **{**vars(guard.settings), "max_actions_per_session": 1, "max_actions_per_day": 10}
+    )
+    guard.quota = public_demo.InMemoryQuotaStore()
+    client = TestClient(public_api.app)
+
+    assert post(client, "/api/agent/run", json={"trigger": "manual_scan"}).status_code == 200
+    for _ in range(5):
+        assert post(client, "/api/agent/run", json={"trigger": "manual_scan"}).status_code == 429
+
+    # One unit of the day budget for the one request that was actually served.
+    day_key = next(k for k in guard.quota._counts if k.startswith("action-day"))
+    assert guard.quota._counts[day_key] == 1
+
+    # And the shared budget is still there for everyone else.
     assert post(client, "/api/agent/run", ws=OTHER_WS, json={"trigger": "manual_scan"}).status_code == 200
 
 
@@ -448,6 +503,15 @@ def test_the_kill_switch_turns_the_paid_action_off_without_touching_the_rest(pub
     assert post(client, "/api/demo/scenario").json()["ok"] is True
 
 
+def test_judge_mode_raises_the_log_level_so_a_run_can_be_correlated(public_api):
+    """Lambda leaves the root logger at WARNING; without this the deployed bridge
+    logged nothing, so a judge's live invocation could not be traced to its
+    AgentCore run."""
+    import logging
+
+    assert logging.getLogger("pool").level == logging.INFO
+
+
 def test_config_tells_the_ui_what_this_deployment_can_actually_do(public_api):
     client = TestClient(public_api.app)
     body = get(client, "/api/demo/config").json()
@@ -560,6 +624,14 @@ class FakeDynamoTable:
 
     Implements only the operations Pool actually issues, and asserts the two DynamoDB
     limits that would bite: no raw floats, and no item over 400 KB.
+
+    **Every stored item round-trips through boto3's own TypeSerializer and
+    TypeDeserializer**, which is what the resource API uses. Without that, a fake
+    stores Python objects verbatim and silently guarantees types the real service does
+    not: DynamoDB reads every number back as ``decimal.Decimal``, whatever it was when
+    written. The first version of this fake did store objects verbatim, the whole
+    lifecycle passed against it, and the first request to the real table returned HTTP
+    500 from ``format_cents`` (#0024). A fake is only worth what its fidelity is worth.
     """
 
     MAX_ITEM_BYTES = 400 * 1024
@@ -567,6 +639,14 @@ class FakeDynamoTable:
     def __init__(self) -> None:
         self.items: dict[tuple[str, str], dict] = {}
         self.ops: dict[str, int] = {}
+
+    @staticmethod
+    def _round_trip(item: dict) -> dict:
+        from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
+
+        serializer, deserializer = TypeSerializer(), TypeDeserializer()
+        wire = {k: serializer.serialize(v) for k, v in item.items()}
+        return {k: deserializer.deserialize(v) for k, v in wire.items()}
 
     def _count(self, name: str) -> None:
         self.ops[name] = self.ops.get(name, 0) + 1
@@ -587,7 +667,7 @@ class FakeDynamoTable:
         self._no_floats(Item["data"])
         size = len(json.dumps(Item, default=str))
         assert size < self.MAX_ITEM_BYTES, f"{Item['pk']}/{Item['sk']} is {size} bytes"
-        self.items[(Item["pk"], Item["sk"])] = Item
+        self.items[(Item["pk"], Item["sk"])] = self._round_trip(Item)
 
     def get_item(self, Key):  # noqa: N803
         self._count("get_item")

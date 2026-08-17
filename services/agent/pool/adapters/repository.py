@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any, Protocol, runtime_checkable
 
 from ..domain.models import (
@@ -458,13 +459,33 @@ def _floats_to_str(value: Any) -> Any:
     return value
 
 
-def _str_to_floats(value: Any) -> Any:
+def _from_item(value: Any) -> Any:
+    """Restore a stored item to native Python types.
+
+    Two conversions, and the second one cost a deployment.
+
+    Tagged floats go back to ``float`` — the write side's own encoding.
+
+    **Every DynamoDB number reads back as ``decimal.Decimal``**, whatever it was when
+    written. Pool stores money as integer cents and stores coordinates as tagged
+    strings, so every ``Decimal`` arriving here was an ``int`` on the way in — but
+    nothing was converting it back. It survived arithmetic silently (``Decimal`` and
+    ``int`` mix fine) and then failed at the display edge: ``format_cents`` does
+    ``f"{cents % 100:02d}"``, and ``d`` is not a valid presentation type for
+    ``Decimal``. The first real showcase run on a real table returned HTTP 500 with
+    ``ValueError: invalid format string`` (#0024). A fake table that stores Python
+    objects verbatim cannot reproduce this; only the type system can.
+    """
+    if isinstance(value, Decimal):
+        # Integral by construction. `int()` on a non-integral Decimal would truncate
+        # silently, so fall back to float rather than lose a fraction unnoticed.
+        return int(value) if value == value.to_integral_value() else float(value)
     if isinstance(value, dict):
         if set(value.keys()) == {"__float__"}:
             return float(value["__float__"])
-        return {k: _str_to_floats(v) for k, v in value.items()}
+        return {k: _from_item(v) for k, v in value.items()}
     if isinstance(value, list):
-        return [_str_to_floats(v) for v in value]
+        return [_from_item(v) for v in value]
     return value
 
 
@@ -527,7 +548,7 @@ class DynamoDBRepository:
 
     @staticmethod
     def _load(cls, data: dict) -> Any:
-        restored = _str_to_floats(data)
+        restored = _from_item(data)
         if hasattr(cls, "from_dict"):
             return cls.from_dict(restored)
         return cls(**restored)

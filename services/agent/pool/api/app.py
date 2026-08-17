@@ -64,6 +64,12 @@ logger = logging.getLogger(__name__)
 WORKSPACE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 GRID_DECIMALS = 3  # ~110 m — enough for community context, not enough to find a door
 
+#: Judge mode. Off by default, so a local run is the full application; on, it reduces
+#: this API to fourteen allowlisted paths with no prompt surface. See
+#: ``pool/api/public_demo.py``. Built before the app because it decides two of its
+#: constructor arguments.
+_public = public_demo.PublicDemoGuard()
+
 app = FastAPI(
     title="Pool API",
     version="0.2.0",
@@ -71,12 +77,15 @@ app = FastAPI(
         "Autonomous collective-purchasing coordinator. All data is synthetic; payments "
         "are simulated or Stripe TEST mode; the supplier purchase is simulated."
     ),
+    # The interactive docs and the OpenAPI schema live *outside* `/api/`, so the
+    # public allowlist — which only guards that prefix — never saw them. Left on, they
+    # published a machine-readable map of all 42 routes, including the 30-odd that
+    # judge mode exists to make unreachable. The routes were still refused; the map was
+    # the leak. Found by probing the deployed URL, not by a test (#0024).
+    docs_url=None if _public.enabled else "/docs",
+    redoc_url=None if _public.enabled else "/redoc",
+    openapi_url=None if _public.enabled else "/openapi.json",
 )
-
-#: Judge mode. Off by default, so a local run is the full application; on, it reduces
-#: this API to fourteen allowlisted paths with no prompt surface. See
-#: ``pool/api/public_demo.py``.
-_public = public_demo.PublicDemoGuard()
 
 if not _public.enabled:
     # Development convenience: the web app runs on :5173 and the API on :8000. In

@@ -100,13 +100,34 @@ class TestCostSafety:
         props = next(iter(fns.values()))["Properties"]
         assert "LoggingConfig" in props, "the function must log to the stack's own group"
 
-    def test_concurrency_is_capped_so_an_anonymous_url_cannot_run_away(
-        self, template: Template
-    ):
-        """The one cost control that does not depend on application code being right."""
+    def test_the_default_stack_reserves_no_concurrency(self, template: Template):
+        """Because AWS will not let it.
+
+        `account_limit - sum(reserved) >= 10` is enforced by Lambda, and a new account's
+        limit *is* 10 — so any nonzero reservation is rejected and the deploy rolls back
+        (it did, once). The ceiling still exists: with no other function in the account,
+        the account limit caps this function. The property is opt-in for accounts whose
+        limit has been raised.
+        """
         fns = template.find_resources("AWS::Lambda::Function")
-        reserved = next(iter(fns.values()))["Properties"]["ReservedConcurrentExecutions"]
-        assert 0 < reserved <= 10, reserved
+        props = next(iter(fns.values()))["Properties"]
+        assert "ReservedConcurrentExecutions" not in props
+
+    def test_a_configured_reservation_still_reaches_the_template(self, bundle, monkeypatch):
+        """The control is dormant, not deleted."""
+        import demo_app
+
+        monkeypatch.setattr(demo_app, "RESERVED_CONCURRENCY", 5)
+        app = cdk.App(outdir="cdk.out.demotest")
+        stack = demo_app.PoolDemoStack(
+            app,
+            "ReservedStack",
+            bundle_path=bundle,
+            agentcore_runtime_arn=ARN,
+            env=cdk.Environment(account="111111111111", region="us-east-1"),
+        )
+        fns = Template.from_stack(stack).find_resources("AWS::Lambda::Function")
+        assert next(iter(fns.values()))["Properties"]["ReservedConcurrentExecutions"] == 5
 
     def test_a_wedged_request_cannot_run_for_minutes(self, template: Template):
         fns = template.find_resources("AWS::Lambda::Function")

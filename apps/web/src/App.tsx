@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AppState,
+  DemoConfig,
   Health,
+  LiveAgentResult,
   MapData,
   NeedRow,
   PoolView,
@@ -17,6 +19,7 @@ import {
   HostConsole,
   Impact,
   Landing,
+  LiveAgent,
   Needs,
   Operator,
   PoolDetail,
@@ -57,6 +60,9 @@ export default function App() {
   const [scenario, setScenario] = useState<ScenarioResult | null>(null);
   const [lastRun, setLastRun] = useState<RunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [demoConfig, setDemoConfig] = useState<DemoConfig | null>(null);
+  const [live, setLive] = useState<LiveAgentResult | null>(null);
+  const [liveBusy, setLiveBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -75,6 +81,9 @@ export default function App() {
     void refresh();
     api.health().then(setHealth).catch(() => setHealth(null));
     api.needs().then(setNeeds).catch(() => setNeeds([]));
+    // Only the deployed demo answers this. A 404 locally is the expected answer, and
+    // it hides the live panel rather than offering a button that cannot work.
+    api.demoConfig().then(setDemoConfig).catch(() => setDemoConfig(null));
   }, [refresh]);
 
   const openPoolDetail = useCallback(
@@ -101,10 +110,10 @@ export default function App() {
   );
 
   const runAgent = useCallback(
-    async (trigger: string, instruction?: string) => {
+    async (trigger: "manual_scan" | "manual_advance") => {
       setRunning(true);
       try {
-        setLastRun(await api.run(trigger, instruction));
+        setLastRun(await api.run(trigger));
         await refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -114,6 +123,19 @@ export default function App() {
     },
     [refresh],
   );
+
+  /** The one action that leaves this machine. It does not touch the state below —
+   *  the deployed runtime seeds its own community inside its own session. */
+  const runLiveAgent = useCallback(async () => {
+    setLiveBusy(true);
+    try {
+      setLive(await api.liveAgent());
+    } catch (err) {
+      setLive({ ok: false, live: false, reason: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setLiveBusy(false);
+    }
+  }, []);
 
   const runScenario = useCallback(async () => {
     setRunning(true);
@@ -203,14 +225,7 @@ export default function App() {
             </button>
             <button
               className="btn btn-sm"
-              onClick={() =>
-                runAgent(
-                  "manual_advance",
-                  "Advance every pool that is blocked: recruit a host, refresh the " +
-                    "supplier quote, issue final offers, recover lost demand, and lock " +
-                    "anything that is fully funded and viable.",
-                )
-              }
+              onClick={() => runAgent("manual_advance")}
               disabled={running}
             >
               Advance pools
@@ -274,8 +289,11 @@ export default function App() {
           <Landing
             onEnter={() => setView("dashboard")}
             onScenario={runScenario}
+            onSeeAgent={() => setView("agent")}
             running={running}
             health={health}
+            demoConfig={demoConfig}
+            memberCount={state?.counts.members ?? null}
           />
         ) : null}
 
@@ -296,7 +314,20 @@ export default function App() {
         {view === "operator" ? <Operator /> : null}
 
         {view === "agent" && state ? (
-          <AgentRuns runs={state.runs} activity={state.activity} />
+          <AgentRuns
+            runs={state.runs}
+            activity={state.activity}
+            live={
+              demoConfig ? (
+                <LiveAgent
+                  config={demoConfig}
+                  result={live}
+                  busy={liveBusy}
+                  onRun={runLiveAgent}
+                />
+              ) : null
+            }
+          />
         ) : null}
 
         {view === "impact" && state ? <Impact state={state} /> : null}

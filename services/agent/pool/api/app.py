@@ -57,6 +57,7 @@ from ..services import coordination as coord
 from ..services import payments as payment_service
 from ..services.context import CoordinationError, PoolContext
 from ..services.demo import run_showcase
+from . import public_demo
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +73,22 @@ app = FastAPI(
     ),
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # public read-only demo over synthetic data
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
-)
+#: Judge mode. Off by default, so a local run is the full application; on, it reduces
+#: this API to fourteen allowlisted paths with no prompt surface. See
+#: ``pool/api/public_demo.py``.
+_public = public_demo.PublicDemoGuard()
+
+if not _public.enabled:
+    # Development convenience: the web app runs on :5173 and the API on :8000. In
+    # public mode the SPA is served from this same origin, so there is no cross-origin
+    # request to permit and the header is left off entirely.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["*"],
+    )
 
 _settings = get_settings()
 _repo: Repository = build_repository(
@@ -99,7 +109,9 @@ def repo() -> Repository:
 def check_workspace(ws: str) -> str:
     if not WORKSPACE_RE.match(ws):
         raise HTTPException(400, "invalid workspace identifier")
-    return ws
+    # Public mode narrows this further to browser-generated session ids, which keeps
+    # anonymous visitors out of each other's data and out of ``primary``.
+    return _public.check_workspace(ws)
 
 
 def ctx_for(ws: str) -> PoolContext:
@@ -121,6 +133,9 @@ def coarse(lat: float, lon: float) -> tuple[float, float]:
 
 def ensure_seeded(ws: str) -> None:
     if not repo().list_communities(ws):
+        # Seeding writes ~100 rows, and any read endpoint triggers it for a workspace
+        # it has not seen. Public mode rations how many cold sessions a day can open.
+        _public.spend_new_session()
         seed(repo(), ws)
 
 
@@ -685,11 +700,17 @@ def trigger_run(
     demo path (AGENTS.md §8). One run per request; nothing recurring is started.
     """
     ws = check_workspace(workspace)
+    # In public mode the client selects a trigger name and the *server* supplies the
+    # prompt: `PoolCoordinator.run()` substitutes `instruction` for the entire run
+    # prompt, so forwarding a client string would hand a stranger the agent's
+    # instructions. Off, this is the identity function.
+    trigger, instruction = _public.resolve_run(body.trigger, body.instruction)
+    _public.spend_action(ws)
     ensure_seeded(ws)
     run = PoolCoordinator(
         repo(), settings=_settings, routing=_routing, payments=_payments,
         purchaser=_purchaser, sourcing=_sourcing,
-    ).run(ws, trigger=body.trigger, instruction=body.instruction, community_id=COMMUNITY_ID)
+    ).run(ws, trigger=trigger, instruction=instruction, community_id=COMMUNITY_ID)
     return {
         "run_id": run.id,
         "outcome": run.outcome.value,
@@ -1100,6 +1121,7 @@ async def payment_webhook(request: Request, workspace: str = Query("demo")) -> d
 def reset(workspace: str = Query("demo")) -> dict[str, Any]:
     """Reset a workspace to the seeded starting state. A judge can always start over."""
     ws = check_workspace(workspace)
+    _public.spend_action(ws)
     counts = seed(repo(), ws)
     return {"workspace": ws, "reset": True, "seeded": counts}
 
@@ -1108,6 +1130,7 @@ def reset(workspace: str = Query("demo")) -> dict[str, Any]:
 def scenario(workspace: str = Query("demo")) -> dict[str, Any]:
     """Run the full showcase end to end and return the transcript."""
     ws = check_workspace(workspace)
+    _public.spend_action(ws)
     result = run_showcase(repo(), ws, settings=_settings, routing=_routing)
     return result.to_dict()
 
@@ -1164,6 +1187,11 @@ def pickup_sites(workspace: str = Query("demo")) -> dict[str, Any]:
         ],
         "permission_legend": {p.value: p.name for p in PickupPermission},
     }
+
+
+# Registered last so the public allowlist sees every route above it, and so the SPA
+# catch-all cannot shadow an API path. A no-op unless POOL_PUBLIC_DEMO is set.
+public_demo.install(app, _public)
 
 
 # Lambda entry point. Imported lazily so local uvicorn does not require mangum.

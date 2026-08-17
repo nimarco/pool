@@ -210,6 +210,20 @@ configuration, not the money. See #0023.
 **No always-on compute exists.** The runtime bills only while an invocation is in flight;
 six invocations totalling ~30 s of processing is the entire compute spend so far.
 
+### Reviewed and awaiting approval — NOT created
+
+| Resource | Service | Purpose | Recurring cost? | Destroy by |
+| --- | --- | --- | --- | --- |
+| `PoolDemoStack` | CloudFormation | Public judge demo, **8 resources**, reviewed by `cdk diff` in #0024 | No | `make destroy-demo` |
+| `DemoApi` | Lambda (1024 MB, 30 s, **reserved concurrency 5**) | Serves the SPA and 14 allowlisted API paths | **No** — per invocation | With the stack |
+| `DemoApi/FunctionUrl` | Lambda Function URL, `AuthType: NONE` | The public URL | No | With the stack |
+| `DemoState` | DynamoDB, PAY_PER_REQUEST, TTL | One partition per anonymous session, 24 h TTL | ~$0 — storage only, self-deleting | With the stack |
+| `DemoLogs` | CloudWatch Logs, **14 days** | Inside the stack, unlike #0023's orphans | Yes — KB-scale | With the stack |
+| `DemoApi/ServiceRole` + policy | IAM | DynamoDB on one table; `InvokeAgentRuntime` on one runtime ARN | No | With the stack |
+
+Nothing above exists. Move these rows to *Active* on the day they are created, and note
+that a deploy adds ~28 MB per version to the existing CDK staging bucket.
+
 ### Recurring / scheduled (highest risk — review every session)
 
 | Resource | Schedule | Enabled? | Created | Kill switch | Destroy by |
@@ -2086,3 +2100,190 @@ agree.
 **Relevant commits / files**
 `BUILD_HISTORY.md` (ledger + this entry), `docs/COST_NOTES.md`. No source change: the
 deployed artifact is the reviewed one.
+
+---
+
+### #0024 — [2026-08-16] — A public demo, and the ordering the local store had been hiding
+`[AWS]` `[ARCHITECTURE]` `[SECURITY]` `[COST]` `[FRONTEND]` `[ARTICLE-2]`
+
+**Goal / user intent**
+Build the smallest, safest, most reliable public judge experience: a URL a judge can open
+with no AWS account, no CLI, no credentials, and no setup. Take it as far as a verified
+dry run and stop before creating any resource.
+
+**Starting state**
+The local product was complete and Bedrock-verified. The AgentCore Runtime was deployed
+and `READY` with `AWS_IAM` inbound auth (#0023). **Nothing was publicly reachable.**
+`PoolStack` existed but had never been deployed, and its API Lambda used
+`Code.from_asset("../services/agent")` with no bundling step — a 252 MB local `.venv`
+inside the asset and no dependencies installed, so the function would have failed to
+deploy and then failed to import.
+
+**Decision**
+A separate stack: **one Lambda behind a Function URL, serving both the built web app and
+a fourteen-path API, plus one DynamoDB table.** Eight CloudFormation resources. The
+existing FastAPI app is reused unchanged in substance and reduced at runtime by a judge
+mode, rather than a second application being written.
+
+**Why**
+Four questions decided it.
+
+*What does a public browser actually need?* Thirteen endpoints. The web app calls
+`health, state, map, needs, pools/{id}, pools/{id}/checklist, operator, agent/run,
+decisions/{id}/respond, pickup-credential, redeem, demo/reset, demo/scenario` — thirteen
+of the API's forty-five. The other thirty-two include supplier-offer mutation, the
+operator pickup override, direct `lock`/`purchase`/`open-distribution`, private message
+threads, and the payment webhook. None of them belongs on an unauthenticated URL, and
+the lifecycle still reaches all of them because the scenario runs them server-side.
+
+*Where is the prompt surface?* `PoolCoordinator.run()` substitutes `instruction` for the
+**entire** run prompt, and `POST /api/agent/run` accepted a 600-character `instruction`
+from the client. Deployed as-is that is a public endpoint for writing an agent's
+instructions. Judge mode inverts it: the client sends an action *name* from a set of two,
+and the server supplies the prompt. A request carrying `instruction` is **refused**, not
+ignored — a silently dropped field looks like it worked, and the first person to notice
+would be someone testing whether the agent can be steered.
+
+*Why not API Gateway, S3, and CloudFront?* Because they buy nothing here. A Function URL
+is HTTPS, free, and deleted with the function. The built app is 196 KB; serving it from
+the same Lambda means one deployable unit, one origin, and therefore **no CORS at all** —
+the local API's `allow_origins=["*"]` is simply not present in public mode.
+
+*Why not deploy `PoolStack`?* It is the shape a pilot wants, not a demo: it carries API
+Gateway, CloudFront, S3, and an EventBridge rule the demo has no use for, and its Lambda
+asset is broken. Deploying a larger stack for convenience is what §3.7 forbids. That
+bundling gap is **still unfixed** and still recorded — `PoolStack` remains undeployed.
+
+**Implementation**
+Implemented and tested; **nothing deployed**.
+
+1. **`pool/api/public_demo.py`** (new) — the whole of judge mode. A route allowlist
+   (404, not 403 — a public demo owes a prober no map), the trigger→prompt table, two
+   quota buckets with per-session and per-day caps, the AgentCore bridge, static
+   serving with path-traversal containment, and three hardening headers.
+2. **`pool/api/app.py`** — five call sites: a guard built at import, CORS only when
+   judge mode is off, the workspace check narrowed, quota spent on the three actions
+   that cost anything, and `install()` last so the SPA fallback cannot shadow an API
+   route. Every one is a no-op with `POOL_PUBLIC_DEMO` unset, so the local API is
+   byte-for-byte what it was.
+3. **`infra/demo_app.py`** + **`infra/test_demo_stack.py`** (new) — the stack and 38
+   tests over its synthesized template.
+4. **`scripts/build_demo_bundle.sh`** (new) — `uv --python-platform x86_64-manylinux2014`
+   resolves Lambda's wheels from macOS, so no Docker is required. 70 MB unzipped,
+   28 MB zipped, against a 250 MB limit.
+5. **`scripts/scan_authored.sh`** (new) — the credential patterns in one place, pointed
+   at the bundle's `pool/` and `web/` rather than at 70 MB of other people's wheels.
+6. **Frontend** — a `LiveAgent` panel, the landing page's framing, and `api.run()`
+   narrowed to two literal action names so the client *cannot* send a prompt.
+
+**AWS / external services touched**
+`bedrock-agentcore:InvokeAgentRuntime` — **two real invocations** of the already-deployed
+runtime, through the bridge, from a browser, to prove the path end to end.
+`cloudformation:DescribeStacks` (read-only, via `cdk diff`). **No resource was created.**
+No Stripe call.
+
+**Cost-relevant activity**
+Two live agent runs: 19,126/469 and 19,022/418 Nova Lite tokens, ~5 s of agent time each
+inside ~12 s round trips. Everything else was free.
+
+The stack's cost surfaces are enumerated in `docs/COST_NOTES.md`. The short version:
+**no always-on compute and no idle charge.** Reserved concurrency 5 is the only control
+that does not depend on application code being correct, and `make demo-kill` sets it to
+zero without deleting anything.
+
+**Agent behavior**
+Unchanged. The public API runs the **offline planner**, so a judge clicking around
+spends no tokens and gets the same answer every time; the one live action goes to
+AgentCore, which has its own model configuration. Each live invocation gets a freshly
+generated 74-character session id — never derived from client input, never reused —
+which is what keeps two anonymous visitors out of each other's runtime session. The
+payload is built server-side from constants: no prompt, no workspace, no community id
+from the caller.
+
+**Validation**
+- **571 application tests + 62 infrastructure tests**, lint clean, typecheck and web
+  build clean, secret scan clean, scanner self-test clean.
+- **Browser QA against the deployed configuration** (judge mode, SPA served from the
+  API's own origin): the full lifecycle ran to `completed`; the denied endpoints
+  returned `404` and the prompt-injection attempt returned `400 this demo does not
+  accept custom agent instructions`, both verified from the page's own `fetch`; two
+  sessions were mutually invisible and a reset cleared one without touching the other;
+  no console errors; no horizontal overflow on any of seven views at 375 px in dark
+  mode.
+- **The live action was exercised for real, twice**, and its failure path was exercised
+  against a nonexistent runtime ARN — `ok:false`, a named exception class, and no
+  fabricated run.
+- **`cdk diff` against the real account**: eight resources, all `[+]`, IAM exactly as
+  designed, and the existing bootstrap satisfies it.
+- **The built frontend contains no AWS identifier, ARN, account id, or credential**, and
+  no hardcoded endpoint — the API base is relative.
+
+**Failures / dead ends**
+1. **The first bundle check refused to ship on `botocore/cacert.pem` and
+   `certifi/cacert.pem`** — public CA bundles, matched by a blanket `*.pem` rule. Fixed
+   by splitting the check: file *names* are checked everywhere, file *contents* only in
+   the code Pool wrote. A check that always fires is a check everyone learns to skip.
+2. **`make qa` then failed on the CDK asset copy of the same wheels.** `cdk synth` copies
+   the whole bundle into `cdk.out.demo/asset.<hash>/`, so the scanner found botocore's
+   documentation `AKIA…EXAMPLE` keys again. Pruned, like `agentcore/.cache` before it.
+3. **The AgentCore live panel rendered `Pool_PoolCoordinatus-east-1`** — a monospace
+   runtime name with no break opportunity running into the next grid column. One line of
+   `overflow-wrap`.
+
+**What we learned**
+The demo had to be run on DynamoDB — a cold Lambda would otherwise lose a judge's pool
+mid-demo, and two judges on two containers would see different worlds. But
+`DynamoDBRepository` had never served a request, so the whole showcase was run through it
+against a fake table faithful enough to be worth believing. **It failed**, with `pool did
+not lock: 1 buyer(s) have not answered yet`.
+
+The first diagnosis was wrong in an instructive way. The fake returned items in
+dict-insertion order; a real Query returns them in **sort-key order**. That one
+difference moved a buyer's share by a single cent — the largest-remainder split assigns
+the odd cent to whoever the member list happens to put first — and a share that rises by
+a cent is *materially worse terms*, which correctly raises a `price_changed` decision,
+which correctly blocks the lock. So the failure was manufactured by an unfaithful fake.
+**A fake that gets ordering wrong reports defects that do not exist, and hides the ones
+that do.**
+
+Fixing the fake surfaced the real defect. Enumerating both adapters showed **five list
+methods where the in-memory ordering contract and DynamoDB's key order disagree**:
+`list_decisions`, `list_pools`, `list_issues`, `list_threads`, and `list_host_candidates`
+all sort by `created_at` or by score in memory, while their DynamoDB sort key is a random
+id. Deployed, a judge's Decision Inbox would have been in arbitrary order and the host
+candidate list would have been an unranked ranking — with the score column still there,
+which is worse than no ranking at all. Host *selection* was never at risk: it takes an
+explicit `max()` and does not read the list order. Fixed by sorting explicitly in the
+adapter, and pinned by a test that mirrors one completed run into both stores and asserts
+all 24 list methods return identical sequences.
+
+The general lesson is the one worth keeping: **an implicit ordering is a contract
+somebody is depending on.** The in-memory repository defined it, the UI was written
+against it, and the adapter that would serve the public inherited whatever the database
+happened to do.
+
+**Article fodder**
+Article 2, strongly, and Article 3 in one place. The transferable findings: reducing a
+45-endpoint application to a public surface by *subtraction at runtime* rather than by
+writing a second application; why `instruction` is the entire security boundary of an
+agent endpoint and why refusing beats ignoring; the one-cent ordering bug and what it
+says about testing against fakes; and the argument for a demo that is deterministic
+everywhere except one clearly labelled button.
+
+**Evidence worth preserving**
+The `cdk diff` output (eight resources, all `[+]`). The live panel screenshot showing
+`pool_created`, `us.amazon.nova-lite-v1:0`, 6 iterations, 19,126/469 tokens, 5,153 ms
+agent time inside 12,130 ms round trip. The browser `fetch` probe table: five denied
+endpoints at `404` and the injected instruction at `400`. The failing-then-passing
+DynamoDB showcase, which is the whole ordering story in two test runs.
+
+**Relevant commits / files**
+`services/agent/pool/api/public_demo.py` (new),
+`services/agent/tests/test_public_demo.py` (new), `infra/demo_app.py` (new),
+`infra/test_demo_stack.py` (new), `scripts/build_demo_bundle.sh` (new),
+`scripts/scan_authored.sh` (new), `scripts/run_public_demo_local.sh` (new),
+`services/agent/pool/api/app.py`, `services/agent/pool/adapters/repository.py`,
+`apps/web/src/api.ts`, `apps/web/src/App.tsx`, `apps/web/src/views.tsx`,
+`apps/web/src/styles.css`, `scripts/secret_scan.sh`, `scripts/secret_scan_selftest.sh`,
+`Makefile`, `.gitignore`, `.claude/launch.json`, `README.md`, `docs/COST_NOTES.md`,
+`docs/HACKATHON_SCORECARD.md`

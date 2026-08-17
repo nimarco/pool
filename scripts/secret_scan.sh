@@ -3,8 +3,13 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+# cdk.out* are CDK synth output. The demo stack's synth copies the whole Lambda
+# bundle in as an asset directory, so excluding it here is the same decision as
+# excluding cdk.out itself — generated, never committed, and full of other people's
+# vendored wheels.
 EXCLUDES=(--exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.venv
           --exclude-dir=dist --exclude-dir=cdk.out --exclude-dir=cdk.out.test
+          --exclude-dir=cdk.out.demo --exclude-dir=cdk.out.demotest
           --exclude-dir=__pycache__ --exclude-dir=.pytest_cache
           --exclude=secret_scan.sh --exclude=secret_scan_selftest.sh
           --exclude=package-lock.json)
@@ -18,7 +23,12 @@ EXCLUDES=(--exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.venv
 # not used for this: it matches a basename, so `--exclude-dir=.cache` would blind the
 # scanner to every `.cache` directory anywhere in the repository. Filtering afterwards
 # costs about half a second on the whole tree and keeps the exemption to this one path.
-GENERATED_CACHE='^\./agentcore/\.cache/'
+#
+# `build/demo-lambda/` is the same situation for the same reason: the public-demo
+# Lambda bundle, ~70 MB of vendored wheels rebuilt by `make demo-bundle` and never
+# committed. `scripts/build_demo_bundle.sh` runs these patterns over the parts of that
+# bundle this project actually wrote, which is the check that has any signal in it.
+GENERATED_CACHE='^\./(agentcore/\.cache|build/demo-lambda)/'
 
 FAIL=0
 scan() {

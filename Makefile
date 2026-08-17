@@ -56,7 +56,7 @@ dev: ## Run API and web together
 .PHONY: test
 test: ## Run the full test suite (offline, no AWS, no model tokens)
 	cd $(AGENT) && .venv/bin/python -m pytest tests/ -q
-	cd $(INFRA) && .venv/bin/python -m pytest test_stack.py -q
+	cd $(INFRA) && .venv/bin/python -m pytest test_stack.py test_demo_stack.py -q
 
 .PHONY: test-demo
 test-demo: ## Prove the showcase scenario end to end
@@ -67,7 +67,7 @@ test-safety: ## Run only the safety-critical suites (bounds, payments, policy, v
 	cd $(AGENT) && .venv/bin/python -m pytest \
 	  tests/test_agent_bounds.py tests/test_payments.py \
 	  tests/test_policy.py tests/test_viability.py -q
-	cd $(INFRA) && .venv/bin/python -m pytest test_stack.py -q
+	cd $(INFRA) && .venv/bin/python -m pytest test_stack.py test_demo_stack.py -q
 
 .PHONY: demo
 demo: ## Run the showcase scenario and print the transcript
@@ -131,6 +131,61 @@ deploy: ## (COSTS MONEY) Deploy the serverless stack
 deploy-web: build ## (COSTS MONEY) Upload the built web app to S3 and invalidate CloudFront
 	@bash scripts/deploy_web.sh
 
+# ----------------------------------------------------------------- public demo
+# The judge experience: one URL, no AWS account, no setup. A separate, tiny stack —
+# NOT PoolStack. See infra/demo_app.py for why.
+
+DEMO_STACK  := PoolDemoStack
+DEMO_APP    := npx aws-cdk@2 --app "$(abspath $(INFRA)/.venv/bin/python) demo_app.py" \
+               --output cdk.out.demo
+
+.PHONY: demo-bundle
+demo-bundle: build ## Build the public-demo Lambda bundle (web app + linux deps + pool)
+	@bash scripts/build_demo_bundle.sh
+
+.PHONY: demo-synth
+demo-synth: ## Synthesize the public-demo stack (offline, no credentials, creates nothing)
+	cd $(INFRA) && CDK_OUTDIR=cdk.out.demo .venv/bin/python demo_app.py \
+	  && echo "→ infra/cdk.out.demo/$(DEMO_STACK).template.json"
+
+.PHONY: demo-local
+demo-local: demo-bundle ## Run the public demo exactly as deployed, on :8000 (free, offline)
+	@echo "→ http://127.0.0.1:8000  (judge mode, in-memory store, live agent off)"
+	cd $(AGENT) && POOL_PUBLIC_DEMO=true \
+	  PUBLIC_DEMO_WEB_ROOT=$(abspath apps/web/dist) \
+	  .venv/bin/python -m uvicorn pool.api.app:app --port 8000
+
+.PHONY: deploy-demo
+deploy-demo: demo-bundle ## (COSTS MONEY) Deploy the public judge demo
+	@bash scripts/aws_preflight.sh
+	cd $(INFRA) && $(DEMO_APP) deploy --require-approval broadening
+
+.PHONY: demo-url
+demo-url: ## (cloud) Print the deployed demo URL
+	@aws cloudformation describe-stacks --stack-name $(DEMO_STACK) \
+	  --query "Stacks[0].Outputs[?OutputKey=='DemoUrl'].OutputValue" --output text
+
+.PHONY: demo-kill
+demo-kill: ## (cloud) Stop the public demo answering, without deleting anything
+	@FN=$$(aws cloudformation describe-stacks --stack-name $(DEMO_STACK) \
+	  --query "Stacks[0].Outputs[?OutputKey=='FunctionName'].OutputValue" --output text) && \
+	  aws lambda put-function-concurrency --function-name "$$FN" \
+	    --reserved-concurrent-executions 0 >/dev/null && \
+	  echo "✓ $$FN throttled to zero. Restore with: make demo-restore"
+
+.PHONY: demo-restore
+demo-restore: ## (cloud) Let the public demo answer again
+	@FN=$$(aws cloudformation describe-stacks --stack-name $(DEMO_STACK) \
+	  --query "Stacks[0].Outputs[?OutputKey=='FunctionName'].OutputValue" --output text) && \
+	  aws lambda put-function-concurrency --function-name "$$FN" \
+	    --reserved-concurrent-executions 5 >/dev/null && echo "✓ $$FN restored to 5"
+
+.PHONY: destroy-demo
+destroy-demo: ## (cloud) Destroy the public demo stack. Scoped to this stack only.
+	@bash scripts/aws_preflight.sh
+	cd $(INFRA) && $(DEMO_APP) destroy --force
+	@echo "✓ $(DEMO_STACK) destroyed — function, URL, table, role and log group all go with it."
+
 .PHONY: agent-validate
 agent-validate: ## Validate the AgentCore project config (offline, free)
 	agentcore validate
@@ -179,6 +234,7 @@ cost-check: ## (cloud) List this project's AWS resources and flag anything recur
 .PHONY: clean
 clean: ## Remove local build artifacts
 	rm -rf $(WEB)/dist $(WEB)/node_modules/.vite $(INFRA)/cdk.out $(INFRA)/cdk.out.test
+	rm -rf $(INFRA)/cdk.out.demo $(INFRA)/cdk.out.demotest build/
 	rm -rf agentcore/.cache agentcore/cdk/cdk.out agentcore/cdk/dist
 	find . -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
 	find . -name .pytest_cache -type d -prune -exec rm -rf {} + 2>/dev/null || true

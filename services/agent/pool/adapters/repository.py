@@ -576,7 +576,16 @@ class DynamoDBRepository:
     def put_site(self, ws, s): self._put(ws, "SITE", s.id, s)
 
     # ---- pools
-    def list_pools(self, ws): return self._query(ws, "POOL", Pool)
+    #
+    # Several of the list methods below re-sort after querying. That is not
+    # redundancy: a Query returns items in sort-key order, and where the sort key is a
+    # random id, "sort-key order" is arbitrary. The in-memory repository defines the
+    # ordering contract the application and the UI are written against — a Decision
+    # Inbox is chronological, a run list is newest-first, host candidates are ranked —
+    # so this adapter reproduces that contract explicitly rather than inheriting
+    # whatever DynamoDB's key order happens to be.
+    def list_pools(self, ws):
+        return sorted(self._query(ws, "POOL", Pool), key=lambda p: (p.created_at, p.id))
     def get_pool(self, ws, pid): return self._get(ws, "POOL", pid, Pool)
     def put_pool(self, ws, p): self._put(ws, "POOL", p.id, p)
 
@@ -600,9 +609,13 @@ class DynamoDBRepository:
     def put_host_profile(self, ws, p): self._put(ws, "HOST_PROFILE", p.key, p)
 
     def list_host_candidates(self, ws, pool_id=None):
-        return self._query(
+        # Ranked best-first. Host *selection* takes an explicit max() and does not
+        # depend on this, but the operator and pool views render the list in order,
+        # and an unranked ranking is a misleading one.
+        items = self._query(
             ws, "HOST_CANDIDATE", HostCandidate, f"{pool_id}#" if pool_id else None
         )
+        return sorted(items, key=lambda c: (c.pool_id, -c.score, c.household_id))
 
     def get_host_candidate(self, ws, pool_id, household_id):
         return self._get(ws, "HOST_CANDIDATE", f"{pool_id}#{household_id}", HostCandidate)
@@ -661,7 +674,8 @@ class DynamoDBRepository:
     def put_announcement(self, ws, a): self._put(ws, "ANNOUNCEMENT", a.id, a)
 
     def list_threads(self, ws, pool_id=None):
-        return self._query(ws, "THREAD", MessageThread, f"{pool_id}#" if pool_id else None)
+        items = self._query(ws, "THREAD", MessageThread, f"{pool_id}#" if pool_id else None)
+        return sorted(items, key=lambda t: t.created_at)
 
     def get_thread(self, ws, thread_id):
         for t in self.list_threads(ws):
@@ -680,12 +694,16 @@ class DynamoDBRepository:
 
     def put_message(self, ws, m): self._put(ws, "MESSAGE", f"{m.thread_id}#{m.at}#{m.id}", m)
 
-    def list_issues(self, ws): return self._query(ws, "ISSUE", IssueCase)
+    def list_issues(self, ws):
+        return sorted(self._query(ws, "ISSUE", IssueCase), key=lambda i: i.created_at)
     def get_issue(self, ws, issue_id): return self._get(ws, "ISSUE", issue_id, IssueCase)
     def put_issue(self, ws, i): self._put(ws, "ISSUE", i.id, i)
 
     # ---- agent + audit
-    def list_decisions(self, ws): return self._query(ws, "DECISION", DecisionRequest)
+    def list_decisions(self, ws):
+        # Oldest first: this is an inbox, and the sort key is a random decision id.
+        items = self._query(ws, "DECISION", DecisionRequest)
+        return sorted(items, key=lambda d: (d.created_at, d.id))
     def get_decision(self, ws, did): return self._get(ws, "DECISION", did, DecisionRequest)
     def put_decision(self, ws, d): self._put(ws, "DECISION", d.id, d)
 

@@ -14,9 +14,10 @@ cd "$(dirname "$0")/.."
 
 PLANT_ROOT=".secret_scan_selftest"
 CACHE_PLANT="agentcore/.cache/__selftest__"
+BUNDLE_PLANT="build/demo-lambda/__selftest__"
 FAIL=0
 
-cleanup() { rm -rf "$PLANT_ROOT" "$CACHE_PLANT"; }
+cleanup() { rm -rf "$PLANT_ROOT" "$CACHE_PLANT" "$BUNDLE_PLANT" build/__selftest__; }
 trap cleanup EXIT INT TERM
 cleanup
 
@@ -48,7 +49,8 @@ for spec in \
   "$PLANT_ROOT/hooks.py:$WEBHOOK" \
   "$PLANT_ROOT/.cache/leaked.py:$AWS_KEY" \
   "services/agent/.cache/leaked.py:$AWS_KEY" \
-  "agentcore/leaked.py:$AWS_KEY"
+  "agentcore/leaked.py:$AWS_KEY" \
+  "build/__selftest__/leaked.py:$AWS_KEY"
 do
   path="${spec%%:*}"; value="${spec#*:}"
   mkdir -p "$(dirname "$path")"
@@ -59,11 +61,40 @@ done
 # The two directories above may have been created by this test; drop them if now empty.
 rmdir services/agent/.cache 2>/dev/null || true
 
-echo "→ Only the AgentCore CLI's generated staging cache is exempt"
+echo "→ Only the two generated vendor trees are exempt"
 mkdir -p "$CACHE_PLANT"
 printf 'KEY = "%s"\n' "$AWS_KEY" > "$CACHE_PLANT/vendored_fixture.py"
 expect clean "agentcore/.cache/ (generated, never committed)"
 rm -rf "$CACHE_PLANT"
+
+# The public-demo Lambda bundle. Exempt from this scanner because it is ~70 MB of
+# other people's wheels; the parts of it Pool wrote are scanned by
+# scripts/build_demo_bundle.sh instead, which is asserted immediately below.
+mkdir -p "$BUNDLE_PLANT"
+printf 'KEY = "%s"\n' "$AWS_KEY" > "$BUNDLE_PLANT/vendored_fixture.py"
+expect clean "build/demo-lambda/ (generated, never committed)"
+rm -rf "$BUNDLE_PLANT"
+
+echo "→ The bundle's own scanner still reads the application code it ships"
+# scan_authored.sh is what build_demo_bundle.sh points at the bundle's pool/ and web/
+# directories, so the exemption above costs no coverage of code Pool wrote.
+mkdir -p "$PLANT_ROOT/bundle"
+printf 'KEY = "%s"\n' "$AWS_KEY" > "$PLANT_ROOT/bundle/leaked.py"
+if bash scripts/scan_authored.sh "$PLANT_ROOT/bundle" >/dev/null 2>&1; then
+  printf '  ✗ %-52s expected detected, got clean\n' "scan_authored.sh"
+  FAIL=1
+else
+  printf '  ✓ %-52s detected\n' "scan_authored.sh"
+fi
+rm -f "$PLANT_ROOT/bundle/leaked.py"
+printf 'ok = True\n' > "$PLANT_ROOT/bundle/clean.py"
+if bash scripts/scan_authored.sh "$PLANT_ROOT/bundle" >/dev/null 2>&1; then
+  printf '  ✓ %-52s clean\n' "scan_authored.sh (no secret)"
+else
+  printf '  ✗ %-52s expected clean, got detected\n' "scan_authored.sh (no secret)"
+  FAIL=1
+fi
+rm -rf "$PLANT_ROOT"
 
 echo "→ Cleaned up"
 expect clean "after cleanup"

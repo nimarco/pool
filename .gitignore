@@ -163,3 +163,5 @@ desktop.ini
 
 # CDK synth output from local verification runs
 cdk.out.test/
+cdk.out.demo/
+cdk.out.demotest/

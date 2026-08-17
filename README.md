@@ -75,6 +75,63 @@ make dev         # API on :8000, web on :5173
 
 Then open <http://localhost:5173> and press **Run the full scenario**.
 
+`make demo-local` runs the same app in **judge mode** — the reduced configuration the
+public demo deploys in, served from a single origin on :8000.
+
+---
+
+## The judge experience
+
+A judge should need nothing: no AWS account, no CLI, no credentials, no setup. So the
+public demo is a **separate, tiny stack** — one Lambda behind a Function URL, serving
+both the web app and a fourteen-path API, plus one DynamoDB table.
+
+```
+browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
+                                             ├─ the built SPA (same origin, no CORS)
+                                             ├─ 14 allowlisted API paths
+                                             ├─ DynamoDB — this session only, 24 h TTL
+                                             └─ InvokeAgentRuntime — the one live action
+```
+
+**The browser never holds an AWS credential.** The deployed AgentCore Runtime uses
+`AWS_IAM` inbound auth, so something has to sign the request; that something is the
+Lambda's execution role, whose only agent permission is `InvokeAgentRuntime` on one
+runtime ARN.
+
+What judge mode changes, and why each one matters:
+
+| Reduction | Why |
+| --- | --- |
+| 14 of 45 endpoints exist; the rest 404 | Supplier-offer mutation, the operator pickup override, the payment webhook, and direct `lock`/`purchase` calls have no business on an anonymous URL |
+| **No prompt surface.** The client sends an action *name*; the server owns the prompt | `coordinator.run(instruction=…)` replaces the entire run prompt — forwarding a client string would let a stranger write the agent's instructions |
+| Per-session and per-day caps on every action that costs anything | An anonymous URL is a cost surface before it is a demo |
+| One session per visitor, isolated by DynamoDB partition, expiring in 24 h | Two judges cannot see or corrupt each other's demo |
+| Reserved concurrency, and a one-command kill switch | The only control that does not depend on application code being correct |
+
+### Deterministic by default, live where it says so
+
+Almost everything a judge touches runs **deterministically on the server** — the real
+Strands loop with the offline planner, the real domain maths, the real state machine.
+That is deliberate: a demo that depends on a paid model call for every interaction is a
+demo that breaks in front of someone.
+
+Exactly one action leaves the machine. **Run the deployed agent** on the Agent tab
+invokes Pool's coordinator on **Amazon Bedrock AgentCore Runtime** — a real model, a
+real Strands loop, real Pool tools — in its own isolated runtime session, and reports
+the tool sequence, the model id, the token counts and the termination reason. It is
+capped, it is labelled, and if it fails it says so. **There is no code path that
+fabricates a run** (`AGENTS.md` §8).
+
+```bash
+make demo-local   # judge mode, locally, free
+make demo-synth   # synthesize the stack — offline, creates nothing
+make deploy-demo  # (COSTS MONEY)
+make demo-url     # print the deployed URL
+make demo-kill    # stop it answering, without deleting anything
+make destroy-demo # remove the stack
+```
+
 ---
 
 ## Community is the boundary, campus is the wedge
@@ -296,20 +353,21 @@ the offers, the money, and the purchase. No goods move. No traction is claimed.
 **Bedrock inference is verified** on both the discovery path (`make verify-bedrock`) and
 the consequential recovery-and-lock path (`make verify-recovery`): a real model drives the
 real Strands loop and the real Pool tools, and the deterministic viability engine refuses
-the lock it is not allowed to take. Everything else is implemented and synthesizing but
-**not yet verified against a live account**. Nothing in this repository claims a deployment
-that has not happened.
+the lock it is not allowed to take. **The AgentCore Runtime is deployed** and answering.
+Everything else is implemented and synthesizing but **not yet verified against a live
+account**. Nothing in this repository claims a deployment that has not happened.
 
 | Service | Role | Status |
 | --- | --- | --- |
 | Bedrock | Model inference via Strands | **Verified** — `us.amazon.nova-lite-v1:0`; discovery, recovery, and lock branches all driven by real runs |
-| AgentCore Runtime | Hosted agent entrypoint | `agentcore_app.py`, configured in `agentcore/` for the official `@aws/agentcore` CLI. **Dry-run only** — synthesizes to one runtime + one execution role; nothing deployed |
-| DynamoDB | Authoritative application state, single table, on-demand, TTL | Implemented, pinned by a fake-client test |
-| API Gateway + Lambda | Public API | In the CDK stack |
-| S3 + CloudFront | Public web app | In the CDK stack |
-| EventBridge | Background scan | In the stack, **created disabled** |
+| AgentCore Runtime | Hosted agent entrypoint | **Deployed and verified** — `agentcore_app.py`, `READY` in `us-east-1`, live invocations proving AgentCore → Strands → Bedrock → Pool tools |
+| Lambda Function URL | The public judge demo: web app + reduced API | In `infra/demo_app.py`. Synthesized and dry-run verified; **not deployed** |
+| DynamoDB | Authoritative application state, single table, on-demand, TTL | Implemented; the complete lifecycle is exercised through the adapter by a faithful fake table |
+| API Gateway + Lambda | Pilot-shaped API | In `PoolStack`, which is **not** what the public demo deploys |
+| S3 + CloudFront | Pilot-shaped web hosting | In `PoolStack`. The public demo needs neither |
+| EventBridge | Background scan | In `PoolStack`, **created disabled** |
 | Amazon Location | `geo-routes`, no provisioned calculator | Implemented, unverified |
-| CloudWatch | Structured run records, retention capped at 14 days | In the stack |
+| CloudWatch | Structured run records, retention capped at 14 days | In both stacks |
 
 ```bash
 make whoami   # which principal am I? run this first

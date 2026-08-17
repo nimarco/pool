@@ -370,21 +370,98 @@ export interface Credential {
   replaced_previous: boolean;
 }
 
+export interface DemoConfig {
+  public_demo: boolean;
+  live_agent_available: boolean;
+  live_agent_runtime: string;
+  region: string;
+  max_live_per_session: number;
+  payments: string;
+  purchase: string;
+}
+
+export interface LiveAgentRun {
+  run_id: string;
+  outcome: string;
+  iterations: number;
+  tool_calls: { name: string; ok: boolean; summary: string }[];
+  termination_reason: string;
+  model_provider: string;
+  model_id: string;
+  duration_ms: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  hitl_decisions_created: number;
+}
+
+/** Either a real invocation of the deployed runtime, or an honest failure. Never a
+ *  fabricated run — the server has no code path that invents one. */
+export type LiveAgentResult =
+  | {
+      ok: true;
+      live: true;
+      service: string;
+      runtime: string;
+      region: string;
+      wall_ms: number;
+      run: LiveAgentRun;
+      note: string;
+    }
+  | { ok: false; live: false; reason: string };
+
 /* ------------------------------------------------------------------ workspace */
 
 const WORKSPACE_KEY = "pool.workspace";
 
+/** The shape the deployed demo accepts. Anything else is refused server-side, so a
+ *  value left over from an older build is replaced rather than sent. */
+const WORKSPACE_RE = /^w[a-z0-9]{8,32}$/;
+
+function freshWorkspaceId(): string {
+  const bytes = new Uint8Array(10);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  const body = Array.from(bytes, (b) => b.toString(36).padStart(2, "0")).join("");
+  return `w${body.slice(0, 16)}`;
+}
+
+/** Held in the module too, so a browser with storage disabled still gets *one*
+ *  stable session for the tab rather than a new one on every request. */
+let cachedWorkspace: string | null = null;
+
 /** Each visitor gets an isolated dataset, so two judges cannot corrupt each other. */
 function workspaceId(): string {
-  const existing = localStorage.getItem(WORKSPACE_KEY);
-  if (existing) return existing;
-  const fresh = `w${Math.random().toString(36).slice(2, 10)}`;
-  localStorage.setItem(WORKSPACE_KEY, fresh);
+  if (cachedWorkspace) return cachedWorkspace;
+  let existing: string | null = null;
+  try {
+    existing = localStorage.getItem(WORKSPACE_KEY);
+  } catch {
+    /* private browsing with storage disabled — fall through to a per-tab id */
+  }
+  if (existing && WORKSPACE_RE.test(existing)) {
+    cachedWorkspace = existing;
+    return existing;
+  }
+  const fresh = freshWorkspaceId();
+  try {
+    localStorage.setItem(WORKSPACE_KEY, fresh);
+  } catch {
+    /* nothing to do: the cache below still isolates this tab */
+  }
+  cachedWorkspace = fresh;
   return fresh;
 }
 
 export function resetWorkspaceId(): void {
-  localStorage.removeItem(WORKSPACE_KEY);
+  cachedWorkspace = null;
+  try {
+    localStorage.removeItem(WORKSPACE_KEY);
+  } catch {
+    /* nothing stored, nothing to clear */
+  }
 }
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -420,8 +497,11 @@ export const api = {
   checklist: (id: string) => request<Checklist>(`/api/pools/${id}/checklist`),
   operator: () => request<OperatorView>("/api/operator"),
 
-  run: (trigger: string, instruction?: string) =>
-    post<RunResult>("/api/agent/run", { trigger, instruction }),
+  // The client picks an action *name*; the server owns the prompt. `instruction`
+  // replaces the coordinator's entire run prompt, so a browser that could set it
+  // would be writing the agent's instructions (see api/public_demo.py).
+  run: (trigger: "manual_scan" | "manual_advance") =>
+    post<RunResult>("/api/agent/run", { trigger }),
   respond: (decisionId: string, approve: boolean) =>
     post<Record<string, unknown>>(`/api/decisions/${decisionId}/respond`, { approve }),
   volunteerHost: (poolId: string, householdId: string, body: Record<string, unknown>) =>
@@ -446,6 +526,11 @@ export const api = {
     }),
   reset: () => post<Record<string, unknown>>("/api/demo/reset"),
   scenario: () => post<ScenarioResult>("/api/demo/scenario"),
+
+  /** Present only on the deployed demo; a local API answers 404 and the UI hides
+   *  the live panel rather than offering a button that cannot work. */
+  demoConfig: () => request<DemoConfig>("/api/demo/config"),
+  liveAgent: () => post<LiveAgentResult>("/api/demo/agentcore"),
 };
 
 /* ------------------------------------------------------------------ formatting */

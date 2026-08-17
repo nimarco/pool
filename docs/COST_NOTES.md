@@ -132,6 +132,69 @@ Turn Transaction Search off with:
 
     aws xray update-trace-segment-destination --destination XRay
 
+## The public judge demo (`PoolDemoStack`) — reviewed, not yet deployed
+
+A separate, deliberately tiny stack. `PoolStack` was **not** reused: it carries API
+Gateway, CloudFront, S3, and an EventBridge rule the demo has no use for, and deploying
+a larger stack for convenience is the thing §3.7 forbids.
+
+**Eight CloudFormation resources**, confirmed by `cdk diff` against the real account:
+
+| Resource | Idle cost | Usage cost |
+| --- | --- | --- |
+| `AWS::Lambda::Function` (1024 MB, 30 s, **reserved concurrency 5**) | **None** | Per request |
+| `AWS::Lambda::Url` (`AuthType: NONE`) | None | None — it is an addressing feature |
+| `AWS::DynamoDB::Table` (PAY_PER_REQUEST, TTL) | **~$0** — storage only, and sessions delete themselves after 24 h | Per read/write |
+| `AWS::Logs::LogGroup` (14 days) | Storage, KB-scale | Ingestion |
+| IAM role + policy, 2 Lambda permissions | None | None |
+
+**No always-on compute, no idle charge, no schedule, no NAT, no distribution.** The
+things that would have added idle cost were all considered and rejected: API Gateway (a
+second resource and a second place for CORS to be wrong), S3 + CloudFront (a bucket, an
+OAC, a bucket policy, a distribution, and an invalidation step, for a 196 KB app).
+
+### What one judge costs
+
+| Action | Work | Bedrock? |
+| --- | --- | --- |
+| Landing on the site | 1 cold start, ~100 DynamoDB writes to seed the session | No |
+| **Run the full scenario** | ~800 DynamoDB round trips, the whole lifecycle | No |
+| Run a scan / Advance pools | ~90 DynamoDB round trips, one bounded Strands run | **No** — offline planner |
+| **Run the deployed agent** | One `InvokeAgentRuntime` | **Yes** — ~19k in / ~470 out on Nova Lite |
+
+Only the last line spends model tokens, and it is capped three ways: **3 per session, 40
+per UTC day**, and switchable off entirely. At Nova Lite's token prices a full day at the
+cap is small change; the cap exists so it cannot be otherwise.
+
+### Bounds, and where each is enforced
+
+| Bound | Default | Enforced by |
+| --- | --- | --- |
+| Live agent invocations per session | 3 | Application, DynamoDB counter |
+| Live agent invocations per day | 40 | Application, DynamoDB **conditional** counter (atomic across containers) |
+| Deterministic actions per session | 40 | Same |
+| Deterministic actions per day | 600 | Same |
+| New demo sessions per day | 300 | Same — a cold session writes ~100 rows before any action |
+| Concurrent executions | 5 | **Lambda reserved concurrency** — the only one that does not depend on our code |
+| Session lifetime | 24 h | DynamoDB TTL |
+
+Every one is an environment variable, so they can be tightened on the deployed function
+in seconds without a rebuild. The quota store **fails closed**: if it cannot be read, the
+request is refused rather than allowed.
+
+### Kill switches, fastest first
+
+```bash
+make demo-kill      # reserved concurrency → 0. Stops everything, deletes nothing
+                    # PUBLIC_DEMO_AGENTCORE_ENABLED=false stops only the paid action
+make destroy-demo   # remove the stack entirely
+```
+
+`make demo-restore` puts concurrency back. Unlike `make destroy-agent`, **`destroy-demo`
+leaves nothing behind**: the log group is inside the stack and every resource is
+`RemovalPolicy.DESTROY`. The one residue is ~28 MB per deployed version in the CDK
+staging bucket, which is the same accumulation `agentcore deploy` already causes.
+
 ## Infrastructure choices, and why
 
 | Choice | Reason |
@@ -196,6 +259,8 @@ Ranked by how easy it is to forget:
 ```bash
 make cost-check     # list project resources; flag anything recurring
 make schedule-off   # stop scheduled runs without tearing anything down
+make demo-kill      # stop the public demo answering, without deleting anything
+make destroy-demo   # remove the public judge demo stack
 make destroy        # remove the PoolStack CDK stack
 make destroy-agent  # remove the AgentCore stack (the CLI has no destroy command)
 ```

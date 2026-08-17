@@ -18,7 +18,9 @@ import {
   Checklist,
   Credential,
   Decision,
+  DemoConfig,
   Health,
+  LiveAgentResult,
   MapData,
   NeedRow,
   OperatorView,
@@ -68,20 +70,28 @@ function Empty({ children }: { children: React.ReactNode }) {
 export function Landing({
   onEnter,
   onScenario,
+  onSeeAgent,
   running,
   health,
+  demoConfig,
+  memberCount,
 }: {
   onEnter: () => void;
   onScenario: () => void;
+  onSeeAgent: () => void;
   running: boolean;
   health: Health | null;
+  demoConfig: DemoConfig | null;
+  memberCount: number | null;
 }) {
   return (
     <>
       <section className="hero">
         <p className="eyebrow">Good Neighbor Agents</p>
         <h1 className="serif">
-          Nobody organised the group.
+          Ten people wanted the same thing.
+          <br />
+          Nobody organised anything.
           <br />
           Pool noticed.
         </h1>
@@ -93,15 +103,25 @@ export function Landing({
           someone to collect it.
         </p>
         <div className="btn-row">
-          <button className="btn btn-primary" onClick={onEnter}>
+          <button className="btn btn-primary" onClick={onScenario} disabled={running}>
+            {running ? "Running the lifecycle…" : "Run the full scenario"}
+          </button>
+          <button className="btn" onClick={onEnter}>
             Enter Demo University
           </button>
-          <button className="btn" onClick={onScenario} disabled={running}>
-            {running ? "Running…" : "Run the full scenario"}
-          </button>
+          {demoConfig?.live_agent_available ? (
+            <button className="btn" onClick={onSeeAgent}>
+              Run the agent live on AWS
+            </button>
+          ) : null}
         </div>
+        <p className="tiny muted" style={{ marginTop: "1rem" }}>
+          No account, no signup, no configuration.{" "}
+          {memberCount ? `${memberCount} synthetic students · ` : ""}Every figure you
+          will see was computed by deterministic code on the server and stored.
+        </p>
         {health ? (
-          <p className="tiny muted" style={{ marginTop: "1rem" }}>
+          <p className="tiny muted" style={{ marginTop: "0.4rem" }}>
             Payments: {health.payment_provider} ({health.payment_mode}) · Purchase:{" "}
             {health.purchase_simulated ? "simulated" : health.purchase_executor} · Model:{" "}
             {health.model_provider} · Background schedules:{" "}
@@ -146,13 +166,23 @@ export function Landing({
               credentials, the recovery when an authorisation fails. Every number on
               every screen was computed by deterministic code and stored.
             </p>
+            {demoConfig?.live_agent_available ? (
+              <p className="small" style={{ marginTop: "0.6rem" }}>
+                <strong>Also real:</strong> the <em>Agent</em> tab has one button that
+                genuinely invokes Pool's coordinator deployed on Amazon Bedrock
+                AgentCore Runtime in {demoConfig.region}. Everything else on this site
+                runs deterministically, so the demo does not depend on a paid model
+                call to work.
+              </p>
+            ) : null}
           </div>
           <div>
             <p className="small">
               <strong>Not real:</strong> the community, the students, the suppliers, and
-              the money. Payments are simulated or Stripe TEST mode; the supplier
-              purchase is simulated and labelled as such; no goods move. Nothing here
-              claims traction that does not exist.
+              the money. Supplier prices, case sizes and minimums are invented demo
+              data — no wholesale relationship exists. Payments are simulated; the
+              supplier purchase is simulated and labelled as such; no goods move.
+              Nothing here claims traction that does not exist.
             </p>
           </div>
         </div>
@@ -973,7 +1003,141 @@ export function Operator() {
 
 /* ---------------------------------------------------------------------- agent */
 
-export function AgentRuns({ runs, activity }: { runs: RunSummary[]; activity: ActivityEvent[] }) {
+/* ------------------------------------------------------------------ live agent */
+
+/** The one action on this site that leaves the browser's own demo behind.
+ *
+ * It is deliberately separate from everything else: the deterministic demo must not
+ * depend on a paid cloud call to work, and a judge must be able to tell which is
+ * which. There is no fallback that fabricates a run — if the invocation fails, this
+ * says so (AGENTS.md §8).
+ */
+export function LiveAgent({
+  config,
+  result,
+  busy,
+  onRun,
+}: {
+  config: DemoConfig;
+  result: LiveAgentResult | null;
+  busy: boolean;
+  onRun: () => void;
+}) {
+  if (!config.live_agent_available) return null;
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h3>Run it live on AWS</h3>
+        <span className="spacer" />
+        <Chip tone="warn">live</Chip>
+      </div>
+      <div className="card-pad">
+        <p className="small">
+          Everything else here runs deterministically on the server. This button does
+          something different: it invokes Pool's coordinator as deployed on{" "}
+          <strong>Amazon Bedrock AgentCore Runtime</strong> in {config.region} — a real
+          model, the real Strands loop, the real Pool tools, inside its own isolated
+          runtime session.
+        </p>
+        <p className="small muted">
+          The runtime seeds its own copy of Demo University, so this does not change
+          anything on the pages around it. Limited to {config.max_live_per_session} runs
+          per visitor, because it spends model tokens.
+        </p>
+        <div className="btn-row" style={{ marginTop: "0.9rem" }}>
+          <button className="btn btn-primary" onClick={onRun} disabled={busy}>
+            {busy ? "Invoking AgentCore…" : "Run the deployed agent"}
+          </button>
+        </div>
+
+        {result && !result.ok ? (
+          <div className="banner banner-warn" style={{ marginTop: "1rem" }}>
+            {result.reason}
+          </div>
+        ) : null}
+      </div>
+
+      {result && result.ok ? (
+        <>
+          <div className="card-head">
+            <h3>
+              {result.service} <Chip tone="ok">{result.run.outcome}</Chip>
+            </h3>
+          </div>
+          <div className="card-pad">
+            <div className="decision-facts">
+              <div>
+                <div className="fact-label">Runtime</div>
+                <div className="fact-value mono">{result.runtime}</div>
+              </div>
+              <div>
+                <div className="fact-label">Region</div>
+                <div className="fact-value mono">{result.region}</div>
+              </div>
+              <div>
+                <div className="fact-label">Model</div>
+                <div className="fact-value mono">{result.run.model_id}</div>
+              </div>
+              <div>
+                <div className="fact-label">Iterations</div>
+                <div className="fact-value num">{result.run.iterations}</div>
+              </div>
+              <div>
+                <div className="fact-label">Tokens in / out</div>
+                <div className="fact-value num">
+                  {result.run.input_tokens ?? 0} / {result.run.output_tokens ?? 0}
+                </div>
+              </div>
+              <div>
+                <div className="fact-label">Agent time</div>
+                <div className="fact-value num">{result.run.duration_ms ?? 0} ms</div>
+              </div>
+              <div>
+                <div className="fact-label">Round trip</div>
+                <div className="fact-value num">{result.wall_ms} ms</div>
+              </div>
+              <div>
+                <div className="fact-label">Stopped because</div>
+                <div className="fact-value mono">{result.run.termination_reason}</div>
+              </div>
+            </div>
+          </div>
+          <div className="trace">
+            {result.run.tool_calls.length === 0 ? (
+              <div className="card-pad">
+                <Empty>The agent called no tools on this run.</Empty>
+              </div>
+            ) : (
+              result.run.tool_calls.map((t, i) => (
+                <span key={`${result.run.run_id}-${i}`} className="trace-step">
+                  <span className="trace-idx">{i + 1}</span>
+                  <span className="trace-name mono">{t.name}</span>
+                  <span className="trace-summary">
+                    {t.ok ? t.summary : `refused — ${t.summary}`}
+                  </span>
+                  {t.ok ? null : <Chip tone="warn">refused</Chip>}
+                </span>
+              ))
+            )}
+          </div>
+          <div className="card-pad">
+            <p className="tiny muted">{result.note}</p>
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+export function AgentRuns({
+  runs,
+  activity,
+  live,
+}: {
+  runs: RunSummary[];
+  activity: ActivityEvent[];
+  live?: React.ReactNode;
+}) {
   return (
     <>
       <div className="page-head">
@@ -987,6 +1151,8 @@ export function AgentRuns({ runs, activity }: { runs: RunSummary[]; activity: Ac
           </p>
         </div>
       </div>
+
+      {live}
 
       <section className="card">
         <div className="card-head">

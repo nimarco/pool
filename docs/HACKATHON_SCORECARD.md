@@ -27,7 +27,7 @@ Pool tools** (entry #0019, three runs). Everything else on AWS remains unverifie
 | Architecture diagram | ✅ | [`architecture.svg`](architecture.svg), source [`architecture.mmd`](architecture.mmd) |
 | Demo video ≤ 5 min | ⬜ | Script written: [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md). Not recorded |
 | AWS Builder ID | ⬜ | User action — account signup |
-| Live demo URL | ❌ | Stack written and synth-verified; **no AWS credentials configured**, so nothing is deployed |
+| Live demo URL | 🟡 | `PoolDemoStack` written, tested, and **dry-run verified against the real account** (`cdk diff`: 8 resources). Awaiting approval to deploy — see #0024 |
 | Project description | ✅ | Draft: [`DEVPOST_DRAFT.md`](DEVPOST_DRAFT.md) |
 | Testing instructions | ✅ | README → Run it. `make qa`, `make demo` |
 | Good Neighbor framing | ✅ | Explicit in README, landing page, demo script, Devpost draft |
@@ -117,9 +117,19 @@ first — only discovery has run against a real model.
 - **Verified responsive and dark-mode correct**, with no horizontal overflow at 375 px on
   any view.
 
+**The public judge experience** (#0024, implemented and locally verified, not yet
+deployed): one URL, no account, no setup. The API a judge can reach is fourteen paths of
+forty-five; the client cannot send the agent a prompt; every action that costs anything
+is capped per session and per day; anonymous sessions are isolated by DynamoDB partition
+and expire in 24 hours. Almost everything runs deterministically on the server, with
+exactly one clearly labelled action that genuinely invokes the deployed AgentCore
+Runtime — verified twice against real AWS, with a failure path that reports the failure
+rather than faking a run.
+
 | Item | Status |
 | --- | :-: |
 | Frictionless judge mode | ✅ |
+| Public demo safe to expose anonymously | ✅ implemented, tested; deployment pending approval |
 | Buyer UX | ✅ |
 | Host UX | ✅ |
 | Operator UX | ✅ |
@@ -128,7 +138,7 @@ first — only discovery has run against a real model.
 | Agent trace visible | ✅ |
 | Mobile responsive | ✅ |
 | Dark mode | ✅ |
-| Deployed and reachable | ❌ needs credentials |
+| Deployed and reachable | 🟡 stack reviewed and dry-run verified; awaiting approval |
 
 ---
 

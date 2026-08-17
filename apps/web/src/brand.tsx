@@ -27,26 +27,36 @@ export function BrandMark({ size = 24 }: { size?: number }) {
 
 /* --------------------------------------------------------------- the figure */
 
-/** Eleven people, eleven separate restock dates, one pool day.
+/** Thirteen people, thirteen separate restock dates, one pool day.
  *
  * This is not decoration and it is not an illustration of the general idea — it is the
  * arithmetic of the pool this community actually forms, drawn. Eight people were going to buy about now
- * anyway, and that is eighteen units against a supplier minimum of twenty-four. Two more
- * would not have bought until later; Pool may bring them forward only because those two
- * authorised an early purchase, and their six units close the gap exactly. An eleventh
- * authorised nothing, so nothing happens to them.
+ * anyway, and that is eighteen units against a supplier minimum of twenty-four. Five more
+ * authorised an early purchase, so Pool *may* bring any of them forward — and it takes
+ * exactly two, because their three units each close the gap to twenty-four precisely.
+ * The other three are left alone: pulling them in as well would buy units nobody
+ * ordered, which is the surplus rule refusing to be convenient.
  *
  * Those counts come from the same `evaluate_timing` the matcher uses, reported by the
  * transcript as `due_now_members` / `pulled_forward_members`. If the seed changes so
- * does the run, and this figure has to change with it.
+ * does the run, and this figure has to change with it — which is why
+ * `test_the_convergence_figure_matches_the_seed` recomputes all four numbers from the
+ * seed rather than trusting this comment.
+ *
+ * It drew eleven rows until 2026-08-17 (#0030), with an eleventh who "authorised
+ * nothing". No such person exists in the seed: nobody with a whey need is timing-
+ * ineligible. The figure was right about 8/18 and 2/6 and wrong about why the rest sat
+ * it out.
  */
 export function ConvergenceFigure() {
   const left = 4;
   const right = 356;
   const poolX = 214;
-  // Each row is one person. `x` is the day they would have bought on their own:
-  // eight already due, two who authorised buying early, one who did not.
-  const rows: { x: number; kind: "due" | "pulled" | "left" }[] = [
+  // Each row is one person. `x` is the day they would have bought on their own: eight
+  // already due, then the five who authorised an early purchase, ordered by how far
+  // Pool would have to reach. The two it takes are *not* the two nearest — it reaches
+  // past a closer 2-unit need to the 3+3 that lands on twenty-four exactly.
+  const rows: { x: number; kind: "due" | "pulled" | "spare" }[] = [
     { x: 118, kind: "due" },
     { x: 178, kind: "due" },
     { x: 62, kind: "due" },
@@ -55,9 +65,11 @@ export function ConvergenceFigure() {
     { x: 90, kind: "due" },
     { x: 166, kind: "due" },
     { x: 132, kind: "due" },
-    { x: 276, kind: "pulled" },
-    { x: 318, kind: "pulled" },
-    { x: 348, kind: "left" },
+    { x: 240, kind: "spare" },
+    { x: 265, kind: "pulled" },
+    { x: 282, kind: "spare" },
+    { x: 331, kind: "spare" },
+    { x: 348, kind: "pulled" },
   ];
   const top = 30;
   const gap = 19;
@@ -70,7 +82,7 @@ export function ConvergenceFigure() {
         className="converge"
         viewBox={`0 0 360 ${height}`}
         role="img"
-        aria-label="Eleven people with eleven separate restock dates. Eight fall due inside the same week and join naturally, which is eighteen units against a supplier minimum of twenty-four. Two more are pulled forward onto the pool day because those buyers had authorised an early purchase, and their six units close the gap exactly. The eleventh had not authorised anything, and is left alone."
+        aria-label="Thirteen people with thirteen separate restock dates. Eight fall due inside the same week and join naturally, which is eighteen units against a supplier minimum of twenty-four. Five more had authorised an early purchase, and Pool pulls exactly two of them onto the pool day because their six units close the gap to twenty-four precisely. The remaining three are left alone rather than buying units nobody ordered."
       >
         {/* The pool day: a fixed weekly moment. Everything that joins lands on it. */}
         <line
@@ -94,7 +106,7 @@ export function ConvergenceFigure() {
 
         {rows.map((row, i) => {
           const y = top + i * gap;
-          const joins = row.kind !== "left";
+          const joins = row.kind !== "spare";
           return (
             <g key={i}>
               <line
@@ -120,15 +132,15 @@ export function ConvergenceFigure() {
               <circle
                 cx={row.x}
                 cy={y}
-                r={row.kind === "left" ? 2.5 : 3.3}
+                r={row.kind === "spare" ? 2.5 : 3.3}
                 fill={
-                  row.kind === "left"
+                  row.kind === "spare"
                     ? "var(--ink-faint)"
                     : row.kind === "pulled"
                       ? "var(--clay)"
                       : "var(--moss)"
                 }
-                opacity={row.kind === "left" ? 0.6 : 1}
+                opacity={row.kind === "spare" ? 0.6 : 1}
               />
               {joins ? <circle cx={poolX} cy={y} r="2.4" fill="var(--moss)" /> : null}
             </g>
@@ -152,9 +164,10 @@ export function ConvergenceFigure() {
       <figcaption className="tiny muted" style={{ marginTop: 10, maxWidth: "46ch" }}>
         Each line is one person's restock date. <strong>Eight</strong> were going to buy
         about now anyway — eighteen units, against a supplier minimum of twenty-four.{" "}
-        <strong>Two</strong> more are pulled forward, allowed only because they authorised
-        an early purchase, and their six units close the gap exactly. The eleventh
-        authorised nothing, so nothing happens to them.
+        <strong>Five</strong> more authorised an early purchase, and Pool takes exactly{" "}
+        <strong>two</strong> of them: their six units close the gap to twenty-four
+        precisely. The other three are left alone — pulling them in too would buy units
+        nobody ordered.
       </figcaption>
     </figure>
   );

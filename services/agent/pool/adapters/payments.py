@@ -34,6 +34,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -115,10 +116,31 @@ FAILING_METHOD_MARKER = "declines"
 #: the nastier real-world case (§60): the pool is locked and the money is not there.
 CAPTURE_FAILURE_MARKER = "capturefails"
 
+#: The whole simulated decision, carried by the reference itself.
+#:
+#: ``_intents`` is process memory; the pool that references an intent is in DynamoDB.
+#: On one machine those are the same lifetime and the difference never shows. On Lambda
+#: they are not: an authorisation taken on one container is captured on another, whose
+#: dict is empty, and ``capture`` raised ``unknown payment reference`` — which locked the
+#: pool, stranded one payment in ``capture_pending`` and left the remaining eight
+#: untouched, with no path forward because ``lock_pool`` short-circuits once a pool is
+#: locked (#0030, found on the deployed demo).
+#:
+#: Encoding the decision into the reference makes the provider stateless, and that is
+#: also the truer simulation: a real processor is a durable remote service that
+#: recognises its own reference no matter who asks. ``f`` declined at authorisation,
+#: ``c`` authorises and fails at capture, ``n`` behaves.
+_SIM_REFERENCE_RE = re.compile(r"^pi_sim_(?P<flag>[fcn])(?P<amount>\d+)_[0-9a-f]+$")
+
 
 @dataclass
 class LocalSimulatedPaymentProvider:
-    """Deterministic in-process payment provider. No network, no cost, no real money."""
+    """Deterministic payment provider. No network, no cost, no real money.
+
+    Holds no state it cannot rebuild: see :data:`_SIM_REFERENCE_RE`. The dict below is a
+    per-process cache of intents this process created or reconstructed, not the source
+    of truth — the reference is.
+    """
 
     name: str = "simulated"
     mode: str = "simulated"
@@ -126,6 +148,33 @@ class LocalSimulatedPaymentProvider:
     _intents: dict[str, dict[str, Any]] = field(default_factory=dict)
     #: idempotency key -> reference, so a retried authorise returns the same intent.
     _by_key: dict[str, str] = field(default_factory=dict)
+
+    def _intent(self, reference: str, *, rebuild_as: str) -> dict[str, Any] | None:
+        """This process's intent for ``reference``, rebuilt from it when unseen.
+
+        ``rebuild_as`` is the state the operation implies, and taking it on trust is
+        correct rather than lax: every caller in ``services/payments.py`` has already
+        checked the authoritative :class:`PaymentRecord` before reaching the provider —
+        capture only runs on ``AUTHORIZED``, cancel refuses a ``CAPTURED`` record, refund
+        requires one. Application state is the source of truth for what has happened; the
+        provider only decides how this reference *behaves* (AGENTS.md §6).
+        """
+        known = self._intents.get(reference)
+        if known is not None:
+            return known
+        match = _SIM_REFERENCE_RE.match(reference)
+        if match is None:
+            return None
+        flag = match.group("flag")
+        rebuilt = {
+            # A declined authorisation stays declined however it is approached. The other
+            # two take the state the caller's own record implies.
+            "state": "failed" if flag == "f" else rebuild_as,
+            "amount_cents": int(match.group("amount")),
+            "method": CAPTURE_FAILURE_MARKER if flag == "c" else "",
+        }
+        self._intents[reference] = rebuilt
+        return rebuilt
 
     def setup_payment_method(self, household_id: str) -> ProviderResult:
         ref = f"pm_sim_{hashlib.sha256(household_id.encode()).hexdigest()[:16]}"
@@ -159,7 +208,13 @@ class LocalSimulatedPaymentProvider:
                 amount_cents=intent["amount_cents"],
             )
 
-        reference = f"pi_sim_{uuid.uuid4().hex[:20]}"
+        if FAILING_METHOD_MARKER in payment_method_ref:
+            flag = "f"
+        elif CAPTURE_FAILURE_MARKER in payment_method_ref:
+            flag = "c"
+        else:
+            flag = "n"
+        reference = f"pi_sim_{flag}{amount_cents}_{uuid.uuid4().hex[:16]}"
         if FAILING_METHOD_MARKER in payment_method_ref:
             self._intents[reference] = {
                 "state": "failed",
@@ -187,7 +242,7 @@ class LocalSimulatedPaymentProvider:
         )
 
     def capture(self, *, reference: str, idempotency_key: str) -> ProviderResult:
-        intent = self._intents.get(reference)
+        intent = self._intent(reference, rebuild_as="requires_capture")
         if intent is None:
             raise PaymentError(f"unknown payment reference: {reference}")
         if intent["state"] == "succeeded":
@@ -216,7 +271,7 @@ class LocalSimulatedPaymentProvider:
         )
 
     def cancel(self, *, reference: str, idempotency_key: str) -> ProviderResult:
-        intent = self._intents.get(reference)
+        intent = self._intent(reference, rebuild_as="requires_capture")
         if intent is None:
             raise PaymentError(f"unknown payment reference: {reference}")
         if intent["state"] == "succeeded":
@@ -231,7 +286,7 @@ class LocalSimulatedPaymentProvider:
     def refund(
         self, *, reference: str, amount_cents: int, idempotency_key: str
     ) -> ProviderResult:
-        intent = self._intents.get(reference)
+        intent = self._intent(reference, rebuild_as="succeeded")
         if intent is None:
             raise PaymentError(f"unknown payment reference: {reference}")
         if intent["state"] != "succeeded":

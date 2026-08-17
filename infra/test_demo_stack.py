@@ -245,7 +245,40 @@ class TestPublicSafety:
     def test_the_agent_bounds_travel_with_the_deployment(self, function_env):
         assert int(function_env["MAX_AGENT_ITERATIONS"]) == 8
         assert int(function_env["MAX_TOOL_CALLS_PER_RUN"]) == 25
-        assert int(function_env["WORKFLOW_TIMEOUT_SECONDS"]) == 120
+        assert int(function_env["WORKFLOW_TIMEOUT_SECONDS"]) == 45
+
+    def test_every_published_bound_is_one_a_run_can_actually_hit(
+        self, template: Template, function_env
+    ):
+        """`/api/health` publishes these, and the Live-on-AWS view prints them as the
+        limits every run is held to. So each one has to be reachable, and the wall clock
+        has to mean the same thing in both places a run can execute.
+
+        It did not. The function shipped `WORKFLOW_TIMEOUT_SECONDS=120` against its own
+        90 s Lambda timeout, so that bound could never fire — Lambda killed the request
+        first — while the runtime's identical-named bound was 45. The page printed 120
+        beside a deployed run held to 45 (#0030). An unreachable limit is worse than a
+        loose one: it reads as a guarantee and enforces nothing.
+        """
+        fns = template.find_resources("AWS::Lambda::Function")
+        function_timeout = next(iter(fns.values()))["Properties"]["Timeout"]
+        local_bound = int(function_env["WORKFLOW_TIMEOUT_SECONDS"])
+        remote_bound = int(agentcore_runtime()["envVars"]["WORKFLOW_TIMEOUT_SECONDS"])
+
+        assert local_bound == remote_bound, (
+            "one number is published for both execution paths; they must agree or the "
+            f"page is lying about one of them ({local_bound} here, {remote_bound} on "
+            "the runtime)"
+        )
+        assert local_bound < function_timeout, (
+            f"a {local_bound}s agent bound inside a {function_timeout}s function can "
+            "never fire"
+        )
+
+        # The other three bounds are environment-independent, so the page may state them
+        # flatly. Pin that they are, since the wall clock stopped being so once.
+        for key in ("MAX_AGENT_ITERATIONS", "MAX_TOOL_CALLS_PER_RUN", "MAX_DUPLICATE_TOOL_CALLS"):
+            assert function_env[key] == agentcore_runtime()["envVars"][key], key
 
     def test_the_live_action_has_its_own_kill_switch(self, function_env):
         """Turning off the paid path must not require taking the demo down."""

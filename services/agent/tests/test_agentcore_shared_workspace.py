@@ -572,6 +572,30 @@ def test_an_invocation_that_never_started_leaves_the_session_exactly_as_it_was(d
     assert deployment.pools() == []
 
 
+def test_a_timed_out_invocation_is_never_retried_underneath_us():
+    """The lease serialises *callers*. A retry issued inside botocore is not a caller.
+
+    ``AgentCoreBridge`` asks for a single attempt so a live action that read-times-out
+    stays one agent run. Botocore's two spellings of that are not synonyms: it treats
+    ``max_attempts`` as the legacy shorthand and resolves it to ``max_attempts + 1``, so
+    ``{"max_attempts": 1}`` silently buys a retry. Observed on the deployed stack
+    (#0030) — one live action, two runs 17 ms apart, both coordinating the same
+    workspace, neither of which passed :class:`DynamoDBLeaseStore` because the second
+    was issued below the code that takes the lease.
+
+    Asserted on the *resolved* client config rather than on the literal we passed in,
+    because the literal is exactly what was wrong.
+    """
+    bridge = public_demo.AgentCoreBridge(runtime_arn=ARN, region="us-east-1")
+    retries = bridge.client.meta.config.retries
+
+    assert retries["total_max_attempts"] == 1, (
+        f"one live action must be one agent run; resolved config asks for "
+        f"{retries['total_max_attempts']} attempts"
+    )
+    assert bridge.client.meta.config.read_timeout == public_demo.LIVE_READ_TIMEOUT_SECONDS
+
+
 # -------------------------------------------------------------------------- quotas
 
 

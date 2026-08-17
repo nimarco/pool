@@ -186,6 +186,7 @@ synthesized template — which is how rows 17–21 were found at all.
 | `Pool_PoolCoordinator-TmVqSN9H56` | Bedrock AgentCore Runtime | 2026-08-16 | Deployed coordinator, status `READY` | **No — billed per invocation only.** No always-on compute; idle session 60 s, max lifetime 300 s | `make destroy-agent` |
 | `AgentCore-Pool-default-ApplicationAgentPoolCoordina-Ad6KX4akMhNd` | IAM Role | 2026-08-16 | Runtime execution role | No | `make destroy-agent` |
 | `Agent-Appli-6NpmisJ95ByC` | IAM Policy | 2026-08-16 | Inline policy: Bedrock invoke, scoped Logs, X-Ray, config bundles | No | `make destroy-agent` |
+| `ApplicationAgentPoolCoordinatorRuntimeAdditionalCustomPolicy03BEAE200` | IAM Policy | **2026-08-17** (#0030) | Inline policy from `services/agent/iam/agentcore-dynamodb.json`: `GetItem`, `PutItem`, `Query` on `table/pool-demo-state` and nothing else. Verified by `iam simulate-principal-policy`: `DeleteItem`, `BatchWriteItem`, `UpdateItem`, `Scan`, `DeleteTable` all `implicitDeny`, and any other table `implicitDeny` | No | `make destroy-agent` |
 
 **Created *outside* both stacks — `make destroy-agent` will NOT remove these**
 
@@ -219,9 +220,9 @@ six invocations totalling ~30 s of processing is the entire compute spend so far
 | Resource | Service | Actual name | Recurring cost? | Destroy by |
 | --- | --- | --- | --- | --- |
 | `PoolDemoStack` | CloudFormation | `stack/PoolDemoStack/65684040-99d9-11f1-bfd1-12dcf36da785` | No | `make destroy-demo` |
-| `DemoApi` | Lambda, 1024 MB, 30 s, **no reserved concurrency** (see below) | `PoolDemoStack-DemoApiE67238F8-NRdyivEjgNe9` | **No** — per invocation | With the stack |
+| `DemoApi` | Lambda, 1024 MB, **90 s** (was 30 s — #0028), **no reserved concurrency** (see below) | `PoolDemoStack-DemoApiE67238F8-NRdyivEjgNe9` | **No** — per invocation | With the stack |
 | `DemoApi/FunctionUrl` | Lambda Function URL, `AuthType: NONE` | `https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/` | No | With the stack |
-| `DemoState` | DynamoDB, PAY_PER_REQUEST, TTL `ttl` **ENABLED** | `PoolDemoStack-DemoStateC0AFBE5F-MEYUG6F12SA` | ~$0 — storage only, rows self-delete in 24 h | With the stack |
+| `DemoState` | DynamoDB, PAY_PER_REQUEST, TTL `ttl` **ENABLED** | **`pool-demo-state`** — explicit physical name since 2026-08-17, so the AgentCore runtime (a different stack, a different tool) can name the same table. **Replaced** the generated-name table below | ~$0 — storage only, rows self-delete in 24 h | With the stack |
 | `DemoLogs` | CloudWatch Logs, **14 days** | `PoolDemoStack-DemoLogs66B26719-oLVBNSrBt9aX` | Yes — KB-scale | With the stack |
 | `DemoApi/ServiceRole` | IAM Role | `PoolDemoStack-DemoApiServiceRoleD1A1B4D5-kT16gVvbahFM` | No | With the stack |
 | Role default policy | IAM Policy | `PoolD-DemoA-IgvYHVbqMZn9` — DynamoDB on one table, `InvokeAgentRuntime` on one runtime ARN | No | With the stack |
@@ -243,7 +244,10 @@ rules.
 
 **The one growth surface:** the CDK staging bucket went from 2 objects / 41.7 MiB to
 **13 objects / 176.8 MiB** across five deploy attempts (~28 MB zipped per bundle
-version). Not garbage-collected; empty it before deleting `CDKToolkit`.
+version). Not garbage-collected; empty it before deleting `CDKToolkit`. **2026-08-17
+(#0030): now 22 objects / 300.1 MiB** after three further deploys. It grows by ~28 MB
+every time the bundle changes and nothing prunes it — the single largest standing
+artefact this project has created.
 
 
 ### Recurring / scheduled (highest risk — review every session)
@@ -256,7 +260,7 @@ version). Not garbage-collected; empty it before deleting `CDKToolkit`.
 
 | Resource | Service | Created | Destroyed | Notes |
 | --- | --- | --- | --- | --- |
-| _(none)_ | | | | |
+| `PoolDemoStack-DemoStateC0AFBE5F-MEYUG6F12SA` | DynamoDB | 2026-08-16 | 2026-08-17 | The generated-name demo table. Giving `DemoState` an explicit `table_name` is a replacing change, so CloudFormation created `pool-demo-state`, switched the function's grant and env to it, then deleted this one (`DELETE_COMPLETE`, 2026-08-17 19:38 UTC). Expected and reviewed in `cdk diff` beforehand; it held only disposable demo sessions with a 24 h TTL. `aws dynamodb list-tables` afterwards returns exactly one table. |
 
 ---
 
@@ -3013,3 +3017,234 @@ covered as well. Focused shared-workspace/public-demo tests: **121 passed**.
 Starlette/httpx deprecation warning), **71 infrastructure tests passed**, web production
 build clean, secret scan clean. `make agent-validate`: **Valid**. No deployment or cloud
 verification was performed.
+
+---
+
+### #0030 — [2026-08-17] — Cloud verification of the shared workspace, and the two bugs only production had
+`[DEPLOYED]` `[INCIDENT]` `[AGENTCORE]` `[COST]` `[PAYMENTS]`
+
+**Goal / user intent**
+Take #0028/#0029 — the deployed AgentCore runtime coordinating inside the same DynamoDB
+workspace the browser reads — from *implemented and locally green* to **verified on real
+AWS**, then QA the live public product end to end as a judge would.
+
+**Starting state**
+`4dcfcc8` on `main`, working tree clean, 700 tests green locally, nothing about the shared
+workspace exercised against AWS. Deployed: the runtime still on `POOL_REPOSITORY=memory`,
+the demo stack still on the generated-name table.
+
+**Decision**
+Deploy AgentCore first, then `PoolDemoStack` (the table rename is a replacement, and the
+runtime's IAM statement and `DYNAMODB_TABLE` both name `pool-demo-state`, so the grant has
+to exist before the table is served). Then prove the chain with one paid invocation and
+read the result out of DynamoDB rather than out of the agent's answer.
+
+**Implementation** — status: **deployed and verified**
+
+Both deploys were reviewed as diffs before running. AgentCore added exactly one resource
+(the DynamoDB inline policy) and changed four env vars; `PoolDemoStack` replaced the table,
+retargeted the existing grant, and moved the function to a 90 s timeout. **No new service
+appeared in either.**
+
+**The shared-state proof.** Fresh browser session `w0t5x5s164x112i5q`, seeded to 110 rows
+with **0 `POOL` and 0 `RUN`**. One click on *Find opportunities*:
+
+| | |
+| --- | --- |
+| run id | `run_f542309cf199` |
+| model | `us.amazon.nova-lite-v1:0` via Bedrock, Strands loop |
+| iterations | 7, terminated `completed` |
+| tools | `list_latent_demand` → `evaluate_pool_economics` → `create_candidate_pool` → `find_host_candidates` → `request_host_acceptance` → `issue_final_offer` |
+| tokens | 23,304 in / 504 out |
+| agent duration | 7.47 s (runtime's own `started_at`→`ended_at`) |
+| end to end | 15.49 s (Lambda `REPORT`, including runtime cold start) |
+
+The pool the browser then showed, `pool_d6e1981c0937`, carries
+`created_by_run = run_f542309cf199` in DynamoDB — the same id the runtime returned to the
+Lambda (`live agentcore run run_id=run_f542309cf199 outcome=pool_created tools=6`) and the
+same id the runtime logged itself, alongside
+`coordination run starting workspace=w0t5x5s164x112i5q` — the browser's own
+`localStorage` value. **No local fallback could have produced it:** the API Lambda runs
+`MODEL_PROVIDER=offline` and its execution role holds no `bedrock:InvokeModel` at all, so a
+run record naming `bedrock`/`nova-lite` cannot originate there.
+
+**Two production-only bugs, both fixed here.**
+
+**(a) One live action, two billed agent runs.** `AgentCoreBridge` asked for a single
+attempt with `retries={"max_attempts": 1, "mode": "standard"}`, with a comment saying
+exactly why a retry would be unacceptable. That config does not mean one attempt. Botocore
+treats `max_attempts` as the legacy shorthand and resolves it to
+`total_max_attempts = max_attempts + 1`, so the code was asking for **one retry**. A forced
+read timeout against the deployed runtime produced **two runs 17 ms apart, both coordinating
+the same workspace** (`run_2ebf71d30e77` *pool_advanced* and `run_69750143627d`
+*pool_created*). The retry is issued inside botocore, underneath the code that takes the
+`DynamoDBLeaseStore` lease — so the lease that exists precisely to stop two agents in one
+partition never saw it. Measured directly against a local socket server that accepts and
+never answers: shipped config → **2** TCP attempts; `total_max_attempts: 1` → **1**.
+Fixed to `total_max_attempts`, redeployed, and the same forced timeout now yields one run.
+
+**(b) The simulated processor forgot its own payments across containers.**
+`LocalSimulatedPaymentProvider` kept intents in a per-process dict while the pools
+referencing them lived in DynamoDB. On one machine those lifetimes are identical and the
+gap is invisible; on Lambda they are not. An authorisation taken on one container was
+captured on another, whose dict was empty, and `capture()` raised
+`unknown payment reference` **from inside `capture_pool`, after the pool had already
+locked**. Observed on the deployed demo: 1 payment captured, **1 stranded in
+`capture_pending`**, 8 untouched, and no way forward — `lock_pool` short-circuits on an
+already-locked pool, so no later run re-enters capture. The hands-on lifecycle simply could
+not reach *purchase* on the public URL. It never showed locally or in the scripted showcase
+because both run the whole lifecycle in one process.
+
+Fixed by encoding the simulation's entire decision into the reference
+(`pi_sim_{f|c|n}{amount}_{rand}`) so any process can reconstruct the intent. That is also
+the more faithful simulation: a real processor is a durable remote service that recognises
+its own reference from any caller. The rebuilt state is taken from the operation, which is
+sound because every caller in `services/payments.py` has already gated on the authoritative
+`PaymentRecord` — capture only runs on `AUTHORIZED`, cancel refuses `CAPTURED`, refund
+requires it (AGENTS.md §6). A declined authorisation is the one case that ignores the
+caller and stays declined, so a refusal can never be reconstructed into a charge.
+
+**AWS / external services touched**
+Bedrock AgentCore Runtime, Bedrock (nova-lite), Lambda, DynamoDB, CloudWatch Logs, X-Ray,
+IAM, CloudFormation/CDK, S3 (CDK staging).
+
+**Cost-relevant activity**
+**10 AgentCore invocations total**, 9 of which built a run; 7 went through the public
+endpoint and 3 were direct probes with developer credentials. Largest single run 26,063
+input tokens. Two of those 10 were the duplicate-retry bug — which is the cost story: the
+bug's whole shape is *paying twice and never being told*. Day counters ended at
+`live 7/40`, `action 40/600`, `newsession 12/300`. X-Ray: 3 traces, **0 faults, 0 errors**.
+Account sweep after the work: 1 Lambda, 1 table, 1 runtime, 0 EventBridge rules, 0 EC2,
+0 RDS, 0 ECS, no new service anywhere.
+
+**Agent behavior**
+Bedrock/nova-lite through Strands, 12 typed tools, bounds honoured (max 8 iterations
+observed 6–8). A second invocation on a workspace that already had its pool returned
+`no_action` after re-costing five products — **idempotent, no duplicate pool**. Direct
+invocation against a workspace with no Community returned
+`workspace has no community; this runtime does not create one` and wrote **zero rows**,
+confirming the runtime cannot bootstrap or destroy a workspace it shares.
+
+**Validation**
+Deployment: runtime `READY` v2 with the intended env; stack `UPDATE_COMPLETE`;
+`pool-demo-state` `ACTIVE`, PAY_PER_REQUEST, TTL `ENABLED`. Isolation: a second session
+sees 0 pools and 404s on the first session's pool id, and the two DynamoDB partitions are
+disjoint. Refusals: 8 malformed workspace shapes → 400; a body naming another workspace is
+ignored; custom `instruction` → 400; unknown trigger → 400 with the allowlist; reset during
+a held lease → 409; a live run on a busy workspace → `workspace_busy` **without spending a
+paid unit**; an exhausted session cap → 429 with the shared day counter **unchanged**.
+Ambiguity: both a forced client error and a genuine read timeout classify as
+`ambiguous_remote_execution` with `allow_local_fallback: false` and the lease **held**, and
+the abandoned run's pool was still there afterwards — the honest outcome.
+Product QA on the public URL, full lifecycle to completion: **10 buyers, 11 memberships
+(1 declined and kept, `card_declined` intact in Operations), 24/24 units against MOQ 24,
+0 surplus, 2 cases, $861.44 all-in, $266.32 saved**, 10/10 pickups. The timing split is
+**8 due / 18 units + 2 pulled forward / 6 units at discovery** — reproduced identically by
+three separate AgentCore runs and by the offline showcase — and **7 / 16 + 3 / 8 over the
+ten buyers of the finished pool**, because the decline recovery replaces a routine buyer
+with a pulled-forward one. Two moments, two true answers; see the reconciliation below. Post-lock withdrawal → 409; credential
+replay → refused; forged credential → refused. `/docs`, `/redoc`, `/openapi.json` serve the
+SPA and expose no schema; every non-allowlisted path 404s; no `access-control-*` header on
+any origin; the served bundle contains no credential, ARN, account id, table name or
+function name. 375 px: **0 horizontal overflow on every view** (the wide supplier table
+scrolls inside `.table-scroll`). Dark mode 15.93:1 body / 7.10:1 muted. No console errors
+beyond the 429/409 this QA deliberately caused.
+Tests: **705 passing** (634 agent + 71 infra), up from 700. Both new regression suites were
+confirmed to **fail against the pre-fix code** before being accepted.
+
+**Failures / dead ends**
+Twelve concurrent requests fired to force multi-container scheduling hit Lambda's own
+throttle and returned bare 429s — this account's concurrency limit is 10, and the demo's
+real ceiling is therefore ~10 simultaneous requests. Not a product fault; the UI degraded
+to an error card with a *Start a fresh session* affordance. Also: the first attempt to
+observe the ambiguous branch by temporarily repointing `AGENTCORE_QUALIFIER` on the live
+function was refused by tooling policy, so the branch was exercised by running the deployed
+code path locally against the real runtime instead — same code, real AWS, no change to what
+the public URL was serving.
+
+**What we learned**
+Two lessons with the same shape: **a comment describing an invariant is not the invariant.**
+The retry config carried a paragraph explaining why a second invocation would be
+unacceptable, and asked for one anyway; the payment provider was correct in every test
+because every test was one process. Both bugs live exactly where local execution and Lambda
+execution differ — retries below the application's own concurrency control, and process
+memory beside durable state. A shared-state architecture makes both far more consequential
+than they were the day before: until #0028 the runtime wrote a throwaway store, so a
+duplicate run cost tokens and nothing else. **Test at the boundary the deployment actually
+has**, which is why the new payments tests instantiate two providers.
+
+**Article fodder**
+Article 2. `total_max_attempts` vs `max_attempts` is a genuinely good short story — a
+one-word config bug that defeated a distributed lock by operating underneath it, found only
+because a timeout was deliberately provoked against real infrastructure. The payment-intent
+bug is the companion piece on why "works locally" and "works serverless" are different
+claims.
+
+**Evidence worth preserving**
+Run `run_f542309cf199` → `pool_d6e1981c0937` with matching `created_by_run`, correlated
+across the Lambda log line, the runtime log line and the DynamoDB row. The two-run timeline
+(`19:51:26.392` / `19:51:26.409`) from one `invoke_agent_runtime`. The stranded-capture
+state (`captured: 1, capture_pending: 1, authorized: 8`) and the agent's own tool record
+`lock_pool ok=False Error: PaymentError - unknown payment reference`. The completed
+Operations view showing `SIMULATED-ORDER-…` and `Pia V. · card_declined` retained.
+
+**Relevant commits / files**
+`services/agent/pool/api/public_demo.py` (retry config),
+`services/agent/pool/adapters/payments.py` (reference-encoded intents),
+`services/agent/tests/test_payments.py` (+4 cross-container tests),
+`services/agent/tests/test_agentcore_shared_workspace.py` (+1 retry test),
+`BUILD_HISTORY.md` (ledger: table replaced, new AgentCore IAM policy, Lambda 90 s).
+
+**Two reconciliations, closing the same phase**
+
+Reviewing the report against the data turned up two numbers that did not survive being
+asked where they came from. Neither was a crash; both were the interface stating
+something the system does not do.
+
+*The timing split reported two different ways.* 7/16 + 3/8 and 8/18 + 2/6 both appeared,
+and the first reading was that the live agent had discovered a different pool from the
+canonical one. It had not. Measured across the four surviving workspaces, **every
+AgentCore discovery produced 8/18 + 2/6, exactly matching the offline showcase** — the
+model chose the same pool the deterministic planner does. 7/16 + 3/8 is the *same pool
+after recovery*, over its ten final buyers: Pia V.'s card declines and the replacement
+recruited is a pulled-forward member, so one member moves columns. Discovery and outcome,
+not live and canonical. `test_the_convergence_figure_matches_the_seed` now asserts against
+the discovery step explicitly, and said so by failing the first time it was pointed at the
+finished pool.
+
+*The figure drew a person who does not exist.* `ConvergenceFigure` claimed in its own
+docstring to be "the arithmetic of the pool this community actually forms", drew eleven
+people, and ended "the eleventh authorised nothing, so nothing happens to them."
+Recomputing from the seed: **thirteen** households hold a whey need, **none** is
+timing-ineligible — 8 routine (18 units) and 5 who authorised an early purchase (13
+units). Pool takes two of those five, and not the two nearest: it reaches past a 16-days-
+early 2-unit need to a 19 and a 29 whose 3 + 3 lands on twenty-four **exactly**. The three
+it leaves are not people who withheld permission; they are people whose units would have
+been surplus nobody ordered. The figure was right about 8/18 and 2/6 and wrong about the
+more interesting half. Now thirteen rows, and the drawing shows Pool reaching past nearer
+candidates — the no-speculative-surplus invariant made visible rather than asserted.
+
+*A published bound no run could hit.* `WORKFLOW_TIMEOUT_SECONDS` was 45 in
+`agentcore.json` and **120** in the demo function's environment — against that function's
+own **90 s** timeout. So on the local execution path the innermost deadline sat outside
+the outermost one and could never fire; Lambda would kill the request at 90 first. And
+because `/api/health` publishes the function's copy, the Live-on-AWS view printed
+"120s wall clock" directly beneath a deployed AgentCore run actually held to 45. Set to
+**45 in both**, which restores the nesting in both directions — **45 agent → 60 bridge
+read → 90 function** — and makes the single number that page prints true of every run it
+lists, wherever it ran. Observed offline runs are 108 ms–1.1 s, so 45 s is ~40x headroom.
+`test_every_published_bound_is_one_a_run_can_actually_hit` pins the two files together and
+refuses any bound that exceeds the function timeout.
+
+**Redeployed** for these two: both are user-visible on the public URL — one is copy in the
+served bundle, the other an environment variable the health endpoint publishes — so
+leaving them uncommitted-but-undeployed would have kept the live demo stating them.
+Tests after: **707 passing** (635 agent + 72 infra). Both new tests were confirmed to fail
+against the pre-fix figure and the pre-fix bound.
+
+**What the pair have in common:** each was a *number that had stopped describing
+anything*, and each had a comment nearby asserting it was accurate — "it is the
+arithmetic... drawn", "the three numbers live in three files, which is why this is worth
+asserting". The existing deadline test did assert an ordering; it just asserted the
+runtime's bound and never the function's own. A test that checks the number you remembered
+to check is not coverage of the claim.

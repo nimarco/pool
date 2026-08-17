@@ -16,7 +16,9 @@ from pool.domain.models import (
     ParticipationState,
     PaymentState,
     PoolStatus,
+    parse_iso,
 )
+from pool.domain.timing import evaluate_timing
 from pool.services.demo import run_showcase
 from tests.conftest import WS
 
@@ -77,6 +79,73 @@ def test_the_pool_is_split_into_due_now_and_pulled_forward(repo):
     # and both the figure and the demo script would be overclaiming.
     assert facts["due_now_units"] < facts["threshold_units"]
     assert facts["pulled_forward_members"] >= 1
+
+
+def test_the_convergence_figure_matches_the_seed(repo):
+    """The landing page's figure claims to be this arithmetic drawn. Hold it to that.
+
+    ``ConvergenceFigure`` in ``apps/web/src/brand.tsx`` says in its own docstring that it
+    is "not an illustration of the general idea — it is the arithmetic of the pool this
+    community actually forms". A drawing that says that has to be checked, and until
+    #0030 it was not: it drew eleven people, one of whom "authorised nothing", and no
+    such person exists — every household with a whey need is timing-eligible. It was
+    right about 8/18 and 2/6 and wrong about why the rest sat it out, which is the more
+    interesting half of the picture.
+
+    So this recomputes the populations from the seed and compares them with the rows the
+    figure actually draws. It reads the TSX because the coupling that broke is exactly
+    the one between that file and this data.
+
+    **The figure draws discovery, not the finished pool,** and the difference is not
+    cosmetic: the scenario later declines a card and recruits a replacement, which moves
+    a third member into the pulled-forward column. Discovery is 8/18 + 2/6; the pool that
+    completes is 7/16 + 3/8 over its ten buyers. Both are true of different moments, and
+    reading one as the other is the mistake this test now makes impossible.
+    """
+    import pathlib
+    import re
+
+    result = _run(repo)
+    pool = repo.get_pool(WS, result.pool_id)
+    day = parse_iso(pool.timing.distribution_starts_at).date()
+    discovery = _step(result, "latent_demand_discovered")
+
+    routine, pulled_eligible = [], []
+    for need in repo.list_needs(WS):
+        if need.product_id != pool.product_id:
+            continue
+        verdict = evaluate_timing(need, day)
+        assert verdict.eligible, (
+            f"{need.household_id} is timing-ineligible; the figure draws nobody in that "
+            "state, so either the seed or the figure has moved"
+        )
+        (pulled_eligible if verdict.is_future_pull_forward else routine).append(need)
+
+    # Who the pool took *at discovery*, which is the moment the figure depicts.
+    taken = discovery["pulled_forward_members"]
+    spare = len(pulled_eligible) - taken
+
+    assert discovery["due_now_members"] == len(routine)
+    assert discovery["due_now_units"] == sum(n.quantity for n in routine)
+    # The claim the caption rests on: the taken pull-forwards close the gap *exactly*.
+    assert discovery["due_now_units"] + discovery["pulled_forward_units"] == (
+        pool.threshold_units
+    ), "the figure says six units close the gap exactly; they no longer do"
+    assert spare > 0, (
+        "with nobody left over, the surplus rule the caption cites is invisible — the "
+        "figure would be claiming a restraint the data never exercises"
+    )
+
+    source = (
+        pathlib.Path(__file__).resolve().parents[3] / "apps" / "web" / "src" / "brand.tsx"
+    ).read_text()
+    block = re.search(r"const rows:[^=]+=\s*\[(.*?)\];", source, re.S)
+    assert block, "could not find the figure's rows array"
+    drawn = re.findall(r'kind:\s*"(due|pulled|spare)"', block.group(1))
+
+    assert drawn.count("due") == len(routine), (drawn.count("due"), len(routine))
+    assert drawn.count("pulled") == taken, (drawn.count("pulled"), taken)
+    assert drawn.count("spare") == spare, (drawn.count("spare"), spare)
 
 
 def test_the_count_reconciles_after_a_declined_card(repo):

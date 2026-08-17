@@ -729,10 +729,19 @@ class AgentCoreBridge:
                 # shared state, and the caller would never know it happened
                 # (AGENTS.md §3.1).
                 #
+                # ``total_max_attempts``, not ``max_attempts``. They are not synonyms:
+                # botocore treats ``max_attempts`` as the legacy shorthand and resolves
+                # it to ``total_max_attempts = max_attempts + 1``, so the obvious-looking
+                # ``{"max_attempts": 1}`` asks for one *retry* — two invocations. That is
+                # not a style point. Observed on the deployed stack (#0030): one live
+                # action whose read timed out started two agent runs 17 ms apart, both
+                # coordinating the same workspace, because the retry is issued inside
+                # botocore and never passes the workspace lease that serialises callers.
+                # One paid run became two, and the second was invisible from every side.
                 config=Config(
                     connect_timeout=LIVE_CONNECT_TIMEOUT_SECONDS,
                     read_timeout=LIVE_READ_TIMEOUT_SECONDS,
-                    retries={"max_attempts": 1, "mode": "standard"},
+                    retries={"total_max_attempts": 1, "mode": "standard"},
                 ),
             )
         return self._client

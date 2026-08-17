@@ -204,7 +204,19 @@ class PoolDemoStack(Stack):
             "MAX_TOOL_CALLS_PER_RUN": "25",
             "MAX_TOOL_RETRIES": "3",
             "MAX_DUPLICATE_TOOL_CALLS": "2",
-            "WORKFLOW_TIMEOUT_SECONDS": "120",
+            # 45, matching `agentcore/agentcore.json`, and it has to be *below* this
+            # function's own timeout to mean anything. It was 120 — larger than the 90 s
+            # timeout below — so a wedged run here would have been killed by Lambda at 90 s
+            # and this bound could never have fired. A limit that cannot be reached is not
+            # a limit, and worse, it is the number `/api/health` publishes and the
+            # Live-on-AWS view prints as the wall clock every run is held to. A judge read
+            # "120s" beside a run whose real bound was 45 (#0030).
+            #
+            # Both environments now state the same figure, so the one number that page
+            # shows is true of every run it lists, wherever that run executed.
+            # `infra/test_demo_stack.py` pins it to the runtime's value and to the
+            # ordering below.
+            "WORKFLOW_TIMEOUT_SECONDS": "45",
             "MAX_ROUTE_MATRIX_CELLS": "100",
             #
             # No STRIPE_API_KEY, no STRIPE_WEBHOOK_SECRET, and no credential of any
@@ -221,13 +233,19 @@ class PoolDemoStack(Stack):
             # Three nested deadlines, innermost first, so whichever one fires produces a
             # structured answer rather than a dropped connection:
             #
-            #   45 s  the agent's own wall-clock bound inside the runtime
-            #         (WORKFLOW_TIMEOUT_SECONDS in agentcore/agentcore.json) — hitting it
-            #         ends the run loudly as a recorded loop fault, and that record is
-            #         still returned;
+            #   45 s  the agent's own wall-clock bound — WORKFLOW_TIMEOUT_SECONDS, and the
+            #         same 45 in both places it can run: inside the AgentCore runtime
+            #         (agentcore/agentcore.json) and inside this function (the env above).
+            #         Hitting it ends the run loudly as a recorded loop fault, and that
+            #         record is still returned;
             #   60 s  this function's read timeout on invoke_agent_runtime, so a runtime
             #         that never answers becomes a reported failure here;
             #   90 s  this timeout, the outermost net.
+            #
+            # The innermost rung has to be genuinely innermost in *both* directions. It
+            # was 45 remotely and 120 locally, and 120 sits outside this 90 — so on the
+            # local path the nesting was inverted and the agent's own bound was dead
+            # config (#0030).
             #
             # It was 30 s, which was ample for the showcase (~800 DynamoDB round trips)
             # and is not for a live agent invocation: the Lambda would have been killed

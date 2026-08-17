@@ -156,6 +156,84 @@ def test_an_unknown_reference_raises_rather_than_guessing():
         LocalSimulatedPaymentProvider().capture(reference="nope", idempotency_key="c")
 
 
+# ------------------------------------------------- one processor, many processes
+#
+# Every test above uses one provider instance, which is one Lambda container. The
+# deployed demo is not one container: the browser fires several requests per action and
+# Lambda answers them from whichever it likes, so an authorisation is routinely taken on
+# one and captured on another. These four run each half on its *own* provider, which is
+# the only arrangement that can see #0030.
+
+
+def _second_container() -> LocalSimulatedPaymentProvider:
+    """A provider that has never seen the reference it is about to be handed."""
+    return LocalSimulatedPaymentProvider()
+
+
+def test_a_capture_on_another_container_still_finds_the_authorisation():
+    """The bug that stranded a locked pool on the deployed demo.
+
+    Authorise on container A, capture on container B. B's ``_intents`` is empty, and it
+    used to raise ``unknown payment reference`` from inside ``capture_pool`` — after the
+    pool had already locked, so the money was neither captured nor released and no
+    further run could reach it (``lock_pool`` short-circuits on an already-locked pool).
+    """
+    auth = LocalSimulatedPaymentProvider().authorize(
+        amount_cents=7184, payment_method_ref="pm_ok", idempotency_key="a", metadata={}
+    )
+    captured = _second_container().capture(reference=auth.reference, idempotency_key="c")
+
+    assert captured.ok is True
+    assert captured.status == "succeeded"
+    assert captured.amount_cents == 7184, "the amount must survive the hop, not be guessed"
+
+
+def test_a_capture_failure_still_fails_on_another_container():
+    """The simulation's teeth have to survive the hop too. A method that authorises and
+    fails at capture must fail on whichever container captures it — otherwise the
+    recovery branch quietly stops being reachable in the deployment that has it."""
+    auth = LocalSimulatedPaymentProvider().authorize(
+        amount_cents=5000,
+        payment_method_ref=f"pm_{CAPTURE_FAILURE_MARKER}",
+        idempotency_key="a",
+        metadata={},
+    )
+    result = _second_container().capture(reference=auth.reference, idempotency_key="c")
+
+    assert result.ok is False
+    assert result.failure_code == "capture_failed"
+
+
+def test_a_declined_authorisation_cannot_be_captured_on_another_container():
+    """The one rebuild that must ignore what the caller is asking for. A declined card
+    is declined from every container; reconstructing it as capturable would turn a
+    refusal into a charge."""
+    auth = LocalSimulatedPaymentProvider().authorize(
+        amount_cents=5000,
+        payment_method_ref=f"pm_{FAILING_METHOD_MARKER}",
+        idempotency_key="a",
+        metadata={},
+    )
+    result = _second_container().capture(reference=auth.reference, idempotency_key="c")
+
+    assert result.ok is False
+    assert auth.ok is False
+
+
+def test_cancel_and_refund_also_survive_the_hop():
+    """Release-the-stale-hold and refund run on whatever container the next request
+    lands on, and both are gated on the authoritative ``PaymentRecord`` before they get
+    here (``services/payments.py``)."""
+    ref = LocalSimulatedPaymentProvider().authorize(
+        amount_cents=2500, payment_method_ref="pm_ok", idempotency_key="a", metadata={}
+    ).reference
+
+    assert _second_container().cancel(reference=ref, idempotency_key="x").ok is True
+    assert _second_container().refund(
+        reference=ref, amount_cents=2500, idempotency_key="y"
+    ).ok is True
+
+
 # ------------------------------------------------------------------------ webhooks
 
 

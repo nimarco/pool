@@ -85,6 +85,8 @@ nothing is findable.
 | `[HITL]` | Human-in-the-loop and authorization semantics. |
 | `[AGENT]` | Agent loop behavior, tool use, prompting, termination. |
 | `[AWS]` | AWS service behavior, limitations, surprises. |
+| `[FRONTEND]` | Interface, information architecture, and how real behaviour is made legible. |
+| `[SECURITY]` | Authorization boundaries, credential handling, privacy, and exposure surface. |
 
 ---
 
@@ -2439,3 +2441,365 @@ same `run_id=run_94aaa6bdd740`.
 `services/agent/tests/test_public_demo.py`, `infra/demo_app.py`,
 `infra/test_demo_stack.py`, `Makefile`, `BUILD_HISTORY.md` (ledger + this entry),
 `docs/COST_NOTES.md`, `docs/HACKATHON_SCORECARD.md`, `README.md`
+
+---
+
+### #0026 — [2026-08-16] — The lifecycle became the interface
+`[FRONTEND]` `[DEMO]` `[ARCHITECTURE]` `[ARTICLE-3]`
+
+**Goal / user intent**
+Make the submission competitive on the two criteria the engineering had not been buying:
+**Design** and **Presentation**. The official rubric is five equally weighted criteria, so
+those two are 40% of the score, and they are the only two a judge assesses almost entirely
+from the interface and the video.
+
+**Starting state**
+Six tabs named after internal roles — Community, Needs, Host, **Operator**, Agent, Impact —
+plus three unexplained buttons in the header. The best thing in the project, the full
+thirteen-step lifecycle, was one button that dumped a transcript into a panel rendering
+`key value · key value · key value` in monospace. The live AgentCore action, the single
+strongest piece of technical evidence, sat below the fold on tab five, and during its ten
+to twenty seconds the only feedback was a disabled button reading "Invoking AgentCore…".
+
+Three real defects were found while reading it:
+
+- The active nav item never highlighted. The CSS styled `[aria-current="page"]`; the
+  component set `className="active"`. Nothing matched, so a judge had no idea where they
+  were.
+- The viability panel — thirteen checks, the clearest evidence of deterministic safety in
+  the product — rendered each row with `className="feed-line"`, which the stylesheet
+  defines as the 1-pixel-wide vertical connector of the activity timeline.
+- `docs/ARCHITECTURE.md` and `docs/PILOT_READINESS.md` still said **"Not verified against a
+  live account — no credentials were configured"**, three entries after Bedrock, AgentCore,
+  DynamoDB and a public URL were all cloud-verified. A judge who read the architecture doc
+  would have concluded nothing was deployed.
+
+**Decision**
+Rebuild the front end around the lifecycle instead of around the data model, and give the
+AI/deterministic boundary a visual grammar instead of a paragraph.
+
+1. **The run is the product.** *The run* presents the server's transcript as thirteen acts,
+   one at a time, each with an act label, a headline, the figures that matter set as
+   figures, and the evidence behind them. Arrow keys advance it.
+2. **Three actors, three shapes.** Moss diamond = the agent chose this. Graphite square =
+   deterministic code computed it. Clay circle = a person was asked. Every act, every feed
+   entry, every panel that attributes an action carries one. Distinguishable without colour.
+3. **Five surfaces named for what a visitor wants**: Overview · The run · Live on AWS ·
+   Community · Operations. Nothing was deleted — Needs and Impact folded into Community,
+   Host and Operator into Operations.
+4. **The waiting state teaches.** The live panel shows the request's path, the caps the run
+   is bounded by, and the complete list of twelve tools the agent may choose from. When the
+   answer returns, the ones it actually chose are marked in order and the rest grey out.
+
+**Why**
+The transcript-reader framing was forced by a measurement: the whole lifecycle executes in
+**~40 ms**. Streaming it would show nothing, and replaying it on a timer would be a progress
+animation implying work that was already over — the thing `AGENTS.md` §8 exists to forbid.
+So the stage bar prints the measured round trip (`whole run: 43 ms`) and the screen is
+honestly a reader, not a player.
+
+The live panel's waiting state came from the same constraint. A browser making one HTTPS
+request can observe its own send and its own receive and nothing between. Lighting up
+"AgentCore ✓ → Bedrock ✓ → tools ✓" during those seconds would be fiction. Showing the
+twelve-door catalogue instead is true, it is genuinely interesting for fifteen seconds, and
+it sets up the payoff: *here is everything it could have done, here is what it did.*
+
+Rejected: a judge-driven wizard where each act is its own server call. More honest-feeling,
+but host acceptance has no endpoint in the public allowlist, so it could not be driven from
+a browser without widening the anonymous API — trading a real security property for a
+presentation one.
+
+**Implementation** — implemented and tested.
+
+- `apps/web/src/`: `styles.css` rewritten as a design system; new `brand.tsx`, `ui.tsx`, and
+  `views/{overview,run,live,community,operations,pool}.tsx`; the 1,366-line `views.tsx`
+  removed. Self-hosted Instrument Serif for display, so every judge sees the same face
+  rather than Iowan on a Mac and Georgia everywhere else.
+- `agent/tools.py`: added `TOOL_SURFACE`, the single definition of the tool catalogue, with
+  each tool's authority (`read` / `act` / `end`). `/api/health` serves it, so the UI cannot
+  show a list that has drifted from what Strands is actually given.
+  `test_agent_projection.py` asserts it against `build_tools()`.
+- `/api/demo/config` now answers in **every** mode. It existed only under
+  `POOL_PUBLIC_DEMO`, so a local run 404'd on every page load — correct behaviour, red line
+  in the console of a demo whose whole pitch is honesty about what it is.
+- `services/demo.py`: host candidates and the selected host carry display names. The
+  transcript rendered `hh_marchetti` while every other surface in the product says "Gio M.".
+- Contrast: `--ink-faint` was 3.55:1 on paper and 4.03:1 in dark. Both now ≥ 5:1. It carries
+  every caption, table header and figure label in the product.
+- `docs/architecture.svg` hand-authored, landscape, and legible. The Mermaid render of the
+  same graph was 1474 × 2902; `docs/architecture.mmd` and `make diagram` are gone.
+- The three defects above, fixed.
+
+**AWS / external services touched**
+Bedrock AgentCore Runtime and Amazon Bedrock — **one** live invocation, to verify the new
+live-agent experience against the real path rather than a local approximation.
+
+**Cost-relevant activity**
+One AgentCore invocation: 19,025 input / 436 output tokens on `us.amazon.nova-lite-v1:0`.
+Deliberately one. The failure state was verified by pointing the local judge-mode server at
+a non-existent runtime ARN, which exercises the error path at the AWS API boundary and
+spends nothing. All visual iteration ran against the offline planner.
+
+**Agent behavior**
+Live run on AgentCore: 6 iterations, terminated `completed`, outcome `pool_created`, one
+human decision created. Tools called, in order: `list_latent_demand` →
+`evaluate_pool_economics` → `create_candidate_pool` → `find_host_candidates` →
+`request_host_acceptance`. Five of twelve — the seven it did not choose are what makes the
+catalogue worth showing.
+
+**Validation**
+583 application + 63 infrastructure tests, `ruff` clean, `tsc` clean, production build
+clean, secret scan clean. In the browser: desktop and 375 px, light and dark, fresh session,
+reset, the full thirteen-act run, pool detail, operations, keyboard stepping, and a
+scripted overflow sweep across all five surfaces — `scrollWidth === clientWidth === 375`
+everywhere, with the only "overflowing" nodes being the off-screen skip link, the nav's own
+scroll container, and the table inside `.table-scroll`. Console clean on a fresh tab. Live
+success and live failure both observed on screen.
+
+**Failures / dead ends**
+Wrote *"Committed buyers disturbed: 0"* as a figure on the recovery act. It is true of the
+design, but the server does not report it, so it was a number the client had invented —
+exactly what the layering everywhere else in this project exists to prevent. Replaced with
+funded-before and funded-after, both server values, and the claim moved into prose where it
+belongs. Same fix applied to a hardcoded "One" on the consent act, and to a headline reading
+"Two people were asked. Eight were not", which would have silently become false the moment
+the seed data changed.
+
+**Then the same mistake, one level up, and it took a reader to catch it.** The landing
+figure asserted *"seven fall due together, two are pulled forward"* — nine people — under
+a headline reading "Ten people wanted the same thing", above a run that ends with ten
+buyers and a pool page listing **eleven** members. Three different numbers across three
+screens, none of them wrong on its own, and no way for a judge to reconcile them.
+
+Checking it against the domain rather than against intuition produced better copy than the
+guess had:
+
+| | people | units |
+| --- | --- | --- |
+| Buying about now anyway | 8 | 18 |
+| Pulled forward, with permission | 2 | 6 |
+| **Demand in this pool** | **10** | **24** |
+| Supplier minimum | | 24 |
+
+Eight were going to buy anyway and that is eighteen units against a twenty-four minimum;
+two more had authorised an early purchase and their six units close the gap *exactly*.
+That is the `18` the README had been quoting all along — the figure had simply been drawn
+from memory instead of from the run. And the eleventh membership is the declined card,
+which is why ten people buy while the record shows eleven.
+
+Fixed by making both facts server-computed rather than authored: `_timing_split()` in
+`services/demo.py` calls the same `evaluate_timing` the matcher used, and the recovery step
+now carries `members_matched_at_discovery` / `buyers_after_recovery` /
+`memberships_on_record` / `memberships_that_failed`. `buyer_count` joins `member_count` on
+every pool view, so the Community row reads *"10 buyers (11 on record — 1 declined)"*
+instead of a bare eleven. Three tests now assert the arithmetic: the split accounts for
+every member and every unit, due-alone demand is genuinely below the supplier minimum
+(otherwise the pull-forward mechanic has stopped being load-bearing and the story is
+overclaiming), and matched − declined + replacements = buyers.
+
+**What we learned**
+`AGENTS.md` §2 already said it — *"engineering effort that never becomes visible or
+explicable is under-rewarded"* — but the sharper version is that **the same discipline
+applies to the interface as to the domain.** The temptation in a presentation layer is to
+type a number that you know is right. It is the identical failure mode as letting a model
+state a price: the value stops being traceable to the thing that computed it.
+
+And the failure is *quiet*. Every one of "seven", "ten" and "eleven" was defensible in
+isolation; the inconsistency only exists across screens, so no single view looks wrong and
+no test that checks a view catches it. The rule that survives is narrower than "don't
+invent numbers": **a number the interface asserts must come from the same computation the
+product used to act on it.** When the split came from `evaluate_timing` instead of from
+memory, the copy got better as a side effect — eighteen units against a twenty-four
+minimum, closed exactly by six, is a sharper sentence than anything that was there before.
+
+**Article fodder**
+Article 3 — the actor grammar is the act-versus-ask boundary made visible, and the strongest
+concrete artifact that essay could have. Article 2 — publishing `TOOL_SURFACE` from the
+agent's own definition, and the twelve-doors device it enables. Demo — the script is rewritten
+against the interface that now exists.
+
+**Evidence worth preserving**
+The live result panel: 5,019 ms inside the agent, 11,268 ms inside AWS, 19,025/436 tokens,
+`us.amazon.nova-lite-v1:0`. The tool catalogue with five marked `called #1`…`called #5` and
+seven greyed to `not chosen`. The failure banner reading *"The deployed agent did not answer
+this time (AccessDeniedException). Nothing below is affected — it is computed locally."* The
+before/after of the viability panel, which was a column of 1-pixel-wide rows.
+
+**Relevant commits / files**
+`apps/web/src/**`, `apps/web/index.html`, `apps/web/package.json`,
+`services/agent/pool/agent/tools.py`, `services/agent/pool/api/app.py`,
+`services/agent/pool/api/public_demo.py`, `services/agent/pool/services/demo.py`,
+`services/agent/tests/{test_api,test_agent_projection,test_demo_scenario}.py`,
+`docs/architecture.svg`, `docs/DEMO_SCRIPT.md`, `docs/ARCHITECTURE.md`,
+`docs/PILOT_READINESS.md`, `docs/HACKATHON_SCORECARD.md`, `README.md`, `Makefile`
+
+---
+
+### #0027 — [2026-08-17] — The product became the demo
+`[FRONTEND]` `[SECURITY]` `[DEMO]` `[ARTICLE-1]`
+
+**Goal / user intent**
+#0026 made the lifecycle legible and then made it the whole application. Reviewed in a
+browser the result read as *an interactive presentation about Pool* rather than *Pool*:
+"The run" and "Live on AWS" were primary navigation, Scan/Advance/Reset sat in the global
+header like a test harness, an agent-run diagnostic was the first thing on the page, and
+the centrepiece was a 01/13 stepper narrating what the demo had loaded. All useful
+material, all in the wrong layer.
+
+**Decision**
+Invert the three layers. The product is primary, technical proof is secondary and hangs
+off the object it explains, and the thirteen-stage reader is tertiary.
+
+- **Home is a member's front page.** You arrive signed in as Rosa N., a real member of the
+  seeded community with two standing needs, who — because one of her own Smart Join rules
+  does not clear — is one of the people Pool has to *ask*. So the first thing a judge sees
+  is a genuine question addressed to them.
+- **Navigation is four things a member has**: Home, Pools, Needs, Community.
+- **A pool is a persistent record** with Overview / People / Economics / Fulfilment /
+  Activity. The Activity tab carries the audit trail, the coordinator's tool sequence, the
+  deployed AgentCore run, and the thirteen-stage reader as *How this pool happened*.
+- **Demo controls are a drawer** behind the environment indicator. Pool is a three-sided
+  product and a judge is one person, so this is where they act for the other nine.
+
+**Why**
+The rule for the drawer is what makes it defensible: **no control sets state**. Every
+button calls the endpoint that participant would call, and a control that cannot legally
+run is not offered — availability is derived from the pool's own status and the decisions
+actually outstanding. There is no "mark this pool purchased", because Pool has no such
+operation.
+
+**Implementation** — implemented and tested.
+
+Ten endpoints of the forty-five moved into the public allowlist (14 → 24 paths): a
+member's own account view, a host's inbox, offering to host, answering a host offer,
+opening the pickup window, and leaving a pool. What stayed out, and why, is now written
+down next to the allowlist itself: `lock` and `purchase` are the *agent's* decisions and a
+button taking them directly would contradict the central claim of the project; `override`
+would make the single-use pickup guarantee decorative; `operator/offers` would let a
+stranger poison the economics every other number derives from; the payment webhook is
+never trusted from a client.
+
+Posture went **up**, not down. Seven handlers now spend the deterministic action
+quota — three of them (`respond`, `pickup-credential`, `redeem`) were reachable and
+unmetered before this pass. The per-session cap went 40 → 100 because one hands-on run is
+about thirty actions and 40 was a limit a genuine visitor could hit halfway through; the
+paid action keeps its own far tighter budget of 3/session and 40/day, untouched.
+
+**Two real bugs, both found by building the product flow rather than by testing:**
+
+1. **Answering a host offer did nothing.** `respond_to_decision` handled only the two
+   buyer kinds. A `HOST_OFFER` decision went to APPROVED, the candidate stayed OFFERED, no
+   assignment was written, and the pool sat in HOST_RECRUITING forever. The previous UI
+   shipped an "Accept the job" button wired to exactly that path — it had never worked.
+   The activity log also reported a host's answer as *"Buyer approved the final offer"*.
+2. **`manual_advance` ran the discovery prompt locally.** The trigger-to-prompt map lived
+   in the public-mode guard, so outside public mode the trigger fell through to the
+   coordinator's default and the agent went hunting for new pools instead of advancing the
+   one in front of it. Same button, same request, different behaviour depending on an
+   environment variable — the kind of difference that survives right up until someone
+   demonstrates it live.
+
+**AWS / external services touched**
+Bedrock AgentCore Runtime and Amazon Bedrock — one live invocation, through the recomposed
+product in judge mode, served from the production bundle.
+
+**Cost-relevant activity**
+One AgentCore invocation: 19,355 in / 556 out on `us.amazon.nova-lite-v1:0`. Everything
+else ran on the deterministic planner.
+
+**Agent behavior**
+Live run: 6 iterations, `completed`, one human decision created, five of twelve tools
+chosen — `list_latent_demand` → `evaluate_pool_economics` → `create_candidate_pool` →
+`find_host_candidates` → `request_host_acceptance`. Measured at three layers: 5,712 ms
+inside the agent, 13,470 ms inside AWS, plus the browser's round trip.
+
+**Validation**
+589 application + 63 infrastructure tests, lint, typecheck, build and secret scan all
+clean; design detector empty. The complete lifecycle driven by hand through the product
+and confirmed against the server at every step:
+
+```
+find          → host_recruiting  buyers=10/10  funded=0/24   decisions=1
+host accepts  → host_selected    buyers=10/10  funded=0/24   decisions=0
+advance       → funding          buyers=10/11  funded=20/24  decisions=2
+buyers answer → funding          buyers=10/11  funded=24/24  decisions=0
+advance       → purchased        buyers=10/11  funded=24/24
+open pickup   → distributing     buyers=10/11  funded=24/24
+handout       → completed        buyers=10/11  funded=24/24
+```
+
+Ten buyers on eleven memberships throughout — the #0026 reconciliation holds under a
+hand-driven run, not just under the scripted one. No horizontal overflow at 375 px on any
+surface; console clean.
+
+**Failures / dead ends**
+Wanted the deployed AgentCore call to *be* the product action — press "Find
+opportunities", the deployed coordinator investigates, product state changes. It cannot,
+and the reason is configuration rather than code: the runtime ships `POOL_REPOSITORY=memory`,
+so it holds no shared state and physically cannot write to a visitor's DynamoDB session.
+Replaying the deployed run's decisions locally and presenting them as the deployed agent's
+work was considered and rejected outright — that is fabrication under AGENTS.md §8.
+So the honest framing shipped instead: the deployed run works from its own copy, the
+screen says exactly that and says *why*, and what it proves is that the coordination the
+judge has been driving is the same code running on AWS.
+
+**Preservation pass**
+A review of the diff caught something the recomposition had quietly cost: deleting the old
+landing page took the *argument* with it. The thesis line, the three claims, "why this
+needs an agent", the community-boundary framing that carries the Good Neighbor case — and,
+worst of the lot, the **legend for the three actor marks**, which the product uses
+everywhere and now explained nowhere. Removing something from primary navigation is not
+the same as deleting it.
+
+All of it came back as an **About** surface reachable from the drawer and the footer, with
+the drawer gaining direct routes to every deep surface — *What Pool is*, *Agent
+execution*, *How a pool happens stage by stage*, *Operations console* — each landing on
+the evidence rather than on a record's front page. The thirteen-stage reader and the
+AgentCore view were never deleted, only relocated onto the pool they describe.
+
+Two loose ends from opening the allowlist closed with it. `host-response` went back out:
+the product answers host offers through the decision inbox like every other question Pool
+asks, and a second path nothing calls is surface without a capability (23 paths, not 24).
+`hosting/opportunities` stayed and finally got a caller — switch account to the host and
+Home shows *"You are carrying this order · 0 of 10 collected · $44.68 you earn"*, which is
+the three-sided product demonstrated rather than asserted. `host-offer` and `withdraw`
+became member actions on a pool: *Offer to carry this*, and *Leave this pool*, whose
+refusal on a locked pool is the server's own sentence — a deterministic boundary a judge
+can trigger in two clicks.
+
+**Showcase mode**
+The guided experience came back as a *second mode* rather than as a replaced one. The
+environment drawer opens **Showcase**, which swaps the top navigation for the original
+five destinations — Overview, The run, Live on AWS, Community, Operations — and offers
+*Leave showcase* to return. It shares every component, every piece of state and every API
+call with the product; the only additions are two variant props, so `About` can render the
+landing-page calls to action instead of a back button and `AgentExecution` can carry its
+own page heading. There is no second scenario and no second copy of any figure.
+
+Both readings of Pool are now available from one build: use it as a member, or be walked
+through it. The embedded lifecycle reader and Agent execution inside a pool record stayed
+exactly where they were.
+
+**What we learned**
+The information architecture *is* the argument. Identical components, identical data,
+identical agent — arranged as a walkthrough it reads as a hackathon exhibit, arranged as a
+product it reads as a company. And building the product flow found two bugs a green test
+suite had not, both in code paths the previous UI *exposed but never exercised*, which is
+its own lesson: a button nobody has pressed is not a tested code path.
+
+The corollary, learned the same day: a capability nobody can *reach* is also not a
+capability. Depth is only worth keeping if it has a door.
+
+**Article fodder**
+Article 1 — the strongest available demonstration that this is a coordination product
+rather than an agent demo. Article 3 — the drawer is the act-versus-ask boundary from the
+other side: everything in it is a *person* answering, because those are the only decisions
+Pool does not make itself.
+
+**Relevant commits / files**
+`apps/web/src/App.tsx`, `apps/web/src/views/{home,pools,needs,pool,demo-panel,community,operations,live,run}.tsx`,
+`apps/web/src/{api.ts,styles.css,brand.tsx}`, `apps/web/src/views/overview.tsx` (removed),
+`services/agent/pool/api/{app,public_demo}.py`,
+`services/agent/pool/services/coordination.py`,
+`services/agent/tests/{test_api,test_coordination,test_public_demo}.py`,
+`README.md`, `docs/{DEMO_SCRIPT,HACKATHON_SCORECARD,COST_NOTES}.md`

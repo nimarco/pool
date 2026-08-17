@@ -291,8 +291,20 @@ It is never presented as evidence that Bedrock works; every run records its
 
 ### AWS status
 
-Implemented and synthesizing. **Not verified against a live account** — no credentials
-were configured. Nothing here claims a deployment that has not happened.
+Four legs are **cloud-verified** — observed working on a real account, not merely
+synthesizing:
+
+| Service | Status |
+| --- | --- |
+| Amazon Bedrock | **Verified.** `us.amazon.nova-lite-v1:0` drives the real Strands loop and the real tools on both the discovery path (`make verify-bedrock`) and the consequential recovery-and-lock path (`make verify-recovery`). |
+| Bedrock AgentCore Runtime | **Verified.** `agentcore_app.py` deployed, `READY` in `us-east-1`, invoked from a public browser through the demo bridge. |
+| DynamoDB | **Verified.** The complete lifecycle runs on a real table with identical economics; the first live write found a `Decimal` bug no fake could have. |
+| Lambda Function URL | **Verified.** The public judge demo — the SPA and the reduced API from one function, on one origin. |
+
+Still **implemented but never called against the live service**: EventBridge (ships
+disabled) and Amazon Location. Neither is on the judge path, and both are named here
+rather than quietly implied. Nothing in this repository claims a deployment that has not
+happened; `docs/HACKATHON_SCORECARD.md` carries the evidence per item.
 
 Not in the CDK stack, deliberately:
 

@@ -130,6 +130,30 @@ def _suggest_site(ctx: ToolContext, household_ids: list[str]) -> tuple[str, str]
     return best.id, best.name
 
 
+#: The complete tool surface, in the order the model is given it, with the authority
+#: each entry carries.
+#:
+#: ``read`` cannot change anything. ``act`` commits Pool to something a member or a
+#: supplier can observe. ``end`` closes the run. Published by the API so the UI can show
+#: what the agent may choose from without keeping a second list that drifts;
+#: ``test_agent_projection.py`` asserts it against what :func:`build_tools` returns, so
+#: adding a tool without describing it fails the suite.
+TOOL_SURFACE: tuple[tuple[str, str], ...] = (
+    ("list_latent_demand", "read"),
+    ("evaluate_pool_economics", "read"),
+    ("create_candidate_pool", "act"),
+    ("find_host_candidates", "read"),
+    ("request_host_acceptance", "act"),
+    ("issue_final_offer", "act"),
+    ("inspect_pool", "read"),
+    ("list_pools_needing_attention", "read"),
+    ("recover_pool", "act"),
+    ("lock_pool", "act"),
+    ("execute_purchase", "act"),
+    ("record_no_action", "end"),
+)
+
+
 def build_tools(ctx: ToolContext) -> list:
     """Construct the tool set bound to one run's context."""
 

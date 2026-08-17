@@ -1,6 +1,6 @@
 # Demo script — five minutes
 
-One memorable journey. The implementation is sophisticated; the story must not be.
+One journey. The implementation is sophisticated; the story must not be.
 
 **The line everything hangs off:**
 
@@ -8,6 +8,11 @@ One memorable journey. The implementation is sophisticated; the story must not b
 
 Do not spend the video explaining every state, every adapter, every host formula, or
 every future legal question. Show one purchase happening.
+
+The rubric is five equally weighted criteria, and the video is graded on **Presentation**
+while also being most judges' only exposure to **Design** and **Potential Impact**. So
+the video's job is not to enumerate features. It is to make one purchase legible, prove
+the agent is real, and prove the money is honest.
 
 ---
 
@@ -18,168 +23,153 @@ make qa          # everything green before you film anything
 make dev         # API :8000, web :5173
 ```
 
-Open <http://localhost:5173>, press **Reset**, and leave the browser on the landing page.
+Record against the **deployed URL**, not localhost, so the live AgentCore action is
+available and the address bar is itself evidence. Open it, use **Demo University → Reset
+Demo University**, and leave the browser on Home.
 
-Have a second terminal ready with `make demo` typed but not run — it produces the same
-transcript in text, which is useful for the technical section.
+Say what is synthetic once, early — the drawer's *What is real here* block has the exact
+wording. Everything after it is easier to trust.
 
-Check on camera: **Payments: simulated · Purchase: simulated · Model: offline ·
-Background schedules: off** is visible in the footer. Say it out loud once. Everything
-else in the video is easier to trust after that.
+Have a second terminal with `make demo` typed but not run — it produces the same
+lifecycle as a text transcript from the same code path, and it is a legitimate fallback.
 
 ---
 
-## 0:00–0:25 — The problem
+## 0:00–0:20 — The problem
 
-**Show:** the landing page.
+**Show:** Pool's home screen, signed in as Rosa.
 
 > Every campus already does this. Someone posts: *"I can buy 50 tubs of protein powder
-> way cheaper than the store — DM me if you want one."*
+> way cheaper than the store — message me if you want one."*
 >
-> And it works, badly. That person guesses the demand, fronts their own money, buys the
-> stock before anyone has committed, then answers thirty messages, chases payment,
-> arranges meetups, and eats whatever is left over. They're not paid for any of it. So it
-> happens once and stops.
+> It works, badly. That person guesses the demand, fronts their own money, answers thirty
+> messages, chases payment, and eats whatever is left. They are not paid for any of it.
+> So it happens once and stops.
 
-## 0:25–0:50 — The insight
+## 0:20–0:50 — What a member actually has
 
-> Pool runs that job in reverse. Nobody creates a group. People just say what they
-> routinely buy — protein powder every six weeks, coffee every month — and then forget
-> about it.
+**Point at:** *What you buy anyway*.
+
+> This is Pool. Rosa told it two things she buys regularly and then forgot about it. No
+> group, no chat, no sign-up sheet — and twenty-four people in this community have each
+> done the same thing, thirty-three standing needs between them.
+
+**Point at:** the figure beside *Pool is watching*.
+
+> Each line is one person's restock date. Eight fall due in the same week — eighteen
+> units, and the supplier will not sell fewer than twenty-four. Two more would not have
+> bought for weeks, and Pool may bring them forward *only* because those two authorised
+> an early purchase. Their six units close the gap exactly.
+
+## 0:50–1:20 — Pool notices
+
+**Click:** *Find opportunities.*
+
+> Nobody creates a group. Pool's coordinator looks across the standing needs and decides
+> whether an order is worth forming at all.
+
+**Show:** the opportunity that appears.
+
+> Ten people. Twenty-four units. A pool exists that none of them asked for.
+
+**Click:** *Open the pool.*
+
+## 1:20–2:00 — The record, and the money
+
+**Show:** the pool's Overview, then Economics.
+
+> This is a real record, not a summary. Who is carrying it, where it is collected, and
+> thirteen checks that all have to pass before anything is bought.
 >
-> An agent watches for the moment several of those needs line up into something worth
-> buying together.
-
-**Click:** *Enter Demo University.*
-
-## 0:50–1:30 — Latent demand
-
-**Show:** the Needs table, briefly. Then **Run a scan**.
-
-> Nobody here declared a group. Twenty-four students, thirty-three standing needs.
+> And the part I would want as a buyer. Seven hundred and fifty-six dollars of
+> merchandise. Forty-four sixty-eight to the host — funded by the buyers, not by us.
+> Twenty-eight of card processing. Thirty-two seventy to Pool.
 >
-> The agent finds eight people who separately need the same protein powder. That's
-> eighteen tubs — and the supplier minimum is twenty-four. Most systems would stop.
+> All-in eight sixty-one forty-four, against eleven twenty-seven if these ten people had
+> each walked to the campus store. Twenty-three point six percent, *after* everything.
+> Pool's fee is a share of the saving, so no saving means no fee.
+
+## 2:00–2:40 — The other nine people
+
+**Open:** *Demo University → Demo controls.*
+
+> Pool is a three-sided product and I am one person, so this is where I act for everyone
+> else. Every one of these calls the same endpoint that participant would — the host
+> answering an offer, the buyers answering theirs.
+
+**Click:** *accepts the fulfilment job*, then *Let Pool work the queue*.
+
+> The host accepts, so the price can be exact. Pool prices it, and eight of these buyers
+> had already told it their rules — minimum saving, maximum spend, maximum walk. Those
+> pass, so Pool commits for them. Two did not, so they get one question each.
+
+## 2:40–3:20 — Failure, and repair
+
+**Show:** the pool's Buyers, and the record's count.
+
+> And one card is declined. This is where a group buy normally dies in a chat.
 >
-> Two more students don't need theirs for another month, but both explicitly said they'd
-> buy up to five weeks early if it saved money. That authorisation is the only reason
-> Pool may count them — and it takes the order to exactly twenty-four.
+> Ten people were matched. One payment failed, one replacement was recruited — so ten
+> people still buy, and the record carries eleven memberships. The declined one stays
+> here. A record that edits out its failures is not a record.
 
-**Point at:** the trace — `list_latent_demand → evaluate_pool_economics →
-create_candidate_pool → request_host_acceptance`.
+**Click:** *Buyers answer*, then *Let Pool work the queue*, then *Open the pickup
+window*, then *Everyone collects their order*.
 
-> Twenty-four is not a coincidence. The supplier sells twelve-unit cases. Pool picks the
-> set of buyers that fills whole cases exactly, because the alternative is buying stock
-> nobody ordered and quietly billing someone for it.
+> Funded, locked, ordered — clearly labelled simulated — and handed over against a
+> one-time code that works exactly once.
 
-## 1:30–2:05 — Fulfilment and economics
+## 3:20–4:10 — The agent is real
 
-**Show:** the pool detail page — host candidates first.
+**Go to:** the pool's *Activity* tab → **Agent execution**. Press **Run the deployed
+agent**.
 
-> Somebody still has to collect thirty kilos of protein powder and hand it out.
+> Everything you just watched ran on the server — the real Strands event loop, the real
+> tools, the real domain arithmetic, with a deterministic planner in the model's place.
+> That is deliberate: a product that needs a paid model call to render a page is a
+> product that breaks in front of someone.
 >
-> Pool considers standing hosts *and* pool members who clicked "offer to host" — and
-> offering doesn't claim the job. Four candidates. Two are ineligible for stated factual
-> reasons: one wants more money than the job pays, one has no vehicle for a fifty-five
-> kilo load. The evaluator ranks the rest and offers the work to the best fit.
+> This is the exception. It invokes the same coordinator as deployed on Amazon Bedrock
+> AgentCore Runtime, in its own session. Ten to twenty seconds.
 
-**Scroll to:** *Where the money goes.*
+**While it runs, point at:** the tool catalogue.
 
-> And this is the part I'd want to see if I were a buyer. Seven hundred and fifty-six
-> dollars of merchandise. Forty-four dollars sixty-eight to the host, funded by the
-> buyers, not by us. Twenty-eight dollars of card processing. Thirty-two seventy to Pool.
+> These are the only twelve things the model can reach. No shell, no query language, no
+> generic mutation. Seven read, four commit something, one ends the run — and every
+> committing tool is idempotent by an explicit key, because agent systems retry.
+
+**When it returns:** point at the marked tools and the three durations.
+
+> There is what it chose, in order. Time inside the agent, time inside AWS, and the
+> browser's own round trip — three separately measured numbers. If this call had failed,
+> the screen would say so. There is no code path in this repository that fabricates a
+> run.
+
+## 4:10–4:40 — The architecture, in one sentence
+
+**Show:** the *What is running where* block at the foot of Agent execution, or the
+diagram.
+
+> Browser to a Lambda Function URL, which signs an invocation of AgentCore Runtime. Inside
+> it, a bounded Strands loop and Amazon Bedrock. State in one DynamoDB table, isolated per
+> visitor. Structured run records in CloudWatch.
 >
-> All-in: eight hundred sixty-one forty-four, against eleven twenty-seven if these ten
-> people had each walked to the campus store. Twenty-three point six percent — *after*
-> everything. Nothing hidden.
-
-## 2:05–2:45 — Autonomy and payment
-
-**Show:** the Decision Inbox.
-
-> Eight of these students had already told Pool their rules: minimum saving, maximum
-> spend, maximum walk. Those rules pass, so Pool authorises their exact final amount
-> without asking. Two are on "ask me", so they get one question with the answer already
-> worked out.
->
-> And notice the order. The host is chosen *before* anyone is charged, because host pay
-> is part of the price. Pool never authorises forty-two dollars and then charges
-> forty-seven.
-
-## 2:45–3:20 — Failure, and recovery
-
-**Show:** the activity feed.
-
-> Then one card is declined.
->
-> Those two units stop counting as funded, and the order is short. This is where a group
-> buy normally dies in a group chat.
-
-**Show:** the recovery run in the trace.
-
-> The agent goes and finds compatible demand in the wider community — someone whose
-> quantity replaces the gap *exactly*, because over-recruiting would just trade a funding
-> hole for surplus stock. Their own rules pass, their payment authorises, and the order
-> is whole again. Nobody who'd already committed was disturbed.
-
-## 3:20–3:50 — Lock and purchase
-
-**Show:** the viability panel.
-
-> Now the lock. Eleven checks, all of them run: supplier minimum, quote freshness, case
-> allocation, host assigned, host pay clears their minimum, buyers actually save,
-> everyone accepted their price, Pool's own economics, timing, pickup site, funding.
->
-> All eleven pass, so the pool locks and the payments capture — in that order. Then one
-> bulk order goes in.
-
-**Point at:** SIMULATED-ORDER-…
-
-> Clearly labelled simulated, everywhere it appears. No supplier was contacted and no
-> money moved.
-
-## 3:50–4:10 — The physical handoff
-
-**Show:** the Host view.
-
-> The host gets a real job: ten orders, a live checklist, and their earnings broken down.
->
-> Each buyer has a one-time code. Only the hash is stored — the plaintext exists once. The
-> host can't mark anyone collected without it.
-
-**Do:** re-enter a code that's already been used. It is rejected.
-
-> And it works exactly once.
-
-## 4:10–4:40 — Technical proof
-
-**Show:** the Agent view.
-
-> Underneath: Strands running the agent loop with twelve typed tools and nothing else —
-> no shell, no arbitrary queries. Every run bounded at eight iterations and twenty-five
-> tool calls, with duplicate-call detection, and every run terminating in a recorded
-> outcome.
->
-> Bedrock for inference, AgentCore Runtime to host it, DynamoDB for state, EventBridge for
-> the background scan — created disabled — Amazon Location for routing, Stripe test mode
-> for payments.
->
-> The rule underneath all of it: the model decides *what to do*. Deterministic code
-> decides *what is true*. Every price on every screen came from a tool, not from a
+> And the rule underneath all of it: **the model decides what to do; deterministic code
+> decides what is true.** Every price on every screen came from a tool, not from a
 > sentence a model wrote.
 
-## 4:40–4:55 — Impact
+## 4:40–5:00 — Who it is for, and the close
 
-**Show:** the Impact page.
+**Show:** Community.
 
-> The buyer saves. The host earns for work they actually did. The supplier gets a clean
-> bulk order. Pool takes a transparent share of the saving — no saving, no fee.
+> A community is a trust-and-density boundary — a campus, an apartment block, a
+> workplace, a school. Bulk pricing normally favours whoever can afford a bigger purchase
+> up front and has somewhere to put it. This is a way to reach that price without each
+> person carrying the capital, the quantity, the storage and the coordination alone.
 >
-> Bulk pricing usually favours whoever can afford to buy a lot at once and has somewhere
-> to put it. This is a way to reach it without each person carrying all of that alone.
-
-## 4:55–5:00 — Close
-
+> The buyer saves. The host earns for work they actually did. The supplier gets a clean
+> bulk order.
+>
 > Nobody organised the group. Pool noticed.
 
 ---
@@ -187,14 +177,21 @@ create_candidate_pool → request_host_acceptance`.
 ## Rules for the recording
 
 - **Say what is simulated, once, early.** It buys credibility for everything after it.
-- **Never say "deployed"** unless it is, at that moment, deployed and you can show the URL.
-- **Never say a number the screen isn't showing.**
+- **Never say "deployed"** unless it is, at that moment, deployed and on screen.
+- **Never say a number the screen is not showing.**
 - Do not narrate the state machine. Do not narrate the adapters. Do not explain the
   merchant-of-record question. All of it is in the docs for anyone who wants it.
-- If the demo breaks on camera: press **Reset** and re-run. It is deterministic; it will
-  produce the same numbers.
+- Arrow keys step the lifecycle reader, so both hands stay off the mouse there.
+- If the demo breaks on camera: **Demo University → Reset Demo University** and re-run.
+  It is deterministic and will produce the same numbers.
+- The thirteen-stage reader lives on the pool's *Activity* tab as **How this pool
+  happened**. Use it if you want the failure and the repair spelled out with figures —
+  but the product already showed both, so it is optional.
 
 ## Backup
 
 If the UI misbehaves, `make demo` prints the same lifecycle as a transcript from the same
 code path. It is a legitimate fallback, not a different demo.
+
+If the live AgentCore action fails on camera, **say so and move on** — the screen already
+says it, and a recorded failure is worth more than a re-shoot that hides it.

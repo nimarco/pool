@@ -243,6 +243,69 @@ def test_a_declined_offer_moves_to_the_next_candidate(seeded_ctx):
     assert result["next_offered_household_id"] != first.offered_household_id
 
 
+def test_answering_a_host_offer_from_the_decision_inbox_assigns_the_host(seeded_ctx):
+    """The decision inbox is the one place a person answers anything Pool asks.
+
+    A host offer creates a `HOST_OFFER` decision, and `respond_to_decision` used to
+    handle only the two buyer kinds: the decision went to APPROVED, the candidate stayed
+    OFFERED, no assignment was written, and the pool sat in HOST_RECRUITING forever. The
+    UI shipped an "Accept the job" button wired to exactly that path, so the button did
+    nothing. Answering here must reach the same service the host's own endpoint calls.
+    """
+    pool, _ = _candidate_pool(seeded_ctx)
+    hosting.open_host_recruiting(ctx=seeded_ctx, pool_id=pool.id)
+    offer = hosting.offer_to_next_host(ctx=seeded_ctx, pool_id=pool.id)
+    decision = next(
+        d
+        for d in seeded_ctx.repo.list_decisions(WS)
+        if d.kind == DecisionKind.HOST_OFFER
+        and d.household_id == offer.offered_household_id
+        and d.state == DecisionState.PENDING
+    )
+
+    coord.respond_to_decision(ctx=seeded_ctx, decision_id=decision.id, approve=True)
+
+    assignment = seeded_ctx.repo.get_host_assignment(WS, pool.id)
+    assert assignment is not None
+    assert assignment.household_id == offer.offered_household_id
+    assert seeded_ctx.repo.get_pool(WS, pool.id).status == PoolStatus.HOST_SELECTED
+    # And the record says what actually happened, rather than reporting a host's answer
+    # as a buyer approving a price.
+    answered = [e for e in seeded_ctx.repo.list_activity(WS) if e.kind == "decision_answered"]
+    assert answered and "Host accepted" in answered[0].summary
+
+
+def test_declining_a_host_offer_from_the_decision_inbox_moves_on(seeded_ctx):
+    pool, _ = _candidate_pool(seeded_ctx)
+    hosting.open_host_recruiting(ctx=seeded_ctx, pool_id=pool.id)
+    hosting.volunteer_to_host(
+        ctx=seeded_ctx, pool_id=pool.id, household_id="hh_thibault",
+        profile=HostProfile(
+            household_id="hh_thibault", community_id=COMMUNITY_ID, has_vehicle=True,
+            vehicle_capacity_units=100, max_orders=60, max_weight_kg=200,
+            max_supplier_distance_km=50.0, minimum_compensation_cents=0, standing=False,
+        ),
+    )
+    offer = hosting.offer_to_next_host(ctx=seeded_ctx, pool_id=pool.id)
+    decision = next(
+        d
+        for d in seeded_ctx.repo.list_decisions(WS)
+        if d.kind == DecisionKind.HOST_OFFER
+        and d.household_id == offer.offered_household_id
+        and d.state == DecisionState.PENDING
+    )
+
+    coord.respond_to_decision(ctx=seeded_ctx, decision_id=decision.id, approve=False)
+
+    assert seeded_ctx.repo.get_host_assignment(WS, pool.id) is None
+    still_offered = [
+        c for c in seeded_ctx.repo.list_host_candidates(WS, pool.id)
+        if c.state.value == "offered"
+    ]
+    assert len(still_offered) == 1
+    assert still_offered[0].household_id != offer.offered_household_id
+
+
 def test_an_expired_host_offer_does_not_stall_the_pool(seeded_ctx):
     pool, _ = _candidate_pool(seeded_ctx)
     hosting.open_host_recruiting(ctx=seeded_ctx, pool_id=pool.id)

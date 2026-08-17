@@ -49,21 +49,22 @@ Implemented, and verified by tests that were actually run.
 
 ## Needs configuration
 
-The code exists and is exercised by tests. It has never run against the real service,
-because no credentials were configured. Nothing here is claimed as verified.
+Some of this has since been run against a real account and some has not. The table says
+which, because the distinction is the whole value of this document.
 
 ### AWS
 
-| Item | What is needed |
-| --- | --- |
-| Non-root IAM identity | An IAM user or role with the deploy permissions. Never root access keys. |
-| Bedrock model access | Model access granted in the region, then `BEDROCK_MODEL_ID` set to an inference profile the account actually has. |
-| First real inference | One direct Bedrock call, then one Strands tool run, before anything larger. |
-| DynamoDB | `POOL_REPOSITORY=dynamodb`. Table shape is pinned by a fake-client test; the live round trip is unverified. |
-| Amazon Location | `ROUTING_PROVIDER=aws_location`. Uses `geo-routes`, so no calculator resource to provision. |
-| AgentCore Runtime | `agentcore deploy` (official `@aws/agentcore` CLI; config in `agentcore/`). Requires a CDK bootstrap in the account first. |
-| EventBridge background scan | Ships **disabled**. Enabling it starts recurring model invocations. |
-| Public deployment | `make deploy` then `make deploy-web`. |
+| Item | Status | What is needed |
+| --- | --- | --- |
+| Non-root IAM identity | ✅ done | An IAM user or role with the deploy permissions. Never root access keys. |
+| Bedrock model access | ✅ verified | Model access granted in the region, then `BEDROCK_MODEL_ID` set to an inference profile the account actually has. |
+| First real inference | ✅ verified | `make verify-bedrock`, then `make verify-recovery` for the consequential branch. |
+| DynamoDB | ✅ verified | `POOL_REPOSITORY=dynamodb`. The full lifecycle has run on a real table. |
+| AgentCore Runtime | ✅ verified | `agentcore deploy` (official `@aws/agentcore` CLI; config in `agentcore/`). Requires a CDK bootstrap in the account first. |
+| Public judge demo | ✅ verified | `make deploy-demo` — one Lambda, one Function URL, one table. |
+| Amazon Location | ⬜ never called | `ROUTING_PROVIDER=aws_location`. Uses `geo-routes`, so no calculator resource to provision. |
+| EventBridge background scan | ⬜ never enabled | Ships **disabled**. Enabling it starts recurring model invocations. |
+| Pilot-shaped stack (API Gateway, S3, CloudFront) | ⬜ never deployed | `make deploy` then `make deploy-web`. The public demo needs none of it. |
 
 Verification order and the exact commands are in the README and `docs/COST_NOTES.md`.
 

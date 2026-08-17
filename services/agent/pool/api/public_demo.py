@@ -7,7 +7,7 @@ put on the open internet with no authentication, so this module reduces it.
 
 Turned on with ``POOL_PUBLIC_DEMO=true``. What it changes, and why each one matters:
 
-1. **Route allowlist.** Fourteen paths are reachable; everything else 404s before it
+1. **Route allowlist.** Twenty-three paths are reachable; everything else 404s before it
    reaches a handler. Supplier-offer mutation, the operator pickup override, the
    payment webhook, direct ``lock``/``purchase``/``open-distribution`` calls, and the
    private message threads are all outside it. The lifecycle still reaches those code
@@ -69,6 +69,10 @@ ALLOWED_GET = frozenset(
         "/api/operator",
         "/api/pickup-sites",
         "/api/demo/config",
+        # A member's own account view: their Smart Join rules, their community
+        # verification, whether a payment method exists. It already refuses to emit a
+        # contact detail or a payment reference, which is what makes it safe to expose.
+        "/api/hosting/opportunities",
     }
 )
 
@@ -79,6 +83,7 @@ ALLOWED_GET_PATTERNS = tuple(
         rf"^/api/pools/{_ID}/checklist$",
         rf"^/api/pools/{_ID}/allocations$",
         rf"^/api/runs/{_ID}$",
+        rf"^/api/members/{_ID}$",
     )
 )
 
@@ -91,19 +96,52 @@ ALLOWED_POST = frozenset(
     }
 )
 
+#: Participant actions. Each one is something a *person* does in the real product —
+#: answering a question, offering to host, replying to an offer, opening the pickup
+#: window, leaving a pool — performed here against synthetic members inside the caller's
+#: own isolated session.
+#:
+#: What is deliberately still absent, and why:
+#:
+#: * ``lock`` and ``purchase`` — consequential decisions the *agent* makes. The judge
+#:   reaches them by running the agent, which is both the honest path and the one the
+#:   viability engine gates. A button that locks a pool directly would undercut the
+#:   entire claim that the model decides what to do.
+#: * ``override`` — the audited bypass of the pickup credential. Exposing it anonymously
+#:   would make the single-use guarantee decorative.
+#: * ``operator/offers`` — supplier price mutation. A stranger could poison the
+#:   economics every other number on the site is derived from.
+#: * ``webhooks/payments`` — a client-submitted "payment succeeded" is never trusted.
+#: * ``payment-method``, ``threads``, ``issues``, ``close-pickup`` — no product surface
+#:   in the demo needs them, and an endpoint nobody calls is an endpoint nobody has to
+#:   reason about.
+#: * ``host-response`` — the host's own accept/decline route. Real, and reachable on the
+#:   full API, but the product answers host offers through the decision inbox like every
+#:   other question Pool asks, so exposing a second path here would widen the surface
+#:   without adding a capability.
 ALLOWED_POST_PATTERNS = tuple(
     re.compile(p)
     for p in (
         rf"^/api/decisions/{_ID}/respond$",
         rf"^/api/pools/{_ID}/pickup-credential/{_ID}$",
         rf"^/api/pools/{_ID}/redeem$",
+        rf"^/api/pools/{_ID}/host-offer/{_ID}$",
+        rf"^/api/pools/{_ID}/open-distribution$",
+        rf"^/api/pools/{_ID}/withdraw/{_ID}$",
     )
 )
 
 #: Trigger name → the run prompt the *server* supplies for it. ``None`` means the
-#: coordinator's own default discovery prompt. This map is the entire public prompt
-#: surface: a public caller selects a key, never a value.
-PUBLIC_TRIGGERS: dict[str, str | None] = {
+#: coordinator's own default discovery prompt.
+#:
+#: This map is the entire public prompt surface — a public caller selects a key, never a
+#: value — and it is also what makes a local run and a deployed run the same run. It used
+#: to be consulted only in public mode, so ``manual_advance`` against the local API fell
+#: through to the *discovery* prompt and the agent went looking for new pools instead of
+#: advancing the one in front of it. Same button, same name, different behaviour depending
+#: on an environment variable, which is exactly the kind of difference that survives until
+#: someone demonstrates it live.
+TRIGGER_PROMPTS: dict[str, str | None] = {
     "manual_scan": None,
     "manual_advance": (
         "Advance every pool that is blocked: recruit a host, refresh the supplier "
@@ -152,8 +190,15 @@ class PublicDemoSettings:
     #: Directory holding the built SPA (``index.html`` + ``assets/``).
     web_root: str = ""
     quota_table: str = ""
-    max_actions_per_session: int = 40
-    max_actions_per_day: int = 600
+    #: Raised from 40 when the demo stopped being a single scripted button and became a
+    #: product a judge drives themselves. One complete hands-on run — scan, advance,
+    #: answer two decisions, accept the host job, open pickup, then issue and redeem ten
+    #: credentials — is around thirty actions, so 40 was a cap a genuine visitor could
+    #: hit halfway through. These are free, deterministic, server-side operations; the
+    #: cap exists to stop a script, not a judge. The paid action keeps its own far
+    #: tighter budget (3/session, 40/day) and is untouched by this.
+    max_actions_per_session: int = 100
+    max_actions_per_day: int = 1200
     max_live_per_session: int = 3
     max_live_per_day: int = 40
     #: Seeding a cold workspace writes ~100 rows, and any read endpoint will do it for
@@ -387,21 +432,28 @@ class PublicDemoGuard:
     # -- the prompt surface ----------------------------------------------
 
     def resolve_run(self, trigger: str, instruction: str | None) -> tuple[str, str | None]:
-        """Return the ``(trigger, instruction)`` a public run is allowed to use.
+        """Return the ``(trigger, instruction)`` this run is allowed to use.
 
-        Refusing a supplied ``instruction`` rather than dropping it is deliberate: a
-        silently ignored field looks like it worked, and the first person to notice
-        would be someone testing whether the agent can be steered.
+        Refusing a supplied ``instruction`` in public mode rather than dropping it is
+        deliberate: a silently ignored field looks like it worked, and the first person to
+        notice would be someone testing whether the agent can be steered.
+
+        Outside public mode the full API is a development surface and a caller may write
+        the prompt — but a caller who supplies *none* gets the same server-owned prompt the
+        deployed demo would use, so the two behave identically for the triggers the product
+        actually sends.
         """
         if not self.enabled:
+            if instruction is None:
+                return trigger, TRIGGER_PROMPTS.get(trigger)
             return trigger, instruction
         if instruction is not None:
             raise HTTPException(400, "this demo does not accept custom agent instructions")
-        if trigger not in PUBLIC_TRIGGERS:
+        if trigger not in TRIGGER_PROMPTS:
             raise HTTPException(
-                400, f"unknown action: {trigger}. Allowed: {sorted(PUBLIC_TRIGGERS)}"
+                400, f"unknown action: {trigger}. Allowed: {sorted(TRIGGER_PROMPTS)}"
             )
-        return trigger, PUBLIC_TRIGGERS[trigger]
+        return trigger, TRIGGER_PROMPTS[trigger]
 
     # -- the live action -------------------------------------------------
 
@@ -567,6 +619,10 @@ _STATIC_TYPES = {
     ".json": "application/json",
     ".ico": "image/x-icon",
     ".woff2": "font/woff2",
+    # The build emits a .woff alongside every .woff2 as a fallback. Serving it as
+    # application/octet-stream mostly works and occasionally does not, which is the worst
+    # kind of bug to ship on a demo URL.
+    ".woff": "font/woff",
     ".png": "image/png",
     ".webmanifest": "application/manifest+json",
 }
@@ -615,11 +671,6 @@ def install(app: FastAPI, guard: PublicDemoGuard) -> None:
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         return response
-
-    @app.get("/api/demo/config")
-    def demo_config() -> dict[str, Any]:
-        """What this deployment can actually do. The UI labels itself from this."""
-        return guard.config_view()
 
     @app.post("/api/demo/agentcore")
     def demo_agentcore(workspace: str = "") -> dict[str, Any]:

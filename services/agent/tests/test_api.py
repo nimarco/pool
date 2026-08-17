@@ -43,6 +43,48 @@ def test_health_never_reports_a_live_payment_mode(client):
     assert client.get("/api/health").json()["payment_mode"] != "live"
 
 
+def test_health_publishes_the_agent_tool_surface(client):
+    """The UI shows a judge which tools the agent could have chosen from.
+
+    It reads that list from here rather than keeping its own copy, so this endpoint has
+    to serve it in every mode. ``test_agent_projection.py`` is what keeps the list
+    honest against the tools actually built.
+    """
+    tools = client.get("/api/health").json()["agent_tools"]
+    assert len(tools) == 12
+    assert tools[0] == {"name": "list_latent_demand", "kind": "read"}
+    assert {t["kind"] for t in tools} <= {"read", "act", "end"}
+
+
+def test_a_named_trigger_gets_the_same_prompt_locally_as_it_would_deployed(client):
+    """`manual_advance` has to mean "advance" everywhere.
+
+    The trigger-to-prompt map used to be consulted only in public mode, so the same
+    button ran the *discovery* prompt against the local API: the agent went hunting for
+    new pools instead of moving the one in front of it. Identical name, identical
+    request, different behaviour depending on an environment variable.
+    """
+    _seed(client)
+    client.post("/api/agent/run", json={"trigger": "manual_scan"})
+    body = client.post("/api/agent/run", json={"trigger": "manual_advance"}).json()
+    called = [t["name"] for t in body["tool_calls"]]
+    assert "list_pools_needing_attention" in called
+    assert "list_latent_demand" not in called
+
+
+def test_demo_config_answers_outside_public_mode(client):
+    """Off is a real answer, and a 404 here put a red line in a judge's console.
+
+    The client asks this on every load to decide whether to offer the live AgentCore
+    action. When the route existed only in public mode, a local run answered 404 — the
+    behaviour was right and the console looked broken.
+    """
+    body = client.get("/api/demo/config").json()
+    assert body["public_demo"] is False
+    assert body["live_agent_available"] is False
+    assert body["payments"] == "simulated"
+
+
 # --------------------------------------------------------------------------- state
 
 
@@ -162,6 +204,25 @@ def test_pool_detail_exposes_economics_hosts_and_viability(client):
     assert body["economics"]["all_in_cents"] > 0
     assert "viability" in body
     assert body["host_candidates"]
+
+
+def test_a_pool_reports_buyers_and_memberships_separately(client):
+    """After a declined card these two counts differ, and the UI shows both.
+
+    `member_count` is every membership still on the record; `buyer_count` is how many
+    people actually receive something. Collapsing them left a judge reconciling
+    "11 members" against "10 handoffs confirmed" with nothing to go on.
+    """
+    client.post("/api/demo/scenario")
+    pool = client.get("/api/state").json()["pools"][0]
+    assert pool["buyer_count"] >= 1
+    assert pool["member_count"] >= pool["buyer_count"]
+    declined = [
+        m
+        for m in client.get(f"/api/pools/{pool['pool_id']}").json()["members"]
+        if m["state"] == "authorization_failed"
+    ]
+    assert pool["member_count"] - pool["buyer_count"] == len(declined)
 
 
 def test_an_unknown_pool_is_a_404(client):

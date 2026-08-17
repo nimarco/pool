@@ -158,8 +158,8 @@ OAC, a bucket policy, a distribution, and an invalidation step, for a 196 KB app
 | Action | Work | Bedrock? |
 | --- | --- | --- |
 | Landing on the site | 1 cold start, ~100 DynamoDB writes to seed the session | No |
-| **Run the full scenario** | ~800 DynamoDB round trips, the whole lifecycle | No |
-| Run a scan / Advance pools | ~90 DynamoDB round trips, one bounded Strands run | **No** — offline planner |
+| **Run the full lifecycle** (the drawer's end-to-end action) | ~800 DynamoDB round trips, all thirteen stages | No |
+| **Find opportunities** / any drawer control | ~30–90 DynamoDB round trips; the agent ones are one bounded Strands run | **No** — offline planner |
 | **Run the deployed agent** | One `InvokeAgentRuntime` | **Yes** — ~19k in / ~470 out on Nova Lite |
 
 Only the last line spends model tokens, and it is capped three ways: **3 per session, 40

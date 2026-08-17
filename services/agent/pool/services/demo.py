@@ -32,9 +32,11 @@ from ..domain.models import (
     ParticipationState,
     PaymentState,
     PoolStatus,
+    parse_iso,
     utcnow,
 )
 from ..domain.money import bps_to_pct_str, format_cents
+from ..domain.timing import evaluate_timing
 from . import communication, fulfillment, hosting
 from . import coordination as coord
 from .context import PoolContext
@@ -67,6 +69,45 @@ class ScenarioResult:
             "pool_id": self.pool_id,
             "steps": [s.to_dict() for s in self.steps],
         }
+
+
+def _timing_split(
+    repo: Repository, ws: str, pool: Any, members: list[Any]
+) -> dict[str, int]:
+    """How much of this pool was already due, and how much had to be pulled forward.
+
+    The headline claim — *seven people were buying about now anyway, and it only clears
+    the supplier's minimum because three more had authorised an early purchase* — is the
+    whole point of §24, so it should be a number the transcript carries rather than a
+    sentence the interface asserts. Computed here by the same
+    :func:`~pool.domain.timing.evaluate_timing` the matcher uses, against the pool's own
+    distribution date, so it cannot disagree with the eligibility decision that formed
+    the pool.
+
+    Returns zeros rather than raising if the pool has no distribution date yet; a
+    transcript step is not the place to discover a missing timing record.
+    """
+    split = {
+        "due_now_members": 0,
+        "due_now_units": 0,
+        "pulled_forward_members": 0,
+        "pulled_forward_units": 0,
+    }
+    if not pool.timing.distribution_starts_at:
+        return split
+    purchase_date = parse_iso(pool.timing.distribution_starts_at).date()
+    for membership in members:
+        need = repo.get_need(ws, membership.need_id)
+        if need is None:
+            continue
+        units = membership.allocated_units or membership.requested_units
+        if evaluate_timing(need, purchase_date).is_future_pull_forward:
+            split["pulled_forward_members"] += 1
+            split["pulled_forward_units"] += units
+        else:
+            split["due_now_members"] += 1
+            split["due_now_units"] += units
+    return split
 
 
 def run_showcase(
@@ -118,6 +159,7 @@ def run_showcase(
     site = repo.get_site(ws, pool.pickup_site_id)
     members = repo.list_memberships(ws, pool.id)
 
+    timing_split = _timing_split(repo, ws, pool, members)
     steps.append(
         Step(
             "latent_demand_discovered",
@@ -136,6 +178,7 @@ def run_showcase(
                 "threshold_units": pool.threshold_units,
                 "pickup_site": site.name if site else "",
                 "status": pool.status.value,
+                **timing_split,
             },
         )
     )
@@ -159,6 +202,18 @@ def run_showcase(
         ),
     )
     evaluation = hosting.evaluate_host_candidates(ctx=ctx, pool_id=pool.id)
+
+    def _named(household_id: str) -> str:
+        """Everywhere else in the product a member is a display name, never an id.
+
+        The evaluator works in identifiers because that is what it joins on, but a
+        transcript is read by people, and `hh_marchetti` says more about someone than
+        `Gio M.` does. Falling back to the id keeps the step honest if a household has
+        gone missing rather than quietly printing nothing.
+        """
+        household = repo.get_household(ws, household_id)
+        return household.display_name if household else household_id
+
     steps.append(
         Step(
             "host_candidates_evaluated",
@@ -166,9 +221,15 @@ def run_showcase(
             "the actual job — capacity, vehicle, distance, availability, and their own "
             "minimum pay",
             {
-                "candidates": evaluation.candidates,
+                "candidates": [
+                    {**candidate, "display_name": _named(str(candidate.get("household_id", "")))}
+                    for candidate in evaluation.candidates
+                ],
                 "eligible_count": evaluation.eligible_count,
+                # The identifier, deliberately: this is a cross-reference into the
+                # candidate list, not something rendered to anyone.
                 "volunteer": VOLUNTEER_HOST,
+                "volunteer_display_name": _named(VOLUNTEER_HOST),
             },
         )
     )
@@ -189,7 +250,7 @@ def run_showcase(
             "The best-ranked host accepted. Their pay is now a known input to every "
             "buyer's price",
             {
-                "host_household_id": offer.offered_household_id,
+                "host": _named(offer.offered_household_id),
                 "reward_total": format_cents(accept.get("reward_total_cents", 0)),
                 "reward_breakdown": assignment.reward_breakdown if assignment else {},
                 "handled_orders": assignment.handled_orders if assignment else 0,
@@ -315,12 +376,34 @@ def run_showcase(
         if recovery_events
         else 0
     )
+    # The count reconciliation, in the one place where the numbers stop agreeing: ten
+    # people were matched, one card was declined, one replacement was found — so ten
+    # people buy, and the record carries eleven memberships. Without this a reader adds
+    # 8 authorised + 2 asked + 1 declined, gets 11, and cannot square it with "ten".
+    all_memberships = repo.list_memberships(ws, pool.id)
+    paying_states = {
+        ParticipationState.AUTHORIZED,
+        ParticipationState.LOCKED,
+        ParticipationState.FINAL_OFFERED,
+    }
     steps.append(
         Step(
             "recovery",
             "Pool searched the wider community for compatible demand and restored the "
             "order without disturbing the buyers who were already committed",
             {
+                # `members` is still the discovery-time list, which is exactly the
+                # "ten people were matched at the start" the reconciliation needs.
+                "members_matched_at_discovery": len(members),
+                "buyers_after_recovery": sum(
+                    1 for m in all_memberships if m.state in paying_states
+                ),
+                "memberships_on_record": len(all_memberships),
+                "memberships_that_failed": sum(
+                    1
+                    for m in all_memberships
+                    if m.state == ParticipationState.AUTHORIZATION_FAILED
+                ),
                 "recovered": bool(recovery_events),
                 "replacements_authorised": replacements,
                 "tools_called": [t.name for t in run2.tool_calls + run3.tool_calls],

@@ -1,11 +1,41 @@
 # Pool
 
-**Pool notices when nearby people could save by buying together, then handles the
-coordination needed to make the group purchase actually happen.**
+**Nobody organised the group. Pool noticed.**
+
+Pool finds the moment when several people in one community independently need the same
+thing, works out whether buying it together is genuinely worth it, recruits and pays
+somebody to collect it, and runs the coordination that makes the informal version
+collapse.
 
 Built for the [AWS Agents for Humans hackathon](https://agentsforhumans.devpost.com/) —
-**Good Neighbor Agents** track. The value here is structurally collective: one person
-alone cannot create it.
+**Good Neighbor Agents** track. The value is structurally collective: one person alone
+cannot create it.
+
+![Pool's architecture](docs/architecture.svg)
+
+---
+
+## Open this first
+
+**<https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/>**
+
+No account, no signup, no credentials, no configuration. You land inside Demo University
+as one of its members. Press **Find opportunities** and Pool's coordinator goes looking
+for overlapping demand; when it finds some, open the pool it formed and drive the rest —
+the host answering, a card being declined, the repair, the order, the handover — from the
+**Demo controls** drawer, which acts for the other synthetic participants.
+
+Then, on that pool's **Activity** tab, open **Agent execution** and press the one button
+on the site that actually leaves it: a real invocation of the same coordinator on Amazon
+Bedrock AgentCore Runtime.
+
+Or run everything locally, offline and free:
+
+```bash
+make install     # Python agent, web app, CDK deps
+make qa          # lint, typecheck, tests, build, secret scan
+make dev         # API on :8000, web on :5173
+```
 
 ---
 
@@ -73,25 +103,53 @@ make demo        # the full lifecycle end to end, printed as a transcript
 make dev         # API on :8000, web on :5173
 ```
 
-Then open <http://localhost:5173> and press **Run the full scenario**.
+Then open <http://localhost:5173> and press **Find opportunities**.
 
 `make demo-local` runs the same app in **judge mode** — the reduced configuration the
 public demo deploys in, served from a single origin on :8000.
+
+### What the app is
+
+Pool as a member of Demo University sees it. You are signed in as one of them; the
+top-right control switches account, holds the demo controls, and explains what is real.
+
+| | |
+| --- | --- |
+| **Home** | Your restocks, anything Pool needs to ask you, and what it has found for the community |
+| **Pools** | The orders people are making together, and the full record of each one |
+| **Needs** | What you buy anyway — and the community's standing needs, none of which are organised into anything |
+| **Community** | Demo University: the map, what Pool did, and where the money went |
+
+A pool's own record carries the depth: **Overview**, **People**, **Economics**,
+**Fulfilment**, and an **Activity** tab holding the audit trail, the agent's tool
+sequence, the deployed AgentCore run, and a thirteen-stage reader for the whole
+lifecycle. None of that is in the navigation, because a student buying protein powder
+has no use for a Bedrock model id and a judge auditing the agent has nothing but use
+for it.
+
+Every action is attributed to one of three actors wherever it appears: **the agent chose
+to do this**, **deterministic code computed it**, or **a person was asked**.
+
+### Driving it alone
+
+Pool is a three-sided product and a judge is one person. The **Demo controls** drawer
+acts on behalf of the other synthetic participants — the host answering an offer, the
+remaining buyers answering theirs, the scheduler opening the pickup window, everyone
+collecting. Each control calls the same endpoint that participant would call, so the
+state machine, the economics and every viability check still apply, and a control that
+cannot legally run is not offered.
 
 ---
 
 ## The judge experience — live
 
-**<https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/>**
-
-No AWS account, no CLI, no credentials, no setup. The public demo is a **separate, tiny
-stack** — one Lambda behind a Function URL, serving both the web app and a fourteen-path
-API, plus one DynamoDB table.
+The public demo is a **separate, tiny stack** — one Lambda behind a Function URL, serving
+both the web app and a twenty-three-path API, plus one DynamoDB table.
 
 ```
 browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
                                              ├─ the built SPA (same origin, no CORS)
-                                             ├─ 14 allowlisted API paths
+                                             ├─ 23 allowlisted API paths
                                              ├─ DynamoDB — this session only, 24 h TTL
                                              └─ InvokeAgentRuntime — the one live action
 ```
@@ -118,12 +176,21 @@ Strands loop with the offline planner, the real domain maths, the real state mac
 That is deliberate: a demo that depends on a paid model call for every interaction is a
 demo that breaks in front of someone.
 
-Exactly one action leaves the machine. **Run the deployed agent** on the Agent tab
-invokes Pool's coordinator on **Amazon Bedrock AgentCore Runtime** — a real model, a
+Exactly one action leaves the machine. **Run the deployed agent**, on a pool's
+*Activity → Agent execution*, invokes Pool's coordinator on **Amazon Bedrock AgentCore
+Runtime** — a real model, a
 real Strands loop, real Pool tools — in its own isolated runtime session, and reports
 the tool sequence, the model id, the token counts and the termination reason. It is
 capped, it is labelled, and if it fails it says so. **There is no code path that
 fabricates a run** (`AGENTS.md` §8).
+
+That call takes ten to twenty seconds, so the screen spends them saying something true.
+It shows the path the request takes, the caps the run is bounded by, and the complete
+list of tools the agent is allowed to choose from; when the answer comes back, the ones
+it actually chose are marked, in order. A browser making one HTTPS request can observe
+its own send and its own receive and nothing in between, so nothing animates a journey
+through AWS it did not watch. Three real, separately measured durations come back with
+the result: time inside the agent, time inside AWS, and the browser's own round trip.
 
 ```bash
 make demo-local   # judge mode, locally, free
@@ -244,8 +311,19 @@ demand exists; the deterministic timing engine decides *who is actually eligible
 member who authorised no early purchase is never pulled forward, however convenient it
 would be for the case count.
 
-In the demo this is not decoration: current demand reaches 18 units against a 24-unit
-minimum, and only permitted pull-forward demand completes the order.
+In the demo this is not decoration, and the split is a figure the transcript carries
+rather than a claim the interface makes: **eight people were buying about now anyway —
+18 units, against a supplier minimum of 24. Two more had authorised an early purchase,
+and their 6 units close the gap exactly.** Ten people, twenty-four units, two whole
+cases. Take away the pull-forward pair and this pool does not form.
+
+### Ten people bought. The record shows eleven
+
+The counts move once, and the run says so where it happens. Ten people are matched at
+discovery. One card is then declined, and recovery finds one replacement — so ten people
+still buy, and the pool's record carries **eleven memberships**, the extra one being the
+failed authorisation. It stays visible on the pool page instead of being deleted, and
+every surface reports both numbers: `buyer_count` alongside `member_count`.
 
 ### Offering to host is not claiming the job
 
@@ -427,7 +505,11 @@ services/agent/pool/
   agent/           Strands coordinator, tools, bounds, result projection, offline planner
   api/             FastAPI
   data/seed.py     the synthetic Demo University dataset
-apps/web/          React app: buyer, host, operator, judge
+apps/web/src/
+  styles.css       the design system: paper, ink, and the three-actor colour grammar
+  brand.tsx        the mark, and the one figure that explains the mechanism
+  ui.tsx           primitives — actors, figures, ledgers, traces, drawn icons
+  views/           overview · run · live · community · operations · pool
 infra/             CDK stack + cost-safety tests
 docs/              architecture, pilot readiness, thesis, demo script, scorecard
 ```

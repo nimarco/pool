@@ -36,6 +36,7 @@ from ..adapters.repository import Repository, build_repository
 from ..adapters.routing import build_routing
 from ..adapters.sourcing import SyntheticCatalogProvider
 from ..agent.coordinator import PoolCoordinator
+from ..agent.tools import TOOL_SURFACE
 from ..config import get_settings
 from ..data.seed import COMMUNITY_ID, seed
 from ..domain.models import (
@@ -65,7 +66,7 @@ WORKSPACE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 GRID_DECIMALS = 3  # ~110 m — enough for community context, not enough to find a door
 
 #: Judge mode. Off by default, so a local run is the full application; on, it reduces
-#: this API to fourteen allowlisted paths with no prompt surface. See
+#: this API to twenty-three allowlisted paths with no prompt surface. See
 #: ``pool/api/public_demo.py``. Built before the app because it decides two of its
 #: constructor arguments.
 _public = public_demo.PublicDemoGuard()
@@ -239,6 +240,11 @@ def health() -> dict[str, Any]:
             "max_duplicate_tool_calls": _settings.bounds.max_duplicate_tool_calls,
             "workflow_timeout_seconds": _settings.bounds.workflow_timeout_seconds,
         },
+        # The whole surface the model can reach, alongside the bounds it runs under —
+        # both answer "what shape is this agent". Served from the single definition in
+        # `agent/tools.py` so the UI cannot show a tool list that has drifted from the
+        # one Strands is actually given.
+        "agent_tools": [{"name": name, "kind": kind} for name, kind in TOOL_SURFACE],
     }
 
 
@@ -279,7 +285,24 @@ def _pool_view(ws: str, pool, *, detail: bool = False) -> dict[str, Any]:
         "threshold_units": pool.threshold_units,
         "provisional_units": coord.provisional_units(ctx, pool.id),
         "funded_units": coord.funded_units(ctx, pool.id),
+        # Two different counts, because they genuinely differ once a payment fails and a
+        # replacement joins: `member_count` is every membership still on the record,
+        # including one whose card was declined; `buyer_count` is how many people are
+        # actually going to receive something. A UI that shows only the first makes a
+        # judge reconcile "11 members" against "10 handoffs" on their own.
         "member_count": len(live),
+        "buyer_count": sum(
+            1
+            for m in live
+            if m.state
+            in {
+                ParticipationState.AUTHORIZED,
+                ParticipationState.LOCKED,
+                ParticipationState.FINAL_OFFERED,
+                ParticipationState.PROVISIONAL,
+                ParticipationState.ELIGIBLE,
+            }
+        ),
         "progress_pct": (
             min(100, round(coord.provisional_units(ctx, pool.id) * 100 / pool.threshold_units))
             if pool.threshold_units
@@ -742,6 +765,7 @@ def respond(
     decision_id: str, body: DecisionResponse, workspace: str = Query("demo")
 ) -> dict[str, Any]:
     ws = check_workspace(workspace)
+    _public.spend_action(ws)
     ctx = ctx_for(ws)
     try:
         decision = coord.respond_to_decision(
@@ -785,6 +809,7 @@ def volunteer_host(
     best-ranked eligible one.
     """
     ws = check_workspace(workspace)
+    _public.spend_action(ws)
     ctx = ctx_for(ws)
     pool = repo().get_pool(ws, pool_id)
     if pool is None:
@@ -823,6 +848,7 @@ def respond_host(
     pool_id: str, household_id: str, body: HostOfferResponse, workspace: str = Query("demo")
 ) -> dict[str, Any]:
     ws = check_workspace(workspace)
+    _public.spend_action(ws)
     try:
         return hosting.respond_to_host_offer(
             ctx=ctx_for(ws), pool_id=pool_id, household_id=household_id, accept=body.accept
@@ -835,6 +861,7 @@ def respond_host(
 def withdraw(pool_id: str, household_id: str, workspace: str = Query("demo")) -> dict[str, Any]:
     """Leave a pool. Refused after lock — the money is captured and the order placed."""
     ws = check_workspace(workspace)
+    _public.spend_action(ws)
     try:
         return coord.withdraw_participant(
             ctx=ctx_for(ws), pool_id=pool_id, household_id=household_id
@@ -876,6 +903,7 @@ def purchase(pool_id: str, workspace: str = Query("demo")) -> dict[str, Any]:
 @app.post("/api/pools/{pool_id}/open-distribution")
 def open_distribution(pool_id: str, workspace: str = Query("demo")) -> dict[str, Any]:
     ws = check_workspace(workspace)
+    _public.spend_action(ws)
     try:
         return fulfillment.open_distribution(ctx=ctx_for(ws), pool_id=pool_id)
     except (CoordinationError, fulfillment.FulfillmentError) as exc:
@@ -895,6 +923,7 @@ def issue_credential(
     again invalidates the previous pair — so a screenshot shared earlier is worthless.
     """
     ws = check_workspace(workspace)
+    _public.spend_action(ws)
     try:
         credential = fulfillment.issue_pickup_credential(
             ctx=ctx_for(ws), pool_id=pool_id, household_id=household_id
@@ -908,6 +937,7 @@ def issue_credential(
 def redeem(pool_id: str, body: RedeemRequest, workspace: str = Query("demo")) -> dict[str, Any]:
     """The host scans a QR or types a short code. The server decides, not the host."""
     ws = check_workspace(workspace)
+    _public.spend_action(ws)
     result = fulfillment.redeem_pickup(
         ctx=ctx_for(ws), pool_id=pool_id, presented=body.value, is_code=body.is_code
     )
@@ -1196,6 +1226,19 @@ def pickup_sites(workspace: str = Query("demo")) -> dict[str, Any]:
         ],
         "permission_legend": {p.value: p.name for p in PickupPermission},
     }
+
+
+@app.get("/api/demo/config")
+def demo_config() -> dict[str, Any]:
+    """What this deployment can actually do. The UI labels itself from this.
+
+    Answers in *every* mode, not only in public mode. It used to exist only when
+    ``POOL_PUBLIC_DEMO`` was set, so a local run answered 404 and the client swallowed
+    it — which worked, but put a red line in the console of anyone who opened dev tools
+    on a demo whose whole pitch is that it is honest about what it is. There is nothing
+    to hide here: the payload is a capability description, and off is a real answer.
+    """
+    return _public.config_view()
 
 
 # Registered last so the public allowlist sees every route above it, and so the SPA

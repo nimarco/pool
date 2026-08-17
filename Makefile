@@ -93,10 +93,9 @@ secret-scan: ## Scan the repo for anything that looks like a credential
 secret-scan-selftest: ## Prove the secret scanner still detects planted secrets
 	@bash scripts/secret_scan_selftest.sh
 
-.PHONY: diagram
-diagram: ## Re-render the architecture diagram from its Mermaid source
-	npx -y @mermaid-js/mermaid-cli@11 -i docs/architecture.mmd -o docs/architecture.svg -b transparent
-	@echo "→ docs/architecture.svg"
+# docs/architecture.svg is hand-authored, not generated. Mermaid laid the same graph
+# out at 1474 x 2902, which is unreadable in a README and useless in a video frame —
+# and a diagram nobody can read is not evidence of anything. Edit the SVG directly.
 
 .PHONY: qa
 qa: lint typecheck test build secret-scan ## Everything CI would run

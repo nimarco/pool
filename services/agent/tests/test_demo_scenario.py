@@ -60,6 +60,49 @@ def test_nobody_created_the_group(repo):
     assert facts["provisional_units"] >= facts["threshold_units"]
 
 
+def test_the_pool_is_split_into_due_now_and_pulled_forward(repo):
+    """The headline arithmetic, and it has to add up.
+
+    The landing page draws this split and *The run* prints it, so the two halves must
+    account for every member and every unit of the pool — otherwise the interface is
+    telling a story the transcript does not support.
+    """
+    facts = _step(_run(repo), "latent_demand_discovered")
+    assert facts["due_now_members"] + facts["pulled_forward_members"] == facts["members"]
+    assert (
+        facts["due_now_units"] + facts["pulled_forward_units"] == facts["provisional_units"]
+    )
+    # And the point of the scenario: due demand alone does not clear the supplier's
+    # minimum. If it ever did, the pull-forward mechanic would stop being load-bearing
+    # and both the figure and the demo script would be overclaiming.
+    assert facts["due_now_units"] < facts["threshold_units"]
+    assert facts["pulled_forward_members"] >= 1
+
+
+def test_the_count_reconciles_after_a_declined_card(repo):
+    """Ten matched, one declined, one replacement — ten buyers, eleven memberships.
+
+    A judge stepping through sees "10 people", then "1 declined", then a pool page
+    listing 11. The transcript has to carry the reconciliation itself rather than
+    leaving three screens to be squared by hand.
+    """
+    result = _run(repo)
+    facts = _step(result, "recovery")
+    assert facts["memberships_on_record"] == (
+        facts["buyers_after_recovery"] + facts["memberships_that_failed"]
+    )
+    assert facts["memberships_that_failed"] >= 1
+    assert facts["buyers_after_recovery"] >= 1
+    # The reconciliation the run screen prints, end to end: matched, minus the declined,
+    # plus the replacements, equals the people who actually buy.
+    matched = facts["members_matched_at_discovery"]
+    assert matched == _step(result, "latent_demand_discovered")["members"]
+    assert (
+        matched - facts["memberships_that_failed"] + facts["replacements_authorised"]
+        == facts["buyers_after_recovery"]
+    )
+
+
 def test_the_agent_loop_stayed_bounded(repo):
     result = _run(repo)
     facts = _step(result, "latent_demand_discovered")
@@ -78,12 +121,17 @@ def test_hosts_were_ranked_from_both_sources(repo):
     # At least one candidate is refused for a stated factual reason, not a vibe.
     ineligible = [c for c in facts["candidates"] if not c["eligible"]]
     assert ineligible and all(c["ineligible_reasons"] for c in ineligible)
+    # Candidates are named the way members are named everywhere else.
+    assert all(c["display_name"] and not c["display_name"].startswith("hh_")
+               for c in facts["candidates"])
 
 
 def test_the_selected_host_is_paid_a_broken_out_reward(repo):
     result = _run(repo)
     facts = _step(result, "host_accepted")
-    assert facts["host_household_id"]
+    # A display name, not an identifier: the transcript is read by people, and it should
+    # not say more about a member than the rest of the product does.
+    assert facts["host"] and not facts["host"].startswith("hh_")
     assert facts["handled_orders"] > 0
     assert sum(facts["reward_breakdown"].values()) > 0
     assert facts["reward_breakdown"]["per_order"] > 0

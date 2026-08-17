@@ -104,7 +104,11 @@ export interface PoolView {
   threshold_units: number;
   provisional_units: number;
   funded_units: number;
+  /** Every membership still on the record, including any whose payment failed. */
   member_count: number;
+  /** How many of those are actually going to receive something. Differs from
+   *  `member_count` exactly when an authorisation failed and a replacement joined. */
+  buyer_count: number;
   progress_pct: number;
   has_final_offer: boolean;
   quote_verified_at: string;
@@ -279,7 +283,15 @@ export interface Health {
   purchase_executor: string;
   purchase_simulated: boolean;
   schedules_enabled: boolean;
-  bounds: Record<string, number>;
+  bounds: {
+    max_iterations: number;
+    max_tool_calls: number;
+    max_duplicate_tool_calls: number;
+    workflow_timeout_seconds: number;
+  };
+  /** The exact tool surface the running agent was given, served from its own
+   *  definition so the UI cannot display a catalogue that has drifted. */
+  agent_tools: { name: string; kind: "read" | "act" | "end" }[];
 }
 
 export interface RunResult {
@@ -360,6 +372,45 @@ export interface OperatorView {
   issues: Record<string, unknown>[];
   failed_runs: { run_id: string; outcome: string; termination_reason: string; notes: string[] }[];
   metrics: Metrics;
+}
+
+export interface MemberView {
+  id: string;
+  display_name: string;
+  zone: string;
+  community_membership: {
+    community_id: string;
+    status: string;
+    verification_method: string;
+    verified_at: string;
+  } | null;
+  has_payment_method: boolean;
+  autonomy_display: {
+    mode: string;
+    min_savings: string;
+    max_spend: string;
+    max_travel: string;
+    substitution: string;
+    public_pickup_only: boolean;
+  };
+  host_profile: Record<string, unknown> | null;
+}
+
+export interface HostOpportunities {
+  household_id: string;
+  offers: {
+    pool_id: string;
+    product_name: string;
+    orders: number;
+    units: number;
+    supplier_distance_km: number;
+    estimated_earnings_display: string;
+    pickup_site: string;
+    distribution_starts_at: string;
+    distribution_ends_at: string;
+    expires_at: string;
+  }[];
+  active_jobs: Checklist[];
 }
 
 export interface Credential {
@@ -496,6 +547,9 @@ export const api = {
   pool: (id: string) => request<PoolView>(`/api/pools/${id}`),
   checklist: (id: string) => request<Checklist>(`/api/pools/${id}/checklist`),
   operator: () => request<OperatorView>("/api/operator"),
+  member: (householdId: string) => request<MemberView>(`/api/members/${householdId}`),
+  hostOpportunities: (householdId: string) =>
+    request<HostOpportunities>(`/api/hosting/opportunities?household_id=${householdId}`),
 
   // The client picks an action *name*; the server owns the prompt. `instruction`
   // replaces the coordinator's entire run prompt, so a browser that could set it
@@ -504,12 +558,18 @@ export const api = {
     post<RunResult>("/api/agent/run", { trigger }),
   respond: (decisionId: string, approve: boolean) =>
     post<Record<string, unknown>>(`/api/decisions/${decisionId}/respond`, { approve }),
-  volunteerHost: (poolId: string, householdId: string, body: Record<string, unknown>) =>
-    post<Record<string, unknown>>(`/api/pools/${poolId}/host-offer/${householdId}`, body),
-  respondHost: (poolId: string, householdId: string, accept: boolean) =>
-    post<Record<string, unknown>>(`/api/pools/${poolId}/host-response/${householdId}`, { accept }),
+  /** Offer to host this pool. Adds you to the candidate set; the deterministic
+   *  evaluator still ranks everyone and offers the job to the best fit. */
+  volunteerHost: (poolId: string, householdId: string, body: Record<string, unknown> = {}) =>
+    post<{ candidates: unknown[]; note: string }>(
+      `/api/pools/${poolId}/host-offer/${householdId}`,
+      body,
+    ),
   withdraw: (poolId: string, householdId: string) =>
     post<Record<string, unknown>>(`/api/pools/${poolId}/withdraw/${householdId}`),
+  /** Open the pickup window once the order has been purchased. */
+  openDistribution: (poolId: string) =>
+    post<Record<string, unknown>>(`/api/pools/${poolId}/open-distribution`),
   issueCredential: (poolId: string, householdId: string) =>
     post<Credential>(`/api/pools/${poolId}/pickup-credential/${householdId}`),
   redeem: (poolId: string, value: string, isCode: boolean) =>
@@ -527,8 +587,9 @@ export const api = {
   reset: () => post<Record<string, unknown>>("/api/demo/reset"),
   scenario: () => post<ScenarioResult>("/api/demo/scenario"),
 
-  /** Present only on the deployed demo; a local API answers 404 and the UI hides
-   *  the live panel rather than offering a button that cannot work. */
+  /** What this deployment can do. Answers everywhere; `live_agent_available` is false
+   *  when no AgentCore runtime is configured, so the UI describes the action rather
+   *  than offering a button that cannot work. */
   demoConfig: () => request<DemoConfig>("/api/demo/config"),
   liveAgent: () => post<LiveAgentResult>("/api/demo/agentcore"),
 };

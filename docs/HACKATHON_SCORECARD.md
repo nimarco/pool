@@ -25,7 +25,7 @@ live store, and a public demo URL a judge can open with no AWS account** (#0019,
 | Public repository | ⬜ | Remote configured, not yet pushed |
 | MIT or Apache licence visible | ✅ | [`LICENSE`](../LICENSE) — MIT |
 | README | ✅ | [`README.md`](../README.md) |
-| Architecture diagram | ✅ | [`architecture.svg`](architecture.svg), source [`architecture.mmd`](architecture.mmd) |
+| Architecture diagram | ✅ | [`architecture.svg`](architecture.svg) — hand-authored and landscape, because the generated Mermaid version was 1474 × 2902 and unreadable in a README or a video frame |
 | Demo video ≤ 5 min | ⬜ | Script written: [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md). Not recorded |
 | AWS Builder ID | ⬜ | User action — account signup |
 | Live demo URL | ✅ | **<https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/>** — deployed 2026-08-16, 8 resources, verified end to end (#0025) |
@@ -96,27 +96,40 @@ public URL. What remains is the demo video and pushing the public repository.
 
 **Strongest evidence:**
 
-- **Four surfaces, each shaped for its user.** Buyer (needs, candidate pools, decision
-  inbox, final offer, pickup code), host (opportunity, live checklist, earnings
-  breakdown), operator (offers, payments, purchases, issues), judge (landing page, one
-  button that runs the whole story).
-- **Judge Mode is frictionless.** No signup, no verification, no configuration. Enter,
-  press one button, watch the entire lifecycle.
-- **The money is the interface.** "Where the money goes" shows merchandise, host pay,
-  processing, and Pool's fee as separate lines against the retail baseline. Hiding
-  operating costs behind a headline discount would be the easy version; this is the honest
-  one.
+- **The product is the demo.** A judge lands signed in as a member of Demo University and
+  drives the real lifecycle: their standing needs, the opportunity Pool finds, the pool
+  record, the declined card, the repair, the handover. Nothing is a slideshow about Pool;
+  every button calls the endpoint the real participant would call, and the state machine,
+  the economics and every viability check apply exactly as they would in production.
+- **Depth without clutter.** The thirteen-stage lifecycle reader and the technical
+  execution evidence both live on a pool's Activity tab rather than in the navigation. A
+  student buying protein powder has no use for a Bedrock model id; a judge auditing the
+  agent has nothing but use for it.
+- **A three-actor visual grammar.** Every action is attributed to *the agent chose this*,
+  *deterministic code computed it*, or *a person was asked* — a shape and a colour,
+  repeated everywhere, distinguishable without colour. The project's central technical
+  claim is legible without reading a paragraph about it.
+- **Four destinations, all of them things a member has**: Home, Pools, Needs, Community.
+  The demo scaffolding — acting for the other nine participants — is a drawer behind the
+  environment indicator, clearly labelled as scaffolding, and a control that cannot
+  legally run is not offered.
+- **Frictionless.** No signup, no verification, no configuration. One URL, one obvious
+  button, and every screen ends by saying what to press next.
+- **The money is the interface.** Merchandise, host pay, processing and Pool's fee as
+  separate lines against the retail baseline, with the net saving set as the payoff.
+  Hiding operating costs behind a headline discount would be the easy version.
 - **Reasoning is legible, not decorative.** Host candidates show their score components
-  and the factual reason anyone is ineligible. The viability panel shows all eleven checks
-  with their details, passed or failed.
-- **Calm by default.** No polling, no badges, no engagement mechanics. The Decision Inbox
-  is usually empty, and says so.
-- **Deliberate visual language.** Paper and ink, one warm accent for "a human is needed",
-  one cool accent for "Pool acted alone". No gradient-and-sparkle AI house style.
+  and the factual reason anyone is ineligible. The viability panel shows all thirteen
+  checks with their details, passed or failed.
+- **Calm by default.** No polling, no badges, no engagement mechanics. The decision inbox
+  is usually empty and says why that is the design working.
+- **A committed visual world.** Warm paper, hairline rules, a self-hosted display serif,
+  tabular numerals, ledgers instead of cards. No gradient-and-sparkle AI house style, and
+  no emoji standing in for an icon set — the icons are drawn.
 - **Verified responsive and dark-mode correct**, with no horizontal overflow at 375 px on
-  any view.
+  any view, and small text at ≥4.5:1 in both themes.
 
-**The public judge experience** (#0024–#0025, deployed and cloud-verified): one URL, no account, no setup. The API a judge can reach is fourteen paths of
+**The public judge experience** (#0024–#0025, deployed and cloud-verified): one URL, no account, no setup. The API a judge can reach is twenty-three paths of
 forty-five; the client cannot send the agent a prompt; every action that costs anything
 is capped per session and per day; anonymous sessions are isolated by DynamoDB partition
 and expire in 24 hours. Almost everything runs deterministically on the server, with
@@ -128,15 +141,17 @@ logs, with a failure path that reports the failure rather than faking a run.
 | --- | :-: |
 | Frictionless judge mode | ✅ |
 | Public demo safe to expose anonymously | ✅ **cloud-verified** — four defects found by probing the deployed system and fixed (#0025) |
-| Buyer UX | ✅ |
-| Host UX | ✅ |
-| Operator UX | ✅ |
-| Decision Inbox | ✅ |
+| Lifecycle as a stepped, readable narrative | ✅ |
+| Actor grammar: agent / deterministic / human | ✅ |
+| Buyer, host and operator surfaces | ✅ |
+| Decision inbox | ✅ |
 | Transparent landed economics | ✅ |
-| Agent trace visible | ✅ |
+| Agent trace visible, plus the tools it did *not* choose | ✅ |
+| Live-agent waiting state that is useful and honest | ✅ |
 | Mobile responsive | ✅ |
 | Dark mode | ✅ |
-| Deployed and reachable | ✅ **cloud-verified** |
+| Contrast ≥ 4.5:1 for small text, both themes | ✅ |
+| Deployed and reachable | ✅ **cloud-verified** — the current build has **not** been redeployed yet |
 
 ---
 

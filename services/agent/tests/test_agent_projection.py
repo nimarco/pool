@@ -25,7 +25,7 @@ from pool.adapters.repository import InMemoryRepository
 from pool.adapters.sourcing import SyntheticCatalogProvider
 from pool.agent import projection as proj
 from pool.agent.coordinator import PoolCoordinator
-from pool.agent.tools import ToolContext, build_tools
+from pool.agent.tools import TOOL_SURFACE, ToolContext, build_tools
 from pool.config import Settings
 from pool.data.seed import COMMUNITY_ID, seed
 from pool.domain.models import RunOutcome
@@ -66,6 +66,19 @@ def tools(tool_ctx: ToolContext) -> dict:
 def seeded(repo: InMemoryRepository) -> InMemoryRepository:
     seed(repo, WS)
     return repo
+
+
+def test_tool_surface_matches_the_tools_actually_built(tool_ctx: ToolContext) -> None:
+    """The published catalogue is the real one, in the real order.
+
+    ``/api/health`` serves ``TOOL_SURFACE`` so the UI can show a judge which tools the
+    agent could have chosen from next to the ones it did choose. That claim is only
+    worth making if the list cannot drift, so adding, removing or reordering a tool
+    without updating the catalogue fails here rather than shipping a lie.
+    """
+    built = [t.tool_name for t in build_tools(tool_ctx)]
+    assert [name for name, _ in TOOL_SURFACE] == built
+    assert {kind for _, kind in TOOL_SURFACE} <= {"read", "act", "end"}
 
 
 def _best_opportunity(tools) -> dict:

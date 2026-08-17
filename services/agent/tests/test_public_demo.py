@@ -72,6 +72,9 @@ ALLOWED_READS = [
     "/api/operator",
     "/api/pickup-sites",
     "/api/demo/config",
+    # A member's own account view and a host's own inbox. Both are product surfaces a
+    # judge uses; neither can emit a contact detail or a payment reference.
+    "/api/hosting/opportunities?household_id=hh_okafor",
 ]
 
 
@@ -90,22 +93,49 @@ DENIED = [
     ("POST", "/api/webhooks/payments"),
     ("POST", "/api/pools/pool_1/lock"),
     ("POST", "/api/pools/pool_1/purchase"),
-    ("POST", "/api/pools/pool_1/open-distribution"),
+    ("POST", "/api/pools/pool_1/host-response/hh_okafor"),
     ("POST", "/api/pools/pool_1/close-pickup"),
     ("POST", "/api/pools/pool_1/override/hh_okafor"),
     ("POST", "/api/pools/pool_1/join/hh_okafor"),
-    ("POST", "/api/pools/pool_1/host-offer/hh_okafor"),
-    ("POST", "/api/pools/pool_1/host-response/hh_okafor"),
-    ("POST", "/api/pools/pool_1/withdraw/hh_okafor"),
     ("POST", "/api/pools/pool_1/announce/hh_okafor"),
     ("POST", "/api/pools/pool_1/exception/hh_okafor"),
     ("POST", "/api/pools/pool_1/issues/hh_okafor"),
     ("POST", "/api/members/hh_okafor/payment-method"),
     ("POST", "/api/threads/th_1/messages/hh_okafor"),
-    ("GET", "/api/members/hh_okafor"),
-    ("GET", "/api/hosting/opportunities"),
     ("GET", "/api/threads/th_1"),
 ]
+
+#: Participant actions, opened when the demo became something a judge drives rather than
+#: watches. Each is an action a *person* performs in the real product, against synthetic
+#: members inside the caller's own session. `lock` and `purchase` stay in DENIED above on
+#: purpose: those are the agent's decisions, and a button that took them directly would
+#: contradict the central claim of the project.
+PARTICIPANT_ACTIONS = [
+    ("POST", "/api/pools/pool_1/host-offer/hh_okafor"),
+    ("POST", "/api/pools/pool_1/withdraw/hh_okafor"),
+    ("POST", "/api/pools/pool_1/open-distribution"),
+    ("GET", "/api/members/hh_okafor"),
+]
+
+
+@pytest.mark.parametrize(("method", "path"), PARTICIPANT_ACTIONS)
+def test_participant_actions_are_reachable_but_still_validated(client, method, path):
+    """Reachable is not the same as unguarded.
+
+    Every one of these still runs its own domain validation, so a request naming a pool
+    or a member that does not exist is refused by the service rather than by the
+    allowlist. What must not happen is a 404 from the *middleware*, which is what would
+    tell us the route is invisible to the product.
+    """
+    response = (
+        get(client, path) if method == "GET" else post(client, path, json={"accept": True})
+    )
+    assert response.status_code != 405
+    # 404 here comes from the handler ("pool not found"), not from the allowlist. The
+    # allowlist's own refusal has no detail body beyond "not found" and never reaches a
+    # handler, so a validation message is the signal that it got through.
+    if response.status_code == 404:
+        assert response.json().get("detail") != "not found"
 
 
 @pytest.mark.parametrize(("method", "path"), DENIED)

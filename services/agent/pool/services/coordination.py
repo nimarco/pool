@@ -1088,9 +1088,34 @@ def respond_to_decision(
                 membership.state = ParticipationState.DECLINED
                 ctx.repo.put_membership(ctx.ws, membership)
 
+    elif decision.kind == DecisionKind.HOST_OFFER:
+        # Answering a host offer here used to mark the decision approved and do nothing
+        # else: the candidate stayed OFFERED, no assignment was written, and the pool sat
+        # in HOST_RECRUITING forever. The decision inbox is the one place a person answers
+        # anything Pool asks, so an offer answered there has to reach the same service the
+        # host's own endpoint calls. Imported inside the function because `hosting` imports
+        # from this module at load time.
+        from . import hosting
+
+        hosting.respond_to_host_offer(
+            ctx=ctx,
+            pool_id=decision.pool_id,
+            household_id=decision.household_id,
+            accept=approve,
+        )
+
+    # The summary has to match the question that was asked. It previously said "Buyer
+    # approved the final offer" for every kind, including a host being offered a job.
+    if decision.kind == DecisionKind.HOST_OFFER:
+        summary = "Host accepted the fulfilment job" if approve else "Host declined the job"
+    elif approve:
+        summary = "Buyer approved the final offer"
+    else:
+        summary = "Buyer declined the final offer"
+
     ctx.log(
         "decision_answered",
-        "Buyer approved the final offer" if approve else "Buyer declined the final offer",
+        summary,
         {"decision_id": decision.id, "kind": decision.kind.value, "approved": approve},
         pool_id=decision.pool_id,
         household_id=decision.household_id,

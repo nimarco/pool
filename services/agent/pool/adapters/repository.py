@@ -496,11 +496,30 @@ class DynamoDBRepository:
     credentials were available. The item shapes and key schema are exercised by a
     fake-client test so the serialisation contract is at least pinned; the CDK stack
     in ``infra/`` provisions the matching table (on-demand billing, TTL on ``ttl``).
+
+    ``consistent_reads`` asks DynamoDB for a strongly consistent read on every
+    ``GetItem`` and ``Query``. It is off by default and on wherever **two compute
+    environments write the same partition inside one user-visible action** — the demo
+    Lambda and the AgentCore runtime now do exactly that. An eventually consistent read
+    may be served by a replica that has not yet seen the runtime's writes, which would
+    let the browser refresh after a live agent run and see the world as it was before
+    it. That is a rare race and an unacceptable one here, because "the browser observes
+    the state the deployed agent produced" is the claim the whole path exists to make.
+    A strongly consistent read costs 1 RRU instead of 0.5 on a table billed per request
+    (AGENTS.md §3.5): about $0.06 per million extra reads, against a demo that does
+    thousands.
     """
 
-    def __init__(self, table_name: str, region_name: str = "us-east-1", table=None) -> None:
+    def __init__(
+        self,
+        table_name: str,
+        region_name: str = "us-east-1",
+        table=None,
+        consistent_reads: bool = False,
+    ) -> None:
         self.table_name = table_name
         self.region_name = region_name
+        self.consistent_reads = consistent_reads
         self._table = table
 
     @property
@@ -524,7 +543,10 @@ class DynamoDBRepository:
         self.table.put_item(Item=item)
 
     def _get(self, ws: str, type_name: str, sk: str, cls) -> Any | None:
-        resp = self.table.get_item(Key={"pk": self._pk(ws, type_name), "sk": sk})
+        kwargs: dict[str, Any] = {"Key": {"pk": self._pk(ws, type_name), "sk": sk}}
+        if self.consistent_reads:
+            kwargs["ConsistentRead"] = True
+        resp = self.table.get_item(**kwargs)
         item = resp.get("Item")
         if not item:
             return None
@@ -538,6 +560,8 @@ class DynamoDBRepository:
             cond = cond & Key("sk").begins_with(sk_prefix)
         out: list[Any] = []
         kwargs: dict[str, Any] = {"KeyConditionExpression": cond}
+        if self.consistent_reads:
+            kwargs["ConsistentRead"] = True
         while True:
             resp = self.table.query(**kwargs)
             out.extend(self._load(cls, it["data"]) for it in resp.get("Items", []))
@@ -762,9 +786,15 @@ class DynamoDBRepository:
                 kwargs["ExclusiveStartKey"] = token
 
 
-def build_repository(kind: str, table_name: str, region_name: str) -> Repository:
+def build_repository(
+    kind: str, table_name: str, region_name: str, consistent_reads: bool = False
+) -> Repository:
     if kind == "memory":
         return InMemoryRepository()
     if kind == "dynamodb":
-        return DynamoDBRepository(table_name=table_name, region_name=region_name)
+        return DynamoDBRepository(
+            table_name=table_name,
+            region_name=region_name,
+            consistent_reads=consistent_reads,
+        )
     raise ValueError(f"unknown repository kind: {kind!r}")

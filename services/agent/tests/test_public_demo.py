@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -439,6 +440,9 @@ def test_the_live_action_reports_a_real_run(public_api):
 
     body = post(client, "/api/demo/agentcore").json()
     assert body["ok"] is True and body["live"] is True
+    assert body["classification"] == public_demo.LIVE_CLASS_SUCCESS
+    assert body["remote_may_still_write"] is False
+    assert body["allow_local_fallback"] is False
     assert body["run"]["model_provider"] == "bedrock"
     assert body["run"]["model_id"] == "us.amazon.nova-lite-v1:0"
     assert [t["name"] for t in body["run"]["tool_calls"]] == [
@@ -449,16 +453,41 @@ def test_the_live_action_reports_a_real_run(public_api):
     assert body["runtime"] == "Pool_PoolCoordinator"
 
 
-def test_the_live_action_sends_no_prompt_and_no_client_data(public_api):
+def test_the_only_client_value_that_reaches_the_runtime_is_its_own_session(public_api):
+    """The payload is two fields, and one of them is the point.
+
+    This used to assert that *nothing* a caller sent reached the runtime, because the
+    runtime worked on a throwaway workspace of its own. It now coordinates the caller's
+    session, so the workspace has to travel — and the invariant becomes narrower and more
+    useful: the payload carries exactly the session the guard validated, and no second
+    field a caller could add rides along with it. There is no prompt, no instruction, and
+    no community id to steer.
+    """
     runtime = FakeRuntime()
     client = _with_live(public_api, runtime)
     post(client, "/api/demo/agentcore")
 
     sent = json.loads(runtime.calls[0]["payload"])
     assert set(sent) == {"workspace", "trigger"}
-    assert "instruction" not in sent
-    assert WS not in json.dumps(sent), "no client-controlled value may reach the runtime"
+    assert sent["workspace"] == WS
+    assert sent["trigger"] == public_demo.LIVE_TRIGGER
     assert runtime.calls[0]["agentRuntimeArn"] == ARN
+
+
+def test_a_workspace_the_guard_refuses_never_reaches_the_runtime(public_api):
+    """Session ids the public client cannot have generated are refused at the door.
+
+    `primary` is the long-lived workspace; `demo` is the local default. Both are real
+    partitions in the deployed table, and neither is reachable from a browser — which is
+    what stops the live action from becoming a way to run the agent over data that is not
+    the caller's.
+    """
+    runtime = FakeRuntime()
+    client = _with_live(public_api, runtime)
+
+    for forged in ["primary", "demo", "../etc", "W12345678", "w", "", "wjudge0000001 "]:
+        assert post(client, "/api/demo/agentcore", ws=forged).status_code == 400, forged
+    assert runtime.calls == [], "a refused workspace must not reach AWS"
 
 
 def test_every_live_invocation_gets_its_own_agentcore_session(public_api):
@@ -476,7 +505,7 @@ def test_every_live_invocation_gets_its_own_agentcore_session(public_api):
         assert session_id.startswith("pooldemo")
 
 
-def test_the_live_response_leaks_no_account_id_arn_or_workspace(public_api):
+def test_the_live_response_leaks_no_account_id_or_arn(public_api):
     runtime = FakeRuntime()
     client = _with_live(public_api, runtime)
     raw = post(client, "/api/demo/agentcore").text
@@ -484,7 +513,10 @@ def test_the_live_response_leaks_no_account_id_arn_or_workspace(public_api):
     assert "860325090409" not in raw
     assert "arn:aws" not in raw
     assert "TmVqSN9H56" not in raw
-    # The runtime's own internal workspace name is not the browser's business either.
+    # Whatever workspace name the runtime echoes back is dropped rather than forwarded.
+    # It is the caller's own now, so this is tidiness rather than a boundary — but the
+    # projection stays an allowlist, so a field added to the runtime's response cannot
+    # start appearing in a public one by default.
     assert "live0123456789ab" not in raw
 
 
@@ -494,6 +526,10 @@ def test_a_failed_live_invocation_is_reported_never_faked(public_api):
 
     body = post(client, "/api/demo/agentcore").json()
     assert body["ok"] is False and body["live"] is False
+    assert body["classification"] == public_demo.LIVE_CLASS_AMBIGUOUS
+    assert body["remote_may_still_write"] is True
+    assert body["allow_local_fallback"] is False
+    assert body["refresh_state"] is True
     assert "run" not in body
     assert body["reason"]
 
@@ -501,7 +537,12 @@ def test_a_failed_live_invocation_is_reported_never_faked(public_api):
 def test_a_runtime_error_payload_is_not_presented_as_a_run(public_api):
     runtime = FakeRuntime(result={"error": "unknown trigger: wat"})
     client = _with_live(public_api, runtime)
-    assert post(client, "/api/demo/agentcore").json()["ok"] is False
+    body = post(client, "/api/demo/agentcore").json()
+    assert body["ok"] is False
+    assert body["classification"] == public_demo.LIVE_CLASS_SAFE_REFUSAL
+    assert body["remote_may_still_write"] is False
+    assert body["allow_local_fallback"] is True
+    assert body["refresh_state"] is False
 
 
 def test_the_live_action_is_capped_per_session(public_api):
@@ -528,9 +569,31 @@ def test_the_kill_switch_turns_the_paid_action_off_without_touching_the_rest(pub
 
     body = post(client, "/api/demo/agentcore").json()
     assert body["ok"] is False
+    assert body["classification"] == public_demo.LIVE_CLASS_SAFE_PRE_EXECUTION
+    assert body["remote_may_still_write"] is False
+    assert body["allow_local_fallback"] is True
+    assert body["refresh_state"] is False
     assert runtime.calls == []
     # The deterministic demo is unaffected.
     assert post(client, "/api/demo/scenario").json()["ok"] is True
+
+
+def test_a_safe_pre_execution_failure_can_use_the_local_fallback(public_api):
+    """Only an explicit safe classification may hand control to the local mutator."""
+    runtime = FakeRuntime()
+    client = _with_live(public_api, runtime)
+    guard = public_api._public
+    guard.settings = type(guard.settings)(
+        **{**vars(guard.settings), "agentcore_runtime_arn": ARN, "agentcore_enabled": False}
+    )
+
+    live = post(client, "/api/demo/agentcore").json()
+    assert live["classification"] == public_demo.LIVE_CLASS_SAFE_PRE_EXECUTION
+    assert live["allow_local_fallback"] is True
+    assert runtime.calls == []
+
+    local = post(client, "/api/agent/run", json={"trigger": "manual_scan"})
+    assert local.status_code == 200
 
 
 def test_judge_mode_raises_the_log_level_so_a_run_can_be_correlated(public_api):
@@ -643,6 +706,32 @@ MIRROR = {
 }
 
 
+def _conditional_check_failed() -> Exception:
+    """The exception DynamoDB actually raises when a conditional write is refused.
+
+    Not a bare ``ClientError``: botocore builds a *modeled* subclass per service error,
+    and both the quota store and the lease store recognise a refusal by that class's
+    name — the alternative, matching on the response's error code, means reaching into a
+    dict two levels deep on every failure path. A fake that raised the base class sent
+    them down their "the store is broken, fail closed" branch instead, which is the same
+    answer for a quota (refuse) and the *opposite* answer for reclaiming an expired lease
+    (which must succeed). The quota's own conditional test passed for that wrong reason
+    until the lease store was written beside it.
+
+    Constructing a client is offline and needs no real credentials; it loads the service
+    model and nothing else.
+    """
+    import boto3
+
+    client = boto3.client(
+        "dynamodb", region_name="us-east-1", aws_access_key_id="t", aws_secret_access_key="t"
+    )
+    return client.exceptions.ConditionalCheckFailedException(
+        {"Error": {"Code": "ConditionalCheckFailedException", "Message": "refused"}},
+        "UpdateItem",
+    )
+
+
 class FakeDynamoTable:
     """A DynamoDB table faithful enough to run the whole lifecycle through.
 
@@ -669,6 +758,10 @@ class FakeDynamoTable:
     def __init__(self) -> None:
         self.items: dict[tuple[str, str], dict] = {}
         self.ops: dict[str, int] = {}
+        #: Whether each read asked for a strongly consistent one. Recorded rather than
+        #: enforced: this fake cannot simulate replica lag, so the only honest thing it
+        #: can check is that the flag was actually sent.
+        self.consistent_reads: list[bool] = []
 
     @staticmethod
     def _round_trip(item: dict) -> dict:
@@ -699,8 +792,9 @@ class FakeDynamoTable:
         assert size < self.MAX_ITEM_BYTES, f"{Item['pk']}/{Item['sk']} is {size} bytes"
         self.items[(Item["pk"], Item["sk"])] = self._round_trip(Item)
 
-    def get_item(self, Key):  # noqa: N803
+    def get_item(self, Key, ConsistentRead=False):  # noqa: N803 - boto3's parameter names
         self._count("get_item")
+        self.consistent_reads.append(bool(ConsistentRead))
         item = self.items.get((Key["pk"], Key["sk"]))
         return {"Item": item} if item else {}
 
@@ -716,6 +810,7 @@ class FakeDynamoTable:
         that does not exist and would hide one that does.
         """
         self._count("query")
+        self.consistent_reads.append(bool(kwargs.get("ConsistentRead")))
         cond = kwargs["KeyConditionExpression"]
         values = getattr(cond, "_values", ())
         if len(values) == 2 and hasattr(values[0], "_values"):
@@ -728,20 +823,40 @@ class FakeDynamoTable:
         return {"Items": [self.items[k] for k in sorted(keys)]}
 
     def update_item(self, **kwargs):
-        """Only the quota store's conditional counter, evaluated for real."""
-        self._count("update_item")
-        from botocore.exceptions import ClientError
+        """The two conditional writes Pool issues, each evaluated for real.
 
+        Dispatch is on the values the expression carries rather than on the key, so an
+        expression that changes shape stops matching and fails loudly instead of being
+        silently reinterpreted as the other one.
+        """
+        self._count("update_item")
         key = (kwargs["Key"]["pk"], kwargs["Key"]["sk"])
         values = kwargs["ExpressionAttributeValues"]
-        current = self.items.get(key, {}).get("n", 0)
-        if current >= values[":limit"]:
-            raise ClientError(
-                {"Error": {"Code": "ConditionalCheckFailedException"}}, "UpdateItem"
-            )
-        self.items[key] = {
-            "pk": key[0], "sk": key[1], "n": current + values[":one"], "ttl": values[":ttl"]
-        }
+        row = self.items.get(key, {})
+
+        def refuse():
+            raise _conditional_check_failed()
+
+        if ":limit" in values:  # quota: ADD n :one IF n < :limit
+            if row.get("n", 0) >= values[":limit"]:
+                refuse()
+            self.items[key] = {
+                "pk": key[0], "sk": key[1],
+                "n": row.get("n", 0) + values[":one"], "ttl": values[":ttl"],
+            }
+            return
+        if ":until" in values:  # lease: SET until IF no row OR until <= :now
+            if row.get("until", 0) > values[":now"]:
+                refuse()
+            self.items[key] = {
+                "pk": key[0], "sk": key[1],
+                "until": values[":until"], "ttl": values[":ttl"],
+            }
+            return
+        if ":zero" in values:  # lease release: SET until = 0
+            self.items[key] = {**row, "pk": key[0], "sk": key[1], "until": values[":zero"]}
+            return
+        raise AssertionError(f"unrecognised conditional update: {kwargs}")
 
     def batch_writer(self):
         table = self
@@ -909,12 +1024,97 @@ def test_the_quota_counter_is_evaluated_against_a_real_conditional():
     assert store.spend("live-day#2026-08-17", 2, 60) is True
 
 
-def test_quota_rows_cannot_collide_with_a_session_partition():
-    """Quota rows share the demo's table, so their partition key must be unreachable
-    as a workspace — `WORKSPACE_RE` requires a leading [a-z0-9]."""
+def test_quota_and_lease_rows_cannot_collide_with_a_session_partition():
+    """Both share the demo's table, so their partition keys must be unreachable as a
+    workspace — `WORKSPACE_RE` requires a leading [a-z0-9]."""
     from pool.api.app import WORKSPACE_RE
 
     assert not WORKSPACE_RE.match(public_demo.QUOTA_PK_PREFIX)
+    assert not WORKSPACE_RE.match(public_demo.LEASE_PK)
+
+
+# ---------------------------------------------------------------------------- leases
+
+
+def test_a_lease_is_taken_with_one_conditional_write():
+    """Two containers racing to start a run on one workspace must not both win, so
+    acquiring is a single conditional update rather than a read then a write."""
+    seen: list[dict] = []
+
+    class Table:
+        def update_item(self, **kwargs):
+            seen.append(kwargs)
+
+    store = public_demo.DynamoDBLeaseStore("t", table=Table())
+    assert store.acquire(WS, 120) is True
+    call = seen[0]
+    assert call["Key"] == {"pk": public_demo.LEASE_PK, "sk": WS}
+    # No row, or a row whose hold has already elapsed. Both, because the holder is a
+    # Lambda that can die mid-flight and must not wedge the session it was serving.
+    assert call["ConditionExpression"] == "attribute_not_exists(#until) OR #until <= :now"
+    assert call["ExpressionAttributeValues"][":until"] > call["ExpressionAttributeValues"][":now"]
+    assert call["ExpressionAttributeValues"][":ttl"] > 0
+
+
+def test_a_held_lease_refuses_the_next_holder_and_expiry_lets_it_through():
+    table = FakeDynamoTable()
+    store = public_demo.DynamoDBLeaseStore("t", table=table)
+
+    assert store.acquire(WS, 120) is True
+    assert store.acquire(WS, 120) is False
+    assert store.acquire(OTHER_WS, 120) is True, "leases are per workspace"
+    store.release(WS)
+    assert store.acquire(WS, 120) is True
+
+
+def test_the_lease_store_fails_closed_when_dynamodb_is_unavailable():
+    """A lease that cannot be taken must not become a way to run anyway: refusing costs
+    a visitor one retry, and the alternative is two agents on one partition."""
+
+    class Broken:
+        def update_item(self, **_kwargs):
+            raise RuntimeError("no table")
+
+    assert public_demo.DynamoDBLeaseStore("t", table=Broken()).acquire(WS, 120) is False
+
+
+def test_a_lease_left_behind_by_a_dead_holder_is_reclaimable():
+    """The scenario the expiry exists for, written the way it actually happens.
+
+    A Lambda killed mid-invocation never releases, so it leaves a row whose ``until`` is
+    in the past. Its ``ttl`` is deliberately much later — DynamoDB's TTL deletion is
+    best-effort and can lag for hours — so nothing may depend on the row being gone. The
+    stored timestamp is what makes the session usable again.
+    """
+    table = FakeDynamoTable()
+    store = public_demo.DynamoDBLeaseStore("t", table=table)
+    now = int(time.time())
+    table.items[(public_demo.LEASE_PK, WS)] = {
+        "pk": public_demo.LEASE_PK, "sk": WS, "until": now - 1, "ttl": now + 86_400,
+    }
+
+    assert store.acquire(WS, 120) is True
+    assert store.acquire(WS, 120) is False, "and the reclaimed lease is a real one"
+
+
+# ----------------------------------------------------------------- read consistency
+
+
+def test_reads_are_strongly_consistent_when_the_deployment_asks_for_them():
+    """Two compute environments write this table inside one user action now, so a
+    replica that has not caught up would show a visitor the world as it was before the
+    deployed agent ran. Off by default; on where the sharing happens."""
+    from pool.adapters.repository import DynamoDBRepository
+
+    table = FakeDynamoTable()
+    DynamoDBRepository("t", table=table, consistent_reads=True).list_pools(WS)
+    DynamoDBRepository("t", table=table, consistent_reads=True).get_pool(WS, "pool_x")
+    assert table.consistent_reads == [True, True]
+
+    table.consistent_reads.clear()
+    DynamoDBRepository("t", table=table).list_pools(WS)
+    DynamoDBRepository("t", table=table).get_pool(WS, "pool_x")
+    assert table.consistent_reads == [False, False]
 
 
 # --------------------------------------------------------------------------- off

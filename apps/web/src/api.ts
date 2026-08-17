@@ -445,8 +445,29 @@ export interface LiveAgentRun {
   hitl_decisions_created: number;
 }
 
+/** What the authoritative store held after a live run, read back by the server from the
+ *  same table it serves `/api/state` from. Not the agent's account of what it did. */
+export interface LiveAgentObserved {
+  /** Whether the run the runtime reported is present in this session's own data. The
+   *  proof that both halves are writing and reading one table. */
+  run_recorded: boolean;
+  pools: number;
+  pending_decisions: number;
+}
+
+export type LiveAgentClassification =
+  | "success"
+  | "safe_refusal"
+  | "safe_pre_execution_failure"
+  | "ambiguous_remote_execution"
+  | "workspace_busy";
+
 /** Either a real invocation of the deployed runtime, or an honest failure. Never a
- *  fabricated run — the server has no code path that invents one. */
+ *  fabricated run — the server has no code path that invents one.
+ *
+ *  `refresh_state` appears on both branches, because a failure is not evidence that
+ *  nothing happened: the invocation can time out after the agent has already written to
+ *  the shared workspace. Re-reading is how the page tells the truth either way. */
 export type LiveAgentResult =
   | {
       ok: true;
@@ -456,9 +477,22 @@ export type LiveAgentResult =
       region: string;
       wall_ms: number;
       run: LiveAgentRun;
+      observed: LiveAgentObserved;
+      refresh_state: true;
+      classification: "success";
+      remote_may_still_write: false;
+      allow_local_fallback: false;
       note: string;
     }
-  | { ok: false; live: false; reason: string };
+  | {
+      ok: false;
+      live: false;
+      reason: string;
+      classification: Exclude<LiveAgentClassification, "success">;
+      remote_may_still_write: boolean;
+      allow_local_fallback: boolean;
+      refresh_state: boolean;
+    };
 
 /* ------------------------------------------------------------------ workspace */
 
@@ -589,8 +623,13 @@ export const api = {
 
   /** What this deployment can do. Answers everywhere; `live_agent_available` is false
    *  when no AgentCore runtime is configured, so the UI describes the action rather
-   *  than offering a button that cannot work. */
+   *  than offering a button that cannot work. It is also what decides whether the
+   *  product's discovery action goes to AWS or runs here. */
   demoConfig: () => request<DemoConfig>("/api/demo/config"),
+  /** Run the deployed coordinator against *this session's* workspace. The workspace is
+   *  the query parameter every request already carries; the server re-validates it and
+   *  builds the runtime payload itself, so the browser names a session it already has,
+   *  never one it does not. */
   liveAgent: () => post<LiveAgentResult>("/api/demo/agentcore"),
 };
 

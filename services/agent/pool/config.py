@@ -100,6 +100,12 @@ class Settings:
 
     # AWS resource names (only read when the corresponding adapter is active)
     dynamodb_table: str = "pool-state"
+    #: Strongly consistent DynamoDB reads. Needed wherever two compute environments
+    #: write the same partition inside one user-visible action — the public Lambda and
+    #: the AgentCore runtime now share a workspace, and a replica that has not caught up
+    #: would show the browser the world as it was before the agent ran. Costs 1 RRU
+    #: instead of 0.5 on a per-request table (AGENTS.md §3.5).
+    dynamodb_consistent_reads: bool = False
     location_route_calculator: str = ""
 
     # Routing bound: a route matrix is origins x destinations, so cap it (AGENTS.md §3.4).
@@ -127,6 +133,7 @@ class Settings:
             stripe_webhook_secret=os.environ.get("STRIPE_WEBHOOK_SECRET", ""),
             purchase_executor=os.environ.get("PURCHASE_EXECUTOR", "simulated"),
             dynamodb_table=os.environ.get("DYNAMODB_TABLE", "pool-state"),
+            dynamodb_consistent_reads=_bool_env("DYNAMODB_CONSISTENT_READS", False),
             location_route_calculator=os.environ.get("LOCATION_ROUTE_CALCULATOR", ""),
             max_route_matrix_cells=_int_env("MAX_ROUTE_MATRIX_CELLS", 100),
         )

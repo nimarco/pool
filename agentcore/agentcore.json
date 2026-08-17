@@ -26,11 +26,14 @@
         "idleRuntimeSessionTimeout": 60,
         "maxLifetime": 300
       },
+      "additionalPolicies": ["iam/agentcore-dynamodb.json"],
       "envVars": [
         { "name": "MODEL_PROVIDER", "value": "bedrock" },
         { "name": "BEDROCK_MODEL_ID", "value": "us.amazon.nova-lite-v1:0" },
         { "name": "MODEL_MAX_TOKENS", "value": "2048" },
-        { "name": "POOL_REPOSITORY", "value": "memory" },
+        { "name": "POOL_REPOSITORY", "value": "dynamodb" },
+        { "name": "DYNAMODB_TABLE", "value": "pool-demo-state" },
+        { "name": "DYNAMODB_CONSISTENT_READS", "value": "true" },
         { "name": "ROUTING_PROVIDER", "value": "deterministic" },
         { "name": "PAYMENT_PROVIDER", "value": "simulated" },
         { "name": "PURCHASE_EXECUTOR", "value": "simulated" },
@@ -39,7 +42,7 @@
         { "name": "MAX_TOOL_CALLS_PER_RUN", "value": "25" },
         { "name": "MAX_TOOL_RETRIES", "value": "3" },
         { "name": "MAX_DUPLICATE_TOOL_CALLS", "value": "2" },
-        { "name": "WORKFLOW_TIMEOUT_SECONDS", "value": "120" },
+        { "name": "WORKFLOW_TIMEOUT_SECONDS", "value": "45" },
         { "name": "MAX_ROUTE_MATRIX_CELLS", "value": "100" },
         { "name": "LOG_LEVEL", "value": "INFO" }
       ]

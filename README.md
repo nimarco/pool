@@ -151,7 +151,10 @@ browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
                                              ├─ the built SPA (same origin, no CORS)
                                              ├─ 23 allowlisted API paths
                                              ├─ DynamoDB — this session only, 24 h TTL
-                                             └─ InvokeAgentRuntime — the one live action
+                                             └─ InvokeAgentRuntime — bound to this session
+                                                       │
+                                 AgentCore Runtime ◀───┘
+                                   └─ the same table, the same partition
 ```
 
 **The browser never holds an AWS credential.** The deployed AgentCore Runtime uses
@@ -176,13 +179,25 @@ Strands loop with the offline planner, the real domain maths, the real state mac
 That is deliberate: a demo that depends on a paid model call for every interaction is a
 demo that breaks in front of someone.
 
-Exactly one action leaves the machine. **Run the deployed agent**, on a pool's
-*Activity → Agent execution*, invokes Pool's coordinator on **Amazon Bedrock AgentCore
-Runtime** — a real model, a
-real Strands loop, real Pool tools — in its own isolated runtime session, and reports
-the tool sequence, the model id, the token counts and the termination reason. It is
-capped, it is labelled, and if it fails it says so. **There is no code path that
-fabricates a run** (`AGENTS.md` §8).
+Exactly one action leaves the machine, and it is the product's own: **Find
+opportunities** invokes Pool's coordinator on **Amazon Bedrock AgentCore Runtime** — a
+real model, a real Strands loop, real Pool tools — inside a runtime session generated
+per invocation, **bound to the visitor's own DynamoDB workspace**. The pool that appears
+afterwards was formed by that run: its `created_by_run` is the run id the runtime
+reported, and the page renders it by re-reading the table rather than by drawing the
+model's answer. The same invocation is auditable from a pool's *Activity → Agent
+execution*, which reports the tool sequence, the model id, the token counts, the
+termination reason — and, separately, what the database held afterwards. It is capped,
+it is labelled, and if it fails it says so. **There is no code path that fabricates a
+run** (`AGENTS.md` §8).
+
+The runtime is a *participant* in a workspace, never its owner. The API seeds workspaces,
+resets them, and rations how many exist; the runtime's execution role can read and write
+that one table and cannot delete from it, so `Repository.reset()` — the only operation
+that empties a partition — is unavailable to the agent by construction
+(`services/agent/iam/agentcore-dynamodb.json`). One live run per session at a time, held
+by a conditional-write lease, because two coordination runs on one partition would both
+find no pool and both create one.
 
 That call takes ten to twenty seconds, so the screen spends them saying something true.
 It shows the path the request takes, the caps the run is bounded by, and the complete

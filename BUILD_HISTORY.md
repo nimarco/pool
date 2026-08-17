@@ -2803,3 +2803,213 @@ Pool does not make itself.
 `services/agent/pool/services/coordination.py`,
 `services/agent/tests/{test_api,test_coordination,test_public_demo}.py`,
 `README.md`, `docs/{DEMO_SCRIPT,HACKATHON_SCORECARD,COST_NOTES}.md`
+
+---
+
+### #0028 — [2026-08-17] — The deployed agent started writing the workspace the browser reads
+`[ARCHITECTURE]` `[SECURITY]` `[AWS]` `[AGENT]` `[COST]` `[ARTICLE-2]`
+
+**Goal / user intent**
+Close the largest remaining architecture gap. The public product ran on authoritative
+DynamoDB state; the deployed AgentCore Runtime ran with `POOL_REPOSITORY=memory`, so its
+Strands agent operated on an isolated copy and could not touch the pool the visitor was
+looking at. That forced the UI to present the deployed runtime as *technical proof* rather
+than as the product's own action, and it made the honest copy read as an apology: "it works
+from its own copy and leaves your pool alone."
+
+**Starting state**
+Two halves that never met. `AgentCoreBridge.invoke()` built its payload from constants and
+generated a throwaway workspace (`live<uuid>`) so nothing a caller sent could reach the
+runtime. The runtime seeded that workspace inside its microVM, ran, returned a summary, and
+the state died with the container. Everything the browser saw came from the API Lambda's
+own offline planner. Both agents were real; only one of them mattered to the product.
+
+**Decision**
+Point the runtime at the same DynamoDB table and the same partition, and make the product's
+`Find opportunities` the thing that invokes it. The workspace becomes the one caller-derived
+value in the payload — validated by the server, never seen by the model — and the resulting
+state is read back out of the store rather than assembled from the model's answer.
+
+Four boundaries make the wider blast radius acceptable:
+
+1. **The workspace is a server value on every hop.** The client sends its session id as the
+   query parameter every request already carries; `PublicDemoGuard.check_workspace` checks
+   it against `PUBLIC_WORKSPACE_RE`; the bridge builds the payload from the *checked* value.
+   There is no body field to smuggle a second workspace through, and the endpoint takes no
+   body. It grants nothing new: a session id is already a bearer capability over that
+   workspace through this same API, so binding the agent to it widens no boundary.
+2. **The model never sees it.** No tool takes a workspace argument, and the string appears
+   in neither the system prompt nor the run instruction. The model chooses *what to do* and
+   cannot choose *whose data to do it to*.
+3. **Authority is asymmetric.** The API owns workspaces — it seeds them, resets them, and
+   rations how many open per day. The runtime is only ever a participant inside one that
+   already exists: it refuses to seed a shared store, and its execution role holds
+   `GetItem`, `PutItem`, `Query` and nothing else. `Repository.reset()` needs `DeleteItem`
+   and `BatchWriteItem`, so emptying a visitor's session is not something the agent can do
+   badly; it is something it cannot do.
+4. **One live run per workspace at a time**, held by a conditional-write lease.
+
+**Why**
+The alternative — replaying the deployed agent's decisions locally, or copying its output
+into DynamoDB — was never on the table (§8). It would also have been *more* code than doing
+it properly. What made "properly" cheap is that the seam already existed: `Repository` is a
+protocol, `PoolCoordinator` takes one, the typed tools close over `PoolContext.ws`, and
+`DynamoDBRepository` had already been exercised end to end by a fake-table test. Nothing in
+the agent, the tools, the services, or the domain changed. The whole feature is a
+configuration change plus a binding plus a lock.
+
+Rejected: giving the runtime its own table (a second source of truth, and the same problem);
+having the Lambda apply the runtime's decisions (fabrication); routing *every* action through
+AgentCore (each press would spend tokens, and the caps are 3/session).
+
+**Implementation** — status: **implemented and tested**, **not deployed**.
+
+- `agentcore/agentcore.json` — `POOL_REPOSITORY=dynamodb`, `DYNAMODB_TABLE=pool-demo-state`,
+  `DYNAMODB_CONSISTENT_READS=true`, `WORKFLOW_TIMEOUT_SECONDS` 120 → 45, and
+  `additionalPolicies: ["iam/agentcore-dynamodb.json"]`.
+- `services/agent/iam/agentcore-dynamodb.json` — three actions, one table. The AgentCore CDK
+  construct resolves the path relative to `codeLocation` and attaches it inline to the
+  runtime's execution role. Discovered by reading the L3 construct's schema; it is the hook
+  that made least-privilege possible without hand-writing the runtime's IAM.
+- `services/agent/agentcore_app.py` — refuses to seed a shared store; workspace validation
+  moved from `str.isalnum()` on a stripped string to an explicit pattern (the old idiom
+  accepted every Unicode letter and digit, so `café` was a valid partition key).
+- `services/agent/pool/api/public_demo.py` — `invoke(workspace)`; `LeaseStore` in two
+  implementations mirroring the quota store; `RuntimeRefusal` as a distinct failure;
+  `LIVE_READ_TIMEOUT_SECONDS`.
+- `services/agent/pool/adapters/repository.py`, `config.py` — optional strongly consistent
+  reads, on wherever the two halves share a partition.
+- `infra/demo_app.py` — explicit `table_name`, Lambda timeout 30 s → 90 s.
+- `apps/web` — `findOpportunities` invokes the deployed agent when one is configured and
+  falls back to the local coordinator otherwise; the technical view's copy corrected.
+
+**AWS / external services touched**
+`sts:GetCallerIdentity`, `cloudformation:DescribeStacks`, `dynamodb:ListTables`,
+`iam:GetRolePolicy` — all read-only — and `agentcore deploy --dry-run`, which synthesizes
+and creates nothing. **No resource was created, changed, or destroyed. The ledger is
+unchanged.**
+
+**Cost-relevant activity**
+No model tokens were spent. Local verification used an unreachable ARN with no credentials,
+so the bridge failed at credential resolution and never reached AWS.
+
+Three cost changes are *pending deployment* and worth stating before they happen:
+
+- **`Find opportunities` becomes the paid path.** It was free (offline planner); it now
+  spends one Nova Lite run — ~19k in / ~500 out on the observed run, about **$0.0013**. The
+  existing caps are unchanged (3/session, 40/day), so the ceiling is unchanged at roughly
+  **$0.05/day**. What changes is that the cap will now actually be approached.
+- **Strongly consistent reads** cost 1 RRU instead of 0.5 on a per-request table.
+- **Lambda timeout 30 s → 90 s** raises the worst case for a wedged request to about a tenth
+  of a cent. It is the outermost of three nested deadlines (agent 45 s < bridge 60 s <
+  function 90 s) so that the innermost fires first and the caller always gets a structured
+  answer instead of a dropped connection.
+
+**Testing**
+`tests/test_agentcore_shared_workspace.py` (31 tests) reproduces the deployed topology
+in-process: **two `DynamoDBRepository` instances over one `FakeDynamoTable`**, with the
+runtime side calling the real `agentcore_app.invoke`. The central assertion is that the
+pool the browser renders has `created_by_run` equal to the run id the runtime reported —
+i.e. the row was written by the process on the other side of the wire, not copied from its
+answer. Also covered: two sessions, forged and internal workspace names, an invented pool
+id, a re-entrant second invocation, reset during a run, reset then re-run, timeout after
+partial progress, a call that never started, quota refusal (and that no refused call reaches
+AWS), and that the runtime issues no delete or update operation.
+
+`infra/test_demo_stack.py::TestSharedWorkspaceContract` asserts the table name, the IAM
+grant, the consistent-reads flag, the trigger name, and the deadline ordering agree across
+three files deployed by two different tools — a drifted name would fail silently, with the
+agent writing to a table nobody reads.
+
+Full suite: **697 passing** (626 agent + 71 infra), `ruff` clean, `tsc` clean.
+
+**Failures and surprises**
+
+- **A fake that was one class too generous.** `FakeDynamoTable.update_item` raised a bare
+  `ClientError` on a conditional failure. DynamoDB raises a *modeled* subclass named
+  `ConditionalCheckFailedException`, which is what both stores match on. The quota store's
+  own test passed anyway — its fail-closed branch returns `False`, the same answer a refusal
+  produces — and the wrong behaviour only surfaced when the lease store needed a refusal and
+  a reclaim to differ. Fixed by having the fake raise the real class, which needs nothing
+  but an offline `boto3.client`.
+- **Two lease implementations disagreed by a second.** In-memory treated a hold as over when
+  `until <= now`; DynamoDB required `until < now`. Aligned on `<=`.
+- **A test that could not send its own hostile input.** `workspace=ws#POOL` was truncated at
+  the fragment by the client and never reached the server, so the case passed for no reason.
+  Percent-encoded now.
+- **A refusal is not a lost call.** The runtime returning `{"error": …}` was being collapsed
+  into "the agent did not answer, it may still have finished" — untrue, since the entrypoint
+  validates before it runs anything — and it held the workspace for the full lease. Split
+  out as `RuntimeRefusal`: released immediately, reported as a refusal.
+- **Copy can assert something the code does not guarantee.** The technical view read "the
+  pool you are looking at was formed by that run", which is false whenever the fallback ran.
+  Caught in a browser, not by a test: the local demo has no runtime configured, so the
+  fallback is the only path a local reviewer ever sees.
+
+**What we learned**
+The gap was never the agent. It was one environment variable and an IAM statement, guarded
+by a lock that did not exist yet. Everything expensive — the typed tools, the domain
+services, `_require_pool`, the idempotency keys, the bounds — worked unchanged against the
+shared store, because they were written against a protocol rather than against a store. The
+work that remained was almost entirely about the *seams*: who may name a workspace, who may
+create one, who may destroy one, and what happens when two writers arrive at once.
+
+The honest-copy discipline paid twice. Both times the change made an existing sentence false
+— "it leaves your pool alone", then "the pool you are looking at was formed by that run" —
+and both times the false sentence was easier to spot than the underlying behaviour would
+have been.
+
+**Article fodder**
+Article 2 — the whole entry. Two compute environments, one partition, and the four questions
+that arrangement forces: who validates the tenant key, whether the model may ever see it,
+what happens to a read-modify-write race, and which side is allowed to delete. The IAM
+asymmetry (read/write but never delete) is the crispest single artefact: the most
+destructive operation in the codebase is unavailable to the agent by construction rather
+than by care.
+
+**Relevant commits / files**
+`agentcore/agentcore.json`, `services/agent/iam/{agentcore-dynamodb.json,README.md}`,
+`services/agent/agentcore_app.py`,
+`services/agent/pool/{config.py,adapters/repository.py,api/app.py,api/public_demo.py}`,
+`services/agent/tests/{test_agentcore_shared_workspace.py,test_public_demo.py}`,
+`infra/{demo_app.py,test_demo_stack.py}`,
+`apps/web/src/{App.tsx,api.ts,views/live.tsx}`,
+`README.md`, `docs/ARCHITECTURE.md`
+
+---
+
+### #0029 — [2026-08-17] — Close the reset and ambiguous AgentCore races
+`[SECURITY]` `[CONCURRENCY]` `[AGENT]`
+
+**Goal / user intent**
+Fix the two remaining correctness gaps in the shared-workspace checkpoint without widening
+the architecture: reset must not release its workspace lease before destructive reseeding,
+and an AgentCore timeout must not fall through to a local mutating run against the same
+partition.
+
+**Implementation** — status: **implemented and tested**, **not cloud-verified or deployed**.
+
+- Reset acquires the per-workspace lease and holds it across the quota check and the entire
+  `seed()` operation, releasing it in `finally`. A live AgentCore attempt during reseeding
+  is refused before it can spend quota or reach the runtime.
+- The live endpoint now returns a server-owned classification. Safe runtime refusals and
+  disabled/pre-execution paths explicitly permit a local fallback after releasing the
+  lease. Ambiguous runtime failures explicitly forbid fallback, request an authoritative
+  state refresh, explain that the deployed run may still be finishing, and leave the lease
+  held until it expires safely.
+- The browser follows `allow_local_fallback` from the server and treats a missing response
+  conservatively as ambiguous; it never parses exception strings to decide whether a local
+  mutation is safe.
+
+**Regression coverage**
+The shared-workspace suite now reproduces the old reset interleaving by attempting a live
+run from inside destructive reseeding, verifies reset lease cleanup on errors, and asserts
+timeout classification, state refresh, protection from another run, safe refusal, and
+recovery after the held lease is released. The existing live-run/reset interleavings remain
+covered as well. Focused shared-workspace/public-demo tests: **121 passed**.
+
+**Verification**
+`make qa`: `ruff` clean, TypeScript clean, **629 agent tests passed** (one existing
+Starlette/httpx deprecation warning), **71 infrastructure tests passed**, web production
+build clean, secret scan clean. `make agent-validate`: **Valid**. No deployment or cloud
+verification was performed.

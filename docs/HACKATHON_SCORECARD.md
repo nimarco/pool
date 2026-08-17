@@ -79,16 +79,19 @@ live store, and a public demo URL a judge can open with no AWS account** (#0019,
 | Webhook verification and replay safety | ✅ | local |
 | Quote freshness enforcement | ✅ | local |
 | One-time pickup confirmation | ✅ | local |
-| Comprehensive tests | ✅ | 469 passing |
+| Comprehensive tests | ✅ | 697 passing (626 agent + 71 infra) |
 | Bedrock real inference | ✅ | **cloud-verified** — `us.amazon.nova-lite-v1:0`, 6 ConverseStream calls per run, 5 Pool tools called, wire-level evidence, 3/3 runs |
 | AgentCore Runtime | ✅ | **cloud-verified** — deployed, and invoked from a public browser through the demo bridge |
 | DynamoDB | ✅ | **cloud-verified** — the full lifecycle on a real table; the first live run found a `Decimal` bug a fake could not (#0025) |
 | EventBridge background path | 🟡 | **ready**, ships disabled |
 | Amazon Location | 🟡 | **ready**, never called |
 | Real cloud trace | ✅ | **cloud-verified** — one `run_id` correlated across the demo Lambda's log and the AgentCore runtime's log |
+| AgentCore on the product's own state | 🟡 | **implemented and tested, not yet deployed** (#0028) — the runtime is configured for the demo's DynamoDB table so the pool a visitor sees is formed by the deployed agent rather than by the server. Verified offline against a two-repository, one-table reproduction and by an AgentCore `--dry-run` synth; the deployed runtime still runs `POOL_REPOSITORY=memory` until `make deploy-agent` and `make deploy-demo` are run |
 
-**Exact next action:** the AWS legs are proven — Bedrock, AgentCore, DynamoDB, and a
-public URL. What remains is the demo video and pushing the public repository.
+**Exact next action:** deploy #0028 (AgentCore runtime first, then the demo stack — the
+table is renamed and therefore replaced), then the demo video and pushing the public
+repository. The AWS legs themselves are proven — Bedrock, AgentCore, DynamoDB, and a
+public URL.
 
 ---
 

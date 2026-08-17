@@ -313,6 +313,40 @@ Not in the CDK stack, deliberately:
 - **A route calculator** — `geo-routes` needs none, so there is one less billable resource
   to create and forget.
 
+### The runtime and the API share one table
+
+The deployed coordinator runs against **the same DynamoDB partition the browser is
+reading**, so the pool a visitor sees was formed by the run on AWS rather than replayed
+from its answer. Two stacks, deployed by two different tools, therefore have to agree
+about one resource:
+
+| Constant | Where |
+| --- | --- |
+| Table name `pool-demo-state` | `infra/demo_app.py` creates it; `agentcore/agentcore.json` names it |
+| The runtime's grant on it | `services/agent/iam/agentcore-dynamodb.json`, attached via `additionalPolicies` |
+| Strongly consistent reads | Both sides, so a refresh after a live run is read-your-writes |
+
+`infra/test_demo_stack.py::TestSharedWorkspaceContract` asserts the three agree, because
+neither tool can express the dependency and a drifted name fails silently — the agent
+would write to a table nobody reads.
+
+**Authority is deliberately asymmetric.** The API owns workspaces: it seeds them, resets
+them, and rations how many can be opened per day. The runtime is only ever a participant
+inside one that already exists — it refuses to seed a shared store, and its execution
+role holds `GetItem`, `PutItem`, `Query` and nothing else. `Repository.reset()` needs
+`DeleteItem` and `BatchWriteItem`, so emptying a visitor's session is not something the
+agent can do incorrectly; it is something it cannot do.
+
+Concurrency is handled by a conditional-write lease, one per workspace, held for the
+duration of a live invocation. Pool formation is idempotent on
+`community:product:site:day`, but that idempotency is a read followed by a write — two
+simultaneous runs would both find no pool and both create one. The same lease blocks a
+reset from landing mid-run.
+
+Three deadlines nest, innermost first, so whichever fires produces a structured answer
+rather than a dropped connection: the agent's 45 s wall-clock bound, the bridge's 60 s
+read timeout, the Lambda's 90 s timeout.
+
 ---
 
 ## Future — not built

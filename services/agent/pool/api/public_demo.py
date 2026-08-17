@@ -31,6 +31,30 @@ Turned on with ``POOL_PUBLIC_DEMO=true``. What it changes, and why each one matt
 
 The browser holds no AWS credential in any of this. The bridge signs with the Lambda's
 execution role, which is why the runtime can keep ``AWS_IAM`` inbound auth (§4).
+
+Workspace binding
+-----------------
+
+The live action runs the deployed agent **against the visitor's own workspace**, so the
+pool that appears afterwards was formed by that execution rather than replayed from its
+answer. Four things make that safe to expose anonymously:
+
+* **The workspace is a server value on every hop.** The client sends a session id as a
+  query parameter and it is checked against :data:`PUBLIC_WORKSPACE_RE` before anything
+  reads it; the payload the bridge signs is then *built here* from that checked value.
+  No client string is forwarded, and there is no field a caller can add to name a
+  different one.
+* **It grants nothing the caller did not already have.** A public session id is a bearer
+  capability — whoever holds it can already read and drive that workspace through this
+  same API. Binding the agent to it widens no boundary; addressing someone else's
+  workspace requires guessing their id, and that is the property that was already
+  protecting `/api/state`.
+* **The model never sees it.** No tool takes a workspace argument, and the workspace
+  string appears in neither the system prompt nor the run instruction. The model chooses
+  *what to do*; it cannot choose *whose data to do it to* (AGENTS.md §4, §5).
+* **One invocation per workspace at a time** (:class:`LeaseStore`). Two runs racing on
+  one partition would both read "no pool exists" and both write one, and a reset landing
+  mid-run would delete rows the run is still writing.
 """
 
 from __future__ import annotations
@@ -55,8 +79,9 @@ logger = logging.getLogger(__name__)
 PUBLIC_WORKSPACE_RE = re.compile(r"^w[a-z0-9]{8,32}$")
 
 #: Never reachable as a workspace prefix — ``WORKSPACE_RE`` requires a leading
-#: ``[a-z0-9]`` — so quota rows cannot collide with a session's data.
+#: ``[a-z0-9]`` — so quota and lease rows cannot collide with a session's data.
 QUOTA_PK_PREFIX = "_quota"
+LEASE_PK = "_lease#agentcore"
 
 _ID = r"[A-Za-z0-9_-]{1,64}"
 
@@ -154,6 +179,23 @@ TRIGGER_PROMPTS: dict[str, str | None] = {
 #: ``ALLOWED_TRIGGERS`` (``services/agent/agentcore_app.py``).
 LIVE_TRIGGER = "manual"
 
+#: Server-owned classification of the live action. The browser may use
+#: ``allow_local_fallback`` to choose a safe path, but it must never infer safety from
+#: an exception string or an HTTP transport failure.
+LIVE_CLASS_SUCCESS = "success"
+LIVE_CLASS_SAFE_REFUSAL = "safe_refusal"
+LIVE_CLASS_SAFE_PRE_EXECUTION = "safe_pre_execution_failure"
+LIVE_CLASS_AMBIGUOUS = "ambiguous_remote_execution"
+LIVE_CLASS_WORKSPACE_BUSY = "workspace_busy"
+
+#: How long the bridge waits for the runtime. The middle rung of three nested deadlines
+#: — the agent's own wall-clock bound (``agentcore/agentcore.json``), then this, then the
+#: Lambda's timeout (``infra/demo_app.py``) — so the innermost one fires first and the
+#: caller gets a structured answer instead of a dropped connection. The ordering spans
+#: three files and is asserted in ``infra/test_demo_stack.py``.
+LIVE_READ_TIMEOUT_SECONDS = 60
+LIVE_CONNECT_TIMEOUT_SECONDS = 5
+
 
 def _bool_env(name: str, default: bool) -> bool:
     raw = os.environ.get(name)
@@ -205,6 +247,12 @@ class PublicDemoSettings:
     #: a workspace it has never seen. Without a cap, a script cycling session ids is an
     #: unbounded write generator, so new sessions are rationed per day.
     max_new_sessions_per_day: int = 300
+    #: How long one workspace stays locked to a single live invocation. Must outlast the
+    #: slowest thing that can still be writing — the runtime's own 45 s wall-clock bound
+    #: plus cold start and network — because the lease is released on a clean return and
+    #: otherwise left to expire. A failed invocation is indistinguishable, from here,
+    #: from one still in flight, and holding is the safe direction to be wrong in.
+    live_lease_seconds: int = 120
 
     @classmethod
     def from_env(cls) -> PublicDemoSettings:
@@ -221,6 +269,7 @@ class PublicDemoSettings:
             max_live_per_session=_int_env("PUBLIC_DEMO_MAX_LIVE_PER_SESSION", 3),
             max_live_per_day=_int_env("PUBLIC_DEMO_MAX_LIVE_PER_DAY", 40),
             max_new_sessions_per_day=_int_env("PUBLIC_DEMO_MAX_NEW_SESSIONS_PER_DAY", 300),
+            live_lease_seconds=_int_env("PUBLIC_DEMO_LIVE_LEASE_SECONDS", 120),
         )
 
     @property
@@ -328,6 +377,113 @@ def _today() -> str:
     return time.strftime("%Y-%m-%d", time.gmtime())
 
 
+# --------------------------------------------------------------------------- leases
+
+
+class LeaseStore(Protocol):
+    def acquire(self, key: str, seconds: int) -> bool:
+        """Take an exclusive lease on ``key``. False means somebody else holds it."""
+        ...
+
+    def release(self, key: str) -> None:
+        """Give the lease back early. Safe to call when it is not held."""
+        ...
+
+
+class InMemoryLeaseStore:
+    """Per-process leases. Correct for a local run and for tests; adequate but not
+    authoritative across Lambda containers, which is why the deployed demo uses the
+    DynamoDB one."""
+
+    def __init__(self) -> None:
+        self._held: dict[str, float] = {}
+
+    def acquire(self, key: str, seconds: int) -> bool:
+        now = time.time()
+        if self._held.get(key, 0.0) > now:
+            return False
+        self._held[key] = now + seconds
+        return True
+
+    def release(self, key: str) -> None:
+        self._held.pop(key, None)
+
+
+class DynamoDBLeaseStore:
+    """One row per workspace, taken with a conditional write.
+
+    The condition — no row, or a row whose lease has already expired — makes acquiring
+    a single atomic operation, so two containers racing to start a run on one workspace
+    cannot both win. **An expiry is required, not optional:** the holder is a Lambda
+    that can be killed mid-flight, and a lease that outlives its holder would wedge a
+    visitor's session until the TTL swept it. The row also carries ``ttl`` so DynamoDB
+    eventually removes it, but correctness rests on ``until``, which is evaluated on
+    every acquire — TTL deletion is best-effort and can lag by hours.
+    """
+
+    def __init__(self, table_name: str, region_name: str = "us-east-1", table: Any = None) -> None:
+        self.table_name = table_name
+        self.region_name = region_name
+        self._table = table
+
+    @property
+    def table(self) -> Any:
+        if self._table is None:
+            import boto3
+
+            self._table = boto3.resource("dynamodb", region_name=self.region_name).Table(
+                self.table_name
+            )
+        return self._table
+
+    def acquire(self, key: str, seconds: int) -> bool:
+        now = int(time.time())
+        try:
+            self.table.update_item(
+                Key={"pk": LEASE_PK, "sk": key},
+                UpdateExpression="SET #until = :until, #ttl = :ttl",
+                # `<=`, not `<`, so a hold is reclaimable the moment its time is up
+                # rather than a second later — the same boundary
+                # :class:`InMemoryLeaseStore` uses, so a local run and the deployed one
+                # cannot disagree about when a lease has ended. Two containers arriving
+                # on that exact second is still settled by the write being conditional:
+                # the loser's condition is false against the winner's new value.
+                ConditionExpression="attribute_not_exists(#until) OR #until <= :now",
+                ExpressionAttributeNames={"#until": "until", "#ttl": "ttl"},
+                ExpressionAttributeValues={
+                    ":until": now + seconds,
+                    ":now": now,
+                    ":ttl": now + _DAY_TTL,
+                },
+            )
+            return True
+        except Exception as exc:  # noqa: BLE001 - the conditional failure is the signal
+            if type(exc).__name__ == "ConditionalCheckFailedException":
+                return False
+            # A lease that cannot be taken must not become a way to run anyway. Fail
+            # closed: refusing costs a visitor one retry, and the alternative is two
+            # agents writing one partition.
+            logger.warning("lease store unavailable for %s: %s", key, type(exc).__name__)
+            return False
+
+    def release(self, key: str) -> None:
+        try:
+            self.table.update_item(
+                Key={"pk": LEASE_PK, "sk": key},
+                UpdateExpression="SET #until = :zero",
+                ExpressionAttributeNames={"#until": "until"},
+                ExpressionAttributeValues={":zero": 0},
+            )
+        except Exception as exc:  # noqa: BLE001 - the lease expires on its own anyway
+            logger.warning("lease release failed for %s: %s", key, type(exc).__name__)
+
+
+def build_lease_store(settings: PublicDemoSettings) -> LeaseStore:
+    if settings.quota_table:
+        return DynamoDBLeaseStore(settings.quota_table, settings.region)
+    return InMemoryLeaseStore()
+
+
 # --------------------------------------------------------------------------- guard
 
 
@@ -343,9 +499,11 @@ class PublicDemoGuard:
         settings: PublicDemoSettings | None = None,
         quota: QuotaStore | None = None,
         bridge: AgentCoreBridge | None = None,
+        lease: LeaseStore | None = None,
     ) -> None:
         self.settings = settings or PublicDemoSettings.from_env()
         self.quota = quota or build_quota_store(self.settings)
+        self.lease = lease or build_lease_store(self.settings)
         self._bridge = bridge
 
     @property
@@ -429,6 +587,37 @@ class PublicDemoGuard:
                 "AWS account.",
             )
 
+    # -- exclusive access to one workspace -------------------------------
+
+    def hold_workspace(self, ws: str) -> bool:
+        """Take this workspace's live-invocation lease, or return False.
+
+        Two coordination runs on one partition is not a theoretical race. Pool formation
+        is idempotent on ``community:product:site:day``, but that idempotency is a read
+        followed by a write: two runs that both find no matching pool will both create
+        one, and the visitor ends up with a duplicate nobody asked for. The narrower
+        cost caps do not prevent it — three live invocations per session is three
+        invocations that can be in flight at once, from two tabs or a script.
+        """
+        if not self.enabled:
+            return True
+        return self.lease.acquire(ws, self.settings.live_lease_seconds)
+
+    def release_workspace(self, ws: str) -> None:
+        if self.enabled:
+            self.lease.release(ws)
+
+    def require_workspace_idle(self, ws: str, message: str) -> None:
+        """Acquire the workspace lease for an action that must not overlap a live run.
+
+        Used by reset, which starts by deleting every row in the partition. The caller
+        must release the lease in a ``finally`` block *after* the destructive operation
+        completes. A check followed by an early release leaves a gap in which a live run
+        can start while reset is deleting and reseeding the same partition.
+        """
+        if not self.hold_workspace(ws):
+            raise HTTPException(409, message)
+
     # -- the prompt surface ----------------------------------------------
 
     def resolve_run(self, trigger: str, instruction: str | None) -> tuple[str, str | None]:
@@ -483,6 +672,18 @@ class PublicDemoGuard:
 # --------------------------------------------------------------------------- bridge
 
 
+class RuntimeRefusal(RuntimeError):
+    """The runtime answered, and its answer was a refusal.
+
+    Worth its own type because it is the one failure where we know something the generic
+    path does not: the entrypoint validates the payload *before* it builds a run, so a
+    structured error means nothing was executed and nothing was written. Collapsing it
+    into "the agent did not answer" would tell a visitor the call might still have
+    finished — which is untrue — and would hold their workspace for the lease's full
+    duration to protect writes that cannot exist.
+    """
+
+
 def new_session_id() -> str:
     """A fresh AgentCore session id, 74 chars of server-generated randomness.
 
@@ -524,26 +725,33 @@ class AgentCoreBridge:
             self._client = boto3.client(
                 "bedrock-agentcore",
                 region_name=self.region,
-                # One attempt. A retried invocation is a second billed agent run, and
-                # the caller would never know it happened (AGENTS.md §3.1).
+                # One attempt. A retried invocation is a second billed agent run against
+                # shared state, and the caller would never know it happened
+                # (AGENTS.md §3.1).
+                #
                 config=Config(
-                    connect_timeout=5,
-                    read_timeout=90,
+                    connect_timeout=LIVE_CONNECT_TIMEOUT_SECONDS,
+                    read_timeout=LIVE_READ_TIMEOUT_SECONDS,
                     retries={"max_attempts": 1, "mode": "standard"},
                 ),
             )
         return self._client
 
-    def invoke(self) -> dict[str, Any]:
-        """Run one live coordination cycle on AWS and project the result.
+    def invoke(self, workspace: str) -> dict[str, Any]:
+        """Run one live coordination cycle on AWS, in ``workspace``, and project it.
 
-        The payload is built here, from constants. Nothing a caller sent reaches the
-        runtime — not a prompt, not a workspace, not a community id.
+        ``workspace`` is the caller's own session, already checked against
+        :data:`PUBLIC_WORKSPACE_RE` by :meth:`PublicDemoGuard.check_workspace`. It is the
+        only caller-derived value in the payload, and it is the payload's *whole*
+        purpose: the runtime coordinates inside that partition, so the pool a visitor
+        sees afterwards is the one this run created rather than a copy of its answer.
+
+        Everything else is still built here from constants — no prompt, no community id,
+        no instruction. The runtime rejects a trigger outside its own allowlist, so even
+        this value cannot be steered into a different behaviour.
         """
         session_id = new_session_id()
-        payload = json.dumps(
-            {"workspace": f"live{uuid.uuid4().hex[:12]}", "trigger": LIVE_TRIGGER}
-        ).encode()
+        payload = json.dumps({"workspace": workspace, "trigger": LIVE_TRIGGER}).encode()
 
         started = time.perf_counter()
         response = self.client.invoke_agent_runtime(
@@ -564,7 +772,7 @@ class AgentCoreBridge:
         if not isinstance(result, dict):
             raise ValueError("runtime returned a non-object response")
         if "error" in result:
-            raise ValueError(str(result["error"])[:200])
+            raise RuntimeRefusal(str(result["error"])[:200])
 
         # Log the correlation handles; do not return them. A judge gains nothing from
         # an X-Ray trace id they cannot query, and it is an account-scoped identifier.
@@ -592,6 +800,27 @@ _LIVE_RUN_FIELDS = (
     "output_tokens",
     "hitl_decisions_created",
 )
+
+
+def _live_note(observed: dict[str, Any]) -> str:
+    """One sentence about where the state on the page came from.
+
+    Both branches are read-backs, not claims about the model's answer. The second is
+    written as an anomaly on purpose: the runtime reported a run id, and that run's own
+    record is not in the workspace it says it wrote — which would mean the two halves
+    are not looking at the same table, and is worth seeing rather than smoothing over.
+    """
+    if observed.get("run_recorded"):
+        return (
+            "This ran on Amazon Bedrock AgentCore in a session generated here and used "
+            "once, against this demo session's own data. Everything on the page below "
+            "is read back from that data — including the agent's own run record."
+        )
+    return (
+        "The deployed agent reported a completed run, but its run record is not "
+        "readable in this session's data. Nothing on the page below has been changed to "
+        "match the agent's answer; it is whatever the database actually holds."
+    )
 
 
 def _project_live_run(result: dict[str, Any]) -> dict[str, Any]:
@@ -628,7 +857,14 @@ _STATIC_TYPES = {
 }
 
 
-def install(app: FastAPI, guard: PublicDemoGuard) -> None:
+#: Reads authoritative state back after a live run: ``(workspace, run_id) -> facts``.
+#: Supplied by ``pool/api/app.py``, which owns the repository. The bridge deliberately
+#: cannot do this itself — it would then be able to *describe* state, and the one thing
+#: this endpoint must never do is source its answer from anywhere but the store.
+ObserveRun = Any
+
+
+def install(app: FastAPI, guard: PublicDemoGuard, observe: Any = None) -> None:
     """Attach the allowlist, the live action, and the built SPA to ``app``.
 
     Called once at import time from ``pool/api/app.py`` and only when public mode is
@@ -674,12 +910,17 @@ def install(app: FastAPI, guard: PublicDemoGuard) -> None:
 
     @app.post("/api/demo/agentcore")
     def demo_agentcore(workspace: str = "") -> dict[str, Any]:
-        """Invoke the deployed AgentCore Runtime, for real, once.
+        """Invoke the deployed AgentCore Runtime, for real, once, on this session.
 
         Returns ``ok: false`` with a reason rather than raising for the situations a
         judge can hit legitimately — the switch being off, or AWS refusing. It never
         returns a fabricated run: if this says a run happened, one happened
         (AGENTS.md §8).
+
+        It also never *reports* state. Whatever the run created is in DynamoDB, and the
+        client re-reads ``/api/state`` for it. The ``observed`` block below is a
+        read-back of that same store, not a description of the model's answer — which is
+        the difference between proving the agent changed the world and taking its word.
         """
         # Read through the guard, never a captured copy: both kill switches and every
         # cap are environment variables so they can be changed on the deployed function
@@ -690,35 +931,94 @@ def install(app: FastAPI, guard: PublicDemoGuard) -> None:
             return {
                 "ok": False,
                 "live": False,
+                "classification": LIVE_CLASS_SAFE_PRE_EXECUTION,
+                "remote_may_still_write": False,
+                "allow_local_fallback": True,
+                "refresh_state": False,
                 "reason": "The live agent action is switched off on this deployment.",
             }
-        guard.spend_live(ws)
+
+        # The lease before the quota, deliberately. A double-click, two tabs, or a script
+        # can put three permitted invocations in flight at once, and the loser of that
+        # race must not also lose one of its three paid runs — so the free, per-workspace
+        # check goes first and is handed straight back if the paid one refuses. (The same
+        # reasoning as the session-before-day cap order in `_spend`, one level out.)
+        if not guard.hold_workspace(ws):
+            return {
+                "ok": False,
+                "live": False,
+                "classification": LIVE_CLASS_WORKSPACE_BUSY,
+                "remote_may_still_write": True,
+                "allow_local_fallback": False,
+                "refresh_state": True,
+                "reason": (
+                    "The deployed agent is already working on this session. "
+                    "Wait for it to finish before starting another run."
+                ),
+            }
         try:
-            result = guard.bridge.invoke()
+            guard.spend_live(ws)
+        except HTTPException:
+            guard.release_workspace(ws)
+            raise
+
+        try:
+            result = guard.bridge.invoke(ws)
+        except RuntimeRefusal as refusal:
+            # A refusal is an answer. The runtime validated the payload and declined
+            # before running anything, so the workspace goes straight back and the client
+            # is told plainly rather than being warned about work that never started.
+            guard.release_workspace(ws)
+            logger.info("live agentcore invocation refused: %s", refusal)
+            return {
+                "ok": False,
+                "live": False,
+                "classification": LIVE_CLASS_SAFE_REFUSAL,
+                "remote_may_still_write": False,
+                "allow_local_fallback": True,
+                "refresh_state": False,
+                "reason": f"The deployed agent refused this request ({refusal}). "
+                "Nothing in this session was changed.",
+            }
         except Exception as exc:  # noqa: BLE001 - reported to the caller, not swallowed
+            # The lease is *not* released here. From this side a timeout and a crash look
+            # identical, and in the timeout case the runtime is very likely still writing
+            # to this partition — so the workspace stays held until the lease expires on
+            # its own. Refusing the next run for a minute is cheap; letting a second
+            # agent into a partition a first one is still mutating is not.
             logger.warning("live agentcore invocation failed: %s", type(exc).__name__)
             return {
                 "ok": False,
                 "live": False,
+                "classification": LIVE_CLASS_AMBIGUOUS,
+                "remote_may_still_write": True,
+                "allow_local_fallback": False,
+                "refresh_state": True,
                 "reason": (
                     "The deployed agent did not answer this time "
-                    f"({type(exc).__name__}). Nothing below is affected — it is "
-                    "computed locally."
+                    f"({type(exc).__name__}). It may still have finished on AWS — the "
+                    "state on this page is read back from the database either way, so "
+                    "it shows whatever actually happened. The session remains protected "
+                    "until it is safe to retry."
                 ),
             }
+        guard.release_workspace(ws)
+
+        observed = observe(ws, result["run"].get("run_id") or "") if observe else {}
         return {
             "ok": True,
             "live": True,
+            "classification": LIVE_CLASS_SUCCESS,
+            "remote_may_still_write": False,
+            "allow_local_fallback": False,
             "service": "Amazon Bedrock AgentCore Runtime",
             "runtime": settings.runtime_label,
             "region": settings.region,
             "wall_ms": result["wall_ms"],
             "run": result["run"],
-            "note": (
-                "This ran in its own AgentCore session on AWS, against its own "
-                "synthetic Demo University seeded inside the runtime. It does not "
-                "change the demo state on this page."
-            ),
+            "observed": observed,
+            "refresh_state": True,
+            "note": _live_note(observed),
         }
 
     if guard.settings.web_root:

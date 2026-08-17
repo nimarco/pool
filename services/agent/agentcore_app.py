@@ -16,6 +16,22 @@ workspace, and hands off to :class:`~pool.agent.coordinator.PoolCoordinator` —
 class the local API and the test suite drive. There is no AgentCore-specific
 orchestration logic, so a run here and a run locally are the same run.
 
+**The runtime coordinates inside a workspace; it never creates or destroys one.**
+With ``POOL_REPOSITORY=dynamodb`` this process writes to the same table, and the same
+partition, that the public API serves the browser from — so the pool a visitor sees was
+genuinely built by this agent rather than replayed from its answer. That sharing is only
+safe with a boundary, and this is it:
+
+* the workspace arrives in the payload and nothing else may name one — no tool takes a
+  workspace argument, and the model is never shown the value (AGENTS.md §4);
+* only one principal can invoke this runtime at all (``AWS_IAM`` inbound auth, and the
+  demo Lambda's role is the only one granted ``InvokeAgentRuntime`` on this ARN), so the
+  payload is server-built by definition;
+* the workspace must already exist. Seeding is a workspace-creating act and belongs to
+  whoever owns the workspace, so on a shared store this refuses rather than seeds — the
+  execution role has no ``DeleteItem`` or ``BatchWriteItem`` and could not complete
+  ``seed()``'s reset anyway (``services/agent/iam/agentcore-dynamodb.json``).
+
 Cost note: this process is invoked per request. It starts nothing recurring, holds no
 background loop, and inherits the same iteration, tool-call, and wall-clock bounds as
 every other entrypoint (AGENTS.md §3.1).
@@ -25,6 +41,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -43,10 +60,25 @@ logger = logging.getLogger("pool.agentcore")
 
 app = BedrockAgentCoreApp()
 
+#: The same shape ``pool/api/app.py`` accepts, stated as a pattern rather than as
+#: ``str.isalnum()`` on a stripped string — that idiom accepts every Unicode letter and
+#: digit, so ``café`` and ``١٢٣`` were both valid workspace names. Not reachable (only
+#: the Lambda can invoke this), but a partition key is not a place for surprises.
+WORKSPACE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
+
 # Built once per container so repeated invocations reuse the clients rather than
 # re-creating a boto3 session on every request.
 _settings = get_settings()
-_repo = build_repository(_settings.repository, _settings.dynamodb_table, _settings.aws_region)
+_repo = build_repository(
+    _settings.repository,
+    _settings.dynamodb_table,
+    _settings.aws_region,
+    consistent_reads=_settings.dynamodb_consistent_reads,
+)
+#: True when this runtime is reading and writing a store somebody else also writes.
+#: The one behavioural difference it makes is that this process will not bootstrap a
+#: workspace — see the module docstring.
+_shared_store = _settings.repository != "memory"
 _routing = build_routing(
     _settings.routing_provider, _settings.aws_region, _settings.max_route_matrix_cells
 )
@@ -109,7 +141,7 @@ def invoke(payload: dict[str, Any], context: Any = None) -> dict[str, Any]:
     payload = payload or {}
 
     workspace = str(payload.get("workspace") or os.environ.get("POOL_WORKSPACE", "primary"))
-    if not workspace.replace("_", "").replace("-", "").isalnum():
+    if not WORKSPACE_RE.match(workspace):
         return {"error": "invalid workspace identifier"}
 
     trigger = str(payload.get("trigger") or "scheduled_scan")
@@ -123,9 +155,19 @@ def invoke(payload: dict[str, Any], context: Any = None) -> dict[str, Any]:
     community_id = str(payload.get("community_id") or COMMUNITY_ID)
 
     # A cold workspace has no Community, so a run would have nothing to coordinate.
-    # Seeding the synthetic dataset here keeps a scheduled invocation meaningful without
-    # a separate bootstrap step — and the data is the same synthetic set as everywhere.
+    #
+    # On this runtime's *own* in-memory store, seeding the synthetic dataset here keeps a
+    # one-shot invocation meaningful without a separate bootstrap step. On a store the
+    # API also owns, it would be this process reaching outside its remit: `seed()` opens
+    # with `repo.reset()`, which deletes every row in the partition — so a stale or
+    # misdirected invocation could wipe a live visitor's session. The execution role
+    # holds no delete permission, so the attempt would fail mid-way and leave a
+    # half-emptied workspace behind; refusing before touching anything is both safer and
+    # a clearer error to read.
     if not _repo.list_communities(workspace):
+        if _shared_store:
+            logger.warning("refusing to seed shared workspace=%s", workspace)
+            return {"error": "workspace has no community; this runtime does not create one"}
         counts = seed(_repo, workspace)
         logger.info("seeded empty workspace=%s %s", workspace, counts)
 

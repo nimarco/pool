@@ -14,9 +14,13 @@ What a judge gets: a URL. No AWS account, no CLI, no credentials, no configurati
 
     browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
                                                  ├─ serves the built SPA (same origin)
-                                                 ├─ serves the 14 allowlisted API paths
+                                                 ├─ serves the 23 allowlisted API paths
                                                  ├─ DynamoDB: this session's demo state
-                                                 └─ InvokeAgentRuntime: the ONE live action
+                                                 └─ InvokeAgentRuntime, bound to this
+                                                    session's workspace
+                                                          │
+                                    AgentCore Runtime ◀───┘
+                                      └─ the same DynamoDB table, the same partition
 
 **Why a Function URL and not API Gateway.** The gateway would add a resource, a stage,
 and a second place for CORS to be wrong, and buys nothing here: there is one function,
@@ -34,6 +38,16 @@ and wrong for a judge who clicks through a lifecycle: a cold Lambda would lose t
 pool mid-demo, and two judges on two containers would see different worlds. One
 on-demand table with a 24 h TTL per session costs approximately nothing idle and makes
 the demo deterministic across containers.
+
+**Why the runtime shares that table rather than keeping its own copy.** It used to keep
+its own: the live action ran the deployed agent against a throwaway workspace inside the
+runtime, which proved the agent was real and could not be the product, because the pool
+it formed was invisible to the person who pressed the button. Pointing it at this table
+makes the deployed agent the thing that actually forms the visitor's pool. The sharing
+is one-directional in authority — the API owns workspaces (it seeds them, resets them,
+and rations how many exist), and the runtime is only ever a participant inside one that
+already exists. That asymmetry is what the runtime's IAM grant encodes: read and write,
+no delete (`services/agent/iam/agentcore-dynamodb.json`).
 
 Cost shape, in full: **no always-on compute, no idle charge.** Lambda and DynamoDB are
 per-request; the table is PAY_PER_REQUEST; the log group is capped at 14 days. Reserved
@@ -73,6 +87,18 @@ BUNDLE = os.environ.get("POOL_DEMO_BUNDLE", "../build/demo-lambda")
 #: The deployed AgentCore runtime this demo is allowed to invoke — and only this one.
 #: Empty means the live action ships switched off, which is a valid deployment.
 AGENTCORE_RUNTIME_ARN = os.environ.get("AGENTCORE_RUNTIME_ARN", "")
+
+#: Explicit physical table name, not CDK's generated one.
+#:
+#: The AgentCore runtime is deployed by a *different* stack (the AgentCore CLI's
+#: `AgentCore-Pool-default`) and now reads and writes this same table, so it needs both
+#: the name (`DYNAMODB_TABLE` in `agentcore/agentcore.json`) and an IAM statement naming
+#: the ARN (`services/agent/iam/agentcore-dynamodb.json`). Neither of those is a
+#: CloudFormation reference that could resolve a generated name, and wiring an export
+#: between two stacks that are deployed by two different tools — in either order — is a
+#: dependency neither tool can express. A fixed name makes the contract a constant that
+#: both halves can state and a test can compare.
+TABLE_NAME = os.environ.get("POOL_DEMO_TABLE", "pool-demo-state")
 
 #: Hard ceiling on parallel executions — the cost control that does not depend on any
 #: application code being correct.
@@ -120,6 +146,7 @@ class PoolDemoStack(Stack):
         table = dynamodb.Table(
             self,
             "DemoState",
+            table_name=TABLE_NAME,
             partition_key=dynamodb.Attribute(name="pk", type=dynamodb.AttributeType.STRING),
             sort_key=dynamodb.Attribute(name="sk", type=dynamodb.AttributeType.STRING),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -148,10 +175,14 @@ class PoolDemoStack(Stack):
             "PUBLIC_DEMO_WEB_ROOT": "/var/task/web",
             "POOL_REPOSITORY": "dynamodb",
             "DYNAMODB_TABLE": table.table_name,
-            # The API Lambda never calls Bedrock. Discovery and lifecycle runs on this
-            # surface use the deterministic offline planner, so the demo is free,
-            # repeatable, and unaffected by model variance. The one live model call in
-            # the product goes to AgentCore, which has its own model configuration.
+            # The AgentCore runtime writes this same partition inside a single user
+            # action, so the refresh that follows one has to be a read-your-writes read
+            # or the browser can be shown the world as it was before the agent ran.
+            "DYNAMODB_CONSISTENT_READS": "true",
+            # The API Lambda never calls Bedrock. The deterministic offline planner backs
+            # the free lifecycle actions — advancing a pool, the scripted showcase — so
+            # those are repeatable and unaffected by model variance. The product's
+            # discovery action goes to AgentCore, which has its own model configuration.
             "MODEL_PROVIDER": "offline",
             "ROUTING_PROVIDER": "deterministic",
             "PAYMENT_PROVIDER": "simulated",
@@ -187,9 +218,24 @@ class PoolDemoStack(Stack):
             runtime=lambda_.Runtime.PYTHON_3_13,
             handler="pool.api.app.lambda_handler",
             code=lambda_.Code.from_asset(bundle_path),
-            # The showcase scenario is ~800 DynamoDB round trips; 30 s is comfortable
-            # for it and still terminates a wedged request long before a judge would.
-            timeout=Duration.seconds(30),
+            # Three nested deadlines, innermost first, so whichever one fires produces a
+            # structured answer rather than a dropped connection:
+            #
+            #   45 s  the agent's own wall-clock bound inside the runtime
+            #         (WORKFLOW_TIMEOUT_SECONDS in agentcore/agentcore.json) — hitting it
+            #         ends the run loudly as a recorded loop fault, and that record is
+            #         still returned;
+            #   60 s  this function's read timeout on invoke_agent_runtime, so a runtime
+            #         that never answers becomes a reported failure here;
+            #   90 s  this timeout, the outermost net.
+            #
+            # It was 30 s, which was ample for the showcase (~800 DynamoDB round trips)
+            # and is not for a live agent invocation: the Lambda would have been killed
+            # mid-flight while the runtime carried on writing, which is the one failure
+            # mode where the browser is told nothing happened and something did. The
+            # worst case a wedged request can now bill is 90 s of one 1 GB execution,
+            # about a tenth of a cent.
+            timeout=Duration.seconds(90),
             memory_size=1024,
             environment=env,
             log_group=log_group,

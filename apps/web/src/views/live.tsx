@@ -1,10 +1,9 @@
-/* The one action that leaves this machine.
+/* The technical view of the one action that leaves this machine.
  *
- * Everything else on this site runs deterministically on the server, which is
- * deliberate: a demo that needs a paid model call to render a page is a demo that
- * breaks in front of someone. This screen is the exception, and it is the exception
- * that proves the agent is real — a genuine invocation of Pool's coordinator deployed
- * on Amazon Bedrock AgentCore Runtime.
+ * This is not a second agent or a second button. Pressing "Find opportunities" in the
+ * product invokes the coordinator deployed on Amazon Bedrock AgentCore Runtime, bound to
+ * this session's own workspace; this screen shows what that invocation was. The button
+ * here runs the same thing, from the auditor's side rather than the member's.
  *
  * The honesty rule shapes the waiting state. A browser making one HTTPS request can
  * observe exactly two things: when it sent, and when it got an answer. So nothing here
@@ -13,6 +12,11 @@
  * runs under, and the *whole menu of tools the agent may choose from* — which the result
  * then resolves into the ones it actually chose. There is no code path that fabricates
  * a run (AGENTS.md §8).
+ *
+ * The result panel deliberately separates two things that look alike. The run summary is
+ * the agent's account of what it did. `observed` is what the database held afterwards,
+ * read back by the server from the same table it serves every other page from. Only the
+ * second one is evidence.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -39,11 +43,12 @@ import {
  *  coordinator this repository's tests drive. */
 const HOPS = [
   { name: "Your browser", note: "no AWS credential, ever" },
-  { name: "Lambda Function URL", note: "signs the call with its execution role" },
+  { name: "Lambda Function URL", note: "signs the call, and names your workspace" },
   { name: "Bedrock AgentCore Runtime", note: "isolated session, generated server-side" },
   { name: "Strands agent loop", note: "bounded: iterations, tool calls, wall clock" },
   { name: "Amazon Bedrock", note: "model inference" },
   { name: "Pool's typed tools", note: "the only way the model reaches any state" },
+  { name: "DynamoDB", note: "your session's partition — the same one this page reads" },
 ];
 
 function HopChain({ state }: { state: "idle" | "flight" | "done" | "failed" }) {
@@ -189,11 +194,23 @@ export function AgentExecution({
             How Pool coordinated this
           </h2>
         )}
+        {/* Deliberately a claim about the mechanism, not about the pool on screen.
+            Discovery goes to AWS when the deployment has a runtime. A local fallback is
+            used only after the server explicitly proves that no remote execution can
+            still mutate this workspace; an ambiguous outcome stays visible as one.
+            Which one answered is a fact per run, and every run below carries it. */}
         <p className="lede">
-          Pool's coordinator runs on this server for every action you take — the real
-          Strands event loop, the real tools, the real domain arithmetic, driven by a
-          deterministic planner rather than a model so the demo is free and cannot break.
-          The same coordinator is also deployed on AWS, and you can make it run there.
+          {available
+            ? `Finding an opportunity on this site invokes Pool's coordinator where it is
+               deployed — on Amazon Bedrock AgentCore, against this session's own data, so
+               the pool it forms is formed there. The rest of the lifecycle runs the same
+               Strands loop on this server with a deterministic planner in the model's
+               place, so the demo is free and cannot break. Every run below records which
+               of the two answered.`
+            : `Pool's coordinator runs on this server for every action you take — the real
+               Strands event loop, the real tools, the real domain arithmetic, driven by a
+               deterministic planner rather than a model so the demo is free and cannot
+               break. The same coordinator is also deployed on AWS.`}
         </p>
       </header>
 
@@ -218,15 +235,20 @@ export function AgentExecution({
                 session generated here and used once.
               </p>
               <p className="tiny muted">
-                It works from its own copy of the community and leaves your pool alone.
-                That is a property of the deployment rather than a demo choice: the runtime
-                is configured to hold no shared state, so each invocation is isolated from
-                every other one and from this session. What it proves is that the
-                coordination you have been driving is the same code, running on AWS.
+                It works on <strong>your</strong> session, not a copy of it. The runtime
+               reads and writes the same DynamoDB partition this page reads, so whatever
+               it decides to do lands in the demo you are driving — and the state shown
+               afterwards is read back from that table rather than assembled from the
+               agent's answer. If the invocation becomes ambiguous, Pool waits for the
+               workspace to become safe before another mutating run. Your session id
+               never leaves the browser as anything but the parameter every request
+               already carries; the server re-checks it and builds the runtime's payload
+               itself, so the agent can choose what to do and never whose data to do it to.
               </p>
               <p className="tiny muted">
                 Capped at {config?.max_live_per_session} runs per visitor because it
-                spends model tokens. The client sends an action name, never a prompt: the
+                spends model tokens, and one at a time per session so two runs cannot
+                write the same pool. The client sends an action name, never a prompt: the
                 server owns the instruction, so a stranger with this URL cannot write the
                 agent's orders.
               </p>
@@ -308,7 +330,20 @@ export function AgentExecution({
             <h3>What it chose to do, in order</h3>
           </div>
           <Trace calls={result.run.tool_calls} />
-          <div className="panel-pad">
+          <div className="panel-head">
+            <h3>What the database held afterwards</h3>
+            <span className="spacer" />
+            <span className="tiny faint">read back by the server, not reported by the agent</span>
+          </div>
+          <div className="panel-pad stack-sm">
+            <div className="facts">
+              <Fact
+                label="Its run record, in your session's data"
+                value={result.observed.run_recorded ? "present" : "not found"}
+              />
+              <Fact label="Pools in your session" value={result.observed.pools} />
+              <Fact label="People it is waiting on" value={result.observed.pending_decisions} />
+            </div>
             <p className="tiny muted">{result.note}</p>
           </div>
         </section>
@@ -348,7 +383,11 @@ export function AgentExecution({
 
       <section className="panel">
         <div className="panel-head">
-          <h3>Runs on this server</h3>
+          {/* Every run this session has had, wherever it executed. A run on AWS writes
+              its record to the same workspace as one that ran here, so this list is the
+              audit trail rather than a local subset of it — `model_provider` on each row
+              says which. */}
+          <h3>Every run in this session</h3>
           <span className="spacer" />
           <span className="tiny faint">
             no model reasoning text is stored, and tool arguments are kept as hashes
@@ -386,7 +425,7 @@ export function AgentExecution({
             ["React app", "one Lambda serves it from the same origin as the API — no CORS, no bucket"],
             ["Lambda Function URL", "23 allowlisted paths of 45; everything else 404s"],
             ["DynamoDB", "single table, on-demand; each visitor isolated by partition, 24 h TTL"],
-            ["Bedrock AgentCore Runtime", "hosts the coordinator; AWS_IAM inbound auth, one runtime ARN"],
+            ["Bedrock AgentCore Runtime", "hosts the coordinator; AWS_IAM inbound auth, one runtime ARN; read/write on that one table, no delete"],
             ["Amazon Bedrock", "model inference, reached through Strands"],
             ["CloudWatch", "structured run records correlated by run id, 14-day retention"],
           ].map(([name, role]) => (

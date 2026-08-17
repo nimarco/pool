@@ -124,13 +124,17 @@ window*, then *Everyone collects their order*.
 **Go to:** the pool's *Activity* tab → **Agent execution**. Press **Run the deployed
 agent**.
 
-> Everything you just watched ran on the server — the real Strands event loop, the real
-> tools, the real domain arithmetic, with a deterministic planner in the model's place.
-> That is deliberate: a product that needs a paid model call to render a page is a
-> product that breaks in front of someone.
+> The pool at the start of this was found by the coordinator deployed on Amazon Bedrock
+> AgentCore Runtime — a real model, in a session generated per invocation, working on
+> this visitor's own DynamoDB workspace. Not a copy of it. The row you have been reading
+> all the way through carries that run's id.
 >
-> This is the exception. It invokes the same coordinator as deployed on Amazon Bedrock
-> AgentCore Runtime, in its own session. Ten to twenty seconds.
+> Everything after that ran on the server — the same Strands event loop, the same tools,
+> the same domain arithmetic, with a deterministic planner in the model's place. That is
+> deliberate: a product that needs a paid model call to render every page is a product
+> that breaks in front of someone.
+>
+> This button runs the deployed one again, from the auditor's side. Ten to twenty seconds.
 
 **While it runs, point at:** the tool catalogue.
 
@@ -138,21 +142,28 @@ agent**.
 > generic mutation. Seven read, four commit something, one ends the run — and every
 > committing tool is idempotent by an explicit key, because agent systems retry.
 
-**When it returns:** point at the marked tools and the three durations.
+**When it returns:** point at the marked tools, the three durations, then the block
+below them.
 
 > There is what it chose, in order. Time inside the agent, time inside AWS, and the
 > browser's own round trip — three separately measured numbers. If this call had failed,
 > the screen would say so. There is no code path in this repository that fabricates a
 > run.
+>
+> And this last part is not the agent's report — it is what the database held afterwards,
+> read back by the server from the same table it serves every other page from. That is
+> the difference between an agent that says it did something and one that did it.
 
 ## 4:10–4:40 — The architecture, in one sentence
 
 **Show:** the *What is running where* block at the foot of Agent execution, or the
 diagram.
 
-> Browser to a Lambda Function URL, which signs an invocation of AgentCore Runtime. Inside
-> it, a bounded Strands loop and Amazon Bedrock. State in one DynamoDB table, isolated per
-> visitor. Structured run records in CloudWatch.
+> Browser to a Lambda Function URL, which signs an invocation of AgentCore Runtime bound
+> to this visitor's workspace. Inside it, a bounded Strands loop and Amazon Bedrock. State
+> in one DynamoDB table, isolated per visitor — and the runtime writes that same table, so
+> the agent on AWS is the one that formed the pool. It can read and write there; it cannot
+> delete.
 >
 > And the rule underneath all of it: **the model decides what to do; deterministic code
 > decides what is true.** Every price on every screen came from a tool, not from a

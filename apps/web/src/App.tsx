@@ -156,12 +156,78 @@ export default function App() {
     [refresh, showcase],
   );
 
+  /** Invoke the coordinator deployed on Bedrock AgentCore, bound to this session.
+   *
+   *  Nothing here reads the run's answer to decide what happened. The result is kept as
+   *  evidence — which tools it chose, what it cost, how long it took — and the state the
+   *  page then renders comes from re-reading the server. That is the difference between
+   *  the agent having done the work and the browser drawing what the agent said.
+   *
+   *  The server classifies the outcome. The caller may fall back only when the server
+   *  explicitly proves that no remote execution can still mutate this workspace. */
+  const invokeDeployedAgent = useCallback(async (): Promise<LiveAgentResult | null> => {
+    setLiveBusy(true);
+    setLive(null);
+    try {
+      const result = await api.liveAgent();
+      setLive(result);
+      // The deployed run's own record, so the product's "what just happened" surfaces
+      // describe the run that actually happened rather than the last local one. `notes`
+      // is the one field the runtime does not return; it is empty, not invented.
+      if (result.ok) setLastRun({ ...result.run, notes: [] });
+      // A failure is not proof that nothing changed: the invocation can time out after
+      // the agent has written to the shared workspace. The server says when to re-read.
+      if (result.refresh_state) await refresh();
+      return result;
+    } catch {
+      // No response means the browser cannot establish whether the request reached AWS.
+      // Treat it conservatively as ambiguous; never parse an exception string to decide
+      // whether a local mutating fallback is safe.
+      const failure: LiveAgentResult = {
+        ok: false,
+        live: false,
+        classification: "ambiguous_remote_execution",
+        remote_may_still_write: true,
+        allow_local_fallback: false,
+        refresh_state: true,
+        reason:
+          "The live request did not complete. The deployed run may still be finishing; " +
+          "this session remains protected until it is safe to retry.",
+      };
+      setLive(failure);
+      await refresh();
+      return failure;
+    } finally {
+      setLiveBusy(false);
+    }
+  }, [refresh]);
+
   /** The product action. Pool's coordinator looks across the community's standing needs
-   *  and forms an opportunity if one is genuinely worth forming. A real Strands run
-   *  against the real tools; it just happens to run on this server. */
+   *  and forms an opportunity if one is genuinely worth forming.
+   *
+   *  Where it runs depends on the deployment, and the answer is never hidden. On the
+   *  public demo it is the coordinator deployed on Bedrock AgentCore, working on this
+   *  session's own DynamoDB workspace — so the pool that appears was formed by that run.
+   *  Locally, or when the server explicitly confirms that no remote execution can still
+   *  mutate the workspace, the same coordinator runs on this server with a deterministic
+   *  planner in the model's place.
+   *  Both are the real Strands loop and the real typed tools; `model_provider` on the
+   *  run record says which one answered, and the technical view shows it. */
   const findOpportunities = useCallback(async () => {
     setRunning(true);
     try {
+      if (demoConfig?.live_agent_available) {
+        const liveResult = await invokeDeployedAgent();
+        if (liveResult?.ok) {
+          setView("home");
+          window.scrollTo({ top: 0 });
+          return;
+        }
+        if (!liveResult?.allow_local_fallback) {
+          if (liveResult) setError(liveResult.reason);
+          return;
+        }
+      }
       const run = await api.run("manual_scan");
       setLastRun(run);
       await refresh();
@@ -172,21 +238,13 @@ export default function App() {
     } finally {
       setRunning(false);
     }
-  }, [refresh]);
+  }, [refresh, demoConfig, invokeDeployedAgent]);
 
-  /** The one action that leaves this machine. The deployed runtime holds no shared
-   *  state, so it works from its own copy and does not touch this session. */
+  /** The same invocation, reached from the technical view rather than from the product.
+   *  One code path, so what a judge audits there is what the product actually did. */
   const runLiveAgent = useCallback(async () => {
-    setLiveBusy(true);
-    setLive(null);
-    try {
-      setLive(await api.liveAgent());
-    } catch (err) {
-      setLive({ ok: false, live: false, reason: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setLiveBusy(false);
-    }
-  }, []);
+    await invokeDeployedAgent();
+  }, [invokeDeployedAgent]);
 
   const runScenario = useCallback(async () => {
     setRunning(true);

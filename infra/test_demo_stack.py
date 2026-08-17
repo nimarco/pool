@@ -18,15 +18,54 @@ Runs offline: synthesis needs no AWS credentials.
 
 from __future__ import annotations
 
+import ast
 import json
+import pathlib
 
 import aws_cdk as cdk
 import pytest
 from aws_cdk.assertions import Match, Template
 
-from demo_app import PoolDemoStack
+from demo_app import TABLE_NAME, PoolDemoStack
 
 ARN = "arn:aws:bedrock-agentcore:us-east-1:111111111111:runtime/Pool_PoolCoordinator-Abc123"
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+
+def agentcore_runtime() -> dict:
+    """The coordinator's deployed configuration, with its env vars as a plain dict.
+
+    Read from the file the AgentCore CLI deploys from, not from a copy — the whole
+    reason these tests exist is that this stack and that one are deployed by different
+    tools and have to agree about a table.
+    """
+    spec = json.loads((ROOT / "agentcore" / "agentcore.json").read_text())
+    runtime = next(r for r in spec["runtimes"] if r["name"] == "PoolCoordinator")
+    return {**runtime, "envVars": {v["name"]: v["value"] for v in runtime["envVars"]}}
+
+
+def runtime_dynamodb_policy() -> dict:
+    """The inline IAM policy `agentcore.json` attaches to the runtime's execution role."""
+    entry = agentcore_runtime()["additionalPolicies"][0]
+    return json.loads((ROOT / "services" / "agent" / entry).read_text())
+
+
+def public_demo_constant(name: str):
+    """One module-level constant from ``pool/api/public_demo.py``, read without importing.
+
+    The agent package is not installed in this virtualenv — infra depends on CDK and
+    nothing else — and adding FastAPI here to read one number would be a worse trade
+    than parsing the assignment. `ast` rather than a regex so a moved or renamed
+    constant is a clean failure instead of a silent no-match.
+    """
+    source = (ROOT / "services" / "agent" / "pool" / "api" / "public_demo.py").read_text()
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == name for t in node.targets
+        ):
+            return ast.literal_eval(node.value)
+    raise AssertionError(f"{name} is not a module-level constant of public_demo.py")
 
 ALWAYS_ON = [
     "AWS::EC2::Instance",
@@ -130,8 +169,40 @@ class TestCostSafety:
         assert next(iter(fns.values()))["Properties"]["ReservedConcurrentExecutions"] == 5
 
     def test_a_wedged_request_cannot_run_for_minutes(self, template: Template):
+        """Long enough for a live agent invocation, short enough to be a real ceiling.
+
+        It was 30 s, which is ample for everything the function does by itself and not
+        for waiting on the deployed agent: the function would have been killed
+        mid-invocation while the runtime carried on writing to the visitor's workspace,
+        which is the single failure mode where the browser is told nothing happened and
+        something did. The bound is now the outermost of three (see
+        ``test_the_deadlines_nest_innermost_first``) and still caps a stuck request at
+        roughly a tenth of a cent.
+        """
         fns = template.find_resources("AWS::Lambda::Function")
-        assert next(iter(fns.values()))["Properties"]["Timeout"] <= 60
+        assert next(iter(fns.values()))["Properties"]["Timeout"] <= 120
+
+    def test_the_deadlines_nest_innermost_first(self, template: Template):
+        """Agent wall clock < bridge read timeout < function timeout.
+
+        Whichever deadline fires, the caller gets a structured answer rather than a
+        dropped connection: the agent's own bound ends the run as a recorded loop fault
+        and still returns it, and the bridge's read timeout becomes a reported failure
+        here. Invert any pair and the outer layer starts killing the inner one
+        mid-write, which is exactly the case that leaves shared state changed and the
+        browser uninformed. The three numbers live in three files, which is why this is
+        worth asserting rather than commenting.
+        """
+        fns = template.find_resources("AWS::Lambda::Function")
+        function_timeout = next(iter(fns.values()))["Properties"]["Timeout"]
+        agent_bound = int(agentcore_runtime()["envVars"]["WORKFLOW_TIMEOUT_SECONDS"])
+        bridge_read = public_demo_constant("LIVE_READ_TIMEOUT_SECONDS")
+
+        assert agent_bound < bridge_read < function_timeout, (
+            agent_bound,
+            bridge_read,
+            function_timeout,
+        )
 
     def test_everything_is_destroyable(self, template: Template):
         for logical_id, resource in template.to_json()["Resources"].items():
@@ -245,6 +316,78 @@ class TestLeastPrivilege:
             },
         )
         assert "AdministratorAccess" not in json.dumps(template.to_json())
+
+
+class TestSharedWorkspaceContract:
+    """The agreement between this stack and the AgentCore one.
+
+    The public demo's Lambda and the deployed coordinator now read and write the same
+    DynamoDB table, and they are deployed by two different tools from two different
+    directories — this CDK app, and the AgentCore CLI reading ``agentcore/``. Nothing in
+    either tool can express the dependency, and neither can be deployed second without
+    breaking the other if the two disagree. So the contract is a constant in three
+    places, and this class is what keeps the three the same.
+
+    A failure here is not a style problem: a table name that has drifted means the
+    deployed agent writes to a table nobody reads, and the demo silently goes back to
+    being two disconnected halves.
+    """
+
+    def test_the_table_has_an_explicit_name_the_other_stack_can_reference(
+        self, template: Template
+    ):
+        template.has_resource_properties("AWS::DynamoDB::Table", {"TableName": TABLE_NAME})
+
+    def test_the_runtime_is_pointed_at_that_exact_table(self):
+        env = agentcore_runtime()["envVars"]
+        assert env["DYNAMODB_TABLE"] == TABLE_NAME
+        assert env["POOL_REPOSITORY"] == "dynamodb", (
+            "an in-memory runtime cannot mutate the workspace the browser is reading"
+        )
+
+    def test_the_runtimes_iam_grant_names_that_exact_table(self):
+        statements = runtime_dynamodb_policy()["Statement"]
+        assert len(statements) == 1
+        assert statements[0]["Resource"].endswith(f"table/{TABLE_NAME}")
+
+    def test_the_runtime_may_read_and_write_but_never_delete(self):
+        """The asymmetry the whole design rests on. The API owns workspaces — it seeds
+        them, resets them, and rations how many exist; the runtime is a participant
+        inside one that already exists. ``DeleteItem`` and ``BatchWriteItem`` are what
+        ``Repository.reset()`` needs to empty a partition, so withholding them means the
+        most destructive operation in the codebase is unavailable to the agent by
+        construction rather than by care."""
+        actions = set(runtime_dynamodb_policy()["Statement"][0]["Action"])
+        assert actions == {"dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"}
+
+    def test_the_runtime_grant_is_scoped_to_one_table_not_a_prefix(self):
+        resource = runtime_dynamodb_policy()["Statement"][0]["Resource"]
+        assert isinstance(resource, str)
+        assert not resource.endswith("*"), resource
+        # Account and region are wildcards on purpose — the role can only ever run in
+        # one account, and the table name is the part that identifies the resource — but
+        # the *table* segment must not be.
+        assert resource.count("*") == 2, resource
+
+    def test_both_halves_read_their_own_writes(self, function_env):
+        """Two compute environments writing one partition inside a single user action.
+        An eventually consistent read can be served by a replica that has not seen the
+        other's writes yet, which would show a visitor the world as it was before the
+        agent ran — on the one page whose entire claim is the opposite."""
+        assert function_env["DYNAMODB_CONSISTENT_READS"] == "true"
+        assert agentcore_runtime()["envVars"]["DYNAMODB_CONSISTENT_READS"] == "true"
+
+    def test_the_live_trigger_is_one_the_runtime_accepts(self):
+        """The bridge sends a trigger name; the entrypoint validates it against a fixed
+        set. A mismatch is a refusal at the far end, visible only in production."""
+        source = (ROOT / "services" / "agent" / "agentcore_app.py").read_text()
+        allowed = next(
+            ast.literal_eval(node.value)
+            for node in ast.parse(source).body
+            if isinstance(node, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == "ALLOWED_TRIGGERS" for t in node.targets)
+        )
+        assert public_demo_constant("LIVE_TRIGGER") in allowed
 
 
 class TestShape:

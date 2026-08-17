@@ -9,6 +9,12 @@ Workspaces give each visitor an isolated dataset so two judges cannot corrupt ea
 other's demo (§92). A workspace is a plain string supplied by the client; server-side it
 only ever selects a DynamoDB partition, and demo partitions carry a TTL.
 
+In judge mode that workspace is also what the deployed AgentCore coordinator is bound to,
+so the agent on AWS writes the partition this API serves. The rule that makes it safe is
+stated once, here: **a workspace is only ever the value this module validated.** Nothing
+downstream re-derives it, no tool takes it as an argument, and the model never sees it.
+See ``pool/api/public_demo.py`` for the binding and the lease that serialises it.
+
 Privacy (AGENTS.md §4, §82). Three rules hold across every endpoint:
 
 * No response ever contains a member's precise coordinates. Map positions are snapped
@@ -102,7 +108,10 @@ if not _public.enabled:
 
 _settings = get_settings()
 _repo: Repository = build_repository(
-    _settings.repository, _settings.dynamodb_table, _settings.aws_region
+    _settings.repository,
+    _settings.dynamodb_table,
+    _settings.aws_region,
+    consistent_reads=_settings.dynamodb_consistent_reads,
 )
 _routing = build_routing(
     _settings.routing_provider, _settings.aws_region, _settings.max_route_matrix_cells
@@ -1160,9 +1169,24 @@ async def payment_webhook(request: Request, workspace: str = Query("demo")) -> d
 def reset(workspace: str = Query("demo")) -> dict[str, Any]:
     """Reset a workspace to the seeded starting state. A judge can always start over."""
     ws = check_workspace(workspace)
-    _public.spend_action(ws)
-    counts = seed(repo(), ws)
-    return {"workspace": ws, "reset": True, "seeded": counts}
+    # `seed()` opens by deleting every row in the partition, and the deployed agent now
+    # writes that same partition from a different compute environment. Landing this
+    # between a pool being created and its members being written leaves a workspace that
+    # is internally inconsistent without looking broken, so reset waits its turn.
+    _public.require_workspace_idle(
+        ws,
+        "The deployed agent is still working on this session. "
+        "Give it a moment, then start over.",
+    )
+    try:
+        _public.spend_action(ws)
+        counts = seed(repo(), ws)
+        return {"workspace": ws, "reset": True, "seeded": counts}
+    finally:
+        # The lease must cover the quota check and the entire destructive reset/reseed,
+        # not just the initial idle check. Otherwise a live AgentCore run can start after
+        # the check and mutate this partition while `seed()` is deleting and rewriting it.
+        _public.release_workspace(ws)
 
 
 @app.post("/api/demo/scenario")
@@ -1241,9 +1265,28 @@ def demo_config() -> dict[str, Any]:
     return _public.config_view()
 
 
+def observe_live_run(ws: str, run_id: str) -> dict[str, Any]:
+    """What the deployed agent left behind, read out of the authoritative store.
+
+    The live endpoint returns this instead of describing the runtime's own response. The
+    distinction is the whole point of pointing AgentCore at this table: a run summary is
+    the agent's account of what it did, and these three numbers are what the database
+    says is true — read by the same code path, from the same partition, that serves the
+    browser its next page.
+    """
+    r = repo()
+    return {
+        "run_recorded": bool(run_id) and r.get_run(ws, run_id) is not None,
+        "pools": len(r.list_pools(ws)),
+        "pending_decisions": sum(
+            1 for d in r.list_decisions(ws) if d.state == DecisionState.PENDING
+        ),
+    }
+
+
 # Registered last so the public allowlist sees every route above it, and so the SPA
 # catch-all cannot shadow an API path. A no-op unless POOL_PUBLIC_DEMO is set.
-public_demo.install(app, _public)
+public_demo.install(app, _public, observe=observe_live_run)
 
 
 # Lambda entry point. Imported lazily so local uvicorn does not require mangum.

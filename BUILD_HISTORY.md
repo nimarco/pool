@@ -3794,3 +3794,26 @@ authoritative readback verdict.
 **Relevant commits / files**
 `apps/web/src/styles.css`, `apps/web/src/ui.tsx`, `apps/web/src/App.tsx` and every view under
 `apps/web/src/views/`, plus the new `apps/web/src/views/home.test.tsx`.
+
+**Update — 2026-08-18, deployment blocked on credentials.** The commit is pushed to `origin/main`,
+but `make deploy-demo` was **not run**: the `pool-dev` profile's session has expired
+(`aws login` reauthentication is an interactive flow belonging to the human owner, not to a coding
+agent). Nothing was deployed, and the public demo is still serving the previous build. This entry's
+implementation status therefore remains **tested**, not deployed.
+
+What *was* verified is the artifact the deploy would have shipped. `scripts/build_demo_bundle.sh`
+produced the Lambda bundle (70 MB unzipped, import check and credential scan clean), and the built
+web app was then served by the same FastAPI app in the same public-demo mode the Lambda uses, on a
+local port. Against that production bundle — not the Vite dev server — the canonical path was
+walked: `Find opportunities`, the resulting pool's Activity → technical proof, the full 13-stage
+lifecycle to stage 13, the Needs form, the demo drawer, Product ↔ Showcase in both directions and
+all five Showcase destinations, at 1512px and 390px. No console errors, every `/api/*` response 200,
+no horizontal overflow on any screen, and the tab strip scrolled its selected tab into view on the
+phone width. The only sub-24px controls are the two inline prose links in the footer.
+
+The proof-link fix was exercised end to end in that bundle: the pool the card drew
+(`pool_1612a42cf6d6`) is the pool whose proof opened, carrying `run_6d02f8fa0250`.
+
+No AgentCore or Bedrock run was invoked at any point. The two POSTs involved — `/api/agent/run` and
+`/api/demo/scenario` — are the offline bounded coordinator and the deterministic lifecycle; neither
+spends model tokens.

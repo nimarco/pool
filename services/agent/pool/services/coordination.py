@@ -1365,11 +1365,14 @@ def lock_pool(*, ctx: PoolContext, pool_id: str) -> dict[str, Any]:
 
     ctx.log(
         "pool_locked",
-        "Every viability condition passed — pool locked and payments are capturing",
+        "Every viability condition passed — pool locked; "
+        f"{'simulated' if ctx.payments.mode == 'simulated' else 'test-mode'} "
+        "capture is beginning",
         {
             "funded_units": funded_units(ctx, pool_id),
             "threshold_units": pool.threshold_units,
             "checks_passed": [c.name for c in verdict.checks],
+            "provider_mode": ctx.payments.mode,
         },
         pool_id=pool_id,
     )

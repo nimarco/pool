@@ -197,6 +197,30 @@ def test_the_pool_the_browser_sees_was_created_by_the_deployed_run(deployment):
     assert len(pools) == 1, pools
     stored = deployment.api._repo.get_pool(WS, pools[0]["pool_id"])
     assert stored.created_by_run == run_id
+    rendered = pools[0]
+    assert rendered["created_by_run"] == run_id
+    assert rendered["execution_proof"] == {
+        "pool_id": rendered["pool_id"],
+        "created_by_run": run_id,
+        "run_id": run_id,
+        "relation_verified": True,
+        "execution": {
+            "service": "Amazon Bedrock AgentCore Runtime",
+            "live": True,
+            "region": "us-east-1",
+        },
+        "workspace_readback": {
+            "run_recorded": True,
+            "pool_recorded": True,
+            "same_workspace": True,
+        },
+        "run": rendered["execution_proof"]["run"],
+    }
+    assert rendered["execution_proof"]["run"]["tool_calls"] == [
+        call["name"] for call in body["run"]["tool_calls"]
+    ]
+    assert body["observed"]["created_pool_ids"] == [rendered["pool_id"]]
+    assert body["observed"]["run_pool_links_verified"] is True
 
 
 def test_the_agents_own_run_record_is_readable_in_the_session_it_ran_on(deployment):
@@ -245,6 +269,9 @@ def test_two_visitors_get_two_workspaces_and_the_agent_stays_inside_each(deploym
     theirs = deployment.pools(OTHER_WS)
     assert len(mine) == 1 and len(theirs) == 1
     assert {p["pool_id"] for p in mine}.isdisjoint({p["pool_id"] for p in theirs})
+    assert mine[0]["execution_proof"]["run_id"] != theirs[0]["execution_proof"]["run_id"]
+    assert mine[0]["execution_proof"]["pool_id"] == mine[0]["pool_id"]
+    assert theirs[0]["execution_proof"]["pool_id"] == theirs[0]["pool_id"]
     assert deployment.sent_workspaces() == [WS, OTHER_WS]
 
     # And the partitions really are separate rows, not a filter applied on the way out.

@@ -98,6 +98,13 @@ def test_state_seeds_on_first_read_and_is_labelled_demo_data(client):
     assert body["community"]["synthetic"] is True
     assert body["counts"]["members"] > 0
     assert body["counts"]["needs"] > 0
+    enablement = body["community"]["enablement"]
+    assert enablement["total_memberships"] == body["counts"]["members"]
+    assert enablement["verified_members"] == enablement["total_memberships"]
+    assert enablement["independent_need_declarers"] > 0
+    assert enablement["verification_methods"] == ["demo"]
+    assert enablement["designated_pickup_sites"]
+    assert {site["permission"] for site in enablement["designated_pickup_sites"]} == {"demo"}
 
 
 def test_an_invalid_workspace_is_rejected(client):

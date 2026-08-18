@@ -82,8 +82,14 @@ GRID_DECIMALS = 3  # ~110 m — enough for community context, not enough to find
 #: costs a handful of reads rather than a spin.
 _SEED_POLL_SECONDS = 0.15
 
+# Written onto the existing run record only after the AgentCore bridge has returned that
+# exact id and the API has read the record from the shared workspace. The model has no
+# tool that can write run metadata, so this is persistent execution-origin evidence, not
+# a frontend inference or a model-authored claim.
+_AGENTCORE_ORIGIN_PREFIX = "execution_origin=bedrock_agentcore_runtime:"
+
 #: Judge mode. Off by default, so a local run is the full application; on, it reduces
-#: this API to twenty-three allowlisted paths with no prompt surface. See
+#: this API to twenty-four allowlisted paths with no prompt surface. See
 #: ``pool/api/public_demo.py``. Built before the app because it decides two of its
 #: constructor arguments.
 _public = public_demo.PublicDemoGuard()
@@ -376,6 +382,65 @@ def _member_name(ws: str, household_id: str) -> str:
     return h.display_name if h else household_id
 
 
+def _run_view(run) -> dict[str, Any]:
+    """The compact, non-reasoning execution record exposed to the browser."""
+    return {
+        "run_id": run.id,
+        "trigger": run.trigger,
+        "outcome": run.outcome.value,
+        "iterations": run.iterations,
+        "tool_calls": [t.name for t in run.tool_calls],
+        "termination_reason": run.termination_reason,
+        "model_provider": run.model_provider,
+        "model_id": run.model_id,
+        "duration_ms": run.duration_ms,
+        "input_tokens": run.input_tokens,
+        "output_tokens": run.output_tokens,
+        "started_at": run.started_at,
+    }
+
+
+def _execution_proof(ws: str, pool) -> dict[str, Any] | None:
+    """Prove a pool/run relationship by reading both records from one workspace.
+
+    The browser must not guess that the latest run created the first pool. The domain
+    write stores ``created_by_run`` on the pool; this projection follows that exact id
+    back to the authoritative run record in the same repository partition. A missing
+    or dangling id is rendered as no proof, never as a weaker causal claim.
+    """
+    if not pool.created_by_run:
+        return None
+    run = repo().get_run(ws, pool.created_by_run)
+    if run is None or run.id != pool.created_by_run:
+        return None
+    origin = next(
+        (note for note in run.notes if note.startswith(_AGENTCORE_ORIGIN_PREFIX)), None
+    )
+    agentcore_live = origin is not None
+    origin_region = origin.removeprefix(_AGENTCORE_ORIGIN_PREFIX) if origin else "local"
+    return {
+        "pool_id": pool.id,
+        "created_by_run": pool.created_by_run,
+        "run_id": run.id,
+        "relation_verified": True,
+        "execution": {
+            "service": (
+                "Amazon Bedrock AgentCore Runtime"
+                if agentcore_live
+                else "In-process Strands coordinator"
+            ),
+            "live": agentcore_live,
+            "region": origin_region,
+        },
+        "workspace_readback": {
+            "run_recorded": True,
+            "pool_recorded": True,
+            "same_workspace": True,
+        },
+        "run": _run_view(run),
+    }
+
+
 def _pool_view(ws: str, pool, *, detail: bool = False) -> dict[str, Any]:
     r = repo()
     ctx = ctx_for(ws)
@@ -392,6 +457,8 @@ def _pool_view(ws: str, pool, *, detail: bool = False) -> dict[str, Any]:
 
     view: dict[str, Any] = {
         "pool_id": pool.id,
+        "created_by_run": pool.created_by_run,
+        "execution_proof": _execution_proof(ws, pool),
         "community_id": pool.community_id,
         "product_id": pool.product_id,
         "product_name": product.name if product else pool.product_id,
@@ -517,6 +584,13 @@ def get_state(workspace: str = Query("demo")) -> dict[str, Any]:
     r = repo()
     ctx = ctx_for(ws)
     community = r.get_community(ws, COMMUNITY_ID) or (r.list_communities(ws) or [None])[0]
+    community_memberships = (
+        r.list_community_memberships(ws, community.id) if community else []
+    )
+    active_needs = [n for n in r.list_needs(ws) if n.active]
+    community_sites = (
+        [s for s in r.list_sites(ws) if s.community_id == community.id] if community else []
+    )
 
     decisions = [
         {
@@ -545,6 +619,31 @@ def get_state(workspace: str = Query("demo")) -> dict[str, Any]:
                 "platform_fee": community.platform_fee.to_dict(),
                 "quote_max_age_hours": community.quote_max_age_hours,
                 "synthetic": community.synthetic,
+                # These facts are read from the Community's own server-side records.
+                # A DEMO permission or verification method stays labelled demo: it is
+                # evidence that the product models the boundary, not an endorsement by
+                # the fictional institution represented by the fixture.
+                "enablement": {
+                    "verified_members": sum(
+                        1 for membership in community_memberships if membership.is_verified
+                    ),
+                    "total_memberships": len(community_memberships),
+                    "verification_methods": sorted(
+                        {membership.verification_method.value for membership in community_memberships}
+                    ),
+                    "independent_need_declarers": len(
+                        {need.household_id for need in active_needs}
+                    ),
+                    "designated_pickup_sites": [
+                        {
+                            "id": site.id,
+                            "name": site.name,
+                            "is_public": site.is_public,
+                            "permission": site.permission.value,
+                        }
+                        for site in community_sites
+                    ],
+                },
             }
             if community
             else None
@@ -553,26 +652,10 @@ def get_state(workspace: str = Query("demo")) -> dict[str, Any]:
         "decisions": decisions,
         "activity": [e.to_dict() for e in r.list_activity(ws, limit=80)],
         "metrics": coord.impact_metrics(ctx),
-        "runs": [
-            {
-                "run_id": run.id,
-                "trigger": run.trigger,
-                "outcome": run.outcome.value,
-                "iterations": run.iterations,
-                "tool_calls": [t.name for t in run.tool_calls],
-                "termination_reason": run.termination_reason,
-                "model_provider": run.model_provider,
-                "model_id": run.model_id,
-                "duration_ms": run.duration_ms,
-                "input_tokens": run.input_tokens,
-                "output_tokens": run.output_tokens,
-                "started_at": run.started_at,
-            }
-            for run in r.list_runs(ws, limit=12)
-        ],
+        "runs": [_run_view(run) for run in r.list_runs(ws, limit=12)],
         "counts": {
             "members": len(r.list_households(ws)),
-            "needs": len([n for n in r.list_needs(ws) if n.active]),
+            "needs": len(active_needs),
             "products": len(r.list_products(ws)),
             "standing_hosts": len(r.list_host_profiles(ws, COMMUNITY_ID)),
             "open_issues": len(r.list_issues(ws)),
@@ -1459,14 +1542,24 @@ def observe_live_run(ws: str, run_id: str) -> dict[str, Any]:
 
     The live endpoint returns this instead of describing the runtime's own response. The
     distinction is the whole point of pointing AgentCore at this table: a run summary is
-    the agent's account of what it did, and these three numbers are what the database
+    the agent's account of what it did, and these facts are what the database
     says is true — read by the same code path, from the same partition, that serves the
     browser its next page.
     """
     r = repo()
+    run = r.get_run(ws, run_id) if run_id else None
+    if run is not None:
+        marker = f"{_AGENTCORE_ORIGIN_PREFIX}{_public.settings.region}"
+        if marker not in run.notes:
+            run.notes.append(marker)
+            r.put_run(ws, run)
+    pools = r.list_pools(ws)
+    created_pool_ids = [pool.id for pool in pools if pool.created_by_run == run_id]
     return {
-        "run_recorded": bool(run_id) and r.get_run(ws, run_id) is not None,
-        "pools": len(r.list_pools(ws)),
+        "run_recorded": run is not None,
+        "pools": len(pools),
+        "created_pool_ids": created_pool_ids,
+        "run_pool_links_verified": run is not None and bool(created_pool_ids),
         "pending_decisions": sum(
             1 for d in r.list_decisions(ws) if d.state == DecisionState.PENDING
         ),

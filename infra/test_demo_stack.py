@@ -228,7 +228,7 @@ class TestCostSafety:
 
 class TestPublicSafety:
     def test_the_demo_runs_in_judge_mode(self, function_env):
-        """Without this the deployed function would expose all 45 endpoints and an
+        """Without this the deployed function would expose all 40 endpoints and an
         arbitrary agent prompt."""
         assert function_env["POOL_PUBLIC_DEMO"] == "true"
 

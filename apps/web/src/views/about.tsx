@@ -70,6 +70,12 @@ export function About({
               routinely buy, and an agent finds the group, the supplier and somebody to
               collect it — then does the coordination that made people quit.
             </p>
+            <p className="small muted prose" style={{ marginTop: 14 }}>
+              Pool is designed as recurring purchasing infrastructure for existing
+              communities: campuses are the first wedge, while apartment buildings,
+              neighbourhoods, workplaces and community organisations provide the same
+              useful boundary for membership, demand density and shared pickup.
+            </p>
             {onRun ? (
               <div className="btn-row" style={{ marginTop: 26 }}>
                 <button className="btn btn-primary btn-lg" onClick={onRun} disabled={running}>
@@ -108,7 +114,7 @@ export function About({
         <article className="claim">
           <h3>Somebody still has to carry the box</h3>
           <p>
-            A bulk order is not a database write. Pool recruits a paid fulfiller from
+            A bulk order is not a database write. Pool recruits a compensated fulfiller from
             standing hosts <em>and</em> from the pool's own members, ranks them on
             capacity, vehicle, distance and the minimum pay they will accept, and offers
             the job to the best fit. They are not a reseller taking a risk — every unit is
@@ -118,7 +124,7 @@ export function About({
         <article className="claim">
           <h3>The price includes everything</h3>
           <p>
-            Merchandise, host pay, card processing and Pool's own fee, all on one screen,
+            Merchandise, host compensation, card processing and Pool's own fee, all on one screen,
             measured against what these people would have paid alone. Pool's fee is a
             share of the saving, so no saving means no fee. If paying the host fairly
             erases the discount, the pool should not form — and it does not. That is a

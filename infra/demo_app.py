@@ -14,7 +14,7 @@ What a judge gets: a URL. No AWS account, no CLI, no credentials, no configurati
 
     browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
                                                  ├─ serves the built SPA (same origin)
-                                                 ├─ serves the 23 allowlisted API paths
+                                                 ├─ serves the 24 allowlisted API paths
                                                  ├─ DynamoDB: this session's demo state
                                                  └─ InvokeAgentRuntime, bound to this
                                                     session's workspace

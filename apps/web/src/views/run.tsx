@@ -319,7 +319,7 @@ function HostAcceptedBody({ f }: { f: Facts }) {
       <div className="grid grid-2">
         <div>
           <Figure
-            label={`${s(f, "host")} is paid`}
+            label={`${s(f, "host")} earns`}
             value={s(f, "reward_total")}
             sub={`${s(f, "handled_orders")} orders, ${s(f, "supplier_distance_km")} km round trip — funded by the buyers, not subsidised by Pool`}
           />
@@ -334,7 +334,8 @@ function HostAcceptedBody({ f }: { f: Facts }) {
         </div>
       </div>
       <p className="small muted prose">
-        This number has to exist before anyone is asked to pay, because host pay is part
+        This number has to exist before anyone is asked to authorize, because host
+        compensation is part
         of every buyer's price. Pool will never authorise $42 and then charge $47. Only
         the handoff component is contingent — a buyer who does not turn up cannot erase
         pay for a trip that was already made.
@@ -493,8 +494,8 @@ function LockBody({ f }: { f: Facts }) {
   return (
     <>
       <div className="grid grid-3">
-        <Figure label="Payments captured" value={s(f, "captured_payments")} />
-        <Figure label="Total captured" value={s(f, "captured_total")} />
+        <Figure label="Payments captured (simulated)" value={s(f, "captured_payments")} />
+        <Figure label="Total captured (simulated)" value={s(f, "captured_total")} />
         <Figure
           label="Provider mode"
           value={s(f, "provider_mode")}
@@ -506,7 +507,7 @@ function LockBody({ f }: { f: Facts }) {
         Locking runs one viability engine over stored facts, and all thirteen checks run —
         never short-circuited — so the reason a pool <em>cannot</em> lock is always the
         complete list: supplier minimum, offer still active, quote freshness, whole-case
-        allocation, host assigned, host pay clearing their own minimum, buyers genuinely
+        allocation, host assigned, host compensation clearing their own minimum, buyers genuinely
         saving, every buyer having authorised, every buyer's decision settled, Pool's own
         economics, timing, the pickup site, and funding. Capture happens after that gate
         and never before it.
@@ -551,9 +552,9 @@ function DistributionBody({ f }: { f: Facts }) {
         <Figure label="The host earns" value={s(f, "host_earnings")} accent />
       </div>
       <p className="small muted prose">
-        The host is not a reseller taking a risk. Every unit in that vehicle is already
-        sold and already paid for, so they are a paid fulfilment provider for demand that
-        was coordinated before the money moved.
+        The host is not a reseller taking a risk. Every unit in that vehicle is allocated
+        and its buyer payment was captured by the simulated provider before the supplier
+        order was recorded. Host compensation is recorded; Pool has no payout rail.
       </p>
     </>
   );
@@ -607,7 +608,7 @@ function ImpactBody({ f }: { f: Facts }) {
           label="Kept in the community"
           value={s(f, "collective_saving")}
           accent
-          sub={`${s(f, "average_saving_each")} each, after merchandise, host pay, card processing and Pool's fee`}
+          sub={`${s(f, "average_saving_each")} each, after merchandise, host compensation, card processing and Pool's fee`}
         />
       </div>
       <div className="grid grid-2">
@@ -872,8 +873,8 @@ export function RunView({
             to take; deterministic code decided every price, every eligibility, every
             state transition and whether the lock was allowed at all. A payment failed
             and the order was repaired without disturbing anyone who had already
-            committed. Ten people paid less than they would have alone, one of them was
-            paid to do the work, and the whole thing ran in{" "}
+            committed. Ten people had lower recorded costs than buying alone, host
+            compensation was recorded for the person doing the work, and the whole thing ran in{" "}
             {roundTripMs !== null ? `${roundTripMs} ms` : "one call"} on a synthetic
             community where no money moved.
           </p>

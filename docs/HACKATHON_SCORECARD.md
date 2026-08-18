@@ -1,271 +1,150 @@
 # Hackathon scorecard
 
-Maps Pool to the five judging categories. **Nothing is marked complete unless it actually
-is.** Requirements verified against <https://agentsforhumans.devpost.com/> on 2026-08-15 —
-re-verify before submitting.
+Maps Pool to the five equally weighted judging categories. Status words follow
+`AGENTS.md`: **Implemented**, **Tested**, and **Deployed** are separate claims.
 
-Legend: ✅ done · 🟡 partial · ⬜ not started · ❌ blocked
+Competition facts were rechecked against the official Devpost overview, rules, FAQ and
+resources on **2026-08-18**. Recheck again before submission.
 
-Evidence is labelled by where it lives: **local** (runs here, verified), **ready**
-(implemented, never run against the real service), **cloud-verified** (observed working on
-AWS).
-
-**Cloud-verified: real Bedrock inference, the deployed AgentCore Runtime, DynamoDB as the
-live store, and a public demo URL a judge can open with no AWS account** (#0019, #0023,
-#0024, #0025). Still unverified: EventBridge and Amazon Location.
-
----
+Legend: ✅ complete with evidence · 🟡 partial / another gate remains · ⬜ human or future
+work
 
 ## Submission requirements
 
-| Requirement | Status | Notes |
+| Requirement | Status | Evidence / remaining gate |
 | --- | :-: | --- |
-| Built with Strands Agents SDK | ✅ | Core loop, twelve-tool surface, and the bounds hook are Strands primitives. Remove Strands and nothing runs |
-| Newly created in the submission period | ✅ | Repo initialised 2026-08-15; full git history |
-| Public repository | ⬜ | Remote configured, not yet pushed |
-| MIT or Apache licence visible | ✅ | [`LICENSE`](../LICENSE) — MIT |
+| Strands Agents SDK is load-bearing | ✅ | Real Strands event loop, hooks and twelve typed tools |
+| Created during submission period | ✅ | Repository history begins 2026-08-15 |
+| Repository pushed | ✅ | `origin/main` exists; final patch still must be pushed after QA |
+| Repository publicly reachable | ⬜ | Human/private-window check before submission |
+| MIT or Apache licence | ✅ | [`LICENSE`](../LICENSE), MIT |
 | README | ✅ | [`README.md`](../README.md) |
-| Architecture diagram | ✅ | [`architecture.svg`](architecture.svg) — hand-authored and landscape, because the generated Mermaid version was 1474 × 2902 and unreadable in a README or a video frame |
-| Demo video ≤ 5 min | ⬜ | Script written: [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md). Not recorded |
-| AWS Builder ID | ⬜ | User action — account signup |
-| Live demo URL | ✅ | **<https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/>** — deployed 2026-08-16, 8 resources, verified end to end (#0025) |
-| Project description | ✅ | Draft: [`DEVPOST_DRAFT.md`](DEVPOST_DRAFT.md) |
-| Testing instructions | ✅ | README → Run it. `make qa`, `make demo` |
-| Good Neighbor framing | ✅ | Explicit in README, landing page, demo script, Devpost draft |
-
----
+| Architecture diagram | ✅ | [`architecture.svg`](architecture.svg) |
+| Demo video ≤ 5 minutes | ⬜ | One-run rehearsal script exists; video intentionally not recorded yet |
+| AWS Builder ID / entrant eligibility | ⬜ | Human-only checks |
+| Live demo | ✅ | Deployed Lambda Function URL; recheck from a private browser after final deploy |
+| Problem, users and why it matters in video | 🟡 | Covered by the ~4:50 rehearsal script; recording remains |
+| Good Neighbor framing | ✅ | Collective value inside an existing Community |
 
 ## 1. Technological Implementation
 
-**Strongest evidence (all local, all verified):**
+### Strongest evidence
 
-- **Strands is load-bearing.** `BoundedRun` is a real `HookProvider` subscribing to
-  `BeforeModelCallEvent`, `BeforeToolCallEvent`, `AfterToolCallEvent`, and
-  `AfterModelCallEvent`. The tool surface is twelve `@tool` functions. This is not a
-  wrapper around code that would work identically without it.
-- **A genuinely adaptive loop.** The agent chooses which product to investigate, whether
-  the result is worth acting on, whether to recruit a host, when to price exactly, which
-  pool to repair, when to lock, and when to stop having done nothing. It re-reads its work
-  queue after acting so it can see the consequences of its own decisions — capped, so
-  alternation never becomes polling.
-- **A hard AI/deterministic boundary that is structural, not stylistic.** `domain/`
-  performs no I/O and imports no adapter. Money, quantities, package maths, host
-  eligibility, Smart Join, and viability are pure functions. A model client cannot reach
-  them.
-- **Non-trivial deterministic work.** Exact-cent arithmetic with largest-remainder splits;
-  a per-buyer processing gross-up so nobody is silently subsidised; a bounded exact search
-  that picks the buyer set filling whole cases; a two-stage viability engine.
-- **Bounded autonomy, enforced not requested.** 8 iterations, 25 tool calls, duplicate
-  detection, a 45 s wall clock on both deployed paths (120 s locally), 100-cell route
-  matrix — all configurable, all proven by driving deliberately misbehaving models
-  through the real event loop. The wall clock is *cooperative*: it is checked before
-  each model and tool call, so it ends a run that is taking too long rather than
-  interrupting one that has hung. The bridge's 60 s read timeout and the Lambda's
-  90 s timeout are the rungs that bound a hung call. There is deliberately **no
-  generic tool-retry bound**, because there is no generic tool retry: re-running a
-  consequential call is the wrong default for a system that moves money.
-- **Idempotency everywhere it matters.** Duplicate pool creation, authorisation, capture,
-  withdrawal, purchase, and webhook delivery are each tested by doing them twice.
-- **Payment state machine with real failure paths.** Authorise → capture at lock, with
-  declines, capture failures, cancellations, replays, and stale-authorisation handling.
-- **Observability.** Every run records trigger, tool sequence, iterations, termination
-  reason, duration, and token usage — with no model reasoning text, and arguments stored
-  as hashes so a run log cannot leak member details.
-- **514 tests** (490 application + 24 infrastructure), all offline and free.
+- **Strands is foundational.** Remove the Strands event loop and hook provider and the
+  coordinator no longer runs.
+- **AI/deterministic separation is structural.** The model selects typed tools;
+  deterministic services compute cents, quantities, eligibility, allocation, policy,
+  state transitions and viability.
+- **Autonomy is bounded.** Public runs allow 8 iterations, 25 tool calls, and 2 identical
+  calls. The 45-second coordinator bound is cooperative and checked between steps; the
+  bridge and Lambda own the outer 60- and 90-second deadlines.
+- **The tool surface is narrow and classified from one source:** 4 read, 1 record, 6 act,
+  1 end. There is no shell, arbitrary SQL or generic mutation.
+- **Consequential operations are authorized and idempotent.** Candidate creation,
+  authorization, capture, withdrawal, purchase, webhook delivery and pickup redemption
+  have repeated-call tests.
+- **Same-run causality is server-owned.** Candidate pools store `created_by_run`; the API
+  follows that exact id to the stored run in the same workspace. The Product shows run
+  id, pool id, tool sequence, model, outcome, termination and authoritative readback. It
+  never substitutes “latest run.”
+- **State is authoritative.** AgentCore and the public Lambda share one DynamoDB table
+  with per-workspace leases, conditional writes, strongly consistent readback and TTL.
+- **No fake demo logic.** The lifecycle, recovery, payment state machine and pickup
+  credential flow execute through real services and stored state. Synthetic data and
+  simulated rails are labelled.
 
-| Item | Status | Evidence |
-| --- | :-: | --- |
-| Strands foundational | ✅ | local |
-| Adaptive, non-scripted agent loop | ✅ | local |
-| Twelve typed narrow tools, no escape hatch | ✅ | local |
-| Deterministic domain separation | ✅ | local |
-| Bounded autonomy | ✅ | local, `test_agent_bounds.py` |
-| Idempotency and invariants | ✅ | local |
-| Payment lifecycle | ✅ | local (simulated provider) |
-| Webhook verification and replay safety | ✅ | local |
-| Quote freshness enforcement | ✅ | local |
-| One-time pickup confirmation | ✅ | local |
-| Comprehensive tests | ✅ | 697 passing (626 agent + 71 infra) |
-| Bedrock real inference | ✅ | **cloud-verified** — `us.amazon.nova-lite-v1:0`, 6 ConverseStream calls per run, 5 Pool tools called, wire-level evidence, 3/3 runs |
-| AgentCore Runtime | ✅ | **cloud-verified** — deployed, and invoked from a public browser through the demo bridge |
-| DynamoDB | ✅ | **cloud-verified** — the full lifecycle on a real table; the first live run found a `Decimal` bug a fake could not (#0025) |
-| EventBridge background path | 🟡 | **ready**, ships disabled |
-| Amazon Location | 🟡 | **ready**, never called |
-| Real cloud trace | ✅ | **cloud-verified** — one `run_id` correlated across the demo Lambda's log and the AgentCore runtime's log |
-| AgentCore on the product's own state | 🟡 | **implemented and tested, not yet deployed** (#0028) — the runtime is configured for the demo's DynamoDB table so the pool a visitor sees is formed by the deployed agent rather than by the server. Verified offline against a two-repository, one-table reproduction and by an AgentCore `--dry-run` synth; the deployed runtime still runs `POOL_REPOSITORY=memory` until `make deploy-agent` and `make deploy-demo` are run |
+### AWS status
 
-**Exact next action:** deploy #0028 (AgentCore runtime first, then the demo stack — the
-table is renamed and therefore replaced), then the demo video and pushing the public
-repository. The AWS legs themselves are proven — Bedrock, AgentCore, DynamoDB, and a
-public URL.
-
----
+| Component | Status |
+| --- | --- |
+| Amazon Bedrock / Nova Lite through Strands | **Deployed and verified** |
+| Amazon Bedrock AgentCore Runtime | **Deployed and verified**, `READY`, `us-east-1` |
+| Lambda Function URL judge surface | **Deployed and verified** |
+| DynamoDB authoritative state | **Deployed and verified** |
+| CloudWatch logs / structured run records | **Deployed and verified**, retention bounded |
+| Same-run proof presentation patch | **Deployed and rehearsed**; exact pool/run relationship survived the completed lifecycle and reload |
+| EventBridge | Definition exists only in un-deployed pilot stack; **zero deployed rules** |
+| Amazon Location | Adapter Implemented and Tested with fakes; live service unverified and absent from judge path |
+| Payments and supplier purchase | **Simulated** in deployed demo |
+| Host payout | **Absent**; compensation is computed and recorded, never claimed paid |
 
 ## 2. Design
 
-**Strongest evidence:**
-
-- **The product is the demo.** A judge lands signed in as a member of Demo University and
-  drives the real lifecycle: their standing needs, the opportunity Pool finds, the pool
-  record, the declined card, the repair, the handover. Nothing is a slideshow about Pool;
-  every button calls the endpoint the real participant would call, and the state machine,
-  the economics and every viability check apply exactly as they would in production.
-- **Depth without clutter.** The thirteen-stage lifecycle reader and the technical
-  execution evidence both live on a pool's Activity tab rather than in the navigation. A
-  student buying protein powder has no use for a Bedrock model id; a judge auditing the
-  agent has nothing but use for it.
-- **A three-actor visual grammar.** Every action is attributed to *the agent chose this*,
-  *deterministic code computed it*, or *a person was asked* — a shape and a colour,
-  repeated everywhere, distinguishable without colour. The project's central technical
-  claim is legible without reading a paragraph about it.
-- **Four destinations, all of them things a member has**: Home, Pools, Needs, Community.
-  The demo scaffolding — acting for the other nine participants — is a drawer behind the
-  environment indicator, clearly labelled as scaffolding, and a control that cannot
-  legally run is not offered.
-- **Frictionless.** No signup, no verification, no configuration. One URL, one obvious
-  button, and every screen ends by saying what to press next.
-- **The money is the interface.** Merchandise, host pay, processing and Pool's fee as
-  separate lines against the retail baseline, with the net saving set as the payoff.
-  Hiding operating costs behind a headline discount would be the easy version.
-- **Reasoning is legible, not decorative.** Host candidates show their score components
-  and the factual reason anyone is ineligible. The viability panel shows all thirteen
-  checks with their details, passed or failed.
-- **Calm by default.** No polling, no badges, no engagement mechanics. The decision inbox
-  is usually empty and says why that is the design working.
-- **A committed visual world.** Warm paper, hairline rules, a self-hosted display serif,
-  tabular numerals, ledgers instead of cards. No gradient-and-sparkle AI house style, and
-  no emoji standing in for an icon set — the icons are drawn.
-- **Verified responsive and dark-mode correct**, with no horizontal overflow at 375 px on
-  any view, and small text at ≥4.5:1 in both themes.
-
-**The public judge experience** (#0024–#0025, deployed and cloud-verified): one URL, no account, no setup. The API a judge can reach is twenty-four endpoints of
-forty-five; the client cannot send the agent a prompt; every action that costs anything
-is capped per session and per day; anonymous sessions are isolated by DynamoDB partition
-and expire in 24 hours. Almost everything runs deterministically on the server, with
-exactly one clearly labelled action that genuinely invokes the deployed AgentCore
-Runtime — invoked from a public browser and correlated by `run_id` across two services'
-logs, with a failure path that reports the failure rather than faking a run.
-
-| Item | Status |
-| --- | :-: |
-| Frictionless judge mode | ✅ |
-| Public demo safe to expose anonymously | ✅ **cloud-verified** — four defects found by probing the deployed system and fixed (#0025) |
-| Lifecycle as a stepped, readable narrative | ✅ |
-| Actor grammar: agent / deterministic / human | ✅ |
-| Buyer, host and operator surfaces | ✅ |
-| Decision inbox | ✅ |
-| Transparent landed economics | ✅ |
-| Agent trace visible, plus the tools it did *not* choose | ✅ |
-| Live-agent waiting state that is useful and honest | ✅ |
-| Mobile responsive | ✅ |
-| Dark mode | ✅ |
-| Contrast ≥ 4.5:1 for small text, both themes | ✅ |
-| Deployed and reachable | ✅ **cloud-verified** — the current build has **not** been redeployed yet |
-
----
+- The Product is the main demo: Home, Pools, Needs and Community are member concepts, not
+  judge navigation.
+- A member's primary action is a recurring need declaration. There is no “create a group”
+  or invitation flow.
+- The one Product discovery action performs the one live AgentCore invocation. The exact
+  resulting pool later exposes `Technical proof for this run`; `Run again` is collapsed
+  and secondary.
+- The wait state names AgentCore and the shared workspace without inventing intermediate
+  progress.
+- A three-actor grammar distinguishes agent choice, deterministic computation and human
+  approval.
+- Candidate economics stay estimated; final terms appear only after host acceptance and
+  quote refresh.
+- Authorized, funded, captured, ordered and paid-out are not treated as synonyms. Host
+  compensation is labelled earned/recorded because no payout rail exists.
+- The Community screen explains the operating model without implying an institutional
+  partnership: **Community enables → Pool coordinates → Members choose and collect.**
+- Demo controls are participant/scheduler scaffolding. They call real endpoints and do
+  not set lifecycle state directly.
 
 ## 3. Potential Impact
 
-**Strongest evidence:**
+Pool is designed as **recurring purchasing infrastructure for existing communities**.
+Campuses are the initial wedge, not a core-domain assumption; apartment buildings,
+neighbourhoods, workplaces and community organisations can provide the same useful
+membership and pickup boundary.
 
-- **The behaviour already exists.** Informal campus bulk-buying is real and its failure
-  mode is well understood; Pool automates the part that makes it stop.
-- **A truthful impact claim.** Bulk pricing favours whoever can afford a larger upfront
-  purchase and has somewhere to put it. Pool lets several people reach that pricing
-  without each carrying the capital, quantity, storage, and coordination alone. No
-  charitable claim, no invented socioeconomic metric.
-- **Precommitment instead of speculative inventory.** The goods are sold before they are
-  bought. Nobody underwrites stock and hopes.
-- **A paid fulfilment role**, priced by the work actually done, funded by buyers rather
-  than subsidised.
-- **Metrics computed from records**, labelled as synthetic demo data, and never presented
-  as traction.
-- **A plausible pilot path** documented in [`PILOT_READINESS.md`](PILOT_READINESS.md),
-  with the unresolved questions named as legal rather than technical.
+The impact claim is bounded:
 
-| Item | Status |
-| --- | :-: |
-| Real, observed problem | ✅ |
-| Honest impact framing | ✅ |
-| Campus wedge, community-general architecture | ✅ |
-| No speculative inventory | ✅ |
-| Transparent net savings | ✅ |
-| Plausible supplier path | ✅ documented |
-| Plausible controlled pilot | ✅ documented |
-| Real users | ⬜ none, and none claimed |
+- people can reach viable bulk economics without one person organizing or holding
+  speculative inventory;
+- host work is included in landed economics rather than hidden or subsidized;
+- the supplier receives one clean bulk order;
+- attention is conserved by deterministic standing policies and exception-only asks; and
+- every displayed impact figure is computed from synthetic records and labelled as demo
+  data, not traction.
 
----
+Real users, institutional partnerships and real transaction savings: **none claimed**.
 
 ## 4. Creativity & Originality
 
-**Strongest evidence:**
-
-- **Latent-demand discovery.** Nobody creates the group. That single inversion is the
-  product, and it is what makes this an agent problem rather than a marketplace.
-- **The organiser is the thing being automated** — not the shopping.
-- **Three-sided coordination.** Buyers, bulk supply, and local fulfilment labour, in one
-  transaction that only exists if all of them work.
-- **Timing-aware demand pull-forward** with per-member authority. The agent decides
-  whether to investigate; the deterministic engine decides who is actually eligible.
-- **Case-boundary fitting as a solver**, not a validation. "Zero speculative surplus"
-  becomes something the system can *achieve* rather than merely refuse.
-- **Payment-failure recovery that replaces exactly what was lost**, because
-  over-recruiting would trade a funding hole for surplus stock.
-- **A three-verdict autonomy boundary** where `NOT_ALLOWED` is reserved for situations no
-  prompt can fix.
-- **The agent does something end to end** — discovery through physical handoff — rather
-  than chatting about it.
-
-| Item | Status |
-| --- | :-: |
-| Latent demand, no manual group creation | ✅ |
-| Autonomous organiser replacement | ✅ |
-| Three-sided coordination | ✅ |
-| Timing-aware pull-forward | ✅ |
-| Host recruitment and ranking | ✅ |
-| Deterministic autonomy boundaries | ✅ |
-| Payment-failure recovery | ✅ |
-| Pickup completion | ✅ |
-| End-to-end, not conversational | ✅ |
-
----
+- **Latent-demand discovery:** nobody starts or names a group.
+- **The organizer is automated, not the shopping conversation.**
+- **Three-sided coordination:** buyers, bulk supply and local fulfilment work have to be
+  viable simultaneously.
+- **Permissioned timing pull-forward:** AI may investigate; deterministic timing policy
+  decides who is eligible.
+- **Exact case fitting:** zero speculative surplus is solved for, not merely checked.
+- **Exact-gap recovery:** a failed authorization recruits only compatible demand needed
+  to restore the threshold.
+- **Same-run provenance:** the visible group-purchase record carries the causal id of the
+  deployed agent execution that formed it.
 
 ## 5. Presentation
 
 | Item | Status | Notes |
 | --- | :-: | --- |
-| README explains the thesis | ✅ | |
-| Architecture doc and diagram | ✅ | Diagram shows only what is built |
-| Demo script | ✅ | [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md), timed to five minutes |
-| Devpost draft | ✅ | With an honesty checklist attached |
-| Pilot readiness | ✅ | [`PILOT_READINESS.md`](PILOT_READINESS.md) |
-| Startup thesis | ✅ | [`STARTUP_THESIS.md`](STARTUP_THESIS.md) |
-| Build history | ✅ | [`BUILD_HISTORY.md`](../BUILD_HISTORY.md) |
-| Article notes | ✅ | [`ARTICLE_NOTES.md`](ARTICLE_NOTES.md) |
-| Video recorded | ⬜ | |
-| Public repo pushed | ⬜ | |
-| Live URL in the video | ❌ | Needs credentials |
+| Product / Showcase separation preserved | ✅ | Same components and state, different tour order |
+| One-run ~4:50 rehearsal path | ✅ | [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md) |
+| Architecture diagram matches deployed path | ✅ | 24/40 routes, 45 s cooperative bound, tool kinds, zero EventBridge rules |
+| Devpost draft current | ✅ | Includes deployment/simulation honesty table |
+| Build history / resource ledger current | ✅ | Final patch, deployment, rehearsal and measured CDK asset storage recorded |
+| Fresh deployed rehearsal | ✅ | One Product invocation: `run_3954c1d2d97f` → `pool_e36b32c84ee2`; no second invocation |
+| Video recorded and public | ⬜ | Human-only final production and private-window check |
 
----
+## Bonus: Builder Center articles
 
-## Bonus: Builder Center article
+Up to +0.6 was confirmed on the official site. Three article outlines exist in
+[`ARTICLE_NOTES.md`](ARTICLE_NOTES.md). Publication and acceptance remain human work;
+recheck the current title requirement immediately before publishing.
 
-Up to +0.6. Three drafts planned; see [`ARTICLE_NOTES.md`](ARTICLE_NOTES.md). Re-verify
-the current title and content requirements before publishing.
+## Current gate
 
----
-
-## Honest summary
-
-**Strong:** the agent architecture, the deterministic boundary, the economics, the
-lifecycle, the safety bounds, the test suite, the four UX surfaces, and the honesty of the
-documentation.
-
-**Now also strong:** the AWS story. Bedrock, AgentCore Runtime, DynamoDB and a public
-demo URL are all cloud-verified, and the deployment found four real defects that no green
-test suite had — a rejected concurrency reservation, a publicly readable OpenAPI schema, a
-`Decimal` type bug on the first real table write, and a quota that let one visitor spend
-everyone's daily budget. All four are fixed, verified live, and written up in #0025.
-
-**Still open:** the demo video, and pushing the public repository. EventBridge and Amazon
-Location remain implemented-but-unverified, deliberately — neither is on the judge path.
+The structural pass is frozen: architecture, deployed Product, same-run evidence and
+submission narrative are aligned, and the one-run rehearsal passed. The next engineering
+task is the bounded `/impeccable` visual/accessibility pass in
+[`IMPECCABLE_HANDOFF.md`](IMPECCABLE_HANDOFF.md). The public video, repository visibility,
+Builder ID and submission remain human-owned checks; none is claimed complete here.

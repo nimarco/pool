@@ -429,6 +429,9 @@ export default function App() {
               busy={liveBusy}
               onRun={runLiveAgent}
               runs={state?.runs ?? []}
+              proof={
+                state?.pools.find((pool) => pool.execution_proof)?.execution_proof ?? null
+              }
               standalone
             />
           ) : null}
@@ -497,9 +500,14 @@ export default function App() {
               onRespond={respond}
               onShowAgent={() => {
                 const pool = state.pools[0];
-                if (pool) void openPoolDetail(pool.pool_id);
+                if (pool)
+                  void openPoolDetail(pool.pool_id, {
+                    tab: "activity",
+                    deep: "execution",
+                  });
               }}
               onGoNeeds={() => navigate("needs")}
+              liveDiscovery={Boolean(demoConfig?.live_agent_available)}
             />
           ) : null}
 
@@ -509,6 +517,7 @@ export default function App() {
               onOpen={openPoolDetail}
               onFind={findOpportunities}
               running={running}
+              liveDiscovery={Boolean(demoConfig?.live_agent_available)}
             />
           ) : null}
 
@@ -519,6 +528,7 @@ export default function App() {
               onFind={findOpportunities}
               running={running}
               hasPool={(state?.pools.length ?? 0) > 0}
+              liveDiscovery={Boolean(demoConfig?.live_agent_available)}
             />
           ) : null}
 
@@ -612,6 +622,7 @@ export default function App() {
         onClose={() => setPanelOpen(false)}
         state={state}
         health={health}
+        demoConfig={demoConfig}
         identity={identity}
         onIdentity={setIdentity}
         onReset={reset}

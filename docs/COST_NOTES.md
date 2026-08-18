@@ -33,7 +33,7 @@ All configurable via environment variables so they can be tightened without a co
 | Identical repeated calls | `MAX_DUPLICATE_TOOL_CALLS` | 2 | Argument digest; cancelled with an explanation |
 | Wall clock per run | `WORKFLOW_TIMEOUT_SECONDS` | 120 local, **45 deployed** | Checked before every model and tool call — cooperative, see below |
 | Route matrix cells | `MAX_ROUTE_MATRIX_CELLS` | 100 | Checked **before** any Location API call |
-| Background schedules | `SCHEDULES_ENABLED` | `false` | Rule ships DISABLED in CloudFormation |
+| Background schedules | `SCHEDULES_ENABLED` | `false` | Deployed judge stack has no rule; un-deployed pilot template asserts DISABLED |
 
 There is **no tool-retry bound, because there is no tool-retry mechanism.** A failed
 tool returns its failure to the model, which decides what to do next inside the
@@ -145,7 +145,7 @@ Turn Transaction Search off with:
 
     aws xray update-trace-segment-destination --destination XRay
 
-## The public judge demo (`PoolDemoStack`) — reviewed, not yet deployed
+## The public judge demo (`PoolDemoStack`) — deployed and verified
 
 A separate, deliberately tiny stack. `PoolStack` was **not** reused: it carries API
 Gateway, CloudFront, S3, and an EventBridge rule the demo has no use for, and deploying
@@ -172,11 +172,12 @@ OAC, a bucket policy, a distribution, and an invalidation step, for a 196 KB app
 | --- | --- | --- |
 | Landing on the site | 1 cold start, ~100 DynamoDB writes to seed the session | No |
 | **Run the full lifecycle** (the drawer's end-to-end action) | ~800 DynamoDB round trips, all thirteen stages | No |
-| **Find opportunities** / any drawer control | ~30–90 DynamoDB round trips; the agent ones are one bounded Strands run | **No** — offline planner |
-| **Run the deployed agent** | One `InvokeAgentRuntime` | **Yes** — ~19k in / ~470 out on Nova Lite |
+| **Find opportunities** | One `InvokeAgentRuntime`, followed by authoritative DynamoDB readback | **Yes** — one bounded AgentCore / Nova Lite run |
+| Drawer lifecycle controls | ~30–90 DynamoDB round trips; bounded Strands run where applicable | **No** — deterministic planner |
+| **Run again** under technical proof | Same paid invocation as Find opportunities; secondary and not part of the video path | **Yes** |
 
-Only the last line spends model tokens, and it is capped three ways: **3 per session, 40
-per UTC day**, and switchable off entirely. At Nova Lite's token prices a full day at the
+Only the two explicitly live actions spend model tokens, and they share the same caps:
+**3 per session, 40 per UTC day**, and switchable off entirely. At Nova Lite's token prices a full day at the
 cap is small change; the cap exists so it cannot be otherwise.
 
 ### Bounds, and where each is enforced
@@ -233,8 +234,8 @@ staging bucket, which is the same accumulation `agentcore deploy` already causes
 | DynamoDB **TTL** on demo workspaces | Judge workspaces expire automatically after 24 h |
 | **No** point-in-time recovery | Synthetic data; PITR is storage cost for nothing worth recovering |
 | CloudWatch retention **14 days** | Explicit log group — the implicit Lambda one never expires *and survives `cdk destroy`* |
-| EventBridge rule **disabled**, 6-hourly when on | Recurring demand changes over days and a Pool Day comes round weekly; faster buys nothing and costs invocations |
-| CloudFront **PriceClass_100** | Cheapest edge footprint |
+| EventBridge definition **disabled** in the un-deployed pilot stack | Recurring demand changes over days; the deployed judge account has zero rules |
+| CloudFront **PriceClass_100** in the un-deployed pilot stack | Cheapest edge footprint if that separate architecture is ever deployed |
 | **No** route calculator resource | `geo-routes` needs none — one less billable thing to forget |
 | **No** EC2 / RDS / NAT / ALB / OpenSearch | All bill continuously. Asserted absent by test |
 | `RemovalPolicy.DESTROY` everywhere | `cdk destroy` genuinely removes everything |
@@ -263,8 +264,9 @@ construction rather than quietly charging a card.
 
 Ranked by how easy it is to forget:
 
-1. **An enabled EventBridge rule.** Ships disabled. `make schedule-off` disables it again;
-   `make schedule-on` requires typing `ENABLE` to confirm.
+1. **An EventBridge rule if the pilot stack is ever deployed and enabled.** The current
+   judge account has zero rules. The pilot template defaults disabled; `make schedule-on`
+   requires typing `ENABLE`.
 2. **A deployed AgentCore Runtime.** Deployed by its own tooling, so it is *not* removed by
    `cdk destroy`. `make cost-check` lists runtimes explicitly for this reason. **Live since
    2026-08-16.** Per-invocation billing, so it costs nothing while idle.

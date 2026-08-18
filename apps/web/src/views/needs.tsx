@@ -18,8 +18,8 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { NeedDraft, NeedLimits, NeedRow, ProductRow, api, shortDate } from "../api";
-import { Block, Chip, Empty, IconArrowRight } from "../ui";
+import { NeedDraft, NeedLimits, NeedRow, ProductRow, api, shortDateOnly } from "../api";
+import { Block, Chip, CoordinatorWait, Empty, IconArrowRight } from "../ui";
 
 /** Substitution preferences, in the member's words.
  *
@@ -253,12 +253,14 @@ export function Needs({
   onFind,
   running,
   hasPool,
+  liveDiscovery,
 }: {
   identity: { id: string; display_name: string };
   communityName: string;
   onFind: () => void;
   running: boolean;
   hasPool: boolean;
+  liveDiscovery: boolean;
 }) {
   const [needs, setNeeds] = useState<NeedRow[] | null>(null);
   const [products, setProducts] = useState<ProductRow[]>([]);
@@ -413,7 +415,7 @@ export function Needs({
                     </div>
                   </div>
                   <div className="row-tail">
-                    <div className="fact-value">{shortDate(n.expected_next_need_date)}</div>
+                    <div className="fact-value">{shortDateOnly(n.expected_next_need_date)}</div>
                     <div className="tiny faint">next needed</div>
                     <button
                       className="btn btn-sm"
@@ -446,12 +448,15 @@ export function Needs({
           Pool's job, not theirs.
         </p>
         {!hasPool ? (
-          <div className="btn-row" style={{ marginTop: 14 }}>
-            <button className="btn btn-primary" onClick={onFind} disabled={running}>
-              {running ? <span className="spinner" /> : null}
-              {running ? "Looking…" : "Find opportunities"}
-              {running ? null : <IconArrowRight />}
-            </button>
+          <div className="stack-sm" style={{ marginTop: 14 }}>
+            <div className="btn-row">
+              <button className="btn btn-primary" onClick={onFind} disabled={running}>
+                {running ? <span className="spinner" /> : null}
+                {running ? "Coordinator running" : "Find opportunities"}
+                {running ? null : <IconArrowRight />}
+              </button>
+            </div>
+            {running ? <CoordinatorWait live={liveDiscovery} /> : null}
           </div>
         ) : null}
         {showAll ? (
@@ -478,7 +483,7 @@ export function Needs({
                       <td className="r">
                         {n.quantity} {n.unit}
                       </td>
-                      <td>{shortDate(n.expected_next_need_date)}</td>
+                      <td>{shortDateOnly(n.expected_next_need_date)}</td>
                       <td className="r">{n.routine_lead_days}d</td>
                       <td className="r">{n.flexibility_days}d</td>
                       <td className="r">{n.min_savings_pct}%</td>

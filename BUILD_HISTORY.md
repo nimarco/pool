@@ -166,7 +166,7 @@ synthesized template — which is how rows 17–21 were found at all.
 | Resource | Service | Created | Purpose | Recurring cost? | Destroy by |
 | --- | --- | --- | --- | --- | --- |
 | `CDKToolkit` | CloudFormation | 2026-08-16 | Bootstrap stack, version 32 | No | Manual (see #0023) |
-| `cdk-hnb659fds-assets-860325090409-us-east-1` | S3 | 2026-08-16 | Deploy staging bucket. **Size not re-measured on 2026-08-18** — the session token expired before the check, and a figure nobody verified does not belong here. It has grown: every `agentcore deploy` and `deploy-demo` publishes a new ~70 MB bundle and hashed objects do not expire. Re-measure with `aws s3 ls s3://cdk-hnb659fds-assets-860325090409-us-east-1 --recursive --summarize` | **Yes — S3 storage, low single-digit $/mo at worst.** Growth is per-deploy, not per-request | Empty + delete before stack |
+| `cdk-hnb659fds-assets-860325090409-us-east-1` | S3 | 2026-08-16 | Deploy staging bucket. Measured after the final 2026-08-18 demo deploy: **36 objects, 544,983,237 bytes**. Every `agentcore deploy` and `deploy-demo` publishes hashed assets that do not expire automatically. Re-measure with `aws s3 ls s3://cdk-hnb659fds-assets-860325090409-us-east-1 --recursive --summarize` | **Yes — 545 MB of S3 storage at this measurement.** Growth is per deploy, not per request | Empty + delete before stack |
 | `cdk-hnb659fds-container-assets-860325090409-us-east-1` | ECR | 2026-08-16 | Bootstrap image repo — **empty, 0 images** (CodeZip needs none) | No (empty) | With CDKToolkit |
 | `/cdk-bootstrap/hnb659fds/version` | SSM Parameter | 2026-08-16 | Bootstrap version marker (`32`) | No (standard tier) | With CDKToolkit |
 | `cdk-hnb659fds-cfn-exec-role-…` | IAM Role | 2026-08-16 | CFN execution — **holds `AdministratorAccess`** | No | With CDKToolkit |
@@ -3414,3 +3414,183 @@ same conclusion — "a test that checks the number you remembered to check is no
 the claim" — which is why the fixes here are mostly *mechanisms* rather than edits: a
 workspace snapshot around every read tool, a test that fails on any bound nothing enforces,
 an endpoint count asserted against the router, and a lint gate that actually runs.
+
+---
+
+### #0032 — [2026-08-18] — Freeze the one-run Product proof before the final visual pass
+`[DEMO]` `[ARCHITECTURE]` `[FRONTEND]` `[AGENT]` `[COST]`
+
+**Goal / user intent**
+Make the normal Product demonstrate one continuous causal path — standing need to one
+live discovery to the resulting pool to same-run proof — while reconciling the Community
+impact model, transaction language, dates, architecture and submission narrative. This is
+the last structural/presentation patch before a separate visual-polish pass.
+
+**Starting state**
+`Find opportunities` already invoked the deployed AgentCore runtime and candidate pools
+already stored `created_by_run`, but the Product linked judges to a generic technical
+surface whose primary control invited a second paid run. The browser did not expose a
+server-verified pool/run relationship. Date-only need values passed through instant/time-zone
+parsing, Community architecture was mostly implicit, and several labels blurred
+authorization, capture and host payout. The detailed architecture also carried stale route,
+bound, tool-effect and EventBridge claims.
+
+**Decision**
+Treat the first Product invocation as its own technical proof. The API follows the pool's
+stored `created_by_run` to that exact run in the same repository workspace; after a
+successful live bridge response and same-workspace run readback, the API adds an
+idempotent server-owned AgentCore-origin marker to the existing run record. A missing or
+dangling relationship produces no proof. A fresh invocation remains available only in a
+collapsed secondary control. No AgentCore runtime code or configuration changed.
+
+The Community addition remains a compact explanation of existing state: verified fixture
+memberships, independent need declarers and designated fixture pickup sites, followed by
+the narrow responsibility model `Community enables → Pool coordinates → Members choose
+and collect`. It explicitly denies institutional partnership, inventory funding, group
+creation, money collection and payment chasing.
+
+**Implementation**
+Status: **Implemented and Tested; not yet Deployed.** Added the exact pool/run proof
+projection, persisted execution-origin evidence, server-backed Community enablement
+projection, direct `Pool → Activity → Technical proof for this run` navigation, an honest
+AgentCore wait strip, a proof-first evidence card and compact deployed/readback path.
+Corrected semantic date-only formatting and judge-visible authorization/capture/host
+compensation language. Reconciled `README.md`, the rehearsal script, Devpost draft,
+scorecard, release/cost notes and both architecture explanations. The 13-stage lifecycle
+reader and canonical domain/economics code were not changed.
+
+**AWS / external services touched**
+No AWS resource was touched in this implementation/QA phase. The official Devpost rules,
+FAQ, overview and resources were rechecked on 2026-08-18. The next action is deliberately
+limited to updating the existing `PoolDemoStack` because only its Lambda/API and bundled
+web changed. AgentCore runtime v4 will not be redeployed.
+
+**Cost-relevant activity**
+No Bedrock or AgentCore invocation was made. The planned demo-stack update will upload one
+new hashed Lambda bundle into the already-ledgered CDK bootstrap bucket and update existing
+resources; the infrastructure diff must show no new service or logical resource before it
+is applied. After deployment, exactly one Product-originated live AgentCore rehearsal is
+authorized in a fresh disposable workspace. No retry run is authorized merely to obtain a
+clean result.
+
+**Validation**
+`make qa`: ruff clean, ESLint clean, TypeScript clean, **734 agent/API/domain tests**, **75
+infrastructure tests**, **20 frontend tests**, production build, and repository secret scan
+all passed. `make secret-scan-selftest` passed in an isolated serial run. `npm audit
+--omit=dev` reported **0 production vulnerabilities**. `git diff --check` and
+`xmllint --noout docs/architecture.svg` passed. Browser inspection of the patched local
+Home, Community and disclosure drawer found the new server-derived content and no console
+errors. AgentCore validation was not run because no AgentCore entrypoint, package, runtime
+configuration or environment configuration changed.
+
+**Failures / dead ends**
+The first sandboxed `make qa` reached 734 passing service tests, then CDK's jsii runtime was
+denied permission to touch its existing cache timestamp; the identical command passed with
+cache access. The first npm audit could not resolve the registry inside the restricted
+network and passed once network access was granted. The secret-scanner self-test was
+accidentally launched twice against one shared fixture directory, so the overlapping runs
+deleted each other's planted files; neither result was accepted. A single serial rerun
+passed every planted-secret and cleanup assertion.
+
+**What we learned**
+Provenance is a relationship, not a telemetry panel: the useful evidence is the exact
+stored pool pointing to the exact stored run, plus a server-owned record of how that run
+was invoked. The same distinction applies to Community impact — exposing modeled
+boundaries and responsibilities is stronger than claiming adoption the project does not
+have.
+
+**Relevant files**
+`services/agent/pool/api/app.py`, `apps/web/src/views/live.tsx`,
+`apps/web/src/views/pool.tsx`, `apps/web/src/views/community.tsx`, `apps/web/src/api.ts`,
+`docs/DEMO_SCRIPT.md`, `docs/architecture.svg`, `docs/ARCHITECTURE.md`, `README.md`.
+
+---
+
+### #0033 — [2026-08-18] — One Product run remains its proof through the completed order
+`[DEMO]` `[AWS]` `[AGENT]` `[FRONTEND]` `[COST]`
+
+**Goal / user intent**
+Deploy only the presentation patch, rehearse the proposed Product path once in clean
+disposable state, and prove that the pool shown at the end still names the exact live run
+that created it. Do not record the video and do not spend a second AgentCore invocation.
+
+**Deployment**
+Status: **Deployed and Tested.** AWS identity was explicitly verified as the non-root
+`pool-admin` user in account `860325090409`, profile `pool-dev`, region `us-east-1`.
+The strict CDK diff contained one existing `AWS::Lambda::Function` code-asset update and a
+stack-description character correction; no resource, IAM permission or service was added
+or removed. `PoolDemoStack` reached `UPDATE_COMPLETE`. AgentCore runtime v4 was not
+redeployed because its entrypoint and configuration did not change.
+
+The rehearsal exposed one stored activity sentence whose bare “Captured” wording relied
+on the drawer to disclose the simulated provider. The service now records “Simulated
+capture recorded”, the feed derives the same explicit kind label from authoritative
+`provider_mode`, and lock activity says simulated capture is beginning. Two focused Python
+tests plus frontend test/lint/typecheck passed, then the same code-only Lambda diff was
+reviewed and deployed. The live discovery was **not** rerun.
+
+**Live rehearsal evidence**
+The existing disposable browser workspace was reset through the Product control before
+the rehearsal, leaving a clean seed with zero pools. Workspace:
+`w0z2b3v2r6c3b0q6l`.
+
+- The Rosa whey declaration was changed from 20% to 21%, saved and read back. The need
+  card and form both showed **Aug 29**; the calendar date did not shift by timezone.
+- `Find opportunities` was clicked **exactly once**. The honest wait named Amazon Bedrock
+  AgentCore and this session's DynamoDB workspace without staged progress.
+- Live run `run_3954c1d2d97f`: `pool_created`, termination `completed`, 6 iterations,
+  Bedrock / `us.amazon.nova-lite-v1:0`, 6,382 ms inside the runtime, 14,282 ms measured by
+  the Lambda bridge, 19,515 input / 493 output tokens.
+- Exact tool sequence: `list_latent_demand → evaluate_pool_economics →
+  create_candidate_pool → find_host_candidates → request_host_acceptance`.
+- Resulting pool `pool_e36b32c84ee2`. A strongly consistent DynamoDB read returned
+  `created_by_run = run_3954c1d2d97f`, status `completed`, threshold 24. The run row carries
+  the server-owned note `execution_origin=bedrock_agentcore_runtime:us-east-1`.
+- The Product proof showed the same run id twice (run and `created_by_run`), the same pool
+  id, live service/region/model, exact tools, `run + pool present in the same workspace`,
+  and a verified run→pool link. It survived recovery, completion, a Lambda redeploy and a
+  browser reload. Home deep-linked back to this exact proof. `Run again` remained collapsed
+  and was never opened.
+- Canonical transaction state remained unchanged: **10 buyers / 11 memberships**, one
+  retained declined authorization, **24/24 units**, two cases of 12, zero speculative
+  surplus, **$861.44 all-in**, **$1,127.76 retail**, **$266.32 collective savings**, and
+  **10/10 handoffs**. Host compensation was $44.68, recorded in a simulated transaction;
+  no payout rail was claimed.
+- Drawer disclosures were correct: live AgentCore/Bedrock discovery, deterministic
+  lifecycle, simulated payments and supplier purchase. The Community close showed all
+  server-backed enablement counts, the responsibility split and no partnership claim.
+- Browser console errors: **0** throughout. Every Product/drawer action returned and the
+  completed state reloaded successfully.
+
+The browser-controlled journey from Needs to the Community close took about **3 minutes
+36 seconds including deliberate inspection pauses and screenshots**. The live response was
+visible about 17 seconds after the click. No unexplained backtracking was required; the
+drawer was used at the two planned lifecycle moments, recovery was clearest on People, and
+the proof card held both ids together so no id had to be remembered from an earlier screen.
+The planned ~4:50 narrated path remains feasible. Typography, responsive polish and denser
+proof-card legibility are explicitly handed to the next `/impeccable` pass rather than
+changing structure here.
+
+**Cost and resource reconciliation**
+Exactly **one** paid AgentCore/Nova invocation was made. No schedule was created or run.
+The post-deploy account-wide EventBridge rule count is **0**. The one existing
+`Pool_PoolCoordinator` runtime remains `READY` and incurs usage only when invoked. The
+existing demo stack still contains the same nine logical resources. Two reviewed Lambda
+uploads were needed because the rehearsal found the copy defect; both produced hashed
+objects in the already-ledgered bootstrap bucket. That bucket now measures **36 objects,
+544,983,237 bytes**; the live resource ledger was updated. No temporary AWS resource is
+unrecorded.
+
+**Final validation**
+`make qa` on the final code: ruff clean, ESLint clean, TypeScript clean, **734
+agent/API/domain tests**, **75 infrastructure tests**, **20 frontend tests**, production
+build, and secret scan all passed — **829 tests total**. The serial secret-scanner
+self-test passed, `npm audit --omit=dev` reported 0 production vulnerabilities,
+`git diff --check` and the SVG XML check passed. AgentCore validation was not owed because
+no runtime code or configuration changed.
+
+**Relevant evidence / files**
+`docs/IMPECCABLE_HANDOFF.md`, `docs/DEMO_SCRIPT.md`, `docs/RELEASE_CHECKLIST.md`,
+`services/agent/pool/api/app.py`, `services/agent/pool/services/payments.py`,
+`services/agent/pool/services/coordination.py`, `apps/web/src/views/live.tsx`,
+`apps/web/src/views/community.tsx`.

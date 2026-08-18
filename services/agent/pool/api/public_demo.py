@@ -997,6 +997,13 @@ def _live_note(observed: dict[str, Any]) -> str:
     record is not in the workspace it says it wrote — which would mean the two halves
     are not looking at the same table, and is worth seeing rather than smoothing over.
     """
+    if observed.get("run_pool_links_verified"):
+        created = ", ".join(observed.get("created_pool_ids") or [])
+        return (
+            "This ran on Amazon Bedrock AgentCore against this demo session's data. "
+            f"The database readback contains its run record and resulting pool {created}; "
+            "the pool's stored created_by_run is this exact run id."
+        )
     if observed.get("run_recorded"):
         return (
             "This ran on Amazon Bedrock AgentCore in a session generated here and used "

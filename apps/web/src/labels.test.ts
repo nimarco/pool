@@ -17,7 +17,7 @@ describe("the group saving caption", () => {
       is_estimate: true,
     });
 
-    expect(caption).toMatch(/estimated using provisional host pay/);
+    expect(caption).toMatch(/estimated using provisional host compensation/);
     expect(caption).not.toMatch(/after every cost/);
   });
 
@@ -28,7 +28,7 @@ describe("the group saving caption", () => {
     });
 
     expect(caption).toContain("$266.32");
-    expect(caption).toMatch(/merchandise, host pay, card processing and Pool's fee/);
+    expect(caption).toMatch(/merchandise, host compensation, card processing and Pool's fee/);
     // "every cost" is a claim about the world; this is a claim about four line items.
     expect(caption).not.toMatch(/after every cost/);
   });
@@ -36,7 +36,7 @@ describe("the group saving caption", () => {
   it("hedges nothing and promises nothing when there is no host yet", () => {
     const caption = groupSavingsCaption({ economics: null, is_estimate: true });
 
-    expect(caption).toBe("host pay is not fixed until a host accepts");
+    expect(caption).toBe("host compensation is not fixed until a host accepts");
   });
 
   it("never presents a provisional total in the same words as a final one", () => {

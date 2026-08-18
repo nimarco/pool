@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { AppState, Health, api } from "../api";
+import { AppState, DemoConfig, Health, api } from "../api";
 import { Chip, IconCheck, IconCross, IconReplay } from "../ui";
 
 export interface Identity {
@@ -125,6 +125,7 @@ export function DemoPanel({
   onClose,
   state,
   health,
+  demoConfig,
   identity,
   onIdentity,
   onReset,
@@ -139,6 +140,7 @@ export function DemoPanel({
   onClose: () => void;
   state: AppState | null;
   health: Health | null;
+  demoConfig: DemoConfig | null;
   identity: Identity;
   onIdentity: (next: Identity) => void;
   onReset: () => void;
@@ -299,12 +301,29 @@ export function DemoPanel({
             <h3 className="section-title" style={{ marginBottom: 10 }}>
               What is real here
             </h3>
+            <div className="facts" style={{ marginBottom: 14 }}>
+              <div>
+                <div className="fact-label">Discovery</div>
+                <div className="fact-value">
+                  {demoConfig?.live_agent_available
+                    ? `AgentCore / Bedrock available · ${demoConfig.region}`
+                    : "local bounded coordinator"}
+                </div>
+              </div>
+              <div>
+                <div className="fact-label">Lifecycle</div>
+                <div className="fact-value">deterministic planner</div>
+              </div>
+              <div>
+                <div className="fact-label">Payments / supplier order</div>
+                <div className="fact-value">simulated</div>
+              </div>
+            </div>
             <p className="small muted" style={{ marginBottom: 12 }}>
-              <Chip tone="ok">real</Chip> The application and everything it decides. The
-              Strands agent loop, the tools it calls, the timing and matching engines, the
-              exact-cent economics, every viability check, the payment state machine, the
-              recovery after a failure, and the one-time pickup credentials. State is
-              stored and read back, not held in the page.
+              <Chip tone="ok">real</Chip> The application, Strands loop, typed tools,
+              timing and matching engines, exact-cent economics, viability checks,
+              payment state machine, recovery workflow and one-time pickup credentials.
+              State is stored and read back, not held in the page.
             </p>
             <p className="small muted" style={{ marginBottom: 12 }}>
               <Chip tone="warn">synthetic</Chip> The university, the people, the supplier
@@ -317,8 +336,8 @@ export function DemoPanel({
             </p>
             {health ? (
               <p className="tiny mono muted" style={{ marginTop: 14 }}>
-                store {health.repository} · model {health.model_provider} · payments{" "}
-                {health.payment_mode} · purchase{" "}
+                store {health.repository} · lifecycle planner {health.model_provider} ·
+                payments {health.payment_mode} · purchase{" "}
                 {health.purchase_simulated ? "simulated" : health.purchase_executor} ·
                 background schedules {health.schedules_enabled ? "on" : "off"}
               </p>
@@ -368,12 +387,11 @@ export function DemoPanel({
                   style={{ width: "100%", justifyContent: "flex-start" }}
                   onClick={onTechnical}
                 >
-                  Agent execution
+                  Technical proof
                 </button>
                 <p className="tiny faint" style={{ marginTop: 4 }}>
-                  The tool surface, the bounds every run is held to, the runs recorded in
-                  this session, and the button that invokes the deployed coordinator on
-                  Bedrock AgentCore Runtime.
+                  The exact stored run-to-pool relationship, tool sequence, bounds and
+                  authoritative readback. A new AgentCore invocation is secondary.
                 </p>
               </div>
               <div>

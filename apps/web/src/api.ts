@@ -91,6 +91,10 @@ export interface ViabilityCheck {
 
 export interface PoolView {
   pool_id: string;
+  /** The run id written on the pool record by the coordinator that created it. */
+  created_by_run: string;
+  /** Server-verified causal link to that exact run, or null when no such proof exists. */
+  execution_proof: PoolExecutionProof | null;
   community_id: string;
   product_id: string;
   product_name: string;
@@ -175,6 +179,24 @@ export interface RunSummary {
   started_at: string;
 }
 
+export interface PoolExecutionProof {
+  pool_id: string;
+  created_by_run: string;
+  run_id: string;
+  relation_verified: true;
+  execution: {
+    service: string;
+    live: boolean;
+    region: string;
+  };
+  workspace_readback: {
+    run_recorded: true;
+    pool_recorded: true;
+    same_workspace: true;
+  };
+  run: RunSummary;
+}
+
 export interface Metrics {
   members_participating: number;
   pools_total: number;
@@ -208,6 +230,18 @@ export interface CommunityView {
   platform_fee: { mode: string; bps: number; fixed_cents_per_buyer: number };
   quote_max_age_hours: number;
   synthetic: boolean;
+  enablement: {
+    verified_members: number;
+    total_memberships: number;
+    verification_methods: string[];
+    independent_need_declarers: number;
+    designated_pickup_sites: {
+      id: string;
+      name: string;
+      is_public: boolean;
+      permission: string;
+    }[];
+  };
 }
 
 export interface AppState {
@@ -334,7 +368,7 @@ export interface Health {
   };
   /** The exact tool surface the running agent was given, served from its own
    *  definition so the UI cannot display a catalogue that has drifted. */
-  agent_tools: { name: string; kind: "read" | "act" | "end" }[];
+  agent_tools: { name: string; kind: "read" | "record" | "act" | "end" }[];
 }
 
 export interface RunResult {
@@ -495,6 +529,9 @@ export interface LiveAgentObserved {
    *  proof that both halves are writing and reading one table. */
   run_recorded: boolean;
   pools: number;
+  /** Pool ids whose stored `created_by_run` is this exact run id. */
+  created_pool_ids: string[];
+  run_pool_links_verified: boolean;
   pending_decisions: number;
 }
 
@@ -699,7 +736,7 @@ const STATUS_COPY: Record<PoolStatus, { label: string; tone: "ok" | "warn" | "in
   funding: { label: "Collecting payment", tone: "warn" },
   recovering: { label: "Repairing", tone: "warn" },
   locked: { label: "Locked", tone: "ok" },
-  purchase_ready: { label: "Paid — ordering", tone: "ok" },
+  purchase_ready: { label: "Ready to order", tone: "ok" },
   purchased: { label: "Ordered", tone: "ok" },
   distributing: { label: "Pickup open", tone: "ok" },
   completed: { label: "Completed", tone: "ok" },
@@ -723,9 +760,28 @@ export function shortTime(iso: string): string {
   });
 }
 
-export function shortDate(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+/** Format a calendar date without treating it as a UTC instant.
+ *
+ * `new Date("2026-08-28")` means midnight UTC, which is August 27 in US time zones.
+ * Need dates are semantic calendar dates, so validate and format their own components
+ * in UTC; no locale offset is allowed to change the day the member declared. */
+export function shortDateOnly(value: string, locale?: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(date);
 }

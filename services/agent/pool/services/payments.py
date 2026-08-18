@@ -275,10 +275,11 @@ def capture_pool(*, ctx: PoolContext, pool_id: str) -> dict[str, Any]:
 
     pool.status = PoolStatus.PURCHASE_READY
     ctx.repo.put_pool(ctx.ws, pool)
+    capture_mode = "Simulated" if ctx.payments.mode == "simulated" else "Test-mode"
     ctx.log(
         "payment_captured",
-        f"Captured {format_cents(total)} across {len(captured)} buyer(s); the order is "
-        "ready to purchase",
+        f"{capture_mode} capture recorded: {format_cents(total)} across "
+        f"{len(captured)} buyer(s); the order is ready to purchase",
         {
             "captured_cents": total,
             "buyers": len(captured),

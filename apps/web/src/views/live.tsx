@@ -1,9 +1,9 @@
 /* The technical view of the one action that leaves this machine.
  *
- * This is not a second agent or a second button. Pressing "Find opportunities" in the
- * product invokes the coordinator deployed on Amazon Bedrock AgentCore Runtime, bound to
- * this session's own workspace; this screen shows what that invocation was. The button
- * here runs the same thing, from the auditor's side rather than the member's.
+ * Pressing "Find opportunities" in the Product invokes the coordinator deployed on
+ * Amazon Bedrock AgentCore Runtime, bound to this session's own workspace. This screen
+ * prioritizes the stored proof of that completed invocation. A fresh invocation remains
+ * available only as a collapsed, secondary auditor control.
  *
  * The honesty rule shapes the waiting state. A browser making one HTTPS request can
  * observe exactly two things: when it sent, and when it got an answer. So nothing here
@@ -20,7 +20,13 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { DemoConfig, Health, LiveAgentResult, RunSummary } from "../api";
+import {
+  DemoConfig,
+  Health,
+  LiveAgentResult,
+  PoolExecutionProof,
+  RunSummary,
+} from "../api";
 import {
   ActorTag,
   Block,
@@ -43,12 +49,13 @@ import {
  *  coordinator this repository's tests drive. */
 const HOPS = [
   { name: "Your browser", note: "no AWS credential, ever" },
-  { name: "Lambda Function URL", note: "signs the call, and names your workspace" },
+  { name: "Lambda", note: "validates the workspace and signs one runtime call" },
   { name: "Bedrock AgentCore Runtime", note: "isolated session, generated server-side" },
-  { name: "Strands agent loop", note: "bounded: iterations, tool calls, wall clock" },
-  { name: "Amazon Bedrock", note: "model inference" },
+  { name: "Strands + Amazon Bedrock", note: "bounded model-driven tool selection" },
   { name: "Pool's typed tools", note: "the only way the model reaches any state" },
-  { name: "DynamoDB", note: "your session's partition — the same one this page reads" },
+  { name: "Deterministic domain services", note: "money, policy, allocation and writes" },
+  { name: "DynamoDB", note: "authoritative state in this session's partition" },
+  { name: "Your browser", note: "re-reads the stored run and resulting pool" },
 ];
 
 function HopChain({ state }: { state: "idle" | "flight" | "done" | "failed" }) {
@@ -65,7 +72,7 @@ function HopChain({ state }: { state: "idle" | "flight" | "done" | "failed" }) {
         const active = state === "flight" && i > 0;
         return (
           <div
-            key={hop.name}
+            key={`${i}-${hop.name}`}
             className={`hop${done ? " done" : ""}${active ? " active" : ""}`}
           >
             <span className="hop-mark">
@@ -160,6 +167,152 @@ function ToolCatalogue({
   );
 }
 
+/* ---------------------------------------------------------- stored run proof */
+
+function StoredExecutionProof({
+  proof,
+}: {
+  proof: PoolExecutionProof;
+}) {
+  const run = proof.run;
+  const isLive = proof.execution.live;
+  return (
+    <section className="panel reveal" data-testid="stored-execution-proof">
+      <div className="panel-head">
+        <h3>Technical proof for this run</h3>
+        <Chip tone={isLive ? "live" : "info"}>
+          {isLive ? "Amazon Bedrock AgentCore · live" : run.model_provider}
+        </Chip>
+        <span className="spacer" />
+        <ActorTag actor="agent" label="Stored causal record" />
+      </div>
+      <div className="panel-pad stack-sm">
+        <p className="small prose">
+          The server read this pool and this run back from the same workspace. The pool’s
+          stored <span className="mono">created_by_run</span> value is the exact run id
+          below; this is not a “latest run” guess made by the browser.
+        </p>
+        <div className="facts">
+          <Fact
+            label="Service"
+            value={proof.execution.service}
+          />
+          <Fact label="Region" value={<span className="mono">{proof.execution.region}</span>} />
+          <Fact
+            label="Model provider / model"
+            value={<span className="mono">{run.model_provider} / {run.model_id}</span>}
+          />
+          <Fact label="Run id" value={<span className="mono">{run.run_id}</span>} />
+          <Fact label="Resulting pool id" value={<span className="mono">{proof.pool_id}</span>} />
+          <Fact
+            label="Pool created_by_run"
+            value={<span className="mono">{proof.created_by_run}</span>}
+          />
+          <Fact label="Outcome" value={run.outcome.replace(/_/g, " ")} />
+          <Fact
+            label="Termination"
+            value={<span className="mono">{run.termination_reason}</span>}
+          />
+          <Fact
+            label="Authoritative readback"
+            value={
+              proof.workspace_readback.run_recorded &&
+              proof.workspace_readback.pool_recorded &&
+              proof.workspace_readback.same_workspace
+                ? "run + pool present in the same workspace"
+                : "not verified"
+            }
+          />
+        </div>
+      </div>
+      <div className="panel-head">
+        <h3>Exact tool sequence</h3>
+        <span className="spacer" />
+        <span className="tiny faint">read from the stored run record</span>
+      </div>
+      <div className="panel-pad">
+        <TracePills names={run.tool_calls} />
+      </div>
+      <div className="panel-head">
+        <h3>Request, execution, authoritative return</h3>
+      </div>
+      <HopChain state="done" />
+    </section>
+  );
+}
+
+function InvocationPanel({
+  config,
+  result,
+  busy,
+  onRun,
+  again = false,
+}: {
+  config: DemoConfig | null;
+  result: LiveAgentResult | null;
+  busy: boolean;
+  onRun: () => void;
+  again?: boolean;
+}) {
+  const available = Boolean(config?.live_agent_available);
+  const state = busy ? "flight" : result?.ok ? "done" : result ? "failed" : "idle";
+  return (
+    <div className="live-panel">
+      <div className="live-head">
+        <IconCloud />
+        <h3 style={{ fontSize: 14.5, fontWeight: 600 }}>
+          {again ? "Run the deployed coordinator again" : "Invoke the deployed coordinator"}
+        </h3>
+        <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
+          <Elapsed running={busy} />
+          {available ? <Chip tone="live">live</Chip> : <Chip>not on this deployment</Chip>}
+        </span>
+      </div>
+      <div className="panel-pad stack-sm">
+        {available ? (
+          <>
+            <p className="small">
+              Starts one bounded coordinator run on Amazon Bedrock AgentCore in{" "}
+              <strong>{config?.region}</strong>, against this session’s own DynamoDB workspace.
+            </p>
+            <p className="tiny muted">
+              The server owns the instruction, creates a one-use runtime session, and
+              re-reads the database after AWS answers. The cap is{" "}
+              {config?.max_live_per_session} live runs per visitor; only one may write a
+              workspace at a time.
+            </p>
+            <div className="btn-row" style={{ marginTop: 4 }}>
+              <button className="btn btn-primary btn-lg" onClick={onRun} disabled={busy}>
+                {busy ? <span className="spinner" /> : <IconCloud />}
+                {busy ? "Coordinator running on AWS" : again ? "Run again" : "Run on AgentCore"}
+              </button>
+              {busy ? (
+                <span className="tiny muted">
+                  One real request is in flight; no intermediate stage is being inferred.
+                </span>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <p className="small muted prose">
+            This build has no AgentCore runtime configured, so no live button is offered.
+            Local coordination uses the same bounded loop and typed tools with an offline
+            planner in the model’s place.
+          </p>
+        )}
+      </div>
+      <HopChain state={state} />
+      {result && !result.ok ? (
+        <div className="panel-pad">
+          <div className="banner banner-warn">
+            <span>{result.reason}</span>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------------- view */
 
 /** The technical evidence for one coordination, shown inside a pool's record.
@@ -174,6 +327,7 @@ export function AgentExecution({
   busy,
   onRun,
   runs,
+  proof,
   standalone,
 }: {
   config: DemoConfig | null;
@@ -182,21 +336,21 @@ export function AgentExecution({
   busy: boolean;
   onRun: () => void;
   runs: RunSummary[];
+  proof: PoolExecutionProof | null;
   /** Rendered as its own destination in Showcase mode rather than inside a pool's
    *  record, where the record already supplies the context and the title. */
   standalone?: boolean;
 }) {
   const available = Boolean(config?.live_agent_available);
   const tools = health?.agent_tools ?? [];
-  const chosen = result?.ok ? result.run.tool_calls.map((t) => t.name) : [];
-  const state = busy ? "flight" : result?.ok ? "done" : result ? "failed" : "idle";
+  const chosen = proof?.run.tool_calls ?? (result?.ok ? result.run.tool_calls.map((t) => t.name) : []);
 
   return (
     <div className="stack">
       <header className="stack-sm">
         {standalone ? (
           <h1 className="title" style={{ maxWidth: "22ch" }}>
-            One button on this site actually leaves it
+            One Product action runs the deployed coordinator
           </h1>
         ) : (
           <h2 className="title" style={{ maxWidth: "24ch" }}>
@@ -214,90 +368,40 @@ export function AgentExecution({
                deployed — on Amazon Bedrock AgentCore, against this session's own data, so
                the pool it forms is formed there. The rest of the lifecycle runs the same
                Strands loop on this server with a deterministic planner in the model's
-               place, so the demo is free and cannot break. Every run below records which
+               place, so the lifecycle is free to rehearse and repeatable. Every run below records which
                of the two answered.`
             : `Pool's coordinator runs on this server for every action you take — the real
                Strands event loop, the real tools, the real domain arithmetic, driven by a
-               deterministic planner rather than a model so the demo is free and cannot
-               break. The same coordinator is also deployed on AWS.`}
+               deterministic planner rather than a model so local rehearsal is free and
+               repeatable. The same coordinator is also deployed on AWS.`}
         </p>
       </header>
 
-      <section className="live-panel">
-        <div className="live-head">
-          <IconCloud />
-          <h3 style={{ fontSize: 14.5, fontWeight: 600 }}>
-            Invoke the deployed agent on Amazon Bedrock AgentCore Runtime
-          </h3>
-          <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
-            <Elapsed running={busy} />
-            {available ? <Chip tone="live">live</Chip> : <Chip>not on this deployment</Chip>}
-          </span>
-        </div>
+      {proof ? <StoredExecutionProof proof={proof} /> : null}
 
-        <div className="panel-pad stack-sm">
-          {available ? (
-            <>
-              <p className="small">
-                Runs Pool's coordinator as deployed in <strong>{config?.region}</strong> —
-                a real model, the real Strands loop, the real typed tools, inside a runtime
-                session generated here and used once.
-              </p>
-              <p className="tiny muted">
-                It works on <strong>your</strong> session, not a copy of it. The runtime
-               reads and writes the same DynamoDB partition this page reads, so whatever
-               it decides to do lands in the demo you are driving — and the state shown
-               afterwards is read back from that table rather than assembled from the
-               agent's answer. If the invocation becomes ambiguous, Pool waits for the
-               workspace to become safe before another mutating run. Your session id
-               never leaves the browser as anything but the parameter every request
-               already carries; the server re-checks it and builds the runtime's payload
-               itself, so the agent can choose what to do and never whose data to do it to.
-              </p>
-              <p className="tiny muted">
-                Capped at {config?.max_live_per_session} runs per visitor because it
-                spends model tokens, and one at a time per session so two runs cannot
-                write the same pool. The client sends an action name, never a prompt: the
-                server owns the instruction, so a stranger with this URL cannot write the
-                agent's orders.
-              </p>
-              <div className="btn-row" style={{ marginTop: 4 }}>
-                <button className="btn btn-primary btn-lg" onClick={onRun} disabled={busy}>
-                  {busy ? <span className="spinner" /> : <IconCloud />}
-                  {busy ? "Waiting for AWS…" : "Run the deployed agent"}
-                </button>
-                {busy ? (
-                  <span className="tiny muted">
-                    Typically ten to twenty seconds. Nothing below is affected either way.
-                  </span>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <p className="small muted prose">
-              This build has no AgentCore runtime configured, so the button is not offered
-              rather than being offered and failing. The deployed public demo has it
-              switched on; a local run keeps the same architecture below, with an offline
-              planner in the model's place and no AWS call at all.
-            </p>
-          )}
-        </div>
-
-        <HopChain state={state} />
-
-        {result && !result.ok ? (
-          <div className="panel-pad">
-            <div className="banner banner-warn">
-              <span>{result.reason}</span>
-            </div>
-          </div>
-        ) : null}
-      </section>
+      {proof ? (
+        <details className="panel">
+          <summary className="panel-head" style={{ cursor: "pointer" }}>
+            <strong>Run again</strong>
+            <span className="spacer" />
+            <span className="tiny faint">secondary live invocation · spends model tokens</span>
+          </summary>
+          <InvocationPanel
+            config={config}
+            result={result}
+            busy={busy}
+            onRun={onRun}
+            again
+          />
+        </details>
+      ) : (
+        <InvocationPanel config={config} result={result} busy={busy} onRun={onRun} />
+      )}
 
       {result?.ok ? (
         <section className="panel reveal">
           <div className="panel-head">
-            <h3>{result.service}</h3>
+            <h3>Latest live invocation response</h3>
             <Chip tone="ok">{result.run.outcome.replace(/_/g, " ")}</Chip>
             <span className="spacer" />
             <ActorTag actor="agent" label="Chosen by the model" />
@@ -351,6 +455,16 @@ export function AgentExecution({
                 value={result.observed.run_recorded ? "present" : "not found"}
               />
               <Fact label="Pools in your session" value={result.observed.pools} />
+              <Fact
+                label="Pools linked to this exact run"
+                value={result.observed.created_pool_ids.length > 0
+                  ? result.observed.created_pool_ids.join(", ")
+                  : "none"}
+              />
+              <Fact
+                label="Run → pool link"
+                value={result.observed.run_pool_links_verified ? "verified" : "not verified"}
+              />
               <Fact label="People it is waiting on" value={result.observed.pending_decisions} />
             </div>
             <p className="tiny muted">{result.note}</p>
@@ -386,11 +500,11 @@ export function AgentExecution({
               {health.bounds.max_iterations} iterations, {health.bounds.max_tool_calls} tool
               calls, {health.bounds.max_duplicate_tool_calls} identical calls before the next
               one is refused, and a {health.bounds.workflow_timeout_seconds}s wall clock
-              checked before every model and tool call. That clock ends a run that is taking
-              too long; a call that hangs is caught by the layer that owns the process
-              instead — the runtime invocation times out at 60s, the function at 90s. A run
-              that hits any of them ends loudly as a recorded fault, never a silent
-              truncation that looks like an answer.
+              checked before every model and tool call. That cooperative bound stops the
+              loop between steps; it cannot interrupt a call already in progress. The
+              layers that own the process provide the outer deadlines — the runtime
+              invocation at 60s and Lambda at 90s. A run that hits a bound ends loudly as
+              a recorded fault, never a silent truncation that looks like an answer.
             </p>
           ) : null}
         </div>
@@ -438,7 +552,7 @@ export function AgentExecution({
         <div className="arch">
           {[
             ["React app", "one Lambda serves it from the same origin as the API — no CORS, no bucket"],
-            ["Lambda Function URL", "23 allowlisted paths of 45; everything else 404s"],
+            ["Lambda Function URL", "24 allowlisted paths of 40; everything else 404s"],
             ["DynamoDB", "single table, on-demand; each visitor isolated by partition, 24 h TTL"],
             ["Bedrock AgentCore Runtime", "hosts the coordinator; AWS_IAM inbound auth, one runtime ARN; read/write on that one table, no delete"],
             ["Amazon Bedrock", "model inference, reached through Strands"],

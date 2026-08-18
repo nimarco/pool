@@ -134,7 +134,7 @@ export function PoolRecord({
         <Figure
           label="Units"
           value={`${pool.provisional_units} / ${pool.threshold_units}`}
-          sub={`${pool.funded_units} paid for · the supplier will not sell fewer than ${pool.threshold_units}`}
+          sub={`${pool.funded_units} units authorized · the supplier will not sell fewer than ${pool.threshold_units}`}
         />
         <Figure
           label="Buyers"
@@ -176,6 +176,7 @@ export function PoolRecord({
       {tab === "fulfilment" ? <FulfilmentTab pool={pool} onRefresh={onRefresh} /> : null}
       {tab === "activity" ? (
         <ActivityTab
+          pool={pool}
           entryDeep={entry?.deep}
           runs={runs}
           activity={activity}
@@ -210,10 +211,11 @@ function OverviewTab({ pool }: { pool: PoolView }) {
                 {pool.host.display_name}
               </div>
               <p className="small muted" style={{ marginTop: 6 }}>
-                Paid <strong>{pool.host.reward_display}</strong> for{" "}
+                Earns <strong>{pool.host.reward_display}</strong> for{" "}
                 {pool.host.handled_orders} orders and a{" "}
-                {pool.host.supplier_distance_km} km round trip. Funded by the buyers, not
-                subsidised by Pool.
+                {pool.host.supplier_distance_km} km round trip. The compensation is
+                included in buyer economics and recorded on the simulated transaction;
+                Pool does not claim a real payout rail.
               </p>
             </>
           ) : (
@@ -496,7 +498,7 @@ function EconomicsTab({ pool }: { pool: PoolView }) {
   if (!e) {
     return (
       <Empty>
-        The exact price is not known yet. Host pay is part of what buyers pay, so nothing
+        The exact price is not known yet. Host compensation is part of what buyers pay, so nothing
         is priced precisely until a host has accepted and the supplier quote has been
         re-verified.
       </Empty>
@@ -513,8 +515,8 @@ function EconomicsTab({ pool }: { pool: PoolView }) {
         <div className="panel-pad">
           <p className="small muted" style={{ marginBottom: 14 }}>
             {e.host_is_estimated
-              ? "Host pay is still an estimate, so this is a range rather than a precise-looking price nobody can be held to."
-              : "Every component is fixed. This is what buyers actually pay."}
+              ? "Host compensation is still an estimate, so this is a range rather than a precise-looking price nobody can be held to."
+              : "Every component is fixed. This is the exact amount offered to buyers."}
           </p>
           <div className="ledger">
             <LedgerLine label="Bulk merchandise" value={money(e.merchandise_cents)} />
@@ -713,6 +715,7 @@ function FulfilmentTab({ pool, onRefresh }: { pool: PoolView; onRefresh: () => v
 /* ------------------------------------------------------------------ activity */
 
 function ActivityTab({
+  pool,
   entryDeep,
   runs,
   activity,
@@ -726,6 +729,7 @@ function ActivityTab({
   onRunLive,
   onRunScenario,
 }: {
+  pool: PoolView;
   entryDeep?: string;
   runs: RunSummary[];
   activity: ActivityEvent[];
@@ -781,6 +785,7 @@ function ActivityTab({
           busy={liveBusy}
           onRun={onRunLive}
           runs={runs}
+          proof={pool.execution_proof}
         />
       </div>
     );
@@ -809,20 +814,21 @@ function ActivityTab({
         <div className="panel panel-pad stack-sm">
           <h3 className="section-title">How Pool coordinated this</h3>
           <p className="small muted">
-            Which tools the coordinator chose and in what order, the bounds it ran under,
-            and the option to run the same coordinator on its deployed home — Amazon
-            Bedrock AgentCore Runtime.
+            The exact run stored on this pool: its run id, tool sequence, termination,
+            model and authoritative database readback. A fresh invocation is secondary.
           </p>
           <div className="btn-row">
             <button className="btn btn-sm" onClick={() => setDeep("execution")}>
-              Agent execution
+              Technical proof for this run
             </button>
             {demoConfig?.live_agent_available ? <Chip tone="live">AWS available</Chip> : null}
           </div>
-          {runs.length > 0 ? (
-            <TracePills names={runs[0].tool_calls} />
+          {pool.execution_proof ? (
+            <TracePills names={pool.execution_proof.run.tool_calls} />
           ) : (
-            <p className="tiny faint">No coordination run recorded in this session yet.</p>
+            <p className="tiny faint">
+              This pool has no server-verified run relationship to display.
+            </p>
           )}
         </div>
 

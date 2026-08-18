@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 760" width="1280" height="760" role="img" aria-labelledby="title desc" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
-  <title id="title">Pool — implemented architecture</title>
-  <desc id="desc">People reach a React app served by one Lambda Function URL, which signs an invocation of Amazon Bedrock AgentCore Runtime. Inside the runtime, a bounded Strands agent loop calls Amazon Bedrock for inference and reaches the world only through twelve typed Pool tools. Those tools call deterministic orchestration services over a pure domain layer that performs no I/O, backed by a single DynamoDB table and CloudWatch run records. Payments, the supplier purchase and routing are simulated adapters. EventBridge and Amazon Location are implemented but not enabled.</desc>
+  <title id="title">Pool — deployed judge architecture and implementation boundary</title>
+  <desc id="desc">People reach a React app served by one Lambda Function URL, which signs an invocation of Amazon Bedrock AgentCore Runtime. Inside the runtime, a bounded Strands agent loop calls Amazon Bedrock for inference and reaches the world only through twelve typed Pool tools. Those tools call deterministic orchestration services over a pure domain layer that performs no I/O, backed by a single DynamoDB table and CloudWatch run records. The browser reads the exact run and resulting pool back from that table. Payments, the supplier purchase and routing are simulated adapters. EventBridge exists only in an un-deployed pilot stack; the deployed judge account has zero EventBridge rules.</desc>
 
   <!-- Hand-authored rather than auto-laid-out. A generated flowchart of this graph came
        out 1474 x 2902, which is illegible in a README and useless in a video frame; a
@@ -16,15 +16,15 @@
   <rect width="1280" height="760" fill="#f7f4ef"/>
 
   <!-- ─────────────────────────────────────────────────────── title -->
-  <text x="40" y="52" font-size="25" font-weight="600" fill="#17150f" letter-spacing="-0.3">Pool — implemented architecture</text>
-  <text x="40" y="76" font-size="13.5" fill="#575145">Everything on this diagram exists in the repository. The model decides what to do; deterministic code determines what is true.</text>
+  <text x="40" y="52" font-size="25" font-weight="600" fill="#17150f" letter-spacing="-0.3">Pool — deployed judge architecture + implementation boundary</text>
+  <text x="40" y="76" font-size="13.5" fill="#575145">Solid AWS path is deployed. Dashed components are implemented but absent from the judge stack. The model decides; deterministic code verifies and writes.</text>
 
   <!-- ─────────────────────────────────────────────────────── people -->
   <rect x="40" y="104" width="236" height="146" rx="10" fill="#ffffff" stroke="#ded7c9"/>
   <text x="58" y="128" font-size="10.5" font-weight="700" letter-spacing="1.2" fill="#a0512a">PEOPLE</text>
   <g font-size="13.5" fill="#17150f">
     <text x="58" y="154">Buyer<tspan fill="#575145" font-size="12"> · declares a recurring need</tspan></text>
-    <text x="58" y="182">Host<tspan fill="#575145" font-size="12"> · paid to collect and hand out</tspan></text>
+    <text x="58" y="182">Host<tspan fill="#575145" font-size="12"> · earns recorded compensation</tspan></text>
     <text x="58" y="210">Operator<tspan fill="#575145" font-size="12"> · offers, payments, cases</tspan></text>
   </g>
   <text x="58" y="230" font-size="11.5" fill="#a0512a">Asked only when a rule they</text>
@@ -38,7 +38,7 @@
     <text x="318" y="182">Lambda Function URL</text>
   </g>
   <text x="318" y="199" font-size="11.5" fill="#575145">one function serves the SPA and the API</text>
-  <text x="318" y="216" font-size="11.5" fill="#575145">from one origin — 14 of 45 paths reachable</text>
+  <text x="318" y="216" font-size="11.5" fill="#575145">from one origin — 24 of 40 API paths reachable</text>
   <text x="318" y="238" font-size="11.5" fill="#384b5e">The browser never holds an AWS credential</text>
 
   <!-- ─────────────────────────────────────────────────────── agent -->
@@ -55,7 +55,7 @@
   <text x="844" y="162" font-size="13" font-weight="600" fill="#17150f">Strands agent loop</text>
   <text x="844" y="181" font-size="11.5" fill="#575145">PoolCoordinator · one bounded run</text>
   <text x="844" y="197" font-size="11.5" fill="#575145">BoundedRun hook provider:</text>
-  <text x="844" y="213" font-size="11.5" fill="#575145">8 iterations · 25 calls · 120 s</text>
+  <text x="844" y="213" font-size="11.5" fill="#575145">8 iterations · 25 calls · 45 s cooperative</text>
 
   <rect x="1054" y="140" width="170" height="92" rx="8" fill="#e4ede4" stroke="#b2cbb7"/>
   <text x="1068" y="162" font-size="13" font-weight="600" fill="#17150f">Amazon Bedrock</text>
@@ -79,7 +79,7 @@
   <rect x="58" y="320" width="256" height="132" rx="8" fill="#e5ebf1" stroke="#b6c4d2"/>
   <text x="72" y="342" font-size="13" font-weight="600" fill="#17150f">agent/tools.py — 12 tools</text>
   <text x="72" y="361" font-size="11.5" fill="#575145">typed · narrow · no shell, no SQL</text>
-  <text x="72" y="378" font-size="11.5" fill="#575145">7 read · 4 consequential · 1 terminal</text>
+  <text x="72" y="378" font-size="11.5" fill="#575145">4 read · 1 record · 6 act · 1 end</text>
   <text x="72" y="395" font-size="11.5" fill="#575145">each consequential one idempotent</text>
   <text x="72" y="412" font-size="11.5" fill="#575145">by an explicit key</text>
   <text x="72" y="437" font-size="11.5" fill="#384b5e">results projected before the model sees</text>
@@ -110,6 +110,8 @@
   <text x="1008" y="437" font-size="11.5" fill="#575145">routing · deterministic function</text>
 
   <path d="M540 470 V510" stroke="#8a8272" stroke-width="1.4" fill="none" marker-end="url(#a)"/>
+  <path d="M58 512 H22 V270 H446 V252" stroke="#384b5e" stroke-width="1.4" fill="none" marker-end="url(#a)"/>
+  <text x="40" y="279" font-size="11.5" fill="#384b5e">authoritative run + pool readback returns to the browser</text>
 
   <!-- ─────────────────────────────────────────────────────── state -->
   <rect x="40" y="512" width="596" height="150" rx="10" fill="#ffffff" stroke="#ded7c9"/>
@@ -120,18 +122,18 @@
   </g>
   <text x="58" y="580" font-size="11.5" fill="#575145">pk = "&lt;workspace&gt;#&lt;TYPE&gt;", sk = "&lt;entity id&gt;". Each demo visitor is</text>
   <text x="58" y="596" font-size="11.5" fill="#575145">isolated in their own partition and expires after 24 hours.</text>
-  <text x="58" y="632" font-size="11.5" fill="#575145">Trigger, tool sequence, iterations, termination reason, duration, tokens.</text>
-  <text x="58" y="648" font-size="11.5" fill="#575145">No model reasoning text; tool arguments stored as hashes only.</text>
+  <text x="58" y="632" font-size="11.5" fill="#575145">Run + resulting pool read back from the same workspace; created_by_run proves causality.</text>
+  <text x="58" y="648" font-size="11.5" fill="#575145">Tool sequence, termination, duration, tokens; no reasoning text, arguments hashed.</text>
 
   <!-- ───────────────────────────────────────────────── not enabled -->
   <rect x="656" y="512" width="584" height="150" rx="10" fill="#f2efe9" stroke="#c6bdab" stroke-dasharray="5 4"/>
-  <text x="674" y="536" font-size="10.5" font-weight="700" letter-spacing="1.2" fill="#6f6759">IMPLEMENTED, NOT ON THE JUDGE PATH</text>
+  <text x="674" y="536" font-size="10.5" font-weight="700" letter-spacing="1.2" fill="#6f6759">IMPLEMENTED BUT NOT DEPLOYED / ABSENT FROM JUDGE PATH</text>
   <g font-size="13" font-weight="600" fill="#3f3a31">
     <text x="674" y="562">EventBridge — background scan</text>
     <text x="674" y="606">Amazon Location — geo-routes</text>
     <text x="674" y="650">API Gateway · S3 · CloudFront — the pilot-shaped stack</text>
   </g>
-  <text x="674" y="580" font-size="11.5" fill="#6f6759">Created disabled. Enabling it starts recurring model invocations.</text>
+  <text x="674" y="580" font-size="11.5" fill="#6f6759">Pilot-stack code only. Deployed judge account: zero EventBridge rules.</text>
   <text x="674" y="624" font-size="11.5" fill="#6f6759">Adapter exists and is tested; never called against the live service.</text>
 
   <!-- ────────────────────────────────────────────────────── legend -->
@@ -143,7 +145,7 @@
     <circle cx="782" cy="706" r="5.5" fill="#a0512a"/>
     <text x="796" y="710" fill="#575145">clay — a person was asked</text>
     <rect x="990" y="700" width="11" height="11" rx="2" fill="#f2efe9" stroke="#c6bdab" stroke-dasharray="3 2"/>
-    <text x="1010" y="710" fill="#575145">dashed — built, deliberately not running</text>
+    <text x="1010" y="710" fill="#575145">dashed — implemented, not deployed</text>
   </g>
   <text x="40" y="740" font-size="11.5" fill="#6f6759">Synthetic community, synthetic suppliers, simulated payments and a simulated supplier purchase. Bedrock, AgentCore Runtime, DynamoDB and the Lambda Function URL are verified on a real account.</text>
 </svg>

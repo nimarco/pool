@@ -21,7 +21,7 @@ import {
   api,
   money,
   pct,
-  shortDate,
+  shortDateOnly,
   shortTime,
   statusCopy,
 } from "../api";
@@ -30,6 +30,7 @@ import {
   ActorTag,
   Block,
   Chip,
+  CoordinatorWait,
   Empty,
   IconArrowRight,
   IconCheck,
@@ -112,12 +113,10 @@ function DecisionCard({
 
 function OpportunityCard({
   pool,
-  lastRun,
   onOpen,
   onShowAgent,
 }: {
   pool: PoolView;
-  lastRun: RunResult | null;
   onOpen: () => void;
   onShowAgent: () => void;
 }) {
@@ -153,7 +152,9 @@ function OpportunityCard({
         <p className="tiny muted">
           {pool.provisional_units} of the {pool.threshold_units} units this supplier will
           sell.
-          {pool.funded_units > 0 ? ` ${pool.funded_units} already paid for.` : ""}
+          {pool.funded_units > 0
+            ? ` ${pool.funded_units} units have exact-amount authorizations.`
+            : ""}
         </p>
 
         <div className="btn-row" style={{ marginTop: 4 }}>
@@ -161,9 +162,9 @@ function OpportunityCard({
             Open the pool
             <IconArrowRight />
           </button>
-          {lastRun ? (
+          {pool.execution_proof ? (
             <button className="btn btn-ghost btn-sm" onClick={onShowAgent}>
-              <ActorTag actor="agent" label="Pool's coordinator found this" />
+              <ActorTag actor="agent" label="Technical proof for this run" />
             </button>
           ) : null}
         </div>
@@ -177,11 +178,13 @@ function WatchingCard({
   onFind,
   memberCount,
   needCount,
+  liveDiscovery,
 }: {
   running: boolean;
   onFind: () => void;
   memberCount: number;
   needCount: number;
+  liveDiscovery: boolean;
 }) {
   return (
     <section className="panel">
@@ -199,9 +202,10 @@ function WatchingCard({
           <div className="btn-row">
             <button className="btn btn-primary btn-lg" onClick={onFind} disabled={running}>
               {running ? <span className="spinner" /> : null}
-              {running ? "Looking…" : "Find opportunities"}
+              {running ? "Coordinator running" : "Find opportunities"}
             </button>
           </div>
+          {running ? <CoordinatorWait live={liveDiscovery} /> : null}
           <p className="tiny faint">
             Runs Pool's coordinator over the community's standing needs.
           </p>
@@ -227,6 +231,7 @@ export function Home({
   onRespond,
   onShowAgent,
   onGoNeeds,
+  liveDiscovery,
 }: {
   state: AppState;
   identity: { id: string; display_name: string };
@@ -238,6 +243,7 @@ export function Home({
   onRespond: (id: string, approve: boolean) => void;
   onShowAgent: () => void;
   onGoNeeds: () => void;
+  liveDiscovery: boolean;
 }) {
   const [needs, setNeeds] = useState<NeedRow[]>([]);
   const [me, setMe] = useState<MemberView | null>(null);
@@ -338,7 +344,6 @@ export function Home({
       {pool ? (
         <OpportunityCard
           pool={pool}
-          lastRun={lastRun}
           onOpen={() => onOpenPool(pool.pool_id)}
           onShowAgent={onShowAgent}
         />
@@ -348,6 +353,7 @@ export function Home({
           onFind={onFind}
           memberCount={state.counts.members}
           needCount={state.counts.needs}
+          liveDiscovery={liveDiscovery}
         />
       )}
 
@@ -384,7 +390,7 @@ export function Home({
                   </div>
                 </div>
                 <div className="row-tail">
-                  <div className="fact-value">{shortDate(n.expected_next_need_date)}</div>
+                  <div className="fact-value">{shortDateOnly(n.expected_next_need_date)}</div>
                   <div className="tiny faint">next needed</div>
                 </div>
               </div>

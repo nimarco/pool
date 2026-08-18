@@ -254,6 +254,9 @@ def test_the_pool_locked_only_after_every_condition_passed(repo):
     facts = _step(result, "locked_and_captured")
     assert facts["captured_payments"] > 0
     assert facts["provider_mode"] in {"simulated", "test"}
+    locked_event = next(event for event in repo.list_activity(WS) if event.kind == "pool_locked")
+    assert locked_event.summary.endswith("simulated capture is beginning")
+    assert locked_event.facts["provider_mode"] == "simulated"
 
 
 def test_the_purchase_is_clearly_simulated(repo):

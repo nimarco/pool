@@ -2,7 +2,7 @@
  * operator has to be able to audit.
  *
  * These two surfaces exist because a coordination product that only has a consumer
- * screen is a mockup. Somebody has to be paid, somebody has to reconcile a declined
+ * screen is a mockup. Host compensation has to be accounted for, somebody has to reconcile a declined
  * card, and somebody has to answer for a stale supplier quote.
  */
 
@@ -59,9 +59,9 @@ function HostConsole({ poolId }: { poolId: string | null }) {
             sub="funded by the buyers, never subsidised"
           />
           <Figure
-            label="Already earned"
+            label="Compensation earned"
             value={money(Number(earnings.paid_cents ?? 0))}
-            sub="a buyer who does not turn up cannot erase pay for the trip"
+            sub="recorded in the simulated transaction; no payout rail exists"
           />
         </div>
 
@@ -153,7 +153,7 @@ export function OperationsView({
           </button>
         </div>
         <h1 className="title" style={{ maxWidth: "24ch" }}>
-          Somebody has to be paid, and somebody has to reconcile it
+          Compensation has to be accounted for, and somebody has to reconcile it
         </h1>
         <p className="lede">
           The parts of a coordination product that are never in the pitch: the job as the

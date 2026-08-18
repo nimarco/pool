@@ -149,6 +149,31 @@ export function Chip({
   return <span className={cls}>{children}</span>;
 }
 
+/** A truthful wait state for one bounded coordinator invocation.
+ *
+ * There is deliberately no staged progress bar: until the response arrives the browser
+ * knows only that the request is in flight. The label names AgentCore only when the
+ * server advertised the live capability that the product action will use. */
+export function CoordinatorWait({ live }: { live: boolean }) {
+  return (
+    <div className="banner" role="status" aria-live="polite">
+      <IconCloud />
+      <span>
+        <strong>
+          Running Pool&apos;s coordinator
+          {live ? " on Amazon Bedrock AgentCore" : " in this workspace"}
+        </strong>
+        <br />
+        <span className="tiny">
+          {live
+            ? "One bounded run is working against this demo session’s DynamoDB workspace."
+            : "One bounded run is checking the Community’s standing needs."}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 export function Figure({
   label,
   value,

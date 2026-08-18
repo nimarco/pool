@@ -3,9 +3,9 @@
 **Nobody organised the group. Pool noticed.**
 
 Pool finds the moment when several people in one community independently need the same
-thing, works out whether buying it together is genuinely worth it, recruits and pays
-somebody to collect it, and runs the coordination that makes the informal version
-collapse.
+thing, works out whether buying it together is genuinely worth it, recruits a local
+fulfiller with buyer-funded compensation, and runs the coordination that makes the
+informal version collapse.
 
 Built for the [AWS Agents for Humans hackathon](https://agentsforhumans.devpost.com/) —
 **Good Neighbor Agents** track. The value is structurally collective: one person alone
@@ -25,9 +25,10 @@ for overlapping demand; when it finds some, open the pool it formed and drive th
 the host answering, a card being declined, the repair, the order, the handover — from the
 **Demo controls** drawer, which acts for the other synthetic participants.
 
-Then, on that pool's **Activity** tab, open **Agent execution** and press the one button
-on the site that actually leaves it: a real invocation of the same coordinator on Amazon
-Bedrock AgentCore Runtime.
+Then, on that same pool's **Activity** tab, open **Technical proof for this run**. It
+shows the exact AgentCore run that already formed the pool: run id, pool id,
+`created_by_run`, tool sequence, model, termination, and authoritative database readback.
+No second live invocation is needed; **Run again** is deliberately secondary.
 
 Or run everything locally, offline and free:
 
@@ -48,7 +49,7 @@ This already happens on every campus:
 
 The informal version works, badly. Someone guesses the demand, fronts hundreds of
 dollars of their own money, buys speculative stock, advertises afterwards, answers
-thirty messages, tracks who paid, arranges meetups, and eats the leftovers.
+thirty messages, tracks commitments, arranges meetups, and eats the leftovers.
 
 Pool runs the same job in reverse:
 
@@ -68,8 +69,9 @@ people independently declare recurring needs
 **Nobody creates the group. Pool discovers that the group can exist.** If the product
 ever becomes "create a group and invite your friends", the whole thesis is gone.
 
-The host is not a speculative reseller. They are a **paid fulfilment provider for
-pre-coordinated demand** — the goods are already sold before anyone buys them.
+The host is not a speculative reseller. They are a **compensated fulfilment provider for
+pre-coordinated demand** — their compensation is part of the buyer economics before the
+pool locks. The current demo records that compensation but has no payout rail.
 
 ---
 
@@ -149,12 +151,14 @@ both the web app and a twenty-four-endpoint API, plus one DynamoDB table.
 ```
 browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
                                              ├─ the built SPA (same origin, no CORS)
-                                             ├─ 23 allowlisted API paths
+                                             ├─ 24 allowlisted API paths
                                              ├─ DynamoDB — this session only, 24 h TTL
                                              └─ InvokeAgentRuntime — bound to this session
                                                        │
                                  AgentCore Runtime ◀───┘
-                                   └─ the same table, the same partition
+                                   └─ Strands + Bedrock → typed tools
+                                        → deterministic services → DynamoDB
+                                             └─ same run + pool read back to browser
 ```
 
 **The browser never holds an AWS credential.** The deployed AgentCore Runtime uses
@@ -185,11 +189,11 @@ real model, a real Strands loop, real Pool tools — inside a runtime session ge
 per invocation, **bound to the visitor's own DynamoDB workspace**. The pool that appears
 afterwards was formed by that run: its `created_by_run` is the run id the runtime
 reported, and the page renders it by re-reading the table rather than by drawing the
-model's answer. The same invocation is auditable from a pool's *Activity → Agent
-execution*, which reports the tool sequence, the model id, the token counts, the
-termination reason — and, separately, what the database held afterwards. It is capped,
-it is labelled, and if it fails it says so. **There is no code path that fabricates a
-run** (`AGENTS.md` §8).
+model's answer. The same invocation is auditable from a pool's *Activity → Technical
+proof for this run*, which reports the exact run and pool ids, `created_by_run`, tool
+sequence, model, token counts, termination reason, and same-workspace readback. It is
+capped and labelled, and if it fails it says so. A fresh invocation is not part of the
+demo path. **There is no code path that fabricates a run** (`AGENTS.md` §8).
 
 The runtime is a *participant* in a workspace, never its owner. The API seeds workspaces,
 resets them, and rations how many exist; the runtime's execution role can read and write
@@ -306,7 +310,7 @@ covers the processor's cut of that very charge. Computing it the naive way would
 under-recover by a few cents per buyer — a silent platform subsidy, which is exactly what
 the model forbids.
 
-If fair host pay erases the saving, the pool should not form. That is a correct outcome,
+If fair host compensation erases the saving, the pool should not form. That is a correct outcome,
 not a bug.
 
 ### Pool does not buy stock nobody ordered
@@ -411,11 +415,12 @@ Every run is bounded in the Strands event loop, not by asking the model nicely:
 | `MAX_AGENT_ITERATIONS` | 8 | Terminates the run as a recorded loop fault |
 | `MAX_TOOL_CALLS_PER_RUN` | 25 | Global circuit breaker |
 | `MAX_DUPLICATE_TOOL_CALLS` | 2 | Identical name+args cancelled as a loop |
-| `WORKFLOW_TIMEOUT_SECONDS` | 120 | Wall-clock kill switch |
+| `WORKFLOW_TIMEOUT_SECONDS` | 45 deployed (120 local default) | Cooperative wall-clock bound checked between model/tool steps; it does not interrupt a call already in progress |
 | `MAX_ROUTE_MATRIX_CELLS` | 100 | Checked *before* any routing call is billed |
 
 A run that hits a bound ends loudly with a `loop_fault` outcome — never a silent
-truncation that looks like a normal result. Background schedules ship **disabled**.
+truncation that looks like a normal result. The deployed judge account has **zero EventBridge rules**;
+no background schedule exists there.
 
 ---
 
@@ -449,8 +454,8 @@ the offers, the money, and the purchase. No goods move. No traction is claimed.
 the consequential recovery-and-lock path (`make verify-recovery`): a real model drives the
 real Strands loop and the real Pool tools, and the deterministic viability engine refuses
 the lock it is not allowed to take. **The AgentCore Runtime is deployed** and answering.
-Everything else is implemented and synthesizing but **not yet verified against a live
-account**. Nothing in this repository claims a deployment that has not happened.
+The pilot-shaped stack also synthesizes, but it is not the deployed judge architecture.
+Nothing in this repository claims a deployment that has not happened.
 
 | Service | Role | Status |
 | --- | --- | --- |
@@ -460,7 +465,7 @@ account**. Nothing in this repository claims a deployment that has not happened.
 | DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified** — the complete 13-step lifecycle runs on the real table with identical economics |
 | API Gateway + Lambda | Pilot-shaped API | In `PoolStack`, which is **not** what the public demo deploys |
 | S3 + CloudFront | Pilot-shaped web hosting | In `PoolStack`. The public demo needs neither |
-| EventBridge | Background scan | In `PoolStack`, **created disabled** |
+| EventBridge | Optional future background scan | Implemented only in the un-deployed `PoolStack`; **zero rules exist in the deployed judge account** |
 | Amazon Location | `geo-routes`, no provisioned calculator | Implemented, unverified |
 | CloudWatch | Structured run records, retention capped at 14 days | In both stacks |
 

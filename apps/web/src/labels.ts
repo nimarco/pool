@@ -22,9 +22,9 @@ export function groupSavingsCaption(pool: {
   economics: { net_savings_cents: number } | null;
   is_estimate: boolean;
 }): string {
-  if (!pool.economics) return "host pay is not fixed until a host accepts";
+  if (!pool.economics) return "host compensation is not fixed until a host accepts";
   const amount = money(pool.economics.net_savings_cents);
   return pool.is_estimate
-    ? `about ${amount} across the group, estimated using provisional host pay`
-    : `${amount} across the group, after merchandise, host pay, card processing and Pool's fee`;
+    ? `about ${amount} across the group, estimated using provisional host compensation`
+    : `${amount} across the group, after merchandise, host compensation, card processing and Pool's fee`;
 }

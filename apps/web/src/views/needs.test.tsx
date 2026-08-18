@@ -60,6 +60,7 @@ function renderNeeds() {
       onFind={() => {}}
       running={false}
       hasPool={false}
+      liveDiscovery={false}
     />,
   );
 }

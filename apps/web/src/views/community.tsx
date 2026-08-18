@@ -143,7 +143,7 @@ function DecisionCard({
           </p>
           <div className="inset facts" style={{ marginTop: 12 }}>
             <Fact label="Merchandise" value={money(breakdown.merchandise ?? 0)} />
-            <Fact label="Host pay" value={money(breakdown.host_compensation ?? 0)} />
+            <Fact label="Host compensation" value={money(breakdown.host_compensation ?? 0)} />
             <Fact label="Pool fee" value={money(breakdown.pool_fee ?? 0)} />
             <Fact label="Processing" value={money(breakdown.payment_processing ?? 0)} />
             <Fact label="Pickup" value={String(f.pickup_site)} />
@@ -198,6 +198,15 @@ function fold(events: ActivityEvent[]): { lead: ActivityEvent; count: number }[]
   return groups;
 }
 
+function activityKindLabel(event: ActivityEvent): string {
+  if (event.kind === "payment_captured") {
+    const mode = String(event.facts.provider_mode ?? "");
+    if (mode === "simulated") return "simulated capture recorded";
+    if (mode === "test") return "test-mode capture recorded";
+  }
+  return event.kind.replace(/_/g, " ");
+}
+
 export function Feed({ events, limit }: { events: ActivityEvent[]; limit?: number }) {
   if (events.length === 0) {
     return <Empty>Nothing has happened yet.</Empty>;
@@ -217,7 +226,7 @@ export function Feed({ events, limit }: { events: ActivityEvent[]; limit?: numbe
             <div className="tl-body">
               <div className="tl-text">{lead.summary}</div>
               <div className="tl-meta">
-                {lead.kind.replace(/_/g, " ")} · {shortTime(lead.at)}
+                {activityKindLabel(lead)} · {shortTime(lead.at)}
                 {count > 1 ? ` · and ${count - 1} more like it` : ""}
               </div>
             </div>
@@ -278,6 +287,7 @@ export function CommunityView({
   onOperations: () => void;
 }) {
   const m = state.metrics;
+  const enablement = state.community?.enablement;
 
 
   return (
@@ -292,6 +302,62 @@ export function CommunityView({
         </div>
       </header>
 
+      {enablement ? (
+        <section className="panel">
+          <div className="panel-head">
+            <h3>How this Community enables Pool</h3>
+            <span className="spacer" />
+            <Chip>synthetic fixture</Chip>
+          </div>
+          <div className="panel-pad stack-sm">
+            <p className="small muted prose">
+              Pool is designed as recurring purchasing infrastructure for existing
+              communities — campuses, apartment buildings, neighbourhoods and workplaces.
+              The Community supplies demand density, a bounded membership and possible
+              shared collection sites; Pool remains responsible for discovering demand and
+              coordinating a viable transaction.
+            </p>
+            <div className="grid grid-3">
+              <Fact
+                label="Membership boundary"
+                value={`${enablement.verified_members} of ${enablement.total_memberships} fixture memberships verified`}
+              />
+              <Fact
+                label="Independent demand"
+                value={`${enablement.independent_need_declarers} members declared needs separately`}
+              />
+              <Fact
+                label="Designated pickup"
+                value={`${enablement.designated_pickup_sites.length} fixture sites · ${[...new Set(enablement.designated_pickup_sites.map((site) => site.permission))].join(", ")}`}
+              />
+            </div>
+            <div className="banner">
+              <strong>Community enables</strong>
+              <span>→</span>
+              <strong>Pool coordinates</strong>
+              <span>→</span>
+              <strong>Members choose and collect</strong>
+            </div>
+            <p className="tiny muted prose">
+              The Community may verify membership, permit a site or window, set site rules
+              and tell members the service exists. Pool handles matching, economics, host
+              coordination, commitments, recovery, records and pickup coordination. Members
+              set their own needs and constraints, approve and fund their own allocations,
+              and collect them.
+            </p>
+            <p className="tiny muted prose">
+              The Community does not buy or front inventory, choose products, create or
+              invite the group, collect money, or chase payment failures.
+            </p>
+            <p className="tiny faint">
+              “Demo” verification and pickup permission describe synthetic records only;
+              they do not imply an institutional partnership, endorsement or real-world
+              permission.
+            </p>
+          </div>
+        </section>
+      ) : null}
+
       <section className="grid grid-3">
         <Figure
           label="If everyone bought alone"
@@ -301,13 +367,13 @@ export function CommunityView({
         <Figure
           label="All-in through Pool"
           value={money(m.pool_spend_cents)}
-          sub="merchandise, host pay, card processing and Pool's fee together"
+          sub="merchandise, host compensation, card processing and Pool's fee together"
         />
         <Figure
           label="Kept in the community"
           value={money(m.collective_savings_cents)}
           accent
-          sub={`${money(m.average_buyer_savings_cents)} each on average, after merchandise, host pay, card processing and Pool's fee`}
+          sub={`${money(m.average_buyer_savings_cents)} each on average, after merchandise, host compensation, card processing and Pool's fee`}
         />
       </section>
 
@@ -381,7 +447,7 @@ export function CommunityView({
               <LedgerLine label="Card processing" value={money(m.payment_processing_cents)} />
               <LedgerLine label="Pool's share of the saving" value={money(m.platform_fee_cents)} />
               <LedgerLine
-                label="Total the group paid"
+                label="Recorded all-in buyer cost"
                 value={money(m.pool_spend_cents)}
                 kind="total"
               />
@@ -436,10 +502,11 @@ export function CommunityView({
 
       <Block title="Behind the counter">
         <p className="small muted prose">
-          Somebody has to be paid and somebody has to reconcile a declined card. The
-          operations console holds the fulfilment job as the person carrying the boxes
-          sees it, the supplier quotes a final price is not allowed to rest on, and every
-          authorisation and capture with its failure code intact.
+          Host compensation has to be accounted for and somebody has to reconcile a
+          declined card. The operations console holds the fulfilment job as the person
+          carrying the boxes sees it, the supplier quotes that a final offer must never
+          rest on once stale, and every authorisation and capture with its failure code
+          intact.
         </p>
         <div className="btn-row" style={{ marginTop: 14 }}>
           <button className="btn btn-sm" onClick={onOperations}>

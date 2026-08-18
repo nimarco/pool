@@ -11,7 +11,7 @@ a Devpost account, cannot own a Builder ID, and cannot confirm that a video play
 stranger. Those lines say `TODO (human)` and stay that way until a person changes them.
 
 Deadline: **2026-09-14, 5:00 pm PDT.** Verified against
-<https://agentsforhumans.devpost.com/> on 2026-08-15; re-verify before relying on any
+<https://agentsforhumans.devpost.com/> on 2026-08-18; re-verify before relying on any
 line here for a submission decision.
 
 ---
@@ -34,7 +34,7 @@ line here for a submission decision.
 | --- | --- | --- |
 | README with setup and run instructions | **Verified** | `README.md`; commands are the Makefile's and are run by `make qa` |
 | Architecture diagram | **Verified** | `docs/architecture.svg`, hand-authored, readable at video resolution |
-| Diagram shows only deployed services | **Verified** | Planned services are in a separate "Future — not built" section of `docs/ARCHITECTURE.md` |
+| Diagram distinguishes deployed from absent services | **Verified** | Solid judge path is deployed; dashed pilot components say implemented but not deployed; EventBridge says zero deployed rules |
 | Public demo URL, reachable with no AWS account | **Verified** | <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/> |
 | Demo stays free to test throughout judging | **TODO (human)** | Depends on credits lasting. `make cost-check` weekly; `make demo-kill` is the emergency stop |
 | Public video, **5 minutes maximum** | **TODO (human)** | Not recorded. Must cover the problem, the users, and why it matters |
@@ -59,13 +59,14 @@ the safe reading is to use that exact phrase and not depend on the hashtag.
 
 | Item | Status | Note |
 | --- | --- | --- |
-| `make qa` green — lint, typecheck, Python tests, web tests, build, secret scan | **Verified** | See BUILD_HISTORY for the run and its counts |
+| `make qa` green — lint, typecheck, Python tests, web tests, build, secret scan | **Verified** | 734 agent/API/domain tests, 75 infrastructure tests, 20 frontend tests; ruff, ESLint, TypeScript, build and secret scan passed |
 | Frontend lint actually runs | **Verified** | ESLint installed and wired into `make lint`; it was referenced but absent until 2026-08-18 |
 | Infrastructure tests green | **Verified** | `infra/test_stack.py`, `infra/test_demo_stack.py` |
 | Production dependency audit clean | **Verified** | `npm audit --omit=dev` → 0 vulnerabilities. Two dev-only Vite/esbuild advisories remain, fixable only by a major upgrade; deferred deliberately |
-| One fresh live AgentCore run captured after the final deploy | **TODO** | Invocation id, tool sequence, termination reason, token usage, DynamoDB readback |
-| Cost check — no schedules, no always-on resources | **TODO** | `make cost-check` |
-| Resource ledger in BUILD_HISTORY reconciled | **TODO** | Every entry destroyed or deliberate (AGENTS.md §3.8) |
+| One fresh Product-originated AgentCore run captured after final deploy | **Verified** | Workspace `w0z2b3v2r6c3b0q6l`; `run_3954c1d2d97f` → `pool_e36b32c84ee2`; exact `created_by_run`, stored tools and readback verified |
+| Same live run remains the pool's technical proof after full lifecycle | **Verified** | Completed 10/10 handoffs, reloaded, and deep-linked from Home without using `Run again` |
+| Cost check — no schedules, no always-on resources | **Verified** | Account-wide EventBridge rule count is 0; one existing AgentCore runtime is `READY` and idle between invocations |
+| Resource ledger in BUILD_HISTORY reconciled | **Verified** | No new logical resources; CDK staging bucket measured at 36 objects / 544,983,237 bytes |
 
 ## 5. Final tag and link verification
 

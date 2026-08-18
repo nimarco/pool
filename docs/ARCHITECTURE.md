@@ -43,6 +43,16 @@ verdicts, viability — is a pure function of its inputs. That is why the whole 
 is testable without a fixture, and why swapping in DynamoDB, Bedrock, or Stripe changes
 nothing about what a price is.
 
+The deployed discovery request and its proof make one round trip:
+
+```text
+browser → Lambda → AgentCore Runtime → Strands + Bedrock → typed Pool tools
+        → deterministic services → DynamoDB → Lambda readback → browser
+```
+
+The final arrow is load-bearing: the UI displays the stored run and pool relationship,
+not a model-authored claim about what happened.
+
 ---
 
 ## AI decides what to do. Deterministic code determines what is true.
@@ -252,7 +262,7 @@ Enforced in the Strands event loop as a hook provider, not by asking the model n
 | `MAX_AGENT_ITERATIONS` | 8 | Raises → run recorded as `loop_fault` |
 | `MAX_TOOL_CALLS_PER_RUN` | 25 | Cancels the tool with an explanatory result |
 | `MAX_DUPLICATE_TOOL_CALLS` | 2 | Identical name+args cancelled as a loop |
-| `WORKFLOW_TIMEOUT_SECONDS` | 120 | Raises |
+| `WORKFLOW_TIMEOUT_SECONDS` | 45 deployed; 120 local default | Cooperative check between model/tool steps → raises; cannot interrupt a call already running |
 | `MAX_ROUTE_MATRIX_CELLS` | 100 | Checked *before* the call is made and billed |
 
 Tool-level bounds cancel so the model can wind down cleanly; run-level bounds raise,
@@ -282,19 +292,18 @@ member's details into an artifact that gets published.
 
 ---
 
-## Local and cloud
+## Local, deployed judge path, and pilot-only implementation
 
-| Concern | Local (default) | Cloud |
-| --- | --- | --- |
-| Model | Deterministic planner, real Strands loop | Bedrock via Strands |
-| State | In-memory | DynamoDB |
-| Routing | Pure function of coordinates | Amazon Location `geo-routes` |
-| Payments | Simulated provider | Stripe **TEST** |
-| Purchase | Simulated executor | Simulated executor |
-| API | uvicorn | API Gateway + Lambda (Mangum) |
-| Web | Vite dev server | S3 + CloudFront |
-| Agent host | In-process | AgentCore Runtime |
-| Background | Manual trigger only | EventBridge, **created disabled** |
+| Concern | Local default | Deployed judge path | Implemented pilot stack, not deployed |
+| --- | --- | --- | --- |
+| Opportunity discovery | Deterministic planner in the real Strands loop | AgentCore Runtime + Bedrock + Strands | Same AgentCore entrypoint |
+| Remaining lifecycle | Deterministic planner in the real Strands loop | Deterministic planner in Lambda | Deterministic planner unless configured otherwise |
+| State | In-memory | DynamoDB, one table, per-workspace TTL | DynamoDB |
+| Routing | Pure function of coordinates | Same deterministic adapter; labelled simulated | Amazon Location `geo-routes` adapter available |
+| Payments | Simulated provider | Simulated provider | Stripe **TEST** adapter available; live keys refused |
+| Purchase | Simulated executor | Simulated executor | Simulated executor |
+| API / web | uvicorn + Vite | One Lambda Function URL serves SPA + 24 of 40 API paths | API Gateway + Lambda; S3 + CloudFront |
+| Background | Manual trigger only | **Absent: zero EventBridge rules deployed** | EventBridge definition exists and defaults disabled if this stack is ever deployed |
 
 The offline planner replaces the LLM and only the LLM: the same Strands event loop, the
 same tools, the same domain maths, the same state machine, the same policy engine. It
@@ -314,10 +323,12 @@ synthesizing:
 | DynamoDB | **Verified.** The complete lifecycle runs on a real table with identical economics; the first live write found a `Decimal` bug no fake could have. |
 | Lambda Function URL | **Verified.** The public judge demo — the SPA and the reduced API from one function, on one origin. |
 
-Still **implemented but never called against the live service**: EventBridge (ships
-disabled) and Amazon Location. Neither is on the judge path, and both are named here
-rather than quietly implied. Nothing in this repository claims a deployment that has not
-happened; `docs/HACKATHON_SCORECARD.md` carries the evidence per item.
+Still **implemented but never called against the live service**: the EventBridge
+definition in the un-deployed pilot stack and the Amazon Location adapter. The judge
+account has zero EventBridge rules; “disabled” is not used as shorthand for a resource
+that does not exist. Neither component is on the judge path. Nothing in this repository
+claims a deployment that has not happened; `docs/HACKATHON_SCORECARD.md` carries the
+evidence per item.
 
 Not in the CDK stack, deliberately:
 
@@ -330,8 +341,11 @@ Not in the CDK stack, deliberately:
 
 The deployed coordinator runs against **the same DynamoDB partition the browser is
 reading**, so the pool a visitor sees was formed by the run on AWS rather than replayed
-from its answer. Two stacks, deployed by two different tools, therefore have to agree
-about one resource:
+from its answer. Candidate-pool creation stamps `created_by_run`; the API follows that
+exact id to the stored run in the same workspace and returns a causal proof containing
+the run id, pool id, tool sequence, outcome, termination and same-workspace readback. It
+never substitutes “latest run.” Two stacks, deployed by two different tools, therefore
+have to agree about one resource:
 
 | Constant | Where |
 | --- | --- |
@@ -362,11 +376,11 @@ idempotency key with a conditional put and hands the loser the winner's pool id,
 single-use pickup redemption is claimed with a conditional update so two simultaneous
 scans of one credential complete exactly one handoff.
 
-Three deadlines nest, innermost first, so whichever fires produces a structured answer
-rather than a dropped connection: the agent's 45 s wall-clock bound, the bridge's 60 s
-read timeout, the Lambda's 90 s timeout. The innermost one is **cooperative** — checked
-before each model and tool call — so it ends a run that is taking too long; a call that
-has already hung is bounded by the two outer rungs, which own the process.
+Three deadlines nest, innermost first: the agent's 45 s wall-clock bound, the bridge's
+60 s read timeout, and Lambda's 90 s timeout. The innermost one is **cooperative** —
+checked before each model and tool call — so it stops scheduling another step and records
+a fault when it fires. It cannot interrupt a call already in progress; the two outer
+rungs own the process-level deadlines.
 
 ---
 

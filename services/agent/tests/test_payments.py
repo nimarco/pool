@@ -398,6 +398,13 @@ def test_capture_only_happens_at_lock(ctx):
     result = payment_service.capture_pool(ctx=ctx, pool_id=pool.id)
     assert result["purchase_ready"] is True
     assert ctx.repo.get_pool(WS, pool.id).status == PoolStatus.PURCHASE_READY
+    captured_event = next(
+        event for event in ctx.repo.list_activity(WS) if event.kind == "payment_captured"
+    )
+    assert captured_event.summary == (
+        "Simulated capture recorded: $50.00 across 1 buyer(s); "
+        "the order is ready to purchase"
+    )
 
 
 def test_capture_failure_leaves_the_pool_locked_for_operator_review(ctx):

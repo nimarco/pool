@@ -1,18 +1,20 @@
 /* Pools — the community's orders, past and in flight. */
 
 import { AppState, money, statusCopy } from "../api";
-import { Chip, Empty, IconArrowRight, Meter } from "../ui";
+import { Chip, CoordinatorWait, Empty, IconArrowRight, Meter } from "../ui";
 
 export function Pools({
   state,
   onOpen,
   onFind,
   running,
+  liveDiscovery,
 }: {
   state: AppState;
   onOpen: (id: string) => void;
   onFind: () => void;
   running: boolean;
+  liveDiscovery: boolean;
 }) {
   return (
     <div className="stack">
@@ -34,8 +36,9 @@ export function Pools({
           <div className="panel-pad" style={{ paddingTop: 0 }}>
             <button className="btn btn-primary" onClick={onFind} disabled={running}>
               {running ? <span className="spinner" /> : null}
-              {running ? "Looking…" : "Find opportunities"}
+              {running ? "Coordinator running" : "Find opportunities"}
             </button>
+            {running ? <CoordinatorWait live={liveDiscovery} /> : null}
           </div>
         </section>
       ) : (

@@ -1,208 +1,161 @@
-# Demo script — five minutes
+# Demo rehearsal script — about 4:50
 
-One journey. The implementation is sophisticated; the story must not be.
+This is a navigation and timing rehearsal, not a final word-for-word voiceover. The
+presentation pass happens later.
 
-**The line everything hangs off:**
+The line everything hangs off:
 
 > **Nobody organised the group. Pool noticed.**
 
-Do not spend the video explaining every state, every adapter, every host formula, or
-every future legal question. Show one purchase happening.
+The defining technical rule is equally simple:
 
-The rubric is five equally weighted criteria, and the video is graded on **Presentation**
-while also being most judges' only exposure to **Design** and **Potential Impact**. So
-the video's job is not to enumerate features. It is to make one purchase legible, prove
-the agent is real, and prove the money is honest.
-
----
+> **One live AgentCore invocation.** The `Find opportunities` run is the same stored run
+> shown later under `Technical proof for this run`. Never invoke the runtime again in the
+> recording.
 
 ## Before recording
 
-```bash
-make qa          # everything green before you film anything
-make dev         # API :8000, web :5173
-```
+1. Run `make qa` and the release checks.
+2. Use the deployed URL, open a fresh disposable workspace, and reset Demo University.
+3. Confirm the drawer says: discovery uses AgentCore / Bedrock; the lifecycle uses the
+   deterministic planner; payments and supplier ordering are simulated.
+4. Leave the Product on **Needs**, signed in as Rosa.
+5. Keep one continuous browser journey. A short edit over the real AgentCore wait is
+   fine; switching to a different run or workspace is not.
 
-Record against the **deployed URL**, not localhost, so the live AgentCore action is
-available and the address bar is itself evidence. Open it, use **Demo University → Reset
-Demo University**, and leave the browser on Home.
+## 0:00–0:18 — The input is a recurring need
 
-Say what is synthetic once, early — the drawer's *What is real here* block has the exact
-wording. Everything after it is easier to trust.
+**Product → Needs → Rosa's whey declaration → Change.**
 
-Have a second terminal with `make demo` typed but not run — it produces the same
-lifecycle as a text transcript from the same code path, and it is a legitimate fallback.
+Establish only the product inversion: Rosa states what she buys anyway. She does not
+create a group, invite anyone, or know who else wants it.
 
----
+## 0:18–0:37 — Change one real constraint
 
-## 0:00–0:20 — The problem
+**Change minimum savings from 20% to 21% → Save.**
 
-**Show:** Pool's home screen, signed in as Rosa.
+The saved declaration is re-read from the server. This makes the later opportunity an
+answer to current stored preferences, not a pre-rendered scenario.
 
-> Every campus already does this. Someone posts: *"I can buy 50 tubs of protein powder
-> way cheaper than the store — message me if you want one."*
->
-> It works, badly. That person guesses the demand, fronts their own money, answers thirty
-> messages, chases payment, and eats whatever is left. They are not paid for any of it.
-> So it happens once and stops.
+## 0:37–0:55 — Independent latent demand
 
-## 0:20–0:50 — What a member actually has
+**Go to Home.**
 
-**Point at:** *What you buy anyway*.
+Point to the standing needs and convergence figure. Each member declared independently;
+no member noticed or organised the overlap.
 
-> This is Pool. Rosa told it two things she buys regularly and then forgot about it. No
-> group, no chat, no sign-up sheet — and twenty-four people in this community have each
-> done the same thing, thirty-three standing needs between them.
+## 0:55–1:18 — One live discovery run
 
-**Point at:** the figure beside *Pool is watching*.
+**Click `Find opportunities` exactly once.**
 
-> Each line is one person's restock date. Eight fall due in the same week — eighteen
-> units, and the supplier will not sell fewer than twenty-four. Two more would not have
-> bought for weeks, and Pool may bring them forward *only* because those two authorised
-> an early purchase. Their six units close the gap exactly.
+The wait state should say that Pool's coordinator is running on Amazon Bedrock AgentCore
+against this demo session's DynamoDB workspace. Show roughly three seconds of the honest
+wait, then cut or fast-forward. Resume only when that same request returns.
 
-## 0:50–1:20 — Pool notices
+Do not open Showcase's live page and do not press `Run again` later.
 
-**Click:** *Find opportunities.*
+## 1:18–1:38 — The resulting pool
 
-> Nobody creates a group. Pool's coordinator looks across the standing needs and decides
-> whether an order is worth forming at all.
+**Open the opportunity returned by that run.**
 
-**Show:** the opportunity that appears.
+Show 10 people, 24 units, and the whole-case result with no speculative surplus. The pool
+exists because the live coordinator created it, not because the browser drew a result.
 
-> Ten people. Twenty-four units. A pool exists that none of them asked for.
+## 1:38–1:58 — Host first, then final terms
 
-**Click:** *Open the pool.*
+**Demo University drawer → Gio accepts the fulfilment job → Let Pool work the queue.**
 
-## 1:20–2:00 — The record, and the money
+Offering to host did not claim the job: Pool ranked candidates and offered it to the best
+eligible one. Only after acceptance can host compensation enter the exact buyer price.
 
-**Show:** the pool's Overview, then Economics.
+## 1:58–2:24 — Exact economics
 
-> This is a real record, not a summary. Who is carrying it, where it is collected, and
-> thirteen checks that all have to pass before anything is bought.
->
-> And the part I would want as a buyer. Seven hundred and fifty-six dollars of
-> merchandise. Forty-four sixty-eight to the host — funded by the buyers, not by us.
-> Twenty-eight of card processing. Thirty-two seventy to Pool.
->
-> All-in eight sixty-one forty-four, against eleven twenty-seven if these ten people had
-> each walked to the campus store. Twenty-three point six percent, *after* everything.
-> Pool's fee is a share of the saving, so no saving means no fee.
+**Pool → Economics.**
 
-## 2:00–2:40 — The other nine people
+Show the final ledger: $861.44 all-in versus $1,127.76 retail, $266.32 collective
+savings, after merchandise, host compensation, processing and Pool's fee. Say that these
+figures are deterministic outputs. Payments and the supplier order are simulated.
 
-**Open:** *Demo University → Demo controls.*
+## 2:24–2:50 — Failure retained, recovery visible
 
-> Pool is a three-sided product and I am one person, so this is where I act for everyone
-> else. Every one of these calls the same endpoint that participant would — the host
-> answering an offer, the buyers answering theirs.
+**Pool → People.**
 
-**Click:** *accepts the fulfilment job*, then *Let Pool work the queue*.
+Show 10 buyers and 11 memberships on the record: one exact-amount authorization failed,
+the failed membership remains visible, and one compatible replacement restores exactly
+24 units. Do not say the failed buyer paid.
 
-> The host accepts, so the price can be exact. Pool prices it, and eight of these buyers
-> had already told it their rules — minimum saving, maximum spend, maximum walk. Those
-> pass, so Pool commits for them. Two did not, so they get one question each.
+## 2:50–3:20 — Decisions, lock, order, pickup
 
-## 2:40–3:20 — Failure, and repair
+Use only the existing drawer controls:
 
-**Show:** the pool's Buyers, and the record's count.
+1. remaining buyers answer their questions;
+2. let Pool work the queue;
+3. open the pickup window;
+4. everyone collects their order.
 
-> And one card is declined. This is where a group buy normally dies in a chat.
->
-> Ten people were matched. One payment failed, one replacement was recruited — so ten
-> people still buy, and the record carries eleven memberships. The declined one stays
-> here. A record that edits out its failures is not a record.
+These controls call participant and scheduler endpoints; they do not set lifecycle state
+directly. Authorizations, simulated captures, the simulated supplier order, and one-time
+handoff credentials remain distinct.
 
-**Click:** *Buyers answer*, then *Let Pool work the queue*, then *Open the pickup
-window*, then *Everyone collects their order*.
+## 3:20–3:42 — Fulfilment completes
 
-> Funded, locked, ordered — clearly labelled simulated — and handed over against a
-> one-time code that works exactly once.
+**Pool → Fulfilment.**
 
-## 3:20–4:10 — The agent is real
+Show 10/10 handoffs. Host compensation is earned and recorded in the simulated
+transaction; Pool does not claim that a payout rail exists.
 
-**Go to:** the pool's *Activity* tab → **Agent execution**. Press **Run the deployed
-agent**.
+## 3:42–4:20 — Same-run technical proof
 
-> The pool at the start of this was found by the coordinator deployed on Amazon Bedrock
-> AgentCore Runtime — a real model, in a session generated per invocation, working on
-> this visitor's own DynamoDB workspace. Not a copy of it. The row you have been reading
-> all the way through carries that run's id.
->
-> Everything after that ran on the server — the same Strands event loop, the same tools,
-> the same domain arithmetic, with a deterministic planner in the model's place. That is
-> deliberate: a product that needs a paid model call to render every page is a product
-> that breaks in front of someone.
->
-> This button runs the deployed one again, from the auditor's side. Ten to twenty seconds.
+**Pool → Activity.** Briefly show the stored recovery event, then click
+**`Technical proof for this run`**.
 
-**While it runs, point at:** the tool catalogue.
+Show, without invoking anything:
 
-> These are the only twelve things the model can reach. No shell, no query language, no
-> generic mutation. Seven read, four commit something, one ends the run — and every
-> committing tool is idempotent by an explicit key, because agent systems retry.
+- Amazon Bedrock AgentCore Runtime live, region, model provider and model;
+- the exact run id and resulting pool id;
+- `Pool created_by_run`, equal to that run id;
+- the exact stored tool sequence, outcome and termination;
+- authoritative run + pool readback from the same workspace;
+- browser → Lambda → AgentCore → Strands / Bedrock → typed tools → deterministic
+  services → DynamoDB → browser.
 
-**When it returns:** point at the marked tools, the three durations, then the block
-below them.
+`Run again` is collapsed and secondary. Do not open it.
 
-> There is what it chose, in order. Time inside the agent, time inside AWS, and the
-> browser's own round trip — three separately measured numbers. If this call had failed,
-> the screen would say so. There is no code path in this repository that fabricates a
-> run.
->
-> And this last part is not the agent's report — it is what the database held afterwards,
-> read back by the server from the same table it serves every other page from. That is
-> the difference between an agent that says it did something and one that did it.
+## 4:20–4:50 — Community infrastructure and impact
 
-## 4:10–4:40 — The architecture, in one sentence
+**Community.**
 
-**Show:** the *What is running where* block at the foot of Agent execution, or the
-diagram.
+Close on the visible model:
 
-> Browser to a Lambda Function URL, which signs an invocation of AgentCore Runtime bound
-> to this visitor's workspace. Inside it, a bounded Strands loop and Amazon Bedrock. State
-> in one DynamoDB table, isolated per visitor — and the runtime writes that same table, so
-> the agent on AWS is the one that formed the pool. It can read and write there; it cannot
-> delete.
->
-> And the rule underneath all of it: **the model decides what to do; deterministic code
-> decides what is true.** Every price on every screen came from a tool, not from a
-> sentence a model wrote.
+> **Community enables → Pool coordinates → Members choose and collect.**
 
-## 4:40–5:00 — Who it is for, and the close
+Pool is designed as recurring purchasing infrastructure for existing communities: a
+campus, apartment building, neighbourhood, workplace or community organisation can
+supply a membership boundary and possible pickup sites. Pool remains responsible for
+demand discovery, viable economics, host coordination and transaction state. Demo
+verification and pickup permissions are synthetic and imply no institutional
+partnership.
 
-**Show:** Community.
+End with the collective outcome, not feature inventory:
 
-> A community is a trust-and-density boundary — a campus, an apartment block, a
-> workplace, a school. Bulk pricing normally favours whoever can afford a bigger purchase
-> up front and has somewhere to put it. This is a way to reach that price without each
-> person carrying the capital, the quantity, the storage and the coordination alone.
->
-> The buyer saves. The host earns for work they actually did. The supplier gets a clean
-> bulk order.
->
-> Nobody organised the group. Pool noticed.
+> The buyers get viable bulk economics without organising the group. The host earns
+> recorded compensation for the fulfilment work represented in the workflow. The
+> supplier receives one clean bulk order. Nobody organised the group. Pool noticed.
 
----
+## Continuity rules
 
-## Rules for the recording
-
-- **Say what is simulated, once, early.** It buys credibility for everything after it.
-- **Never say "deployed"** unless it is, at that moment, deployed and on screen.
-- **Never say a number the screen is not showing.**
-- Do not narrate the state machine. Do not narrate the adapters. Do not explain the
-  merchant-of-record question. All of it is in the docs for anyone who wants it.
-- Arrow keys step the lifecycle reader, so both hands stay off the mouse there.
-- If the demo breaks on camera: **Demo University → Reset Demo University** and re-run.
-  It is deterministic and will produce the same numbers.
-- The thirteen-stage reader lives on the pool's *Activity* tab as **How this pool
-  happened**. Use it if you want the failure and the repair spelled out with figures —
-  but the product already showed both, so it is optional.
+- One workspace, one `Find opportunities` click, one live AgentCore invocation.
+- A video cut may shorten the wait; it must not replace the run or its result.
+- Never say “deployed,” “paid,” “captured,” “final,” or “permission” more strongly than
+  the screen supports.
+- Never say a number not visible on screen.
+- If the live call fails, keep the honest failure visible and stop the rehearsal. Do not
+  spend a second invocation trying to manufacture a clean take.
+- Do not record until the rehearsal confirms the exact run id, pool id and
+  `created_by_run` relationship survive the entire journey.
 
 ## Backup
 
-If the UI misbehaves, `make demo` prints the same lifecycle as a transcript from the same
-code path. It is a legitimate fallback, not a different demo.
-
-If the live AgentCore action fails on camera, **say so and move on** — the screen already
-says it, and a recorded failure is worth more than a re-shoot that hides it.
+`make demo` produces a deterministic lifecycle transcript from the same domain and tool
+code. It is a truthful fallback for explaining the lifecycle, but it is not a substitute
+for the single live discovery proof required by the primary recording.

@@ -56,8 +56,14 @@ live store, and a public demo URL a judge can open with no AWS account** (#0019,
   a per-buyer processing gross-up so nobody is silently subsidised; a bounded exact search
   that picks the buyer set filling whole cases; a two-stage viability engine.
 - **Bounded autonomy, enforced not requested.** 8 iterations, 25 tool calls, duplicate
-  detection, 120 s wall clock, 100-cell route matrix — all configurable, all proven by
-  driving deliberately misbehaving models through the real event loop.
+  detection, a 45 s wall clock on both deployed paths (120 s locally), 100-cell route
+  matrix — all configurable, all proven by driving deliberately misbehaving models
+  through the real event loop. The wall clock is *cooperative*: it is checked before
+  each model and tool call, so it ends a run that is taking too long rather than
+  interrupting one that has hung. The bridge's 60 s read timeout and the Lambda's
+  90 s timeout are the rungs that bound a hung call. There is deliberately **no
+  generic tool-retry bound**, because there is no generic tool retry: re-running a
+  consequential call is the wrong default for a system that moves money.
 - **Idempotency everywhere it matters.** Duplicate pool creation, authorisation, capture,
   withdrawal, purchase, and webhook delivery are each tested by doing them twice.
 - **Payment state machine with real failure paths.** Authorise → capture at lock, with
@@ -132,7 +138,7 @@ public URL.
 - **Verified responsive and dark-mode correct**, with no horizontal overflow at 375 px on
   any view, and small text at ≥4.5:1 in both themes.
 
-**The public judge experience** (#0024–#0025, deployed and cloud-verified): one URL, no account, no setup. The API a judge can reach is twenty-three paths of
+**The public judge experience** (#0024–#0025, deployed and cloud-verified): one URL, no account, no setup. The API a judge can reach is twenty-four endpoints of
 forty-five; the client cannot send the agent a prompt; every action that costs anything
 is capped per session and per day; anonymous sessions are isolated by DynamoDB partition
 and expire in 24 hours. Almost everything runs deterministically on the server, with

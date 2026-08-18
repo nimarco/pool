@@ -65,23 +65,36 @@ the tool's value — not the model's paraphrase of it.
 
 Twelve narrow, typed tools. No shell, no arbitrary query, no generic mutation.
 
+Four effect kinds, because three could not describe the surface honestly. `read` writes
+nothing at all. `record` writes Pool's own working state — an evaluation it wants to be
+able to show its reasoning from, or a lifecycle status catching up with facts that are
+already true — but commits nothing anyone can observe. `act` is consequential. `end`
+closes the run.
+
 | Tool | Kind |
 | --- | --- |
 | `list_latent_demand` | read |
 | `evaluate_pool_economics` | read |
 | `inspect_pool` | read |
 | `list_pools_needing_attention` | read |
-| `create_candidate_pool` | consequential — commits no money |
-| `find_host_candidates` | read |
-| `request_host_acceptance` | consequential |
-| `issue_final_offer` | consequential — refreshes the quote, authorises or asks |
-| `recover_pool` | consequential |
-| `lock_pool` | consequential — irreversible for buyers |
-| `execute_purchase` | consequential — simulated in this build |
-| `record_no_action` | terminal |
+| `create_candidate_pool` | act — commits no money |
+| `find_host_candidates` | record — opens recruiting, stores each candidate's evaluation |
+| `request_host_acceptance` | act |
+| `issue_final_offer` | act — refreshes the quote, authorises or asks |
+| `recover_pool` | act |
+| `lock_pool` | act — irreversible for buyers |
+| `execute_purchase` | act — externally consequential, simulated in this build |
+| `record_no_action` | end |
 
-Every consequential tool is idempotent by an explicit key, because agent systems retry and
-a retried `create_candidate_pool` must not produce two pools.
+`find_host_candidates` was published as a `read` — here, in the API, and on the Showcase
+page — while opening host recruiting and persisting a candidate record per evaluation.
+The tool did not change; the label did, because the label was what was wrong. The lesson
+generalised into a test: `test_agent_effects.py` snapshots the entire workspace around
+every tool declared `read` and fails if anything moved, so an effect label is now proved
+rather than asserted.
+
+Every `act` tool is idempotent by an explicit key, because agent systems retry and a
+retried `create_candidate_pool` must not produce two pools.
 
 ### What the model is shown, and what is kept
 
@@ -337,15 +350,23 @@ role holds `GetItem`, `PutItem`, `Query` and nothing else. `Repository.reset()` 
 `DeleteItem` and `BatchWriteItem`, so emptying a visitor's session is not something the
 agent can do incorrectly; it is something it cannot do.
 
-Concurrency is handled by a conditional-write lease, one per workspace, held for the
-duration of a live invocation. Pool formation is idempotent on
-`community:product:site:day`, but that idempotency is a read followed by a write — two
-simultaneous runs would both find no pool and both create one. The same lease blocks a
-reset from landing mid-run.
+Concurrency is handled by a conditional-write lease, one per workspace, taken by
+**every** coordinator that mutates it: first-load seeding, reset, the showcase scenario,
+a local coordinator run, and the live AgentCore invocation. They are mutually exclusive
+because they all write the same partition, and which two overlap is an accident of what
+a visitor clicked. Unrelated workspaces never contend — the lease key *is* the workspace.
+
+The lease is coordination, not the invariant itself, so the writes it protects are also
+conditional where a duplicate would be visible: candidate-pool creation claims its
+idempotency key with a conditional put and hands the loser the winner's pool id, and
+single-use pickup redemption is claimed with a conditional update so two simultaneous
+scans of one credential complete exactly one handoff.
 
 Three deadlines nest, innermost first, so whichever fires produces a structured answer
 rather than a dropped connection: the agent's 45 s wall-clock bound, the bridge's 60 s
-read timeout, the Lambda's 90 s timeout.
+read timeout, the Lambda's 90 s timeout. The innermost one is **cooperative** — checked
+before each model and tool call — so it ends a run that is taking too long; a call that
+has already hung is bounded by the two outer rungs, which own the process.
 
 ---
 

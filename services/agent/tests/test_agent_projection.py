@@ -25,7 +25,7 @@ from pool.adapters.repository import InMemoryRepository
 from pool.adapters.sourcing import SyntheticCatalogProvider
 from pool.agent import projection as proj
 from pool.agent.coordinator import PoolCoordinator
-from pool.agent.tools import TOOL_SURFACE, ToolContext, build_tools
+from pool.agent.tools import TOOL_KINDS, TOOL_SURFACE, ToolContext, build_tools
 from pool.config import Settings
 from pool.data.seed import COMMUNITY_ID, seed
 from pool.domain.models import RunOutcome
@@ -78,7 +78,9 @@ def test_tool_surface_matches_the_tools_actually_built(tool_ctx: ToolContext) ->
     """
     built = [t.tool_name for t in build_tools(tool_ctx)]
     assert [name for name, _ in TOOL_SURFACE] == built
-    assert {kind for _, kind in TOOL_SURFACE} <= {"read", "act", "end"}
+    # Effect labels are proved against real writes in `test_agent_effects.py`; this
+    # only pins that the vocabulary itself has not grown a value nothing renders.
+    assert {kind for _, kind in TOOL_SURFACE} <= TOOL_KINDS
 
 
 def _best_opportunity(tools) -> dict:

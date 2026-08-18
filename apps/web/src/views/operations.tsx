@@ -298,12 +298,24 @@ export function OperationsView({
             <h3 className="section-title" style={{ marginBottom: 12 }}>
               Pool's own economics
             </h3>
+            <p className="tiny muted" style={{ marginBottom: 12 }}>
+              Every figure is computed from stored records. Money is simulated throughout:
+              cards are authorised and captured against a simulated provider, and host
+              compensation is earned and accounted for but never disbursed — Pool has no
+              payout rail.
+            </p>
             <div className="ledger">
               <LedgerLine
                 label="Gross value coordinated"
                 value={money(data.metrics.pool_spend_cents)}
               />
-              <LedgerLine label="Paid out to hosts" value={money(data.metrics.host_earnings_cents)} />
+              {/* Earned, not paid. Host compensation is computed deterministically and is part
+                    of what every buyer was charged — but Pool has no payout rail, so no money has
+                    left anything. Calling this "paid out" described a system that does not exist. */}
+              <LedgerLine
+                label="Earned by hosts, for work done"
+                value={money(data.metrics.host_earnings_cents)}
+              />
               <LedgerLine
                 label="Card processing recovered"
                 value={money(data.metrics.payment_processing_cents)}

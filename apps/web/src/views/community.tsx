@@ -307,7 +307,7 @@ export function CommunityView({
           label="Kept in the community"
           value={money(m.collective_savings_cents)}
           accent
-          sub={`${money(m.average_buyer_savings_cents)} each on average, after every cost`}
+          sub={`${money(m.average_buyer_savings_cents)} each on average, after merchandise, host pay, card processing and Pool's fee`}
         />
       </section>
 

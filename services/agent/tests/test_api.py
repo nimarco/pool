@@ -11,6 +11,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from pool.agent.tools import TOOL_KINDS
 from pool.api import app as api
 from pool.data.seed import COMMUNITY_ID
 from pool.domain.models import PoolStatus
@@ -53,7 +54,9 @@ def test_health_publishes_the_agent_tool_surface(client):
     tools = client.get("/api/health").json()["agent_tools"]
     assert len(tools) == 12
     assert tools[0] == {"name": "list_latent_demand", "kind": "read"}
-    assert {t["kind"] for t in tools} <= {"read", "act", "end"}
+    assert {t["kind"] for t in tools} <= TOOL_KINDS
+    # The host search writes, so it must not be published to the UI as a read.
+    assert {"name": "find_host_candidates", "kind": "record"} in tools
 
 
 def test_a_named_trigger_gets_the_same_prompt_locally_as_it_would_deployed(client):
@@ -393,3 +396,33 @@ def test_pool_status_values_are_canonical(client):
     statuses = {p["status"] for p in client.get("/api/state").json()["pools"]}
     assert statuses <= {s.value for s in PoolStatus}
     assert client.get("/api/state").json()["community"]["id"] == COMMUNITY_ID
+
+
+def test_a_refused_lifecycle_move_is_a_conflict_not_a_server_error(client):
+    """`assert_transition` raises `IllegalTransition`, which is a `ValueError`.
+
+    Routes that did not name it explicitly turned a correct refusal into a 500 — and
+    `open-distribution` is a *public* route, so a judge clicking it twice on a finished
+    pool got one. Handled once at the app level so no route can miss it.
+    """
+    client.post("/api/demo/scenario")
+    pool_id = client.get("/api/state").json()["pools"][0]["pool_id"]
+    assert client.get(f"/api/pools/{pool_id}").json()["status"] == "completed"
+
+    response = client.post(f"/api/pools/{pool_id}/open-distribution")
+
+    assert response.status_code in {400, 409}, response.text
+    assert "detail" in response.json()
+
+
+def test_no_lifecycle_refusal_anywhere_returns_a_500(client):
+    """The general property, not just the one route that exposed it."""
+    client.post("/api/demo/scenario")
+    pool_id = client.get("/api/state").json()["pools"][0]["pool_id"]
+
+    for path in (
+        f"/api/pools/{pool_id}/open-distribution",
+        f"/api/pools/{pool_id}/lock",
+        f"/api/pools/{pool_id}/purchase",
+    ):
+        assert client.post(path).status_code < 500, path

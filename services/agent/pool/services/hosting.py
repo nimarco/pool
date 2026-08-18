@@ -24,7 +24,14 @@ from datetime import timedelta
 from typing import Any
 
 from ..domain.economics import allocate_packages, compute_host_reward
-from ..domain.hosting import HostEvaluation, HostJob, estimate_weight_kg, evaluate_host, rank_hosts
+from ..domain.hosting import (
+    HostEvaluation,
+    HostJob,
+    estimate_weight_kg,
+    evaluate_host,
+    rank_hosts,
+    ranking_key,
+)
 from ..domain.models import (
     DecisionKind,
     DecisionRequest,
@@ -285,7 +292,13 @@ def offer_to_next_host(*, ctx: PoolContext, pool_id: str) -> HostRecruitingResul
         result.status = _require_pool(ctx, pool_id).status.value
         return result
 
-    best = max(available, key=lambda c: (c.score, c.household_id))
+    # `min` with the canonical descending-score key, not `max` with an ad-hoc one:
+    # this must select exactly the candidate `rank_hosts` puts first, or the ranking
+    # the UI shows and the offer the pool actually makes can name different people.
+    best = min(
+        available,
+        key=lambda c: ranking_key(household_id=c.household_id, score=c.score),
+    )
     best.state = HostCandidateState.OFFERED
     best.offered_at = iso(ctx.now)
     best.expires_at = _offer_deadline(ctx, pool)

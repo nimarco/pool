@@ -50,12 +50,25 @@ class AgentBounds:
 
     A run that hits any of these terminates loudly with a recorded loop-fault
     outcome — never a silent truncation that looks like a normal result.
+
+    There is deliberately no tool-retry bound here. Pool has no generic tool-retry
+    mechanism: a failed tool returns its failure to the model, which decides what to do
+    next under the iteration and duplicate-call bounds. `MAX_TOOL_RETRIES` used to be
+    configured and published anyway — a number nothing read, describing behaviour that
+    did not exist. Automatically retrying a consequential tool is the wrong default for
+    a system that moves money, so the bound was removed rather than implemented
+    (#audit P1-1).
     """
 
     max_iterations: int = 8
     max_tool_calls: int = 25
-    max_tool_retries: int = 3
     max_duplicate_tool_calls: int = 2
+    #: Cooperative, not pre-emptive. `BoundedRun` checks it before each model call
+    #: and before each tool call, so it ends a run that is *taking* too long — it
+    #: cannot interrupt one call that has already hung. The outer rungs are what
+    #: cover that case: the bridge's read timeout, then the Lambda's own timeout
+    #: (`infra/demo_app.py` documents the nesting). Deployments set this to 45 in
+    #: both places the agent can run, so it stays the innermost bound.
     workflow_timeout_seconds: int = 120
 
     @classmethod
@@ -63,7 +76,6 @@ class AgentBounds:
         return cls(
             max_iterations=_int_env("MAX_AGENT_ITERATIONS", 8),
             max_tool_calls=_int_env("MAX_TOOL_CALLS_PER_RUN", 25),
-            max_tool_retries=_int_env("MAX_TOOL_RETRIES", 3),
             max_duplicate_tool_calls=_int_env("MAX_DUPLICATE_TOOL_CALLS", 2),
             workflow_timeout_seconds=_int_env("WORKFLOW_TIMEOUT_SECONDS", 120),
         )

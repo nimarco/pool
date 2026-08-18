@@ -268,6 +268,49 @@ export interface NeedRow {
   routine_lead_days: number;
   min_savings_pct: number;
   max_spend_display: string;
+  max_spend_cents: number;
+  substitution: string;
+  active: boolean;
+}
+
+/** The catalogue a member can declare a need against, served alongside their needs. */
+export interface ProductRow {
+  product_id: string;
+  name: string;
+  unit: string;
+  brand: string;
+}
+
+export interface NeedLimits {
+  max_quantity: number;
+  max_cadence_days: number;
+  max_min_savings_pct: number;
+  max_spend_cents: number;
+  max_horizon_days: number;
+}
+
+export interface NeedsView {
+  needs: NeedRow[];
+  products: ProductRow[];
+  limits: NeedLimits;
+}
+
+/** One standing declaration, as the member states it.
+ *
+ *  `flexibility_days` rather than a raw earliest-purchase date: "how far ahead of
+ *  myself am I willing to buy" is the question a person can answer, and the server
+ *  derives the date the timing engine needs. Nothing here names another member — a
+ *  need is a statement about one household, never about a group. */
+export interface NeedDraft {
+  household_id: string;
+  product_id: string;
+  quantity: number;
+  cadence_days: number;
+  expected_next_need_date: string;
+  flexibility_days: number;
+  routine_lead_days: number;
+  min_savings_pct: number;
+  max_spend_cents: number;
   substitution: string;
   active: boolean;
 }
@@ -577,7 +620,10 @@ export const api = {
   health: () => request<Health>("/api/health"),
   state: () => request<AppState>("/api/state"),
   map: () => request<MapData>("/api/map"),
-  needs: () => request<{ needs: NeedRow[] }>("/api/needs").then((r) => r.needs),
+  needs: () => request<NeedsView>("/api/needs"),
+  declareNeed: (draft: NeedDraft) => post<NeedRow>("/api/needs", draft),
+  amendNeed: (needId: string, draft: NeedDraft) =>
+    post<NeedRow>(`/api/needs/${needId}`, draft),
   pool: (id: string) => request<PoolView>(`/api/pools/${id}`),
   checklist: (id: string) => request<Checklist>(`/api/pools/${id}/checklist`),
   operator: () => request<OperatorView>("/api/operator"),

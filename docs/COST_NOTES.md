@@ -31,10 +31,23 @@ All configurable via environment variables so they can be tightened without a co
 | Model iterations per run | `MAX_AGENT_ITERATIONS` | 8 | `BeforeModelCallEvent` — **raises**, terminating the run |
 | Tool calls per run | `MAX_TOOL_CALLS_PER_RUN` | 25 | `BeforeToolCallEvent` — cancels further calls |
 | Identical repeated calls | `MAX_DUPLICATE_TOOL_CALLS` | 2 | Argument digest; cancelled with an explanation |
-| Tool retries | `MAX_TOOL_RETRIES` | 3 | Bounded with backoff |
-| Wall clock per run | `WORKFLOW_TIMEOUT_SECONDS` | 120 | Checked on every model and tool call |
+| Wall clock per run | `WORKFLOW_TIMEOUT_SECONDS` | 120 local, **45 deployed** | Checked before every model and tool call — cooperative, see below |
 | Route matrix cells | `MAX_ROUTE_MATRIX_CELLS` | 100 | Checked **before** any Location API call |
 | Background schedules | `SCHEDULES_ENABLED` | `false` | Rule ships DISABLED in CloudFormation |
+
+There is **no tool-retry bound, because there is no tool-retry mechanism.** A failed
+tool returns its failure to the model, which decides what to do next inside the
+iteration and duplicate-call bounds. `MAX_TOOL_RETRIES` was configured here and in
+both stacks without anything reading it; automatically re-running a consequential
+tool is the wrong default for a system that moves money, so it was removed rather
+than implemented.
+
+The wall clock is **cooperative**. `BoundedRun` checks it before each model call and
+before each tool call, so it ends a run that is *taking* too long; it cannot
+interrupt a single call that has already hung. Two outer rungs cover that: the
+bridge's 60 s read timeout on `invoke_agent_runtime`, then the Lambda's own 90 s
+timeout. Deployments set the inner bound to 45 in both places the agent can run, so
+the nesting holds whichever path executes.
 
 A run that hits a bound terminates **loudly** — recorded as `outcome=loop_fault` with the
 specific bound in `termination_reason` — never as a silent truncation that resembles a
@@ -142,7 +155,7 @@ a larger stack for convenience is the thing §3.7 forbids.
 
 | Resource | Idle cost | Usage cost |
 | --- | --- | --- |
-| `AWS::Lambda::Function` (1024 MB, 30 s, **reserved concurrency 5**) | **None** | Per request |
+| `AWS::Lambda::Function` (1024 MB, 90 s, **no reserved concurrency** — see below) | **None** | Per request |
 | `AWS::Lambda::Url` (`AuthType: NONE`) | None | None — it is an addressing feature |
 | `AWS::DynamoDB::Table` (PAY_PER_REQUEST, TTL) | **~$0** — storage only, and sessions delete themselves after 24 h | Per read/write |
 | `AWS::Logs::LogGroup` (14 days) | Storage, KB-scale | Ingestion |
@@ -175,12 +188,29 @@ cap is small change; the cap exists so it cannot be otherwise.
 | Deterministic actions per session | 40 | Same |
 | Deterministic actions per day | 600 | Same |
 | New demo sessions per day | 300 | Same — a cold session writes ~100 rows before any action |
-| Concurrent executions | 5 | **Lambda reserved concurrency** — the only one that does not depend on our code |
+| Concurrent executions | 10 | **The account's own concurrency limit** — see below. Not a per-function reservation |
 | Session lifetime | 24 h | DynamoDB TTL |
 
-Every one is an environment variable, so they can be tightened on the deployed function
-in seconds without a rebuild. The quota store **fails closed**: if it cannot be read, the
-request is refused rather than allowed.
+Every application bound is an environment variable, so they can be tightened on the
+deployed function in seconds without a rebuild. The quota store **fails closed**: if it
+cannot be read, the request is refused rather than allowed.
+
+**The concurrency ceiling is the account's, not this function's.** AWS enforces
+`account_limit - sum(reserved) >= 10`, and this account's limit is 10 — verified again
+on 2026-08-18 with `aws lambda get-account-settings` (limit 10, unreserved 10) and
+`service-quotas get-service-quota --quota-code L-B99A9384` (value 10, adjustable). Any
+nonzero reservation is therefore rejected outright; the first deploy failed on exactly
+this and rolled back. Earlier revisions of this file claimed a **reserved concurrency of
+5**, which never existed on the deployed function.
+
+The ceiling is real regardless: with no other function in the account, the account limit
+of 10 caps this function at 10 concurrent executions. `POOL_DEMO_CONCURRENCY` sets a
+per-function reservation on an account whose limit has been raised, and
+`infra/test_demo_stack.py` pins both halves. No quota increase has been requested — the
+account ceiling is the cheaper control and it is already in force.
+
+The kill switch is unaffected: reserving *zero* subtracts nothing from the unreserved
+pool, so `make demo-kill` is permitted and throttles the function to nothing.
 
 ### Kill switches, fastest first
 

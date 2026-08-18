@@ -117,7 +117,7 @@ top-right control switches account, holds the demo controls, and explains what i
 | --- | --- |
 | **Home** | Your restocks, anything Pool needs to ask you, and what it has found for the community |
 | **Pools** | The orders people are making together, and the full record of each one |
-| **Needs** | What you buy anyway — and the community's standing needs, none of which are organised into anything |
+| **Needs** | What you buy anyway. Declare one, change one, or stop buying something — the product's primary action, and the only thing a member ever has to do. Underneath: the community's standing needs, none of which are organised into anything |
 | **Community** | Demo University: the map, what Pool did, and where the money went |
 
 A pool's own record carries the depth: **Overview**, **People**, **Economics**,
@@ -144,7 +144,7 @@ cannot legally run is not offered.
 ## The judge experience — live
 
 The public demo is a **separate, tiny stack** — one Lambda behind a Function URL, serving
-both the web app and a twenty-three-path API, plus one DynamoDB table.
+both the web app and a twenty-four-endpoint API, plus one DynamoDB table.
 
 ```
 browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
@@ -166,11 +166,11 @@ What judge mode changes, and why each one matters:
 
 | Reduction | Why |
 | --- | --- |
-| 14 of 45 endpoints exist; the rest 404 | Supplier-offer mutation, the operator pickup override, the payment webhook, and direct `lock`/`purchase` calls have no business on an anonymous URL |
+| 24 of 40 endpoints exist; the rest 404 | Supplier-offer mutation, the operator pickup override, the payment webhook, and direct `lock`/`purchase` calls have no business on an anonymous URL |
 | **No prompt surface.** The client sends an action *name*; the server owns the prompt | `coordinator.run(instruction=…)` replaces the entire run prompt — forwarding a client string would let a stranger write the agent's instructions |
 | Per-session and per-day caps on every action that costs anything | An anonymous URL is a cost surface before it is a demo |
 | One session per visitor, isolated by DynamoDB partition, expiring in 24 h | Two judges cannot see or corrupt each other's demo |
-| Reserved concurrency, and a one-command kill switch | The only control that does not depend on application code being correct |
+| A one-command kill switch, and the account's own concurrency ceiling | The only controls that do not depend on application code being correct |
 
 ### Deterministic by default, live where it says so
 
@@ -538,6 +538,7 @@ docs/              architecture, pilot readiness, thesis, demo script, scorecard
 - [`docs/STARTUP_THESIS.md`](docs/STARTUP_THESIS.md) — the business argument and its assumptions
 - [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) — the five-minute story
 - [`docs/HACKATHON_SCORECARD.md`](docs/HACKATHON_SCORECARD.md) — evidence per judging criterion, honestly graded
+- [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) — everything that must be true before submitting, with the human-only items left as TODO rather than assumed
 - [`docs/COST_NOTES.md`](docs/COST_NOTES.md) — every resource that can accrue cost
 - [`BUILD_HISTORY.md`](BUILD_HISTORY.md) — decisions, rejected approaches, and what broke
 - [`AGENTS.md`](AGENTS.md) — the operating manual any agent working here must follow

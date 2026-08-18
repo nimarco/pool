@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { AppState, Health, NeedRow, api } from "../api";
+import { AppState, Health, api } from "../api";
 import { Chip, IconCheck, IconCross, IconReplay } from "../ui";
 
 export interface Identity {
@@ -159,9 +159,9 @@ export function DemoPanel({
     if (!open || people.length > 0) return;
     api
       .needs()
-      .then((rows: NeedRow[]) => {
+      .then((view) => {
         const seen = new Map<string, string>();
-        for (const row of rows) seen.set(row.household_id, row.household_name);
+        for (const row of view.needs) seen.set(row.household_id, row.household_name);
         setPeople(
           [...seen.entries()]
             .map(([id, display_name]) => ({ id, display_name }))

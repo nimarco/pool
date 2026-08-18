@@ -23,6 +23,7 @@ which keeps two judges from corrupting each other's demo (§92).
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -89,6 +90,8 @@ class Store:
     decisions: dict[str, DecisionRequest] = field(default_factory=dict)
     activity: list[ActivityEvent] = field(default_factory=list)
     runs: dict[str, AgentRun] = field(default_factory=dict)
+    #: Idempotency key -> the pool id that owns it. See `claim_pool_idempotency`.
+    pool_claims: dict[str, str] = field(default_factory=dict)
 
 
 @runtime_checkable
@@ -135,6 +138,7 @@ class Repository(Protocol):
     def list_pools(self, ws: str) -> list[Pool]: ...
     def get_pool(self, ws: str, pid: str) -> Pool | None: ...
     def put_pool(self, ws: str, p: Pool) -> None: ...
+    def claim_pool_idempotency(self, ws: str, key: str, pool_id: str) -> str: ...
 
     def list_memberships(self, ws: str, pool_id: str | None = None) -> list[Membership]: ...
     def get_membership(self, ws: str, pool_id: str, household_id: str) -> Membership | None: ...
@@ -178,6 +182,9 @@ class Repository(Protocol):
     def list_pickup_tokens(self, ws: str, pool_id: str | None = None) -> list[PickupToken]: ...
     def get_pickup_token(self, ws: str, pool_id: str, household_id: str) -> PickupToken | None: ...
     def put_pickup_token(self, ws: str, t: PickupToken) -> None: ...
+    def claim_pickup_redemption(
+        self, ws: str, pool_id: str, household_id: str, at: str
+    ) -> bool: ...
 
     # -- communication
     def list_announcements(self, ws: str, pool_id: str | None = None) -> list[Announcement]: ...
@@ -215,6 +222,11 @@ class InMemoryRepository:
 
     def __init__(self) -> None:
         self._ws: dict[str, Store] = {}
+        #: Guards the one check-and-set this backend must perform atomically. Everything
+        #: else here is a plain dict write, but single-use redemption is a guarantee
+        #: rather than a convenience, and the DynamoDB backend enforces it with a
+        #: condition — so the reference implementation has to mean the same thing.
+        self._redemption_lock = threading.Lock()
 
     def store(self, ws: str) -> Store:
         return self._ws.setdefault(ws, Store())
@@ -269,6 +281,9 @@ class InMemoryRepository:
     def list_pools(self, ws): return sorted(self.store(ws).pools.values(), key=lambda p: (p.created_at, p.id))
     def get_pool(self, ws, pid): return self.store(ws).pools.get(pid)
     def put_pool(self, ws, p): self.store(ws).pools[p.id] = p
+
+    def claim_pool_idempotency(self, ws, key, pool_id):
+        return self.store(ws).pool_claims.setdefault(key, pool_id)
 
     def list_memberships(self, ws, pool_id=None):
         items = self._filtered(self.store(ws).memberships.values(), "pool_id", pool_id)
@@ -344,6 +359,14 @@ class InMemoryRepository:
         return self.store(ws).pickup_tokens.get(f"{pool_id}#{household_id}")
 
     def put_pickup_token(self, ws, t): self.store(ws).pickup_tokens[t.key] = t
+
+    def claim_pickup_redemption(self, ws, pool_id, household_id, at):
+        with self._redemption_lock:
+            token = self.store(ws).pickup_tokens.get(f"{pool_id}#{household_id}")
+            if token is None or token.redeemed_at:
+                return False
+            token.redeemed_at = at
+            return True
 
     # ---- communication
     def list_announcements(self, ws, pool_id=None):
@@ -634,6 +657,39 @@ class DynamoDBRepository:
     def get_pool(self, ws, pid): return self._get(ws, "POOL", pid, Pool)
     def put_pool(self, ws, p): self._put(ws, "POOL", p.id, p)
 
+    def claim_pool_idempotency(self, ws, key, pool_id):
+        """Atomically decide which pool id owns an idempotency key.
+
+        The existing check — scan the pools, look for a matching key — is a read
+        followed by a write, so two coordinators that both find nothing both create a
+        pool. The workspace lease normally keeps them apart, but a lease is a
+        best-effort coordination row and this is the write it is protecting, so the
+        invariant is also enforced where it actually lives.
+
+        The claim is written *before* the pool, carrying the id the caller intends to
+        use, and the loser is told that id rather than being refused. That ordering is
+        what makes a crash between the two writes recoverable: the next caller reads
+        the claim, finds no pool under it, and creates that same agreed id — instead of
+        a key nobody can ever use again.
+        """
+        item = {"pk": self._pk(ws, "POOL_CLAIM"), "sk": key, "data": {"pool_id": pool_id}}
+        if ws != "primary":
+            item["ttl"] = int(time.time()) + DEMO_TTL_SECONDS
+        try:
+            self.table.put_item(
+                Item=item, ConditionExpression="attribute_not_exists(pk)"
+            )
+            return pool_id
+        except Exception as exc:  # noqa: BLE001 - the conditional failure is the signal
+            if type(exc).__name__ != "ConditionalCheckFailedException":
+                raise
+        resp = self.table.get_item(
+            Key={"pk": self._pk(ws, "POOL_CLAIM"), "sk": key},
+            **({"ConsistentRead": True} if self.consistent_reads else {}),
+        )
+        stored = (resp.get("Item") or {}).get("data") or {}
+        return str(stored.get("pool_id") or pool_id)
+
     def list_memberships(self, ws, pool_id=None):
         return self._query(ws, "MEMBERSHIP", Membership, f"{pool_id}#" if pool_id else None)
 
@@ -710,6 +766,36 @@ class DynamoDBRepository:
 
     def put_pickup_token(self, ws, t): self._put(ws, "PICKUP_TOKEN", t.key, t)
 
+    def claim_pickup_redemption(self, ws, pool_id, household_id, at):
+        """Mark one credential redeemed, once, atomically.
+
+        Single use is the guarantee the whole pickup design rests on (canonical
+        invariant 9), and it was enforced by reading ``redeemed_at`` and then writing
+        it — two scans of one QR code arriving together both read empty and both
+        completed the handoff. The condition makes the check and the write one
+        operation, so the second scan loses and is told the credential is spent.
+
+        ``redeemed_at`` defaults to an empty string rather than being absent, so the
+        condition has to accept both shapes: a row written before this method existed
+        carries the empty string.
+        """
+        try:
+            self.table.update_item(
+                Key={"pk": self._pk(ws, "PICKUP_TOKEN"), "sk": f"{pool_id}#{household_id}"},
+                UpdateExpression="SET #data.#redeemed = :at",
+                ConditionExpression=(
+                    "attribute_exists(pk) AND "
+                    "(attribute_not_exists(#data.#redeemed) OR #data.#redeemed = :empty)"
+                ),
+                ExpressionAttributeNames={"#data": "data", "#redeemed": "redeemed_at"},
+                ExpressionAttributeValues={":at": at, ":empty": ""},
+            )
+            return True
+        except Exception as exc:  # noqa: BLE001 - the conditional failure is the signal
+            if type(exc).__name__ == "ConditionalCheckFailedException":
+                return False
+            raise
+
     # ---- communication
     def list_announcements(self, ws, pool_id=None):
         items = self._query(ws, "ANNOUNCEMENT", Announcement)
@@ -770,7 +856,7 @@ class DynamoDBRepository:
         reach another workspace, let alone another table (AGENTS.md §3.8)."""
         from boto3.dynamodb.conditions import Key
 
-        for type_name in _TYPES:
+        for type_name in (*_TYPES, "POOL_CLAIM"):
             kwargs: dict[str, Any] = {
                 "KeyConditionExpression": Key("pk").eq(self._pk(ws, type_name)),
                 "ProjectionExpression": "pk, sk",

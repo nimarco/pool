@@ -1,9 +1,11 @@
 """The agent's tool surface (§95).
 
-Narrow, typed, and structured. Each tool is either a *read* (safe, unlimited) or a
-single *consequential* operation with idempotency and an approval boundary baked in.
-There is no generic "run SQL" or "update anything" escape hatch — the model reaches
-the world only through these doors (AGENTS.md §4).
+Narrow, typed, and structured. Each tool is a pure read, a record of Pool's own working
+state, or a single consequential operation with idempotency and an approval boundary
+baked in — see :data:`TOOL_SURFACE` for which is which, and ``test_agent_effects.py``
+for the test that checks the labels against what the tools actually write rather than
+against what their docstrings claim. There is no generic "run SQL" or "update anything"
+escape hatch — the model reaches the world only through these doors (AGENTS.md §4).
 
 Every tool returns a JSON string. The numbers inside come from the deterministic
 services layer; the agent's job is to decide which door to open next, never to compute
@@ -133,16 +135,40 @@ def _suggest_site(ctx: ToolContext, household_ids: list[str]) -> tuple[str, str]
 #: The complete tool surface, in the order the model is given it, with the authority
 #: each entry carries.
 #:
-#: ``read`` cannot change anything. ``act`` commits Pool to something a member or a
-#: supplier can observe. ``end`` closes the run. Published by the API so the UI can show
-#: what the agent may choose from without keeping a second list that drifts;
-#: ``test_agent_projection.py`` asserts it against what :func:`build_tools` returns, so
-#: adding a tool without describing it fails the suite.
+#: Four kinds, because three could not describe what these tools actually do:
+#:
+#: * ``read`` — writes nothing at all. Safe to call freely, and
+#:   ``test_agent_effects.py`` *proves* it by snapshotting the whole workspace around
+#:   every one of them rather than trusting this label.
+#: * ``record`` — writes Pool's own working state: an evaluation it wants to be able to
+#:   show its reasoning from, or a lifecycle status catching up with facts that are
+#:   already true. Nothing a member or a supplier can observe as a commitment, nobody is
+#:   contacted, and no money moves.
+#: * ``act`` — consequential. Commits Pool to something a member or supplier can
+#:   observe: forms a pool, offers someone paid work, issues a price, authorises or
+#:   captures money, places an order. ``execute_purchase`` is the externally
+#:   consequential one, and in this build its executor is simulated and says so.
+#: * ``end`` — closes the run.
+#:
+#: ``find_host_candidates`` was labelled ``read`` and is not: it opens host recruiting
+#: and persists a candidate record per evaluation. Nothing about the tool changed —
+#: the label did, because the label was the thing that was wrong (#audit P1-1).
+#:
+#: Published by the API so the UI can show what the agent may choose from without
+#: keeping a second list that drifts; ``test_agent_projection.py`` asserts it against
+#: what :func:`build_tools` returns, so adding a tool without describing it fails the
+#: suite.
+TOOL_KINDS = frozenset({"read", "record", "act", "end"})
+
+#: Kinds that write. The complement of ``read``, stated once so the effect test and the
+#: API cannot disagree about which tools are supposed to be inert.
+MUTATING_TOOL_KINDS = frozenset({"record", "act"})
+
 TOOL_SURFACE: tuple[tuple[str, str], ...] = (
     ("list_latent_demand", "read"),
     ("evaluate_pool_economics", "read"),
     ("create_candidate_pool", "act"),
-    ("find_host_candidates", "read"),
+    ("find_host_candidates", "record"),
     ("request_host_acceptance", "act"),
     ("issue_final_offer", "act"),
     ("inspect_pool", "read"),
@@ -316,10 +342,15 @@ def build_tools(ctx: ToolContext) -> list:
     def find_host_candidates(pool_id: str) -> str:
         """Evaluate who could fulfil this pool, and why.
 
-        Read-only. Candidates come from standing hosts and from pool members who
-        offered to host this specific pool. Returns each candidate's eligibility, rank,
-        deterministic pay, and the factual reasons anyone is ineligible — so a selection
-        can be explained rather than asserted.
+        Records state, but commits nothing: it opens host recruiting if demand now
+        clears the supplier minimum, and stores each candidate's evaluation so the
+        ranking can be inspected later. Nobody is offered the job and nobody is
+        contacted — that is ``request_host_acceptance``.
+
+        Candidates come from standing hosts and from pool members who offered to host
+        this specific pool. Returns each candidate's eligibility, rank, deterministic
+        pay, and the factual reasons anyone is ineligible — so a selection can be
+        explained rather than asserted.
 
         Args:
             pool_id: The pool that needs fulfilment.

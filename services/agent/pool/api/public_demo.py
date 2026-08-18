@@ -1,18 +1,20 @@
 """Public judge mode — the narrow surface Pool exposes to an anonymous browser.
 
-The local API (``pool/api/app.py``) is a full four-surface application: 45 endpoints
+The local API (``pool/api/app.py``) is a full four-surface application: 40 endpoints
 covering buyer, host, operator, and demo flows, plus a payment webhook. That is the
 right shape for development and for the test suite. It is **not** the right shape to
 put on the open internet with no authentication, so this module reduces it.
 
 Turned on with ``POOL_PUBLIC_DEMO=true``. What it changes, and why each one matters:
 
-1. **Route allowlist.** Twenty-three paths are reachable; everything else 404s before it
-   reaches a handler. Supplier-offer mutation, the operator pickup override, the
-   payment webhook, direct ``lock``/``purchase``/``open-distribution`` calls, and the
-   private message threads are all outside it. The lifecycle still reaches those code
-   paths — the scenario runs them server-side — but no anonymous request can drive
-   them directly.
+1. **Route allowlist.** Twenty-four of those forty endpoints are reachable; everything
+   else 404s before it reaches a handler. Supplier-offer mutation, the operator pickup
+   override, the payment webhook, direct ``lock``/``purchase`` calls, and the private
+   message threads are all outside it. The lifecycle still reaches those code paths —
+   the scenario runs them server-side — but no anonymous request can drive them
+   directly. Both counts are method-and-path pairs, and
+   ``test_the_published_endpoint_counts_are_the_real_ones`` pins them, because these
+   are the numbers the README quotes and they had already drifted once.
 
 2. **No prompt surface.** ``PoolCoordinator.run()`` substitutes ``instruction`` for the
    *entire* run prompt, so an endpoint that forwards a client string is an endpoint
@@ -63,8 +65,11 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -81,7 +86,81 @@ PUBLIC_WORKSPACE_RE = re.compile(r"^w[a-z0-9]{8,32}$")
 #: Never reachable as a workspace prefix — ``WORKSPACE_RE`` requires a leading
 #: ``[a-z0-9]`` — so quota and lease rows cannot collide with a session's data.
 QUOTA_PK_PREFIX = "_quota"
-LEASE_PK = "_lease#agentcore"
+
+#: One row per workspace, holding the mutation lease described in
+#: :meth:`PublicDemoGuard.workspace_mutation`. The stored value still says ``agentcore``
+#: because that is the partition the row has always lived in and renaming it would mean
+#: a deploy in which old and new containers took *different* locks — precisely the
+#: overlap the lease exists to prevent. It protects every mutating coordinator now, not
+#: only the live one.
+WORKSPACE_LEASE_PK = "_lease#agentcore"
+LEASE_PK = WORKSPACE_LEASE_PK  # historical alias
+
+#: A content security policy the bundle can actually satisfy, verified against the built
+#: SPA rather than copied from a template. Every directive here is one the deployed page
+#: already complies with, which is why it can be strict:
+#:
+#: * ``script-src 'self'`` — no ``unsafe-inline``, no ``unsafe-eval``. Vite emits a
+#:   single same-origin module script and `index.html` carries no inline script, so the
+#:   one directive that actually stops XSS is the one that costs nothing here.
+#: * ``style-src`` keeps ``'unsafe-inline'`` because the views use React ``style={{…}}``
+#:   attributes, which CSP treats as inline styles. Stating that plainly beats a policy
+#:   that looks stricter and has to be relaxed the first time anyone tests it.
+#: * ``img-src`` allows ``data:`` for exactly one thing: the inline SVG favicon, which is
+#:   embedded precisely so the tab icon reaches no external host.
+#: * ``connect-src 'self'`` — the API is same-origin, and the browser holds no AWS
+#:   credential, so there is nothing it should ever call cross-origin. A page that starts
+#:   talking to another host is a page that has been compromised.
+#: * ``font-src 'self'`` — Instrument Serif is bundled, not fetched from a CDN.
+#: * ``frame-ancestors``/``base-uri``/``form-action``/``object-src`` are all ``'none'``:
+#:   nothing frames this, nothing rewrites its base URL, and it submits no forms in the
+#:   HTML sense — the need form posts through `fetch`, which `connect-src` governs.
+CONTENT_SECURITY_POLICY = "; ".join(
+    (
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data:",
+        "font-src 'self'",
+        "connect-src 'self'",
+        "frame-ancestors 'none'",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "object-src 'none'",
+    )
+)
+
+#: Sent on every public response. The first three were already here; the rest close the
+#: gaps an external review found (#audit P2).
+#:
+#: ``Strict-Transport-Security`` carries no ``preload`` and no ``includeSubDomains``
+#: beyond this host: the demo is served from an AWS-owned Function URL domain, and
+#: asserting a policy over a domain this project does not control would be overreach with
+#: a two-year memory. Browsers ignore the header entirely over plain HTTP, so a local run
+#: is unaffected.
+#:
+#: ``Permissions-Policy`` denies the capability set outright. Pool asks for none of it —
+#: the map is a synthetic coarse-grid rendering and never requests a real position — so
+#: the honest policy is an empty allowlist rather than a considered subset.
+SECURITY_HEADERS: dict[str, str] = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": CONTENT_SECURITY_POLICY,
+    "Strict-Transport-Security": "max-age=31536000",
+    "Permissions-Policy": (
+        "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), "
+        "microphone=(), payment=(), usb=(), interest-cohort=()"
+    ),
+}
+
+#: What a caller is told when another coordinator holds this workspace. Deliberately
+#: does not name which one: from the losing request's side, a live run, a reset, the
+#: scenario and a second tab's coordinator run are the same event, and guessing wrong
+#: in the message would be worse than not guessing.
+WORKSPACE_BUSY = (
+    "Something else is already working on this session. Give it a moment and try again."
+)
 
 _ID = r"[A-Za-z0-9_-]{1,64}"
 
@@ -118,6 +197,12 @@ ALLOWED_POST = frozenset(
         "/api/demo/reset",
         "/api/demo/scenario",
         "/api/demo/agentcore",
+        # Declaring a standing need. The product's primary user action, and the one a
+        # judge has to be able to *perform* rather than read about — the whole thesis is
+        # that this is all anybody does and the agent finds the overlap. It creates no
+        # group, commits no money, and the service refuses to write a declaration for a
+        # household other than the one the request names.
+        "/api/needs",
     }
 )
 
@@ -147,6 +232,9 @@ ALLOWED_POST = frozenset(
 ALLOWED_POST_PATTERNS = tuple(
     re.compile(p)
     for p in (
+        # Amending one's own standing need. The ownership check lives in the service, so
+        # this pattern being open does not let a caller rewrite another member's rules.
+        rf"^/api/needs/{_ID}$",
         rf"^/api/decisions/{_ID}/respond$",
         rf"^/api/pools/{_ID}/pickup-credential/{_ID}$",
         rf"^/api/pools/{_ID}/redeem$",
@@ -253,6 +341,16 @@ class PublicDemoSettings:
     #: otherwise left to expire. A failed invocation is indistinguishable, from here,
     #: from one still in flight, and holding is the safe direction to be wrong in.
     live_lease_seconds: int = 120
+    #: How long a workspace stays locked to a single *local* mutating action — seeding,
+    #: reset, the scenario, a local coordinator run. Sized to outlive the slowest holder
+    #: that could die without releasing, which is this Lambda's own 90 s timeout
+    #: (``infra/demo_app.py``). Shorter than the live lease because nothing here can
+    #: still be writing from another compute environment once the request is gone.
+    mutation_lease_seconds: int = 90
+    #: A cold workspace is seeded by whichever request gets the lease; the others wait
+    #: for it rather than seeding a second time over the top. Bounded, because a request
+    #: that waits forever is worse than one that renders an empty community.
+    seed_wait_seconds: float = 6.0
 
     @classmethod
     def from_env(cls) -> PublicDemoSettings:
@@ -270,6 +368,7 @@ class PublicDemoSettings:
             max_live_per_day=_int_env("PUBLIC_DEMO_MAX_LIVE_PER_DAY", 40),
             max_new_sessions_per_day=_int_env("PUBLIC_DEMO_MAX_NEW_SESSIONS_PER_DAY", 300),
             live_lease_seconds=_int_env("PUBLIC_DEMO_LIVE_LEASE_SECONDS", 120),
+            mutation_lease_seconds=_int_env("PUBLIC_DEMO_MUTATION_LEASE_SECONDS", 90),
         )
 
     @property
@@ -490,8 +589,14 @@ def build_lease_store(settings: PublicDemoSettings) -> LeaseStore:
 class PublicDemoGuard:
     """The single object the API asks before doing anything a public caller triggered.
 
-    Every method is a no-op when public mode is off, so the local API, ``make demo``,
-    and the test suite behave exactly as they did before.
+    The route allowlist, the prompt substitution, and the spend quotas are all no-ops
+    when public mode is off, so the local API, ``make demo``, and the test suite behave
+    exactly as they did before.
+
+    The **workspace mutation lease is not**. It is correctness rather than rationing:
+    two tabs pointed at one workspace can interleave a reset with a coordinator run on a
+    laptop exactly as they can on Lambda, and a protection that only exists in
+    production is one nothing ever tests.
     """
 
     def __init__(
@@ -505,6 +610,8 @@ class PublicDemoGuard:
         self.quota = quota or build_quota_store(self.settings)
         self.lease = lease or build_lease_store(self.settings)
         self._bridge = bridge
+        #: Re-entrancy depth per workspace, per request thread. See `hold_workspace`.
+        self._local = threading.local()
 
     @property
     def enabled(self) -> bool:
@@ -588,32 +695,103 @@ class PublicDemoGuard:
             )
 
     # -- exclusive access to one workspace -------------------------------
+    #
+    # One lease per workspace, taken by *every* coordinator that mutates it: seeding,
+    # reset, the scenario, a local coordinator run, and the live AgentCore invocation.
+    # They are mutually exclusive because they are all writing the same partition, and
+    # which two happen to overlap is an accident of what a visitor clicked.
+    #
+    # It has to be one lock rather than one per action. Reset deletes every row while
+    # the scenario is halfway through writing them; a local run and a live run both
+    # create the pool the other is about to look for. Anything narrower would only move
+    # the race.
+    #
+    # Unrelated workspaces never contend: the lease key *is* the workspace, so two
+    # judges in two sessions are on two different rows.
 
-    def hold_workspace(self, ws: str) -> bool:
-        """Take this workspace's live-invocation lease, or return False.
+    def hold_workspace(self, ws: str, seconds: int | None = None) -> bool:
+        """Take this workspace's mutation lease, or return False.
 
-        Two coordination runs on one partition is not a theoretical race. Pool formation
-        is idempotent on ``community:product:site:day``, but that idempotency is a read
+        Two coordinators on one partition is not a theoretical race. Pool formation is
+        idempotent on ``community:product:site:day``, but that idempotency is a read
         followed by a write: two runs that both find no matching pool will both create
-        one, and the visitor ends up with a duplicate nobody asked for. The narrower
-        cost caps do not prevent it — three live invocations per session is three
-        invocations that can be in flight at once, from two tabs or a script.
+        one, and the visitor ends up with a duplicate nobody asked for. The cost caps do
+        not prevent it — three live invocations per session is three that can be in
+        flight at once, from two tabs or a script.
+
+        Re-entrant *within one request*. Handlers compose — a coordinator run seeds a
+        cold workspace before it runs — and an inner acquisition that blocked on the
+        lease its own caller is holding would deadlock a request against itself. The
+        depth counter is thread-local because a sync FastAPI handler runs start to
+        finish on one worker thread, so the count belongs to the request that opened it
+        and never leaks into a concurrent one.
+
+        Held regardless of ``enabled``. Two browser tabs are two browser tabs whether
+        the process is a public Lambda or a laptop running ``make dev``, and the tests
+        that prove this exercise the real lease rather than a bypass.
         """
-        if not self.enabled:
+        depth = self._depth()
+        if depth.get(ws, 0) > 0:
+            depth[ws] += 1
             return True
-        return self.lease.acquire(ws, self.settings.live_lease_seconds)
+        window = self.settings.mutation_lease_seconds if seconds is None else seconds
+        if not self.lease.acquire(ws, window):
+            return False
+        depth[ws] = 1
+        return True
 
     def release_workspace(self, ws: str) -> None:
-        if self.enabled:
-            self.lease.release(ws)
+        """Give the lease back. Only the outermost holder actually releases it."""
+        depth = self._depth()
+        held = depth.get(ws, 0)
+        if held > 1:
+            depth[ws] = held - 1
+            return
+        depth.pop(ws, None)
+        self.lease.release(ws)
+
+    def abandon_workspace(self, ws: str) -> None:
+        """Stop tracking the lease without releasing it, so it expires on its own.
+
+        For the one case where releasing would be wrong: a live invocation that failed
+        ambiguously may still be writing from another compute environment, and the lease
+        is the only thing keeping a second coordinator out of that partition.
+        """
+        self._depth().pop(ws, None)
+
+    def _depth(self) -> dict[str, int]:
+        held = getattr(self._local, "held", None)
+        if held is None:
+            held = {}
+            self._local.held = held
+        return held
+
+    @contextmanager
+    def workspace_mutation(
+        self, ws: str, message: str, seconds: int | None = None
+    ) -> Iterator[None]:
+        """Hold the mutation lease for the duration of one mutating action.
+
+        Refuses with 409 rather than queueing: the caller is a browser, and a request
+        that waits for a 45-second agent run has already failed. The lease is released
+        on the way out however the body ends, including on an exception — a handler that
+        raised has stopped writing, so continuing to hold would only wedge the visitor's
+        own next click.
+        """
+        if not self.hold_workspace(ws, seconds):
+            raise HTTPException(409, message)
+        try:
+            yield
+        finally:
+            self.release_workspace(ws)
 
     def require_workspace_idle(self, ws: str, message: str) -> None:
-        """Acquire the workspace lease for an action that must not overlap a live run.
+        """Acquire the workspace lease for an action that must not overlap another.
 
         Used by reset, which starts by deleting every row in the partition. The caller
         must release the lease in a ``finally`` block *after* the destructive operation
-        completes. A check followed by an early release leaves a gap in which a live run
-        can start while reset is deleting and reseeding the same partition.
+        completes. A check followed by an early release leaves a gap in which another
+        coordinator can start while reset is deleting and reseeding the same partition.
         """
         if not self.hold_workspace(ws):
             raise HTTPException(409, message)
@@ -911,10 +1089,8 @@ def install(app: FastAPI, guard: PublicDemoGuard, observe: Any = None) -> None:
                 # exists behind it.
                 return JSONResponse({"detail": "not found"}, status_code=404)
         response = await call_next(request)
-        # No third party should be able to frame the demo or sniff its content type.
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "no-referrer"
+        for name, value in SECURITY_HEADERS.items():
+            response.headers[name] = value
         return response
 
     @app.post("/api/demo/agentcore")
@@ -952,7 +1128,7 @@ def install(app: FastAPI, guard: PublicDemoGuard, observe: Any = None) -> None:
         # race must not also lose one of its three paid runs — so the free, per-workspace
         # check goes first and is handed straight back if the paid one refuses. (The same
         # reasoning as the session-before-day cap order in `_spend`, one level out.)
-        if not guard.hold_workspace(ws):
+        if not guard.hold_workspace(ws, settings.live_lease_seconds):
             return {
                 "ok": False,
                 "live": False,
@@ -961,7 +1137,7 @@ def install(app: FastAPI, guard: PublicDemoGuard, observe: Any = None) -> None:
                 "allow_local_fallback": False,
                 "refresh_state": True,
                 "reason": (
-                    "The deployed agent is already working on this session. "
+                    "Something is already working on this session. "
                     "Wait for it to finish before starting another run."
                 ),
             }
@@ -995,6 +1171,14 @@ def install(app: FastAPI, guard: PublicDemoGuard, observe: Any = None) -> None:
             # to this partition — so the workspace stays held until the lease expires on
             # its own. Refusing the next run for a minute is cheap; letting a second
             # agent into a partition a first one is still mutating is not.
+            #
+            # `abandon` rather than `release`: the request stops tracking the lease so a
+            # later action on this same thread does not decrement a hold it no longer
+            # owns, while the row itself is left to expire. This is the one path where
+            # the reply is *also* what keeps the local coordinator out — the client is
+            # told `allow_local_fallback: false`, and any local run it tried anyway would
+            # now find the workspace held.
+            guard.abandon_workspace(ws)
             logger.warning("live agentcore invocation failed: %s", type(exc).__name__)
             return {
                 "ok": False,

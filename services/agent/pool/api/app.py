@@ -30,10 +30,13 @@ from __future__ import annotations
 
 import logging
 import re
+import time
+from datetime import date
 from typing import Any
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from ..adapters.payments import build_payment_provider
@@ -55,12 +58,15 @@ from ..domain.models import (
     ParticipationState,
     PickupPermission,
     PoolStatus,
+    SubstitutionPolicy,
     utcnow,
 )
 from ..domain.money import bps_to_pct_str, format_cents
+from ..domain.state import IllegalTransition
 from ..domain.viability import ViabilityStage
 from ..services import communication, fulfillment, hosting
 from ..services import coordination as coord
+from ..services import needs as needs_service
 from ..services import payments as payment_service
 from ..services.context import CoordinationError, PoolContext
 from ..services.demo import run_showcase
@@ -70,6 +76,11 @@ logger = logging.getLogger(__name__)
 
 WORKSPACE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 GRID_DECIMALS = 3  # ~110 m — enough for community context, not enough to find a door
+
+#: How often a request waiting on someone else's seed re-reads the store. Short
+#: enough that a first page load does not feel stalled, long enough that waiting
+#: costs a handful of reads rather than a spin.
+_SEED_POLL_SECONDS = 0.15
 
 #: Judge mode. Off by default, so a local run is the full application; on, it reduces
 #: this API to twenty-three allowlisted paths with no prompt surface. See
@@ -105,6 +116,21 @@ if not _public.enabled:
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
     )
+
+@app.exception_handler(IllegalTransition)
+def _illegal_transition(_request: Request, exc: IllegalTransition) -> JSONResponse:
+    """A refused lifecycle move is a conflict, not a server fault.
+
+    `assert_transition` raises this, and it is a `ValueError` — so any route that did
+    not name it explicitly turned a correct refusal into a 500. That is a public
+    surface: opening distribution twice on a finished pool returned one. Handling it
+    once, here, means no route can miss it and no future route has to remember.
+    """
+    return JSONResponse(
+        {"detail": f"this pool cannot go from {exc.current.value} to {exc.requested.value}"},
+        status_code=409,
+    )
+
 
 _settings = get_settings()
 _repo: Repository = build_repository(
@@ -151,11 +177,50 @@ def coarse(lat: float, lon: float) -> tuple[float, float]:
 
 
 def ensure_seeded(ws: str) -> None:
-    if not repo().list_communities(ws):
+    """Populate a cold workspace, exactly once, however many requests arrive at once.
+
+    The browser opens with ``Promise.all([state(), map()])`` and both call this, so the
+    first load of a session is *always* a race — and ``seed()`` opens by deleting every
+    row in the partition. Two unsynchronised seeds therefore do not merely duplicate
+    work: the second one's reset deletes rows the first has already written, and
+    whichever request read in between renders a half-built community.
+
+    So the check and the seed happen under the workspace mutation lease, and are
+    re-checked once it is held: the request that waited for the lease usually finds the
+    world already there and writes nothing. A request that cannot get the lease waits
+    for the holder rather than seeding over the top — a bounded wait, because rendering
+    an empty community is a better failure than blocking a page load indefinitely.
+    """
+    if repo().list_communities(ws):
+        return
+    if not _public.hold_workspace(ws):
+        _wait_for_seed(ws)
+        return
+    try:
+        # Re-read under the lease. The common case for the second tab is that the first
+        # one seeded while this request was waiting, and re-seeding would destroy it.
+        if repo().list_communities(ws):
+            return
         # Seeding writes ~100 rows, and any read endpoint triggers it for a workspace
         # it has not seen. Public mode rations how many cold sessions a day can open.
         _public.spend_new_session()
         seed(repo(), ws)
+    finally:
+        _public.release_workspace(ws)
+
+
+def _wait_for_seed(ws: str) -> None:
+    """Wait, briefly, for whoever holds the lease to finish seeding this workspace.
+
+    Polls the authoritative store rather than the lease, because the lease may be held
+    for something else entirely — a coordinator run on an already-seeded workspace — and
+    the only question here is whether there is a community to render.
+    """
+    deadline = time.monotonic() + _public.settings.seed_wait_seconds
+    while time.monotonic() < deadline:
+        time.sleep(_SEED_POLL_SECONDS)
+        if repo().list_communities(ws):
+            return
 
 
 # --------------------------------------------------------------------------- models
@@ -208,6 +273,52 @@ class OverrideRequest(BaseModel):
 class IssueRequest(BaseModel):
     kind: str
     detail: str = Field(default="", max_length=600)
+
+
+class NeedRequest(BaseModel):
+    """One standing declaration, as a member states it.
+
+    Every field maps to something ``NeedDeclaration`` already holds and something a
+    deterministic engine already reads. There is deliberately nothing here for Smart
+    Join mode: that is a standing property of the *account*, not of one need, and
+    exposing it from this form would make a preferences product out of the one screen
+    that should stay a single honest sentence about what you buy.
+    """
+
+    household_id: str = Field(max_length=60)
+    product_id: str = Field(max_length=60)
+    quantity: int = Field(ge=1, le=100)
+    cadence_days: int = Field(ge=1, le=365)
+    expected_next_need_date: str = Field(max_length=10)
+    flexibility_days: int = Field(default=0, ge=0, le=365)
+    routine_lead_days: int = Field(default=7, ge=0, le=365)
+    min_savings_pct: int = Field(default=20, ge=0, le=90)
+    max_spend_cents: int = Field(ge=1, le=500_000)
+    substitution: str = Field(default="exact_only", max_length=40)
+    active: bool = True
+
+    def to_input(self) -> needs_service.NeedInput:
+        try:
+            due = date.fromisoformat(self.expected_next_need_date)
+        except ValueError as exc:
+            raise HTTPException(400, "that is not a valid date") from exc
+        try:
+            substitution = SubstitutionPolicy(self.substitution)
+        except ValueError as exc:
+            raise HTTPException(400, "unknown substitution preference") from exc
+        return needs_service.NeedInput(
+            household_id=self.household_id,
+            product_id=self.product_id,
+            quantity=self.quantity,
+            cadence_days=self.cadence_days,
+            expected_next_need_date=due,
+            flexibility_days=self.flexibility_days,
+            routine_lead_days=self.routine_lead_days,
+            min_savings_pct=self.min_savings_pct,
+            max_spend_cents=self.max_spend_cents,
+            substitution=substitution,
+            active=self.active,
+        )
 
 
 class OfferUpsertRequest(BaseModel):
@@ -544,6 +655,21 @@ def get_needs(workspace: str = Query("demo")) -> dict[str, Any]:
     r = repo()
     products = {p.id: p for p in r.list_products(ws)}
     return {
+        # The catalogue a member can declare against, alongside their declarations, so
+        # the Needs view can offer a picker without a second round trip. Not a shop:
+        # these are the things this community's suppliers stock, and choosing one states
+        # a need rather than placing an order.
+        "products": [
+            {"product_id": p.id, "name": p.name, "unit": p.unit, "brand": p.brand}
+            for p in sorted(products.values(), key=lambda p: p.name)
+        ],
+        "limits": {
+            "max_quantity": needs_service.MAX_QUANTITY,
+            "max_cadence_days": needs_service.MAX_CADENCE_DAYS,
+            "max_min_savings_pct": needs_service.MAX_MIN_SAVINGS_PCT,
+            "max_spend_cents": needs_service.MAX_SPEND_CENTS,
+            "max_horizon_days": needs_service.MAX_HORIZON_DAYS,
+        },
         "needs": [
             {
                 "need_id": n.id,
@@ -560,13 +686,70 @@ def get_needs(workspace: str = Query("demo")) -> dict[str, Any]:
                 "flexibility_days": n.flexibility_days,
                 "routine_lead_days": n.routine_lead_days,
                 "min_savings_pct": n.min_savings_pct,
+                # Both forms: the display string for the table, the integer for the
+                # edit form. A client that had to parse "$45.00" back into cents
+                # would be re-deriving money on the browser, which is the one place
+                # this project never computes it.
                 "max_spend_display": format_cents(n.max_spend_cents),
+                "max_spend_cents": n.max_spend_cents,
                 "substitution": n.substitution.value,
                 "active": n.active,
             }
             for n in r.list_needs(ws)
-        ]
+        ],
     }
+
+
+@app.post("/api/needs")
+def create_need(body: NeedRequest, workspace: str = Query("demo")) -> dict[str, Any]:
+    """Declare a standing need. **The primary user action of the product.**
+
+    Nothing about this creates or joins a group: it records what one household routinely
+    buys and the terms they will accept, which is the whole of what a member is ever
+    asked to do (AGENTS.md §1, canonical invariant 1). Whether that demand ever becomes
+    a pool is the agent's problem, discovered from the overlap between declarations
+    nobody coordinated.
+
+    No lease. A declaration is a single row keyed by its own id — the same class of
+    participant action as answering a decision or offering to host — and none of those
+    take the workspace lease. Refusing a member's own primary action for the 45 seconds
+    an agent run takes would be a worse product than the race it would prevent, and
+    there is no race: the coordinators that scan-then-write are the ones that need
+    serialising.
+    """
+    ws = check_workspace(workspace)
+    _public.spend_action(ws)
+    ensure_seeded(ws)
+    ctx = ctx_for(ws)
+    try:
+        need = needs_service.declare_need(
+            ctx=ctx, community_id=COMMUNITY_ID, data=body.to_input()
+        )
+    except needs_service.NeedError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return needs_service.need_view(ctx, need)
+
+
+@app.post("/api/needs/{need_id}")
+def update_need(
+    need_id: str, body: NeedRequest, workspace: str = Query("demo")
+) -> dict[str, Any]:
+    """Change or retire one standing need.
+
+    The service refuses when ``household_id`` does not match the stored declaration, so
+    a member cannot rewrite somebody else's rules by sending their own id.
+    """
+    ws = check_workspace(workspace)
+    _public.spend_action(ws)
+    ensure_seeded(ws)
+    ctx = ctx_for(ws)
+    try:
+        need = needs_service.amend_need(
+            ctx=ctx, community_id=COMMUNITY_ID, need_id=need_id, data=body.to_input()
+        )
+    except needs_service.NeedError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return needs_service.need_view(ctx, need)
 
 
 @app.get("/api/members/{household_id}")
@@ -746,12 +929,19 @@ def trigger_run(
     # prompt, so forwarding a client string would hand a stranger the agent's
     # instructions. Off, this is the identity function.
     trigger, instruction = _public.resolve_run(body.trigger, body.instruction)
-    _public.spend_action(ws)
-    ensure_seeded(ws)
-    run = PoolCoordinator(
-        repo(), settings=_settings, routing=_routing, payments=_payments,
-        purchaser=_purchaser, sourcing=_sourcing,
-    ).run(ws, trigger=trigger, instruction=instruction, community_id=COMMUNITY_ID)
+    # This coordinator writes the same partition the deployed one does, and it forms
+    # pools by reading "does one exist yet" and then creating one. Two of these, or one
+    # of these against a live AgentCore run, is the duplicate-pool race — so a local run
+    # takes the same lease the live action does. The lease is taken before the quota for
+    # the same reason as in the live path: losing a race should not also cost the loser
+    # one of their actions.
+    with _public.workspace_mutation(ws, public_demo.WORKSPACE_BUSY):
+        _public.spend_action(ws)
+        ensure_seeded(ws)
+        run = PoolCoordinator(
+            repo(), settings=_settings, routing=_routing, payments=_payments,
+            purchaser=_purchaser, sourcing=_sourcing,
+        ).run(ws, trigger=trigger, instruction=instruction, community_id=COMMUNITY_ID)
     return {
         "run_id": run.id,
         "outcome": run.outcome.value,
@@ -1173,28 +1363,27 @@ def reset(workspace: str = Query("demo")) -> dict[str, Any]:
     # writes that same partition from a different compute environment. Landing this
     # between a pool being created and its members being written leaves a workspace that
     # is internally inconsistent without looking broken, so reset waits its turn.
-    _public.require_workspace_idle(
-        ws,
-        "The deployed agent is still working on this session. "
-        "Give it a moment, then start over.",
-    )
-    try:
+    #
+    # The lease covers the quota check and the entire destructive reset/reseed, not just
+    # an initial idle check. A check followed by an early release leaves a gap in which
+    # another coordinator can start while `seed()` is deleting and rewriting rows.
+    with _public.workspace_mutation(ws, public_demo.WORKSPACE_BUSY):
         _public.spend_action(ws)
         counts = seed(repo(), ws)
-        return {"workspace": ws, "reset": True, "seeded": counts}
-    finally:
-        # The lease must cover the quota check and the entire destructive reset/reseed,
-        # not just the initial idle check. Otherwise a live AgentCore run can start after
-        # the check and mutate this partition while `seed()` is deleting and rewriting it.
-        _public.release_workspace(ws)
+    return {"workspace": ws, "reset": True, "seeded": counts}
 
 
 @app.post("/api/demo/scenario")
 def scenario(workspace: str = Query("demo")) -> dict[str, Any]:
     """Run the full showcase end to end and return the transcript."""
     ws = check_workspace(workspace)
-    _public.spend_action(ws)
-    result = run_showcase(repo(), ws, settings=_settings, routing=_routing)
+    # The showcase reseeds the workspace and then drives the entire lifecycle through
+    # it — several hundred writes. A live agent run, a reset, or a second tab's scenario
+    # landing anywhere inside that produces a workspace that is inconsistent without
+    # looking broken, so it holds the lease for the whole thing.
+    with _public.workspace_mutation(ws, public_demo.WORKSPACE_BUSY):
+        _public.spend_action(ws)
+        result = run_showcase(repo(), ws, settings=_settings, routing=_routing)
     return result.to_dict()
 
 

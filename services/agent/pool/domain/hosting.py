@@ -146,10 +146,30 @@ def evaluate_host(
     )
 
 
+def ranking_key(*, household_id: str, score: int) -> tuple[int, str]:
+    """The canonical host ordering, defined once. Lower sorts better.
+
+    Highest score first; ties break on the **lower** household id, so a rerun of the
+    same pool offers the job to the same person. Two callers used to derive this
+    independently — this module ranked ascending by id, while the hosting service
+    selected with ``max((score, household_id))`` and therefore preferred the *higher*
+    id on a tie. Both were deterministic and they disagreed, which is worse than either:
+    the ranking a judge is shown came from one and the offer from the other (#audit P2).
+
+    Exported as the key rather than as a sorted list because the service ranks
+    ``HostCandidate`` rows and this module ranks ``HostEvaluation`` objects. They are
+    different types with the same ordering, and the ordering is the part that must not
+    be written twice.
+    """
+    return (-score, household_id)
+
+
 def rank_hosts(evaluations: list[HostEvaluation]) -> list[HostEvaluation]:
     """Eligible candidates, best first. Ties break on household id so runs repeat."""
     eligible = [e for e in evaluations if e.eligible]
-    return sorted(eligible, key=lambda e: (-e.score, e.household_id))
+    return sorted(
+        eligible, key=lambda e: ranking_key(household_id=e.household_id, score=e.score)
+    )
 
 
 def estimate_weight_kg(units: int, unit_weight_grams: int) -> int:

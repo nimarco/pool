@@ -100,6 +100,21 @@ function Elapsed({ running }: { running: boolean }) {
 
 /* -------------------------------------------------------------- tool catalogue */
 
+/** What each effect label means, in a judge's words rather than the code's.
+ *
+ *  Served from `/api/health`, which serves the agent's own `TOOL_SURFACE`, so these are
+ *  the same four kinds the model is handed. `record` exists because three kinds could
+ *  not describe the tool surface honestly: the host search writes a candidate
+ *  evaluation and opens recruiting, which is neither inert nor a commitment anyone can
+ *  observe. Calling it a read — which this page did — was the inaccuracy, not the
+ *  writing. */
+const TOOL_EFFECT: Record<string, string> = {
+  read: "reads only",
+  record: "records its working state",
+  act: "commits something",
+  end: "ends the run",
+};
+
 /** The menu, with whatever the agent picked marked. Before a run this is "here are the
  *  twelve doors"; after one it is "here is the sequence it opened, in order". */
 function ToolCatalogue({
@@ -127,13 +142,7 @@ function ToolCatalogue({
               <span className="mono" style={{ fontSize: 13, fontWeight: 600 }}>
                 {tool.name}
               </span>{" "}
-              <span className="tiny faint">
-                {tool.kind === "read"
-                  ? "reads only"
-                  : tool.kind === "act"
-                    ? "commits something"
-                    : "ends the run"}
-              </span>
+              <span className="tiny faint">{TOOL_EFFECT[tool.kind] ?? tool.kind}</span>
             </div>
             <div className="row-tail">
               {picks.length > 0 ? (
@@ -358,10 +367,13 @@ export function AgentExecution({
         <div className="panel-pad">
           <p className="small muted prose" style={{ marginBottom: 14 }}>
             The model has no shell, no query language, and no generic mutation. It reaches
-            the world through these typed functions and nothing else. Reads cannot change
-            anything; the ones that commit are idempotent by an explicit key, because
-            agent systems retry and a repeated <span className="mono">create_candidate_pool</span>{" "}
-            must not produce two pools.
+            the world through these typed functions and nothing else. Each one is labelled
+            by what it actually writes, and a test calls every tool marked{" "}
+            <em>reads only</em> against a snapshot of the whole workspace to prove the
+            label — because a door described as harmless is worth exactly what the check
+            behind it is worth. The ones that commit are idempotent by an explicit key,
+            because agent systems retry and a repeated{" "}
+            <span className="mono">create_candidate_pool</span> must not produce two pools.
           </p>
           {tools.length === 0 ? (
             <Empty>The tool catalogue was not available from this server.</Empty>
@@ -372,10 +384,13 @@ export function AgentExecution({
             <p className="tiny muted" style={{ marginTop: 14 }}>
               Every run is bounded inside the event loop, not by asking the model nicely:{" "}
               {health.bounds.max_iterations} iterations, {health.bounds.max_tool_calls} tool
-              calls, {health.bounds.max_duplicate_tool_calls} identical calls before it is
-              treated as a loop, {health.bounds.workflow_timeout_seconds}s wall clock. A run
-              that hits one ends loudly as a recorded fault, never a silent truncation that
-              looks like an answer.
+              calls, {health.bounds.max_duplicate_tool_calls} identical calls before the next
+              one is refused, and a {health.bounds.workflow_timeout_seconds}s wall clock
+              checked before every model and tool call. That clock ends a run that is taking
+              too long; a call that hangs is caught by the layer that owns the process
+              instead — the runtime invocation times out at 60s, the function at 90s. A run
+              that hits any of them ends loudly as a recorded fault, never a silent
+              truncation that looks like an answer.
             </p>
           ) : null}
         </div>

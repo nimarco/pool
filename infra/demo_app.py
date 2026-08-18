@@ -202,7 +202,6 @@ class PoolDemoStack(Stack):
             # Agent bounds, same defaults as everywhere else.
             "MAX_AGENT_ITERATIONS": "8",
             "MAX_TOOL_CALLS_PER_RUN": "25",
-            "MAX_TOOL_RETRIES": "3",
             "MAX_DUPLICATE_TOOL_CALLS": "2",
             # 45, matching `agentcore/agentcore.json`, and it has to be *below* this
             # function's own timeout to mean anything. It was 120 — larger than the 90 s
@@ -258,7 +257,31 @@ class PoolDemoStack(Stack):
             environment=env,
             log_group=log_group,
         )
-        table.grant_read_write_data(fn)
+        # Exactly the five DynamoDB actions this function issues, rather than
+        # `grant_read_write_data`, which also hands it Scan, DescribeTable, BatchGetItem,
+        # ConditionCheckItem, DeleteItem and the stream read actions. None of those
+        # appear anywhere in `pool/`:
+        #
+        #   GetItem / PutItem / Query   the repository's three primitives
+        #   UpdateItem                  the quota counters and the workspace lease, both
+        #                               of which are conditional writes
+        #   BatchWriteItem              `reset()` deletes a workspace through a batch
+        #                               writer, so the delete travels as a batch
+        #
+        # Scan is the one worth naming: it is the action that turns a per-workspace grant
+        # into a whole-table read, and the single-table design has no reason to issue one.
+        fn.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:Query",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:BatchWriteItem",
+                ],
+                resources=[table.table_arn],
+            )
+        )
 
         # The single privileged thing this function can do, scoped to one runtime ARN.
         # This is why the browser needs no AWS credential and the runtime can keep

@@ -44,6 +44,7 @@ import {
   Meter,
   TracePills,
 } from "../ui";
+import { groupSavingsCaption } from "../labels";
 import { Feed } from "./community";
 import { AgentExecution } from "./live";
 import { RunView } from "./run";
@@ -148,11 +149,7 @@ export function PoolRecord({
           label={pool.is_estimate ? "Estimated saving" : "Saving against retail"}
           value={pool.savings_pct || "—"}
           accent={!pool.is_estimate}
-          sub={
-            pool.economics
-              ? `${money(pool.economics.net_savings_cents)} across the group, after every cost`
-              : "host pay is not fixed until a host accepts"
-          }
+          sub={groupSavingsCaption(pool)}
         />
       </section>
 

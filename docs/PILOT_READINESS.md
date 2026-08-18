@@ -153,6 +153,41 @@ that gets called by accident.
 
 ---
 
+## Concurrency: what is serialised, and what is not
+
+Worth stating precisely, because the honest answer is "most of it, and deliberately not
+all of it".
+
+**Serialised today.** Every coordinator that scans-then-writes a workspace takes one
+conditional-write lease keyed by that workspace: first-load seeding, reset, the showcase
+scenario, a local coordinator run, and the live AgentCore invocation. Two of those can
+no longer interleave, on one machine or across Lambda containers. The writes the lease
+protects are *also* conditional where a duplicate would be visible — candidate-pool
+creation claims its idempotency key, and pickup redemption claims its credential — so
+the invariant does not rest on the lease alone.
+
+**Not serialised, and a pilot blocker.** Participant actions — answering a decision,
+withdrawing, volunteering to host, opening distribution, issuing or redeeming a pickup
+credential, declaring a need — do **not** take the lease. That is a deliberate trade for
+the demo: the lease can be held for the length of a live agent run, and refusing a
+member's own action for that long would break the product to protect it.
+
+The residual race is real and narrow. `issue_final_offer` reads its membership set once;
+a withdrawal landing after that read is included in the offer and its state overwritten.
+It needs genuine concurrency — two tabs, or a script — and the synthetic demo has no
+money in it. For real users it is not acceptable, and the fix is not a wider lease:
+
+- entity version numbers on `Membership`, `Pool`, and `PaymentRecord`, with conditional
+  writes that fail on a stale read, so a lost update is an error rather than silence;
+- a transaction around the final-offer write set, so membership and economics commit
+  together or not at all.
+
+That is the entity-versioning work listed under **Not implemented**. It touches the
+domain broadly, which is why it belongs to pilot readiness rather than to a submission
+freeze — but it is a blocker for real money, not a nice-to-have.
+
+---
+
 ## Would a pilot require rewriting the core?
 
 No — and that was the design constraint. The seams that would move are all adapters:

@@ -607,7 +607,7 @@ function ImpactBody({ f }: { f: Facts }) {
           label="Kept in the community"
           value={s(f, "collective_saving")}
           accent
-          sub={`${s(f, "average_saving_each")} each, after every cost`}
+          sub={`${s(f, "average_saving_each")} each, after merchandise, host pay, card processing and Pool's fee`}
         />
       </div>
       <div className="grid grid-2">

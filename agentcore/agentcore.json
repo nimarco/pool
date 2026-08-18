@@ -40,7 +40,6 @@
         { "name": "SCHEDULES_ENABLED", "value": "false" },
         { "name": "MAX_AGENT_ITERATIONS", "value": "8" },
         { "name": "MAX_TOOL_CALLS_PER_RUN", "value": "25" },
-        { "name": "MAX_TOOL_RETRIES", "value": "3" },
         { "name": "MAX_DUPLICATE_TOOL_CALLS", "value": "2" },
         { "name": "WORKFLOW_TIMEOUT_SECONDS", "value": "45" },
         { "name": "MAX_ROUTE_MATRIX_CELLS", "value": "100" },

@@ -166,7 +166,7 @@ synthesized template — which is how rows 17–21 were found at all.
 | Resource | Service | Created | Purpose | Recurring cost? | Destroy by |
 | --- | --- | --- | --- | --- | --- |
 | `CDKToolkit` | CloudFormation | 2026-08-16 | Bootstrap stack, version 32 | No | Manual (see #0023) |
-| `cdk-hnb659fds-assets-860325090409-us-east-1` | S3 | 2026-08-16 | Deploy staging bucket — **holds 2 objects, 41.7 MiB** | **Yes — S3 storage, ~$0.001/mo at current size** | Empty + delete before stack |
+| `cdk-hnb659fds-assets-860325090409-us-east-1` | S3 | 2026-08-16 | Deploy staging bucket. **Size not re-measured on 2026-08-18** — the session token expired before the check, and a figure nobody verified does not belong here. It has grown: every `agentcore deploy` and `deploy-demo` publishes a new ~70 MB bundle and hashed objects do not expire. Re-measure with `aws s3 ls s3://cdk-hnb659fds-assets-860325090409-us-east-1 --recursive --summarize` | **Yes — S3 storage, low single-digit $/mo at worst.** Growth is per-deploy, not per-request | Empty + delete before stack |
 | `cdk-hnb659fds-container-assets-860325090409-us-east-1` | ECR | 2026-08-16 | Bootstrap image repo — **empty, 0 images** (CodeZip needs none) | No (empty) | With CDKToolkit |
 | `/cdk-bootstrap/hnb659fds/version` | SSM Parameter | 2026-08-16 | Bootstrap version marker (`32`) | No (standard tier) | With CDKToolkit |
 | `cdk-hnb659fds-cfn-exec-role-…` | IAM Role | 2026-08-16 | CFN execution — **holds `AdministratorAccess`** | No | With CDKToolkit |
@@ -183,10 +183,10 @@ synthesized template — which is how rows 17–21 were found at all.
 | Resource | Service | Created | Purpose | Recurring cost? | Destroy by |
 | --- | --- | --- | --- | --- | --- |
 | `AgentCore-Pool-default` | CloudFormation | 2026-08-16 | Pool runtime stack | No | `make destroy-agent` |
-| `Pool_PoolCoordinator-TmVqSN9H56` | Bedrock AgentCore Runtime | 2026-08-16 | Deployed coordinator, status `READY` | **No — billed per invocation only.** No always-on compute; idle session 60 s, max lifetime 300 s | `make destroy-agent` |
+| `Pool_PoolCoordinator-TmVqSN9H56` | Bedrock AgentCore Runtime | 2026-08-16 | Deployed coordinator, status `READY`. **Version 4** as of 2026-08-18 (#0031) | **No — billed per invocation only.** No always-on compute; idle session 60 s, max lifetime 300 s | `make destroy-agent` |
 | `AgentCore-Pool-default-ApplicationAgentPoolCoordina-Ad6KX4akMhNd` | IAM Role | 2026-08-16 | Runtime execution role | No | `make destroy-agent` |
 | `Agent-Appli-6NpmisJ95ByC` | IAM Policy | 2026-08-16 | Inline policy: Bedrock invoke, scoped Logs, X-Ray, config bundles | No | `make destroy-agent` |
-| `ApplicationAgentPoolCoordinatorRuntimeAdditionalCustomPolicy03BEAE200` | IAM Policy | **2026-08-17** (#0030) | Inline policy from `services/agent/iam/agentcore-dynamodb.json`: `GetItem`, `PutItem`, `Query` on `table/pool-demo-state` and nothing else. Verified by `iam simulate-principal-policy`: `DeleteItem`, `BatchWriteItem`, `UpdateItem`, `Scan`, `DeleteTable` all `implicitDeny`, and any other table `implicitDeny` | No | `make destroy-agent` |
+| `ApplicationAgentPoolCoordinatorRuntimeAdditionalCustomPolicy03BEAE200` | IAM Policy | **2026-08-17** (#0030) | Inline policy from `services/agent/iam/agentcore-dynamodb.json`: `GetItem`, `PutItem`, `Query` on `table/pool-demo-state` and nothing else. Verified by `iam simulate-principal-policy`: `DeleteItem`, `BatchWriteItem`, `UpdateItem`, `Scan`, `DeleteTable` all `implicitDeny`, and any other table `implicitDeny`. **Region pinned to `us-east-1` on 2026-08-18** (#0031) — the resource ARN was `arn:aws:dynamodb:*:*:table/pool-demo-state`, granting the runtime a same-named table in every region for no reason. The account segment stays a wildcard deliberately: the role can only act in its own account | No | `make destroy-agent` |
 
 **Created *outside* both stacks — `make destroy-agent` will NOT remove these**
 
@@ -224,7 +224,7 @@ six invocations totalling ~30 s of processing is the entire compute spend so far
 | `DemoApi/FunctionUrl` | Lambda Function URL, `AuthType: NONE` | `https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/` | No | With the stack |
 | `DemoState` | DynamoDB, PAY_PER_REQUEST, TTL `ttl` **ENABLED** | **`pool-demo-state`** — explicit physical name since 2026-08-17, so the AgentCore runtime (a different stack, a different tool) can name the same table. **Replaced** the generated-name table below | ~$0 — storage only, rows self-delete in 24 h | With the stack |
 | `DemoLogs` | CloudWatch Logs, **14 days** | `PoolDemoStack-DemoLogs66B26719-oLVBNSrBt9aX` | Yes — KB-scale | With the stack |
-| `DemoApi/ServiceRole` | IAM Role | `PoolDemoStack-DemoApiServiceRoleD1A1B4D5-kT16gVvbahFM` | No | With the stack |
+| `DemoApi/ServiceRole` | IAM Role | `PoolDemoStack-DemoApiServiceRoleD1A1B4D5-kT16gVvbahFM`. **DynamoDB grant narrowed 2026-08-18** (#0031) from `grant_read_write_data` to the five actions the code issues — `GetItem`, `PutItem`, `Query`, `UpdateItem`, `BatchWriteItem`. Removed: `Scan`, `DeleteItem`, `DescribeTable`, `BatchGetItem`, `ConditionCheckItem`, `GetRecords`, `GetShardIterator` | No | With the stack |
 | Role default policy | IAM Policy | `PoolD-DemoA-IgvYHVbqMZn9` — DynamoDB on one table, `InvokeAgentRuntime` on one runtime ARN | No | With the stack |
 | 2 x invoke permission | Lambda Permission | `...-DemoApiinvokefunctionEB041109-WxR1cOdgWRyn`, `...-DemoApiinvokefunctionurl07DCB729-roeUn4lhuRUD` | No | With the stack |
 
@@ -3248,3 +3248,169 @@ arithmetic... drawn", "the three numbers live in three files, which is why this 
 asserting". The existing deadline test did assert an ordering; it just asserted the
 runtime's bound and never the function's own. A test that checks the number you remembered
 to check is not coverage of the claim.
+
+---
+
+### #0031 — [2026-08-18] — An external audit, and the difference between a bound and a claim
+
+**Status: Implemented, Tested, Deployed.** An independent read-only audit produced a
+findings list. This entry records what survived contact with the code, what did not, and
+the one finding that was real in a different way than reported.
+
+**Two P0s.**
+
+*Workspace mutations were not all serialised.* The lease existed and was correct — it just
+guarded one caller. The browser opens with `Promise.all([state(), map()])`, both reach
+`ensure_seeded`, and `seed()` begins with `repo.reset()`, so a cold first load was *always*
+a race in which the second seed deletes rows the first has written. The scenario and the
+local coordinator run held nothing either. Now one lease per workspace is taken by every
+coordinator that scans-then-writes: seeding, reset, scenario, local run, live run.
+
+Four decisions inside that are worth keeping:
+
+- **Re-entrant per request.** A coordinator run seeds a cold workspace before it runs, so
+  an inner acquisition that blocked on its caller's own lease would deadlock a request
+  against itself. Thread-local depth, because a sync FastAPI handler runs start to finish
+  on one worker thread.
+- **Always on, not gated on public mode.** Two tabs are two tabs on a laptop. A protection
+  that only exists in production is one nothing ever tests.
+- **Seeding waits; it does not 409.** Every other mutator refuses immediately, but a first
+  page load must not error — the loser polls the store briefly and renders what exists.
+- **The lease is coordination, not the invariant.** So the writes it protects are also
+  conditional: candidate creation claims its idempotency key with a conditional put and
+  hands the loser the *winner's* pool id, and pickup redemption claims its credential with
+  a conditional update. The claim is written before the pool and carries the id, which is
+  what makes a crash between the two writes recoverable rather than a key nobody can use
+  again.
+
+*Final-offer convergence.* Reported as "the fourth pass may prune and exit with stale
+economics". Structurally true and worse than described — reproduced with
+`MAX_PRICING_PASSES=1`: economics for ten buyers and twenty-four units against nine
+surviving members, **seven of them authorised at ten-buyer prices**, and a twenty-four-unit
+order for twenty-two units of real demand. Those per-buyer figures are what
+`authorize_participant` puts a hold on and the case count is what sizes the supplier order,
+so it is a money bug, not a display bug.
+
+**But the reported reachability was wrong, and that is the more interesting half.** No
+shipped *hard* policy rule is price-dependent — `min_net_savings` and `max_spend` are soft
+and return `HUMAN_APPROVAL_REQUIRED`; only `substitution` and `pickup_day` are hard, and
+neither moves with price. So pruning always finishes on pass 1 and passes 2–4 are spare.
+Measured: a hard rejection uses **two** pricing passes and economics matched membership.
+The invariant was holding **by accident of the policy table**, not by construction. Making
+one soft rule hard — an ordinary future product change — would have silently authorised
+money at the wrong price. Fixed anyway: economics are now assigned in exactly one place,
+guarded by a pass that rejected nobody, and running out of passes fails loudly and
+authorises no one.
+
+**A label that had stopped being true.** `find_host_candidates` was published as a *read*
+to the model, to `/api/health`, and to the Showcase page, while calling
+`open_host_recruiting` — which transitions the pool and logs activity — and persisting a
+candidate record per evaluation. The tool was fine; the label was the defect. Rather than
+fix one string, the effect vocabulary grew a fourth kind (`record`) and, more usefully,
+`test_agent_effects.py` now snapshots the **entire workspace** around every tool declared
+`read` and fails if anything moved. Confirmed it fails against the old label. The deployed
+live run then showed `find_host_candidates` returning `status: host_recruiting`, which is
+the mislabel visible in production output.
+
+**A bound that enforced nothing.** `MAX_TOOL_RETRIES=3` was in `config.py`, both CDK
+stacks, the AgentCore runtime, and `COST_NOTES.md` as "bounded with backoff" — and was read
+by nothing. Pool has no generic tool retry, and re-running a consequential call is the
+wrong default for a system that moves money, so it was **removed rather than implemented**.
+The 45 s wall clock is now described as what it is: cooperative, checked *before* each
+model and tool call, ending a run that is taking too long but unable to interrupt one that
+has hung — the bridge's 60 s read timeout and the function's 90 s timeout are the rungs
+that bound that. A configured limit for behaviour that does not exist is worse than no
+limit, because it reads as a guarantee. `AGENTS.md` §3.1 now says so.
+
+**The product gained its primary action.** Needs were readable and not writable, which made
+the most distinctive thing about Pool the one thing a judge could not do. `POST /api/needs`
+and `POST /api/needs/{id}` go through a new `services/needs.py`, exposing only fields the
+domain already stores and enforcing the rules deterministically: one active declaration per
+household per product (two rows would double-count demand), pull-forward capped at one
+cadence (restocking before the previous purchase is used is storage nobody agreed to), and
+an ownership check so supplying your own id cannot rewrite someone else's rules. Smart Join
+mode is deliberately absent — it is an account property, not a need's, and putting it here
+would make a settings product out of the one screen that should stay a single sentence
+about what you buy. Nothing in the form can create a group.
+
+**Two lifecycle defects.** Pickup credentials could be issued and redeemed between
+`PURCHASED` and `DISTRIBUTING` — allocations exist after purchase, so every check the code
+performed passed, and the goods were still at the supplier. Gated on both issuance and
+redemption, with the lifecycle check placed *after* credential identification so a
+wrong-pool scan keeps its own distinct audit reason. And host ranking disagreed with itself:
+the domain broke ties toward the lower household id, the service selected with
+`max((score, household_id))` and therefore preferred the higher one. Both deterministic,
+both defensible, and they named different people — so the ranking shown and the offer made
+could differ. One exported `ranking_key`, both callers use it.
+
+**A public 500, found while verifying something else.** `IllegalTransition` is a
+`ValueError`; routes that did not name it explicitly turned a correct refusal into a server
+error. `open-distribution` is public, so clicking it twice on a finished pool returned one.
+Handled once at the app level as a 409 — no route can miss it, and no future route has to
+remember.
+
+**The quality gate was reporting a green tick over a skipped application.** `npm run lint`
+referenced ESLint from the first commit and ESLint was never a dependency, and `make qa`
+did not call it at all. ESLint installed (16 files, 0 findings, and confirmed to catch a
+planted defect), thirteen frontend tests added against the two things only a frontend test
+can assert — that the primary action reaches the API, and that the words beside a number
+match the number — and `qa` now runs both. `vitest` pinned to v3 rather than v2 so the test
+tooling added **zero** new advisories; production `npm audit` stays at 0. The two remaining
+Vite/esbuild advisories are development-only and fixable only by a major upgrade, which is
+not a thing to do days before a freeze.
+
+**Cloud.** The Lambda's table grant went from `grant_read_write_data` to the five actions
+the code issues; `Scan` is the one worth naming, since it is what turns a per-workspace
+single-table design into a whole-table read. The AgentCore policy's region wildcard is
+pinned. Security headers gained CSP, HSTS and Permissions-Policy — the CSP was written
+against the built bundle rather than from a template, which is why `script-src` can be
+`'self'` with no `unsafe-inline`, and why `style-src` honestly keeps it (the views use React
+`style={{}}`, which CSP counts as inline).
+
+**Reserved concurrency remains impossible, and the docs now say so.** Re-verified: account
+limit **10**, unreserved **10**, quota `L-B99A9384` value 10. AWS enforces
+`account_limit - sum(reserved) >= 10`, so any reservation is rejected. `README.md` claimed
+one and `COST_NOTES.md` claimed a specific reservation of 5 that never existed on the
+deployed function. No quota increase requested — the account ceiling is the cheaper control
+and it is already in force.
+
+**Two findings were not acted on, deliberately.** The reported secret-scanner noise was
+`gitleaks`, which this repository does not use; its own scanner exits 0 and its self-test
+still catches planted secrets, so adding suppressions for a tool we do not run would have
+repeated the `MAX_TOOL_RETRIES` mistake exactly. And participant actions — respond,
+withdraw, host-offer, open-distribution, pickup, needs — stay **outside** the lease. Holding
+it for a 45 s agent run would refuse a member their own primary action to protect them. The
+residual race is real (`issue_final_offer` reads its membership set once; a withdrawal
+landing after that read is included and overwritten), needs genuine concurrency, and is now
+written down in `PILOT_READINESS.md` as a pilot blocker with the actual fix: entity
+versioning plus a transaction around the final-offer write set. Not a wider lock.
+
+**Verified.** `make qa` green: ruff clean, ESLint clean, **731** agent tests (was 635),
+**75** infrastructure (was 72), **13** frontend (was 0), secret scan and self-test clean,
+production audit 0. AgentCore deployed first (runtime **v4**, `READY`), then `PoolDemoStack`
+— both diffs reviewed before applying, and the IAM change is strictly a removal.
+
+One live proof run, fresh workspace `w414eca3df8c044ff`: run `run_c754d9acf69d`,
+`pool_created`, `completed`, 7 iterations, Nova Lite, 23,842 in / 516 out, 7,090 ms in
+AgentCore and 14,395 ms end to end, tools
+`list_latent_demand → evaluate_pool_economics → create_candidate_pool → find_host_candidates
+→ request_host_acceptance → issue_final_offer`, producing `pool_b6dfdce9fc19` whose
+`created_by_run` matches the run id, confirmed by a consistent read of
+`w414eca3df8c044ff#POOL` and by what `/api/state` serves the browser.
+
+Production regression: two-tab first load seeded **once**; two simultaneous resets returned
+**409 + 200** across Lambda containers, which is the lease working in the environment it
+was written for; workspace isolation held; needs create/edit/re-read and both refusals
+behaved; no duplicate pool after a second run; the canonical **$861.44 / $266.32 / 24
+units** unchanged on the deployed stack; ten pickups completed with one replay rejected; no
+500s; 390 px with zero overflow on every view and zero console errors.
+
+**What the audit was most useful for.** Not the defects — those were findable. It was that
+four separate items were the same shape: a **number or a label that had stopped describing
+anything**, each with a comment nearby asserting it was accurate. A retry bound nothing
+read. A tool kind contradicted by the tool. A concurrency reservation that never existed. A
+convergence invariant holding by coincidence. #0030 hit the same shape twice and drew the
+same conclusion — "a test that checks the number you remembered to check is not coverage of
+the claim" — which is why the fixes here are mostly *mechanisms* rather than edits: a
+workspace snapshot around every read tool, a test that fails on any bound nothing enforces,
+an endpoint count asserted against the router, and a lint gate that actually runs.

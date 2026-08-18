@@ -195,6 +195,67 @@ def test_responses_carry_hardening_headers(client):
     assert headers["x-content-type-options"] == "nosniff"
     assert headers["x-frame-options"] == "DENY"
     assert headers["referrer-policy"] == "no-referrer"
+    assert headers["strict-transport-security"].startswith("max-age=")
+    assert "camera=()" in headers["permissions-policy"]
+    assert "geolocation=()" in headers["permissions-policy"]
+
+
+def test_the_content_security_policy_is_one_the_bundle_can_satisfy(client):
+    """A CSP is only worth what the page complies with.
+
+    Every directive here was checked against the built SPA in a browser: Vite emits a
+    single same-origin module script, the favicon is an inline `data:` SVG, the font is
+    bundled, and the API is same-origin. Loosening any of these is a change to what the
+    page is allowed to reach, so it fails here first (#audit P2).
+    """
+    policy = get(client, "/api/health").headers["content-security-policy"]
+    directives = dict(
+        part.strip().split(" ", 1) for part in policy.split(";") if " " in part.strip()
+    )
+
+    assert directives["default-src"] == "'self'"
+    assert directives["connect-src"] == "'self'"
+    assert directives["font-src"] == "'self'"
+    assert directives["frame-ancestors"] == "'none'"
+    assert directives["object-src"] == "'none'"
+    assert directives["base-uri"] == "'none'"
+    # Exactly one `data:` allowance, for the inline SVG favicon.
+    assert directives["img-src"] == "'self' data:"
+
+
+def test_the_script_policy_permits_no_inline_or_eval(client):
+    """The one directive that actually stops XSS, and the one there is no reason to
+    relax: nothing in `index.html` is inline and nothing in the bundle evals."""
+    policy = get(client, "/api/health").headers["content-security-policy"]
+    script = next(
+        part.strip() for part in policy.split(";") if part.strip().startswith("script-src")
+    )
+
+    assert script == "script-src 'self'"
+    assert "unsafe-inline" not in script
+    assert "unsafe-eval" not in script
+
+
+def test_the_style_policy_admits_why_it_is_looser(client):
+    """The views use React `style={{…}}` attributes, which CSP counts as inline styles.
+
+    Stating that beats a policy that looks stricter and breaks the first time the page
+    renders — but the allowance must stay confined to styles.
+    """
+    policy = get(client, "/api/health").headers["content-security-policy"]
+    style = next(
+        part.strip() for part in policy.split(";") if part.strip().startswith("style-src")
+    )
+
+    assert style == "style-src 'self' 'unsafe-inline'"
+
+
+def test_the_security_headers_reach_the_app_shell_not_only_the_api(static_api):
+    """A CSP on `/api/*` and not on the HTML would protect nothing that renders."""
+    headers = TestClient(static_api.app).get("/").headers
+
+    assert "content-security-policy" in headers
+    assert headers["x-frame-options"] == "DENY"
 
 
 def test_public_mode_adds_no_permissive_cors_header(client):
@@ -732,6 +793,15 @@ def _conditional_check_failed() -> Exception:
     )
 
 
+class ConditionalCheckFailedException(Exception):
+    """What DynamoDB raises when a conditional write loses.
+
+    The adapters detect it by class name, exactly as they do against the real service —
+    botocore builds that class dynamically from the error code, so there is no importable
+    type to catch and a name check is the honest way to recognise it.
+    """
+
+
 class FakeDynamoTable:
     """A DynamoDB table faithful enough to run the whole lifecycle through.
 
@@ -785,11 +855,18 @@ class FakeDynamoTable:
             for v in value:
                 FakeDynamoTable._no_floats(v)
 
-    def put_item(self, Item):  # noqa: N803 - boto3's parameter name
+    def put_item(self, Item, ConditionExpression=None):  # noqa: N803 - boto3's names
         self._count("put_item")
         self._no_floats(Item["data"])
         size = len(json.dumps(Item, default=str))
         assert size < self.MAX_ITEM_BYTES, f"{Item['pk']}/{Item['sk']} is {size} bytes"
+        if ConditionExpression is not None:
+            # Only the one form Pool issues. Anything else must fail the test rather
+            # than be quietly treated as unconditional — a fake that ignores a condition
+            # proves the opposite of what a conditional-write test is for.
+            assert ConditionExpression == "attribute_not_exists(pk)", ConditionExpression
+            if (Item["pk"], Item["sk"]) in self.items:
+                raise ConditionalCheckFailedException(ConditionExpression)
         self.items[(Item["pk"], Item["sk"])] = self._round_trip(Item)
 
     def get_item(self, Key, ConsistentRead=False):  # noqa: N803 - boto3's parameter names
@@ -823,11 +900,11 @@ class FakeDynamoTable:
         return {"Items": [self.items[k] for k in sorted(keys)]}
 
     def update_item(self, **kwargs):
-        """The two conditional writes Pool issues, each evaluated for real.
+        """The conditional writes Pool issues, each evaluated for real.
 
         Dispatch is on the values the expression carries rather than on the key, so an
         expression that changes shape stops matching and fails loudly instead of being
-        silently reinterpreted as the other one.
+        silently reinterpreted as another one.
         """
         self._count("update_item")
         key = (kwargs["Key"]["pk"], kwargs["Key"]["sk"])
@@ -855,6 +932,14 @@ class FakeDynamoTable:
             return
         if ":zero" in values:  # lease release: SET until = 0
             self.items[key] = {**row, "pk": key[0], "sk": key[1], "until": values[":zero"]}
+            return
+        if ":at" in values:  # pickup: SET data.redeemed_at IF unset or empty
+            data = row.get("data")
+            if not data or data.get("redeemed_at", "") != "":
+                refuse()
+            self.items[key] = {
+                **row, "data": {**data, "redeemed_at": values[":at"]},
+            }
             return
         raise AssertionError(f"unrecognised conditional update: {kwargs}")
 
@@ -1135,3 +1220,42 @@ def test_none_of_this_applies_when_public_mode_is_off():
     # Endpoints judge mode removes are still present locally.
     assert client.get("/api/members/hh_okafor?workspace=demo").status_code == 200
     assert client.get("/api/threads/nope?workspace=demo").json() != {"detail": "not found"}
+
+
+def test_the_published_endpoint_counts_are_the_real_ones():
+    """The README, the architecture doc and this module's own docstring all quote these.
+
+    They drifted: the docs said "14 of 45 endpoints" long after the surface had changed,
+    which is the sort of number a judge can check in thirty seconds. Counting
+    ``(method, path)`` pairs rather than paths, because that is what "an endpoint a
+    stranger can call" actually means — one path with two verbs is two doors.
+    """
+    import re
+
+    from pool.api.app import app
+
+    endpoints = {
+        (method, route.path)
+        for route in app.routes
+        for method in (getattr(route, "methods", set()) or set()) - {"HEAD", "OPTIONS"}
+        if getattr(route, "path", "").startswith("/api")
+    }
+
+    def reachable(method: str, path: str) -> bool:
+        concrete = re.sub(r"\{[^}]+\}", "sampleid", path)
+        if method == "GET":
+            return concrete in public_demo.ALLOWED_GET or any(
+                p.match(concrete) for p in public_demo.ALLOWED_GET_PATTERNS
+            )
+        if method == "POST":
+            return concrete in public_demo.ALLOWED_POST or any(
+                p.match(concrete) for p in public_demo.ALLOWED_POST_PATTERNS
+            )
+        return False
+
+    public = {e for e in endpoints if reachable(*e)}
+
+    assert len(endpoints) == 40, f"the full API is now {len(endpoints)} endpoints"
+    assert len(public) == 24, f"judge mode now exposes {len(public)} endpoints"
+    # The reduction is the point: most of the application is not on the public URL.
+    assert len(public) < len(endpoints) / 1.5

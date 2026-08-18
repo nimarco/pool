@@ -84,6 +84,10 @@ ESTIMATED_SUPPLIER_DISTANCE_KM = 6.0
 
 #: Dropping buyers whose rules reject the final price changes the price for everyone
 #: else, so pricing is a small fixed-point iteration. Bounded, like every loop here.
+#:
+#: The bound is a *fail-closed* limit, not a budget to be spent: economics are only ever
+#: adopted from a pass that removed nobody, so exhausting these passes means the pool
+#: does not price rather than pricing approximately. See :func:`issue_final_offer`.
 MAX_PRICING_PASSES = 4
 
 
@@ -566,10 +570,20 @@ def create_candidate_pool(
         if existing.idempotency_key == idempotency_key:
             return existing, False
 
+    # The scan above answers the common case and costs nothing extra, but it is a read
+    # followed by a write: two coordinators that both find nothing both create a pool.
+    # The claim settles that atomically. The loser is handed the winner's pool id rather
+    # than being refused, so a retry — which is what agent systems do — returns the
+    # existing pool instead of a second one (§25).
+    pool_id = ctx.repo.claim_pool_idempotency(ctx.ws, idempotency_key, new_id("pool"))
+    claimed = ctx.repo.get_pool(ctx.ws, pool_id)
+    if claimed is not None:
+        return claimed, False
+
     offer = ctx.repo.get_offer(ctx.ws, assessment.bulk_offer_id)
     assert offer is not None
     pool = Pool(
-        id=new_id("pool"),
+        id=pool_id,
         community_id=assessment.community_id,
         product_id=assessment.product_id,
         offer_id=assessment.bulk_offer_id,
@@ -814,6 +828,19 @@ def issue_final_offer(*, ctx: PoolContext, pool_id: str) -> FinalOfferResult:
     Buyers whose own rules **cannot** accept the final price are removed from the pool
     and the price is recomputed for everyone else — a bounded fixed point, because
     removing a buyer changes the per-unit split.
+
+    **Convergence contract.** A final offer may only rest on economics that were
+    computed for exactly the membership set that survives. So economics are adopted
+    *only* from a pass that rejected nobody; a pass that prunes discards its own numbers
+    before iterating. If no such pass occurs inside :data:`MAX_PRICING_PASSES`, the pool
+    fails loudly and authorises nobody, rather than issuing prices computed for a set
+    that no longer exists.
+
+    Without that rule the last permitted pass could prune and fall out of the loop
+    carrying the *previous* set's economics — which is not merely a display error. Those
+    per-buyer amounts are what ``authorize_participant`` puts a hold on, and the case
+    count is what the supplier order is sized from, so a stale pair would authorise
+    money at the wrong price and buy units nobody ordered (§48).
     """
     from . import payments as payment_service
 
@@ -840,6 +867,7 @@ def issue_final_offer(*, ctx: PoolContext, pool_id: str) -> FinalOfferResult:
     removed: list[str] = []
     members = _active_memberships(ctx, pool_id)
     economics: LandedEconomics | None = None
+    converged = False
 
     for _ in range(MAX_PRICING_PASSES):
         if not members:
@@ -854,12 +882,15 @@ def issue_final_offer(*, ctx: PoolContext, pool_id: str) -> FinalOfferResult:
             ),
             merchandise_cents=0,
         )
-        economics = price_pool_now(
+        # Held on a local until this pass proves it changed nobody. Assigning straight
+        # to `economics` is what let a pruning final pass leave the loop with numbers
+        # describing a membership set that no longer exists.
+        priced = price_pool_now(
             ctx=ctx, pool=pool, members=members, host_reward=reward, host_is_estimated=False
         )
         rejected_now: list[Membership] = []
         for m in members:
-            line = economics.line_for(m.household_id)
+            line = priced.line_for(m.household_id)
             household = ctx.repo.get_household(ctx.ws, m.household_id)
             need = ctx.repo.get_need(ctx.ws, m.need_id)
             if line is None or household is None or need is None:
@@ -879,6 +910,10 @@ def issue_final_offer(*, ctx: PoolContext, pool_id: str) -> FinalOfferResult:
             if verdict.kind == JoinVerdictKind.NOT_ALLOWED:
                 rejected_now.append(m)
         if not rejected_now:
+            # The set this was priced for is the set that survives. Only now is it safe
+            # to adopt, and this is the *only* place `economics` is ever assigned.
+            economics = priced
+            converged = True
             break
         for m in rejected_now:
             m.state = ParticipationState.DECLINED
@@ -886,11 +921,37 @@ def issue_final_offer(*, ctx: PoolContext, pool_id: str) -> FinalOfferResult:
             removed.append(m.household_id)
         members = [m for m in members if m not in rejected_now]
 
-    if not members or economics is None:
+    if not members:
         _fail(ctx, pool, "no buyer's rules accept the final price")
         return FinalOfferResult(
             pool_id, False, "no buyer's rules accept the final price", removed=removed,
             status=pool.status.value,
+        )
+
+    if not converged or economics is None:
+        # Buyers were still being pruned when the last permitted pass ran, so no pass
+        # ever priced the set that survives. There is no honest number to offer: the
+        # last figures computed describe a larger group, and re-using them would
+        # authorise money at a price nobody was quoted. Fail loudly instead (§3.1).
+        reason = (
+            f"final pricing did not settle within {MAX_PRICING_PASSES} "
+            f"pass{'es' if MAX_PRICING_PASSES != 1 else ''} — the buyer set was still "
+            "changing when the last one ran"
+        )
+        ctx.log(
+            "final_offer_not_converged",
+            "Final pricing did not settle on a stable buyer set, so no price was "
+            "issued and nobody was charged",
+            {
+                "passes": MAX_PRICING_PASSES,
+                "removed": removed,
+                "remaining_buyers": len(members),
+            },
+            pool_id=pool_id,
+        )
+        _fail(ctx, pool, reason)
+        return FinalOfferResult(
+            pool_id, False, reason, removed=removed, status=pool.status.value
         )
 
     # Case rounding must not create inventory nobody bought (§48).

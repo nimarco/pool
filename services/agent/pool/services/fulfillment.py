@@ -49,6 +49,41 @@ class FulfillmentError(RuntimeError):
     """A fulfilment step could not be completed."""
 
 
+#: Pool statuses in which a handoff can legitimately occur — the goods are with the
+#: host. ``COMPLETED`` is included because the secondary window outlives settlement: a
+#: no-show who collects late is the case :func:`close_pickup_window` exists to allow,
+#: and the allocation-state gate below still decides whether *that* order may be
+#: collected.
+PICKUP_OPEN_STATUSES = frozenset({PoolStatus.DISTRIBUTING, PoolStatus.COMPLETED})
+
+#: Allocation states a credential may be issued or honoured against. A no-show is
+#: collectible because the secondary window is a designed behaviour (§74); an order
+#: under issue review is not, because a human is deciding what happened to it.
+COLLECTIBLE_ALLOCATION_STATES = frozenset(
+    {
+        AllocationState.READY_FOR_PICKUP,
+        AllocationState.NO_SHOW,
+        AllocationState.SECONDARY_PICKUP,
+    }
+)
+
+
+def _require_pickup_open(ctx: PoolContext, pool_id: str) -> Pool:
+    """The lifecycle gate on every credential operation.
+
+    Pickup proves a physical handoff, so it cannot precede one. Until
+    :func:`open_distribution` runs, the host has not collected the goods and there is
+    nothing to hand anybody.
+    """
+    pool = _require_pool(ctx, pool_id)
+    if pool.status not in PICKUP_OPEN_STATUSES:
+        raise FulfillmentError(
+            "pickup has not opened for this pool yet "
+            f"(it is {pool.status.value}, not distributing)"
+        )
+    return pool
+
+
 # --------------------------------------------------------------------------- purchase
 
 
@@ -183,6 +218,12 @@ def open_distribution(*, ctx: PoolContext, pool_id: str) -> dict[str, Any]:
         raise FulfillmentError("a pool cannot be distributed without an assigned fulfiller")
     if pool.status == PoolStatus.DISTRIBUTING:
         return {"pool_id": pool_id, "distributing": True, "already_open": True}
+    if pool.status == PoolStatus.COMPLETED:
+        # Distribution already happened *and* finished. Saying so is more useful than
+        # either pretending the window reopened or letting `assert_transition` raise —
+        # this is a public route, and clicking it twice on a finished pool used to
+        # return a 500.
+        raise FulfillmentError("this pool has already finished distributing")
 
     run = FulfillmentRun(
         id=new_id("run"),
@@ -260,14 +301,26 @@ def issue_pickup_credential(
     """Mint a one-time pickup credential for one buyer's allocation.
 
     Re-issuing invalidates the previous pair, so a screenshot shared before a re-issue
-    is worthless. Refuses to issue against an allocation that has already been
-    collected.
+    is worthless.
+
+    **Only once the pool is actually distributing.** A credential is the proof that a
+    handoff happened (canonical invariant 9), so one that exists before there is
+    anything to hand over proves nothing. Allocations are written by
+    :func:`execute_purchase`, which means the gap between ``PURCHASED`` and
+    ``DISTRIBUTING`` was a real window in which a buyer's order could be marked
+    collected while the goods were still at the supplier — the state check was on the
+    allocation alone, and never on the lifecycle (#audit P2).
     """
+    _require_pickup_open(ctx, pool_id)
     allocation = ctx.repo.get_allocation(ctx.ws, pool_id, household_id)
     if allocation is None:
         raise FulfillmentError("this member has no allocation in this pool")
     if allocation.state == AllocationState.PICKED_UP:
         raise FulfillmentError("this allocation has already been collected")
+    if allocation.state not in COLLECTIBLE_ALLOCATION_STATES:
+        raise FulfillmentError(
+            f"this order is not ready to collect ({allocation.state.value})"
+        )
 
     previous = ctx.repo.get_pickup_token(ctx.ws, pool_id, household_id)
     credential: IssuedCredential = issue_credential()
@@ -317,9 +370,15 @@ def redeem_pickup(
     """Verify a presented credential and complete one handoff.
 
     Every failure path is explicit and audited: a credential from another pool, an
-    unknown value, a second scan of the same credential, and a revoked one all fail
-    with a distinct reason. Nothing is looked up by buyer id — the credential itself
-    identifies the allocation, so a host cannot complete an order without one.
+    unknown value, a second scan of the same credential, a revoked one, and one
+    presented before the pool is distributing all fail with a distinct reason. Nothing
+    is looked up by buyer id — the credential itself identifies the allocation, so a
+    host cannot complete an order without one.
+
+    The lifecycle check is repeated here rather than trusted to issuance. A credential
+    minted legitimately and presented after the window is a different event from one
+    that should never have existed, and the gate that matters is the one at the moment
+    of the handoff.
     """
     tokens = ctx.repo.list_pickup_tokens(ctx.ws, pool_id)
     matcher = matches_code if is_code else matches_token
@@ -364,6 +423,21 @@ def redeem_pickup(
             False, "this credential has already been used", pool_id, match.household_id
         )
 
+    # The lifecycle gate sits *after* the credential is identified, so a wrong-pool or
+    # forged scan still gets its own distinct reason — the audit trail should say what
+    # was actually presented, not merely that the window was shut.
+    pool = ctx.repo.get_pool(ctx.ws, pool_id)
+    if pool is None or pool.status not in PICKUP_OPEN_STATUSES:
+        reason = "pickup has not opened for this pool yet"
+        ctx.log(
+            "pickup_rejected",
+            f"Pickup rejected: {reason}",
+            {"pool_status": pool.status.value if pool else "unknown"},
+            pool_id=pool_id,
+            household_id=match.household_id,
+        )
+        return RedemptionResult(False, reason, pool_id, match.household_id)
+
     allocation = ctx.repo.get_allocation(ctx.ws, pool_id, match.household_id)
     if allocation is None:
         return RedemptionResult(False, "no allocation for this credential", pool_id)
@@ -371,10 +445,34 @@ def redeem_pickup(
         return RedemptionResult(
             False, "this allocation has already been collected", pool_id, match.household_id
         )
+    if allocation.state not in COLLECTIBLE_ALLOCATION_STATES:
+        reason = f"this order is not ready to collect ({allocation.state.value})"
+        ctx.log(
+            "pickup_rejected",
+            f"Pickup rejected: {reason}",
+            {"allocation_state": allocation.state.value},
+            pool_id=pool_id,
+            household_id=match.household_id,
+        )
+        return RedemptionResult(False, reason, pool_id, match.household_id)
 
     now = iso(ctx.now)
+    # Claim the credential *before* touching the allocation, with a conditional write.
+    # The `redeemed_at` check above is a read, so two scans of one QR code arriving
+    # together both saw it empty and both completed the handoff. Whoever wins the
+    # condition here is the only one who proceeds; the loser is told the same thing a
+    # sequential replay is told, because it is the same thing.
+    if not ctx.repo.claim_pickup_redemption(
+        ctx.ws, pool_id, match.household_id, now
+    ):
+        ctx.log(
+            "pickup_rejected", "Pickup rejected: credential has already been used",
+            {"concurrent": True}, pool_id=pool_id, household_id=match.household_id,
+        )
+        return RedemptionResult(
+            False, "this credential has already been used", pool_id, match.household_id
+        )
     match.redeemed_at = now
-    ctx.repo.put_pickup_token(ctx.ws, match)
     allocation.state = AllocationState.PICKED_UP
     allocation.picked_up_at = now
     allocation.picked_up_via = "code" if is_code else "qr"

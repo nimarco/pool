@@ -78,8 +78,13 @@ typecheck: ## Typecheck the web app
 	cd $(WEB) && npx tsc -b --noEmit
 
 .PHONY: lint
-lint: ## Lint Python
+lint: ## Lint Python and the web app
 	cd $(AGENT) && .venv/bin/python -m ruff check pool tests agentcore_app.py
+	cd $(WEB) && npm run lint
+
+.PHONY: test-web
+test-web: ## Run the web app's tests
+	cd $(WEB) && npm test
 
 .PHONY: build
 build: ## Build the web app for production
@@ -97,8 +102,12 @@ secret-scan-selftest: ## Prove the secret scanner still detects planted secrets
 # out at 1474 x 2902, which is unreadable in a README and useless in a video frame —
 # and a diagram nobody can read is not evidence of anything. Edit the SVG directly.
 
+# `lint` used to mean Python only, and `npm run lint` referenced an ESLint that was
+# never installed — so the frontend's gate was both absent from `qa` and broken if run
+# by hand. Reporting "all checks passed" while silently skipping a whole application is
+# the kind of green tick this project exists not to produce (#audit P2).
 .PHONY: qa
-qa: lint typecheck test build secret-scan ## Everything CI would run
+qa: lint typecheck test test-web build secret-scan ## Everything CI would run
 	@echo "✅ all checks passed"
 
 # ----------------------------------------------------------------- cloud

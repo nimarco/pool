@@ -1480,6 +1480,86 @@ table.data th.r {
   margin-left: auto;
 }
 
+/* ================================================================== need form
+ *
+ * The one place in Product where a visitor types rather than reads. Kept to the same
+ * paper-and-rule vocabulary as everything else — a form that looks like a different
+ * application would undercut the point that declaring a need is ordinary, not an
+ * administrative act. */
+
+.need-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(184px, 1fr));
+  gap: 14px 16px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.field-wide {
+  grid-column: 1 / -1;
+}
+.field-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.field-note {
+  font-size: 12px;
+  color: var(--ink-faint);
+  line-height: 1.45;
+}
+.control {
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: var(--radius);
+  border: 1px solid var(--rule-strong);
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  /* iOS zooms the page when a focused control is under 16px, which on a phone reads as
+   * the layout breaking. Only the text-entry controls need the guard. */
+  min-height: 38px;
+}
+.control:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+  border-color: var(--ink);
+}
+select.control {
+  appearance: none;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-muted) 50%),
+    linear-gradient(135deg, var(--ink-muted) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 16px, calc(100% - 12px) 16px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 30px;
+}
+.form-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--stop);
+  background: var(--stop-soft);
+  color: var(--stop);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.row-editing {
+  padding: 16px 20px;
+  border-top: 1px solid var(--rule);
+  background: var(--paper-sunken);
+}
+
 /* ================================================================== responsive */
 
 @media (max-width: 940px) {
@@ -1501,6 +1581,14 @@ table.data th.r {
 }
 
 @media (max-width: 700px) {
+  /* iOS Safari zooms the viewport when a focused input is under 16px, which on a phone
+     looks like the page breaking rather than a browser behaviour. */
+  .control {
+    font-size: 16px;
+  }
+  .field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
   :root {
     --gutter: 18px;
   }

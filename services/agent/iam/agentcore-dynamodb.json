@@ -2,14 +2,14 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "PoolDemoWorkspaceStateReadWrite",
+      "Sid": "PoolDemoWorkspaceStateReadWriteUsEast1",
       "Effect": "Allow",
       "Action": [
         "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:Query"
       ],
-      "Resource": "arn:aws:dynamodb:*:*:table/pool-demo-state"
+      "Resource": "arn:aws:dynamodb:us-east-1:*:table/pool-demo-state"
     }
   ]
 }

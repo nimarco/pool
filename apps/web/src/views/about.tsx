@@ -165,11 +165,13 @@ export function About({
           </h3>
           <div className="stack-sm">
             <p className="small">
-              <Chip tone="ok">real</Chip> The coordination system and the agent are fully
-              functional. The Strands loop, the demand matching, the case arithmetic, the
-              host ranking, the payment state machine, the recovery after a decline, the
-              one-time pickup credentials — all of it genuinely runs, application state is
-              stored and read back, and every number you see was computed by that code.
+              <Chip tone="ok">real</Chip> The coordination lifecycle demonstrated here is
+              functional end to end. The Strands loop, the demand matching, the case
+              arithmetic, the host ranking, the payment authorisation state machine, the
+              recovery after a decline, the one-time pickup credentials — all of it
+              genuinely runs, application state is stored and read back, and every number
+              you see was computed by that code. What is not built is everything after the
+              coordination: no payout rail, no supplier ordering, no refunds.
               {live ? (
                 <>
                   {" "}

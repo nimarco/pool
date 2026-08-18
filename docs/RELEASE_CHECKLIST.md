@@ -1,0 +1,90 @@
+# Release checklist — AWS Agents for Humans
+
+Everything that must be true before the submission is final, in the order it becomes
+checkable. Most of it is not code, which is exactly why it needs a list: strong
+engineering can still fail Stage One over a form field nobody filled in.
+
+**Status vocabulary is AGENTS.md's.** `Verified` means someone observed it — a response,
+a loaded URL, a screenshot. `TODO` means it has not been done. **A human-only item is
+never marked verified by a coding agent**, however confident it is: an agent cannot see
+a Devpost account, cannot own a Builder ID, and cannot confirm that a video plays for a
+stranger. Those lines say `TODO (human)` and stay that way until a person changes them.
+
+Deadline: **2026-09-14, 5:00 pm PDT.** Verified against
+<https://agentsforhumans.devpost.com/> on 2026-08-15; re-verify before relying on any
+line here for a submission decision.
+
+---
+
+## 1. Eligibility — pass/fail, Stage One
+
+| Item | Status | Note |
+| --- | --- | --- |
+| AWS Builder ID exists, and its email matches the Devpost account | **TODO (human)** | Required to submit. Only the account owner can confirm this |
+| Entrant eligibility (age, region, not an excluded party) | **TODO (human)** | Read the official rules; an agent cannot assess this |
+| Project newly created inside the competition period | **Verified** | GitHub reports the repository created 2026-08-15; competition opened 2026-08-10. The full commit history is public |
+| No undisclosed pre-existing code incorporated | **Verified** | Every commit is in this repository's history |
+| Strands Agents SDK is load-bearing | **Verified** | `pool/agent/coordinator.py` runs the real event loop; `pool/agent/bounds.py` is a Strands `HookProvider`. Remove Strands and nothing runs |
+| Public repository | **Verified** | <https://github.com/nimarco/pool> |
+| MIT or Apache license visible | **Verified** | `LICENSE` (MIT), recognised by GitHub |
+
+## 2. Required artifacts
+
+| Item | Status | Note |
+| --- | --- | --- |
+| README with setup and run instructions | **Verified** | `README.md`; commands are the Makefile's and are run by `make qa` |
+| Architecture diagram | **Verified** | `docs/architecture.svg`, hand-authored, readable at video resolution |
+| Diagram shows only deployed services | **Verified** | Planned services are in a separate "Future — not built" section of `docs/ARCHITECTURE.md` |
+| Public demo URL, reachable with no AWS account | **Verified** | <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/> |
+| Demo stays free to test throughout judging | **TODO (human)** | Depends on credits lasting. `make cost-check` weekly; `make demo-kill` is the emergency stop |
+| Public video, **5 minutes maximum** | **TODO (human)** | Not recorded. Must cover the problem, the users, and why it matters |
+| Video is public and plays without a login | **TODO (human)** | Check in a private window before submitting |
+| Devpost submission form complete | **TODO (human)** | Draft text in `docs/DEVPOST_DRAFT.md` — it is a draft, not a submission |
+
+## 3. Builder Center articles — bonus, up to +0.6
+
+Three qualifying public posts at 0.2 each. An August 12 rules update removed the hashtag
+requirement while surviving wording still asks for **"Agents for Humans" in the title**;
+the safe reading is to use that exact phrase and not depend on the hashtag.
+
+| Item | Status | Note |
+| --- | --- | --- |
+| Article 1 — Strands, and the boundary that keeps money deterministic | **TODO (human)** | Outline in `docs/ARTICLE_NOTES.md` |
+| Article 2 — a shared-state coordinator on AgentCore, and the consistency problem | **TODO (human)** | |
+| Article 3 — bounding agent loops, projecting tool results, and cloud-only failures | **TODO (human)** | |
+| Each is **public** and accepted before the deadline | **TODO (human)** | Publish with several days of buffer, not minutes |
+| Each title contains "Agents for Humans" | **TODO (human)** | |
+
+## 4. Engineering freeze
+
+| Item | Status | Note |
+| --- | --- | --- |
+| `make qa` green — lint, typecheck, Python tests, web tests, build, secret scan | **Verified** | See BUILD_HISTORY for the run and its counts |
+| Frontend lint actually runs | **Verified** | ESLint installed and wired into `make lint`; it was referenced but absent until 2026-08-18 |
+| Infrastructure tests green | **Verified** | `infra/test_stack.py`, `infra/test_demo_stack.py` |
+| Production dependency audit clean | **Verified** | `npm audit --omit=dev` → 0 vulnerabilities. Two dev-only Vite/esbuild advisories remain, fixable only by a major upgrade; deferred deliberately |
+| One fresh live AgentCore run captured after the final deploy | **TODO** | Invocation id, tool sequence, termination reason, token usage, DynamoDB readback |
+| Cost check — no schedules, no always-on resources | **TODO** | `make cost-check` |
+| Resource ledger in BUILD_HISTORY reconciled | **TODO** | Every entry destroyed or deliberate (AGENTS.md §3.8) |
+
+## 5. Final tag and link verification
+
+| Item | Status | Note |
+| --- | --- | --- |
+| Submission commit tagged and pushed | **TODO** | An immutable tag, linked from the README and Devpost, so later work cannot be mistaken for the submitted architecture |
+| Every URL in the submission opened in a private window | **TODO (human)** | Repository, demo, video, articles, diagram |
+| Demo exercised end to end on the deployed URL after the final deploy | **TODO** | Including 390 px mobile |
+| Repository has no secret, and the scanner says so | **Verified** | `make secret-scan` and `make secret-scan-selftest` both pass |
+
+---
+
+## Not part of this submission
+
+Recorded so nobody mistakes absence for oversight: real Stripe, host payouts, real
+supplier ordering, production authentication, notifications, refunds, mobile/Capacitor,
+and RevenueCat are all deliberately absent. `docs/PILOT_READINESS.md` says what a real
+pilot would need first.
+
+No user, host, or supplier validation has been performed. If any is done before the
+deadline, record it there with the date and what was actually said — and never as a
+quotation nobody gave.

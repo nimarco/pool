@@ -45,6 +45,18 @@ def agentcore_runtime() -> dict:
     return {**runtime, "envVars": {v["name"]: v["value"] for v in runtime["envVars"]}}
 
 
+def agentcore_target() -> dict:
+    """The deployment target the AgentCore CLI uses — the source of the pinned region."""
+    targets = json.loads((ROOT / "agentcore" / "aws-targets.json").read_text())
+    return next(t for t in targets if t["name"] == "default")
+
+
+def _actions(statement: dict) -> list[str]:
+    """A statement's actions, whether CDK emitted one string or a list."""
+    actions = statement["Action"]
+    return actions if isinstance(actions, list) else [actions]
+
+
 def runtime_dynamodb_policy() -> dict:
     """The inline IAM policy `agentcore.json` attaches to the runtime's execution role."""
     entry = agentcore_runtime()["additionalPolicies"][0]
@@ -247,6 +259,21 @@ class TestPublicSafety:
         assert int(function_env["MAX_TOOL_CALLS_PER_RUN"]) == 25
         assert int(function_env["WORKFLOW_TIMEOUT_SECONDS"]) == 45
 
+    def test_no_bound_is_configured_that_nothing_enforces(self, function_env):
+        """Every bound shipped here has to correspond to code that reads it.
+
+        `MAX_TOOL_RETRIES=3` travelled with both stacks and with the runtime, was listed
+        in the cost notes as "bounded with backoff", and was read by nothing: Pool has no
+        generic tool-retry mechanism. A configured limit for behaviour that does not
+        exist is worse than no limit, because it reads as a guarantee (#audit P1-1).
+        """
+        runtime_env = agentcore_runtime()["envVars"]
+        for env, where in ((function_env, "the function"), (runtime_env, "the runtime")):
+            offenders = [
+                k for k in env if k.startswith("MAX_") and k.endswith(("_RETRIES", "_ATTEMPTS"))
+            ]
+            assert offenders == [], f"{offenders} configured on {where}, enforced nowhere"
+
     def test_every_published_bound_is_one_a_run_can_actually_hit(
         self, template: Template, function_env
     ):
@@ -311,6 +338,50 @@ class TestLeastPrivilege:
         assert agent[0]["Action"] == "bedrock-agentcore:InvokeAgentRuntime"
         for resource in agent[0]["Resource"]:
             assert resource.startswith(ARN), resource
+
+    def test_the_function_gets_only_the_dynamodb_actions_it_issues(
+        self, template: Template
+    ):
+        """`grant_read_write_data` is a convenience, not a policy.
+
+        It also hands out Scan, DescribeTable, BatchGetItem, ConditionCheckItem,
+        DeleteItem and the stream read actions, none of which appear anywhere in
+        `pool/`. Scan is the one that matters: it is what turns a single-table,
+        per-workspace design into a whole-table read (#audit P1-6).
+        """
+        statements = [
+            statement
+            for policy in template.find_resources("AWS::IAM::Policy").values()
+            for statement in policy["Properties"]["PolicyDocument"]["Statement"]
+        ]
+        dynamo = {
+            action
+            for statement in statements
+            for action in _actions(statement)
+            if action.startswith("dynamodb:")
+        }
+
+        assert dynamo == {
+            "dynamodb:GetItem",
+            "dynamodb:PutItem",
+            "dynamodb:Query",
+            "dynamodb:UpdateItem",
+            "dynamodb:BatchWriteItem",
+        }, dynamo
+        assert "dynamodb:Scan" not in dynamo
+        assert "dynamodb:DeleteItem" not in dynamo
+
+    def test_no_dynamodb_grant_reaches_beyond_this_stacks_table(self, template: Template):
+        """A wildcard table ARN would make the workspace isolation decorative."""
+        for policy in template.find_resources("AWS::IAM::Policy").values():
+            for statement in policy["Properties"]["PolicyDocument"]["Statement"]:
+                if not any(a.startswith("dynamodb:") for a in _actions(statement)):
+                    continue
+                resources = statement["Resource"]
+                resources = resources if isinstance(resources, list) else [resources]
+                for resource in resources:
+                    assert resource != "*", statement
+                    assert isinstance(resource, dict), resource  # a Fn::GetAtt, not a string
 
     def test_no_statement_grants_a_wildcard_action(self, template: Template):
         policies = template.find_resources("AWS::IAM::Policy")
@@ -393,14 +464,25 @@ class TestSharedWorkspaceContract:
         actions = set(runtime_dynamodb_policy()["Statement"][0]["Action"])
         assert actions == {"dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"}
 
-    def test_the_runtime_grant_is_scoped_to_one_table_not_a_prefix(self):
+    def test_the_runtime_grant_is_scoped_to_one_table_in_one_region(self):
+        """The table segment must not be a prefix, and the region must not be a wildcard.
+
+        The region *was* one, which granted the runtime access to a same-named table in
+        every region for no reason — the deployment target is pinned to us-east-1 in
+        `agentcore/aws-targets.json`, so there was nothing the wildcard bought (#audit
+        P1-6).
+
+        The account stays a wildcard deliberately. This policy is attached to a role that
+        can only ever act in its own account, so pinning it narrows nothing real, and it
+        would make a fork edit two files to deploy instead of one.
+        """
         resource = runtime_dynamodb_policy()["Statement"][0]["Resource"]
+        region = agentcore_target()["region"]
+
         assert isinstance(resource, str)
         assert not resource.endswith("*"), resource
-        # Account and region are wildcards on purpose — the role can only ever run in
-        # one account, and the table name is the part that identifies the resource — but
-        # the *table* segment must not be.
-        assert resource.count("*") == 2, resource
+        assert resource == f"arn:aws:dynamodb:{region}:*:table/{TABLE_NAME}", resource
+        assert resource.count("*") == 1, resource
 
     def test_both_halves_read_their_own_writes(self, function_env):
         """Two compute environments writing one partition inside a single user action.

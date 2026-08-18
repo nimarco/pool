@@ -244,7 +244,7 @@ export function Home({
   const [hosting, setHosting] = useState<HostOpportunities | null>(null);
 
   useEffect(() => {
-    api.needs().then(setNeeds).catch(() => setNeeds([]));
+    api.needs().then((view) => setNeeds(view.needs)).catch(() => setNeeds([]));
   }, [state.workspace]);
 
   useEffect(() => {

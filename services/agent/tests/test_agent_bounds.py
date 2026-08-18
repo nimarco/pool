@@ -9,11 +9,14 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import AsyncIterable
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from strands.models import Model
 
 from pool.adapters.repository import InMemoryRepository
+from pool.agent import bounds as bounds_module
 from pool.agent.bounds import BoundedRun, BoundExceeded, RunTelemetry, digest_arguments
 from pool.agent.coordinator import PoolCoordinator
 from pool.config import AgentBounds, Settings
@@ -93,7 +96,7 @@ class VariedLoopModel(Model):
 
 def coordinator(repo, model, **bound_kw) -> PoolCoordinator:
     bounds = AgentBounds(**{
-        "max_iterations": 5, "max_tool_calls": 20, "max_tool_retries": 3,
+        "max_iterations": 5, "max_tool_calls": 20,
         "max_duplicate_tool_calls": 2, "workflow_timeout_seconds": 60, **bound_kw,
     })
     settings = Settings(bounds=bounds, model_provider="offline", routing_provider="deterministic")
@@ -189,6 +192,47 @@ class TestTimeout:
         bounded = BoundedRun(AgentBounds(workflow_timeout_seconds=0), RunTelemetry())
         with pytest.raises(BoundExceeded, match="workflow_timeout_seconds"):
             bounded._check_clock()
+
+    def test_the_clock_is_cooperative_and_the_docs_must_not_claim_otherwise(self):
+        """It is checked *before* each step, so it ends a run that is taking too long.
+
+        It cannot interrupt a call already in flight — nothing in the event loop can.
+        Pinned as a test because the copy on the Live-on-AWS page and in `COST_NOTES.md`
+        describes exactly this behaviour, and the two must not drift into a stronger
+        claim than the mechanism supports (#audit P1-1). The outer rungs — the bridge's
+        read timeout and the Lambda timeout — are what bound a hung call.
+        """
+        bounded = BoundedRun(AgentBounds(workflow_timeout_seconds=0), RunTelemetry())
+
+        # Every entry point that can end a run on time checks the clock first.
+        with pytest.raises(BoundExceeded, match="workflow_timeout_seconds"):
+            bounded.on_before_model(SimpleNamespace())
+        with pytest.raises(BoundExceeded, match="workflow_timeout_seconds"):
+            bounded.on_before_tool(SimpleNamespace(tool_use={"name": "x", "input": {}}))
+
+        # And there is no cancellation mechanism hiding elsewhere that would let the
+        # bound claim to interrupt work in progress.
+        assert not hasattr(bounded, "cancel")
+        assert not hasattr(bounded, "interrupt")
+
+
+class TestBoundVocabulary:
+    def test_no_bound_exists_that_nothing_enforces(self):
+        """Every field on `AgentBounds` must be read by the enforcement it names.
+
+        `max_tool_retries` was configured here, shipped in both CDK stacks and the
+        AgentCore runtime, and documented as "bounded with backoff" — while nothing read
+        it and no retry mechanism existed. Pool deliberately does not auto-retry tools:
+        re-running a consequential call is the wrong default for a system that moves
+        money. So the bound is absent rather than aspirational (#audit P1-1).
+        """
+        source = Path(bounds_module.__file__).read_text()
+        for name in vars(AgentBounds()):
+            assert f"bounds.{name}" in source, f"{name} is configured but never read"
+
+    def test_there_is_no_generic_tool_retry(self):
+        assert "max_tool_retries" not in vars(AgentBounds())
+        assert "retry" not in Path(bounds_module.__file__).read_text().lower()
 
 
 class TestErrorHandling:

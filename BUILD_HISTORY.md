@@ -3817,3 +3817,20 @@ The proof-link fix was exercised end to end in that bundle: the pool the card dr
 No AgentCore or Bedrock run was invoked at any point. The two POSTs involved — `/api/agent/run` and
 `/api/demo/scenario` — are the offline bounded coordinator and the deterministic lifecycle; neither
 spends model tokens.
+
+**Update — 2026-08-18, deployed.** AWS authentication was refreshed and `make deploy-demo` ran from
+a clean tree at `719585a`. `PoolDemoStack` reached `UPDATE_COMPLETE` in 16.9s, updating only the
+`DemoApi` Lambda — no new AWS resource, so the ledger is unchanged. The bundle live at the demo URL
+is the reviewed commit, confirmed by asset hash: production moved from `index-C4sU9Sjx.js` to
+`index-DO-itO5M.js`, the hash the deploy's own rebuild reproduced from the committed tree. The stack
+shipped with `LiveAgentAction` set to the `Pool_PoolCoordinator-TmVqSN9H56` runtime, so the live
+path is enabled rather than silently off. **This entry's implementation status is now deployed.**
+
+The live AgentCore proof was rendered in production for the first time, from **one** paid run
+(`run_df149d669b95`, `pool_b4393b23ade9`, 7 iterations, 23642/478 tokens, 7070 ms inside the agent,
+14456 ms inside AWS): the live chip, the two matching run ids aligned in the provenance ledger, the
+verified same-workspace readback, the six-tool sequence, the `browser → Lambda → AgentCore →
+Bedrock / Strands → typed tools → DynamoDB → browser` path, and the live invocation details with the
+real tool trace. Product, Needs, the pool record, both Showcase directions, the 13-stage reader, the
+demo drawer and the 390px layout were smoke-tested against production with no application console or
+network errors.

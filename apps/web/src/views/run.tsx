@@ -39,6 +39,11 @@ import {
 
 type Facts = Record<string, unknown>;
 
+/* Where a stage body sits in the document outline. The reader is an h1 page of its own
+   in Showcase and an h2 section inside a pool record, so everything under the stage
+   headline shifts with it rather than skipping a level in one of the two. */
+type SubLevel = "h3" | "h4";
+
 const s = (f: Facts, k: string): string => {
   const v = f[k];
   return v === null || v === undefined ? "" : String(v);
@@ -154,7 +159,7 @@ function StageNote({
 }) {
   return (
     <details className="inset">
-      <summary className="small" style={{ cursor: "pointer" }}>
+      <summary className="small">
         <strong>{label}</strong>
       </summary>
       <div className="stack-sm" style={{ marginTop: 10 }}>
@@ -199,7 +204,7 @@ function SeedBody({ f }: { f: Facts }) {
   );
 }
 
-function DiscoveryBody({ f }: { f: Facts }) {
+function DiscoveryBody({ f, sub }: { f: Facts; sub: SubLevel }) {
   const units = n(f, "provisional_units");
   const threshold = n(f, "threshold_units");
   return (
@@ -261,8 +266,11 @@ function DiscoveryBody({ f }: { f: Facts }) {
           window; a member who authorised zero days is never moved.
         </p>
       </StageNote>
-      <Block title={`Tools the agent called · ${s(f, "iterations")} iterations`}>
-        <TracePills names={list(f, "tools_called")} />
+      <Block
+        title={`Tools the agent called · ${s(f, "iterations")} iterations`}
+        level={sub === "h3" ? 3 : 4}
+      >
+        <TracePills names={list(f, "tools_called")} ordered />
       </Block>
     </>
   );
@@ -617,7 +625,8 @@ function PickupBody({ f }: { f: Facts }) {
   );
 }
 
-function ImpactBody({ f }: { f: Facts }) {
+function ImpactBody({ f, sub }: { f: Facts; sub: SubLevel }) {
+  const SubHead = sub;
   return (
     <>
       <div className="grid grid-3">
@@ -636,18 +645,18 @@ function ImpactBody({ f }: { f: Facts }) {
       </div>
       <div className="grid grid-2">
         <div>
-          <h4 className="section-title" style={{ marginBottom: 8 }}>
+          <SubHead className="section-title" style={{ marginBottom: 8 }}>
             Where the saving went
-          </h4>
+          </SubHead>
           <div className="ledger">
             <LedgerLine label="Earned by the host, for work done" value={s(f, "host_earnings")} />
             <LedgerLine label="Pool's share of the saving" value={s(f, "pool_fee")} />
           </div>
         </div>
         <div>
-          <h4 className="section-title" style={{ marginBottom: 8 }}>
+          <SubHead className="section-title" style={{ marginBottom: 8 }}>
             What it cost anyone in attention
-          </h4>
+          </SubHead>
           <div className="ledger">
             <LedgerLine
               label="Actions Pool took on its own"
@@ -684,7 +693,7 @@ function GenericBody({ f }: { f: Facts }) {
   );
 }
 
-const BODIES: Record<string, (props: { f: Facts }) => JSX.Element | null> = {
+const BODIES: Record<string, (props: { f: Facts; sub: SubLevel }) => JSX.Element | null> = {
   seed: SeedBody,
   latent_demand_discovered: DiscoveryBody,
   host_candidates_evaluated: HostCandidatesBody,
@@ -787,13 +796,18 @@ export function RunView({
   const chapter = chapterFor(step);
   const Body = BODIES[step.name] ?? GenericBody;
   const last = index === total - 1;
+  /* Showcase renders the reader as its own page; a pool record renders it under the
+     record's own title. The whole outline moves together. */
+  const Title = embedded ? "h2" : "h1";
+  const StageHead = embedded ? "h3" : "h2";
+  const sub: SubLevel = embedded ? "h4" : "h3";
 
   return (
     <div className="stack">
       <header className="row-between">
-        <h2 className="title" style={{ maxWidth: "20ch", fontSize: embedded ? 26 : undefined }}>
+        <Title className="title" style={{ maxWidth: "20ch", fontSize: embedded ? 26 : undefined }}>
           {embedded ? "How this pool happened" : "One purchase, end to end"}
-        </h2>
+        </Title>
         <div className="btn-row">
           {!embedded && scenario.pool_id ? (
             <button className="btn btn-sm" onClick={() => onOpenPool(scenario.pool_id)}>
@@ -822,15 +836,21 @@ export function RunView({
             {String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
           </span>
           <nav className="ruler" aria-label="Lifecycle steps">
-            {steps.map((st, i) => (
-              <button
-                key={`${st.name}-${i}`}
-                className={i === index ? "current" : i <= seen ? "seen" : ""}
-                aria-label={`Step ${i + 1}: ${chapterFor(st).headline}`}
-                aria-current={i === index ? "step" : undefined}
-                onClick={() => go(i)}
-              />
-            ))}
+            {steps.map((st, i) => {
+              const chapterHere = chapterFor(st);
+              return (
+                <button
+                  key={`${st.name}-${i}`}
+                  className={i === index ? "current" : i <= seen ? "seen" : ""}
+                  aria-label={`Step ${i + 1}: ${chapterHere.headline}`}
+                  /* A mouse can hover the ruler; rehearsing from it is easier when the
+                     segments say which act they are. */
+                  title={`${i + 1} of ${total} · ${chapterHere.act} — ${chapterHere.headline}`}
+                  aria-current={i === index ? "step" : undefined}
+                  onClick={() => go(i)}
+                />
+              );
+            })}
           </nav>
           <span className="stage-count nowrap">
             {roundTripMs !== null ? `whole run: ${roundTripMs} ms` : "already executed"}
@@ -847,11 +867,11 @@ export function RunView({
                 ))}
               </span>
             </div>
-            <h3 className="stage-headline">{chapter.headline}</h3>
+            <StageHead className="stage-headline">{chapter.headline}</StageHead>
             <p className="stage-detail">{step.detail}.</p>
           </div>
 
-          <Body f={step.facts} />
+          <Body f={step.facts} sub={sub} />
         </div>
 
         <div className="stage-foot">
@@ -883,7 +903,7 @@ export function RunView({
 
       {last && scenario.ok ? (
         <details className="block reveal">
-          <summary className="section-title" style={{ cursor: "pointer" }}>
+          <summary className="section-title">
             What just happened
           </summary>
           <p className="small muted prose" style={{ marginTop: 12 }}>

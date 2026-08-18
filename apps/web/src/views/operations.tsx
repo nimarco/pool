@@ -27,7 +27,7 @@ function HostConsole({ poolId }: { poolId: string | null }) {
     return (
       <section className="panel">
         <div className="panel-head">
-          <h3>The fulfilment job</h3>
+          <h2>The fulfilment job</h2>
         </div>
         <Empty>
           No job is open. A host checklist appears after the supplier order is recorded.
@@ -40,7 +40,7 @@ function HostConsole({ poolId }: { poolId: string | null }) {
   return (
     <section className="panel">
       <div className="panel-head">
-        <h3>The fulfilment job — {checklist.product_name}</h3>
+        <h2>The fulfilment job — {checklist.product_name}</h2>
         <span className="spacer" />
         <Chip tone={statusCopy(checklist.status as never).tone}>{checklist.status}</Chip>
       </div>
@@ -70,7 +70,7 @@ function HostConsole({ poolId }: { poolId: string | null }) {
             verifies it before marking the order collected.
           </p>
           <details>
-            <summary className="tiny muted" style={{ cursor: "pointer" }}>
+            <summary className="tiny muted">
               Override boundary
             </summary>
             <p className="tiny muted" style={{ marginTop: 8 }}>
@@ -79,15 +79,15 @@ function HostConsole({ poolId }: { poolId: string | null }) {
           </details>
           <div className="btn-row">
             <input
-              className="btn"
-              style={{ minWidth: "11rem", fontFamily: "var(--mono)", letterSpacing: "0.06em" }}
+              className="control"
+              style={{ maxWidth: "13rem", fontFamily: "var(--mono)", letterSpacing: "0.06em" }}
               value={code}
               placeholder="e.g. 4KQ7WMTX"
               aria-label="One-time pickup code"
               onChange={(ev) => setCode(ev.target.value)}
             />
             <button
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary"
               disabled={!code.trim()}
               onClick={async () => {
                 try {
@@ -110,7 +110,9 @@ function HostConsole({ poolId }: { poolId: string | null }) {
             </button>
           </div>
           {outcome ? (
-            <p className={`small${outcome.ok ? "" : " muted"}`}>{outcome.message}</p>
+            <p className={`small${outcome.ok ? "" : " muted"}`} role="status">
+              {outcome.message}
+            </p>
           ) : null}
         </div>
       </div>
@@ -172,7 +174,7 @@ export function OperationsView({
         <>
           <section className="panel">
             <div className="panel-head">
-              <h3>Supplier offers</h3>
+              <h2>Supplier offers</h2>
               <span className="spacer" />
               <span className="tiny faint">a final price may never rest on a stale quote</span>
             </div>
@@ -213,7 +215,7 @@ export function OperationsView({
           {data.pools.map((p) => (
             <section key={p.pool_id} className="panel">
               <div className="panel-head">
-                <h3>{p.product_name}</h3>
+                <h2>{p.product_name}</h2>
                 <Chip tone={statusCopy(p.status).tone}>{statusCopy(p.status).label}</Chip>
                 <span className="spacer" />
                 {p.purchase ? (
@@ -252,7 +254,7 @@ export function OperationsView({
           {data.issues.length > 0 ? (
             <section className="panel">
               <div className="panel-head">
-                <h3>Open cases</h3>
+                <h2>Open cases</h2>
               </div>
               <div className="rows">
                 {data.issues.map((i) => (
@@ -272,7 +274,7 @@ export function OperationsView({
           {data.failed_runs.length > 0 ? (
             <section className="panel">
               <div className="panel-head">
-                <h3>Runs that did not succeed</h3>
+                <h2>Runs that did not succeed</h2>
                 <span className="spacer" />
                 <span className="tiny faint">kept, not hidden</span>
               </div>
@@ -296,9 +298,9 @@ export function OperationsView({
           ) : null}
 
           <section className="panel panel-pad">
-            <h3 className="section-title" style={{ marginBottom: 12 }}>
+            <h2 className="section-title" style={{ marginBottom: 12 }}>
               Pool's own economics
-            </h3>
+            </h2>
             <p className="tiny muted" style={{ marginBottom: 12 }}>
               Stored-record figures. Payments are simulated; host compensation is earned
               and accounted for, never disbursed — no payout rail exists.
@@ -326,7 +328,7 @@ export function OperationsView({
               />
             </div>
             <details style={{ marginTop: 12 }}>
-              <summary className="tiny muted" style={{ cursor: "pointer" }}>
+              <summary className="tiny muted">
                 Platform viability rule
               </summary>
               <p className="tiny muted" style={{ marginTop: 8 }}>

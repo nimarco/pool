@@ -31,11 +31,13 @@ import {
   ActorTag,
   Chip,
   Empty,
+  ExecutionPath,
   Fact,
   Figure,
   IconCheck,
   IconCloud,
   IconDot,
+  ProofIdentity,
   Trace,
   TracePills,
 } from "../ui";
@@ -170,8 +172,10 @@ function ToolCatalogue({
 
 function StoredExecutionProof({
   proof,
+  heading: Heading,
 }: {
   proof: PoolExecutionProof;
+  heading: "h2" | "h3";
 }) {
   const run = proof.run;
   const isLive = proof.execution.live;
@@ -182,7 +186,7 @@ function StoredExecutionProof({
   return (
     <section className="panel reveal" data-testid="stored-execution-proof">
       <div className="panel-head">
-        <h3>Technical proof for this run</h3>
+        <Heading>Technical proof for this run</Heading>
         <Chip tone={isLive ? "live" : "info"}>
           {isLive ? "Amazon Bedrock AgentCore · live" : run.model_provider}
         </Chip>
@@ -190,41 +194,28 @@ function StoredExecutionProof({
         <ActorTag actor="agent" label="Stored causal record" />
       </div>
       <div className="panel-pad stack-sm">
-        <div className="facts">
-          <Fact label="Run id" value={<span className="mono">{run.run_id}</span>} />
-          <Fact label="Resulting pool id" value={<span className="mono">{proof.pool_id}</span>} />
-          <Fact
-            label="Pool created_by_run"
-            value={
-              <span>
-                <span className="mono">{proof.created_by_run}</span>
-                {proof.created_by_run === run.run_id ? " · matches run id" : " · mismatch"}
-              </span>
-            }
-          />
-          <Fact
-            label="Authoritative same-workspace readback"
-            value={sameWorkspace ? "verified · run + pool present" : "not verified"}
-          />
-        </div>
+        {/* Ordered so the provenance claim is read first and the environment second:
+            which run made this pool, then what that run was and where it ran. */}
+        <ProofIdentity
+          runId={run.run_id}
+          poolId={proof.pool_id}
+          createdByRun={proof.created_by_run}
+          sameWorkspace={sameWorkspace}
+        />
         <div>
-          <div className="fact-label">Exact selected tool sequence</div>
-          <TracePills names={run.tool_calls} />
+          <div className="fact-label" style={{ marginBottom: 6 }}>
+            Exact selected tool sequence
+          </div>
+          <TracePills names={run.tool_calls} ordered />
         </div>
-        <div className="banner">
-          <span className="mono">
-            {isLive
-              ? "browser → Lambda → AgentCore → Bedrock / Strands → typed tools → DynamoDB → browser"
-              : "browser → server → Strands planner → typed tools → database → browser"}
-          </span>
-        </div>
+        <ExecutionPath live={isLive} />
         <p className="tiny muted">
           Typed tools delegate money, policy, allocation and writes to deterministic domain
           services.
         </p>
-        <div className="facts">
+        <div className="facts facts-wide">
           <Fact label="Service" value={proof.execution.service} />
-          <Fact label="Region" value={<span className="mono">{proof.execution.region}</span>} />
+          <Fact label="Region" value={<span className="mono token">{proof.execution.region}</span>} />
           <Fact
             label="Model provider / model"
             value={<span className="mono">{run.model_provider} / {run.model_id}</span>}
@@ -232,7 +223,7 @@ function StoredExecutionProof({
           <Fact label="Outcome" value={run.outcome.replace(/_/g, " ")} />
           <Fact
             label="Termination"
-            value={<span className="mono">{run.termination_reason}</span>}
+            value={<span className="mono token">{run.termination_reason}</span>}
           />
         </div>
         <p className="tiny faint">
@@ -240,7 +231,7 @@ function StoredExecutionProof({
           is part of this proof.
         </p>
         <details className="inset">
-          <summary className="small" style={{ cursor: "pointer" }}>
+          <summary className="small">
             <strong>Detailed hop evidence</strong>
           </summary>
           <div style={{ marginTop: 10 }}>
@@ -258,12 +249,14 @@ function InvocationPanel({
   busy,
   onRun,
   again = false,
+  heading: Heading = "h3",
 }: {
   config: DemoConfig | null;
   result: LiveAgentResult | null;
   busy: boolean;
   onRun: () => void;
   again?: boolean;
+  heading?: "h2" | "h3";
 }) {
   const available = Boolean(config?.live_agent_available);
   const state = busy ? "flight" : result?.ok ? "done" : result ? "failed" : "idle";
@@ -271,9 +264,9 @@ function InvocationPanel({
     <div className="live-panel">
       <div className="live-head">
         <IconCloud />
-        <h3 style={{ fontSize: 14.5, fontWeight: 600 }}>
+        <Heading style={{ fontSize: 14.5, fontWeight: 600 }}>
           {again ? "Run the deployed coordinator again" : "Invoke the deployed coordinator"}
-        </h3>
+        </Heading>
         <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
           <Elapsed running={busy} />
           {available ? <Chip tone="live">live</Chip> : <Chip>not on this deployment</Chip>}
@@ -352,6 +345,9 @@ export function AgentExecution({
   const available = Boolean(config?.live_agent_available);
   const tools = health?.agent_tools ?? [];
   const chosen = proof?.run.tool_calls ?? (result?.ok ? result.run.tool_calls.map((t) => t.name) : []);
+  /* Standalone this screen owns the page title, so its sections are h2. Embedded in a
+     pool record the record owns the h1 and this header is the h2, so they are h3. */
+  const Sub: "h2" | "h3" = standalone ? "h2" : "h3";
 
   return (
     <div className="stack">
@@ -380,7 +376,7 @@ export function AgentExecution({
         </p>
       </header>
 
-      {proof ? <StoredExecutionProof proof={proof} /> : null}
+      {proof ? <StoredExecutionProof proof={proof} heading={Sub} /> : null}
 
       {proof ? (
         <div className="banner">
@@ -397,7 +393,7 @@ export function AgentExecution({
 
       {proof ? (
         <details className="panel">
-          <summary className="panel-head" style={{ cursor: "pointer" }}>
+          <summary className="panel-head">
             <strong>Run again</strong>
             <span className="spacer" />
             <span className="tiny faint">secondary live invocation · spends model tokens</span>
@@ -408,15 +404,22 @@ export function AgentExecution({
             busy={busy}
             onRun={onRun}
             again
+            heading={Sub}
           />
         </details>
       ) : (
-        <InvocationPanel config={config} result={result} busy={busy} onRun={onRun} />
+        <InvocationPanel
+          config={config}
+          result={result}
+          busy={busy}
+          onRun={onRun}
+          heading={Sub}
+        />
       )}
 
       {result?.ok ? (
         <details className="panel reveal">
-          <summary className="panel-head" style={{ cursor: "pointer" }}>
+          <summary className="panel-head">
             <strong>Latest live invocation details</strong>
             <Chip tone="ok">{result.run.outcome.replace(/_/g, " ")}</Chip>
             <span className="spacer" />
@@ -443,9 +446,9 @@ export function AgentExecution({
                 sub="what this single run cost in model usage"
               />
             </div>
-            <div className="facts">
-              <Fact label="Runtime" value={<span className="mono">{result.runtime}</span>} />
-              <Fact label="Region" value={<span className="mono">{result.region}</span>} />
+            <div className="facts facts-wide">
+              <Fact label="Runtime" value={<span className="mono token">{result.runtime}</span>} />
+              <Fact label="Region" value={<span className="mono token">{result.region}</span>} />
               <Fact label="Model" value={<span className="mono">{result.run.model_id}</span>} />
               <Fact label="Iterations" value={result.run.iterations} />
               <Fact
@@ -456,11 +459,11 @@ export function AgentExecution({
             </div>
           </div>
           <div className="panel-head">
-            <h3>What it chose to do, in order</h3>
+            <Sub>What it chose to do, in order</Sub>
           </div>
           <Trace calls={result.run.tool_calls} />
           <div className="panel-head">
-            <h3>What the database held afterwards</h3>
+            <Sub>What the database held afterwards</Sub>
             <span className="spacer" />
             <span className="tiny faint">read back by the server, not reported by the agent</span>
           </div>
@@ -489,7 +492,7 @@ export function AgentExecution({
       ) : null}
 
       <details className="panel">
-        <summary className="panel-head" style={{ cursor: "pointer" }}>
+        <summary className="panel-head">
           <strong>
             {chosen.length > 0
               ? `Typed tool boundary · ${tools.length} tools`
@@ -522,7 +525,7 @@ export function AgentExecution({
       </details>
 
       <details className="panel">
-        <summary className="panel-head" style={{ cursor: "pointer" }}>
+        <summary className="panel-head">
           {/* Every run this session has had, wherever it executed. A run on AWS writes
               its record to the same workspace as one that ran here, so this list is the
               audit trail rather than a local subset of it — `model_provider` on each row
@@ -560,7 +563,7 @@ export function AgentExecution({
       </details>
 
       <details className="panel">
-        <summary className="panel-head" style={{ cursor: "pointer" }}>
+        <summary className="panel-head">
           <strong>What is running where</strong>
         </summary>
         <div className="panel-pad">

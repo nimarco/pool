@@ -118,14 +118,16 @@ function OpportunityCard({
 }: {
   pool: PoolView;
   onOpen: () => void;
-  onShowAgent: () => void;
+  /* Takes the pool id rather than firing a bare signal: the card is the only thing that
+     knows which pool it drew, and the proof it offers has to be that pool's proof. */
+  onShowAgent: (poolId: string) => void;
 }) {
   const s = statusCopy(pool.status);
   const settled = pool.status === "completed" || pool.status === "purchased";
   return (
     <section className="panel">
       <div className="panel-head">
-        <h3>{settled ? "Your order" : "Pool found overlapping demand"}</h3>
+        <h2>{settled ? "Your order" : "Pool found overlapping demand"}</h2>
         <Chip tone={s.tone}>{s.label}</Chip>
       </div>
       <div className="panel-pad stack-sm">
@@ -141,7 +143,7 @@ function OpportunityCard({
             </p>
           </div>
           {pool.savings_pct ? (
-            <div style={{ textAlign: "right" }}>
+            <div className="figure-tail">
               <div className="figure-value sm figure-accent">{pool.savings_pct}</div>
               <div className="tiny faint">{pool.is_estimate ? "estimated" : "less than retail"}</div>
             </div>
@@ -163,7 +165,10 @@ function OpportunityCard({
             <IconArrowRight />
           </button>
           {pool.execution_proof ? (
-            <button className="btn btn-ghost btn-sm" onClick={onShowAgent}>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => onShowAgent(pool.pool_id)}
+            >
               <ActorTag actor="agent" label="Technical proof for this run" />
             </button>
           ) : null}
@@ -189,10 +194,10 @@ function WatchingCard({
   return (
     <section className="panel">
       <div className="panel-head">
-        <h3>Pool is watching</h3>
+        <h2>Pool is watching</h2>
       </div>
       <div className="grid grid-side" style={{ gap: 0, alignItems: "stretch" }}>
-        <div className="panel-pad stack-sm">
+        <div className="panel-pad stack-sm" style={{ justifyContent: "center" }}>
           <p className="small muted prose">
             {memberCount} members declared {needCount} standing needs independently. Pool
             watches for overlaps worth buying together; nobody has to organise a group.
@@ -236,7 +241,7 @@ export function Home({
   onFind: () => void;
   onOpenPool: (id: string) => void;
   onRespond: (id: string, approve: boolean) => void;
-  onShowAgent: () => void;
+  onShowAgent: (poolId: string) => void;
   onGoNeeds: () => void;
   liveDiscovery: boolean;
 }) {
@@ -282,7 +287,7 @@ export function Home({
       {forMe.length > 0 ? (
         <section className="panel" style={{ borderColor: "var(--clay-line)" }}>
           <div className="panel-head" style={{ background: "var(--clay-soft)", borderColor: "var(--clay-line)" }}>
-            <h3>Pool needs your answer</h3>
+            <h2>Pool needs your answer</h2>
             <span className="spacer" />
             <ActorTag actor="human" />
           </div>
@@ -302,7 +307,7 @@ export function Home({
       {(hosting?.active_jobs ?? []).map((job) => (
         <section key={job.pool_id} className="panel">
           <div className="panel-head">
-            <h3>You are carrying this order</h3>
+            <h2>You are carrying this order</h2>
             <span className="spacer" />
             <ActorTag actor="human" label="Your job" />
           </div>
@@ -318,7 +323,7 @@ export function Home({
                   {shortTime(job.distribution_ends_at)}
                 </p>
               </div>
-              <div style={{ textAlign: "right" }}>
+              <div className="figure-tail">
                 <div className="figure-value sm figure-accent">
                   {String((job.earnings as Record<string, string>).total_display ?? "—")}
                 </div>
@@ -362,7 +367,7 @@ export function Home({
 
       <section className="panel">
         <div className="panel-head">
-          <h3>What you buy anyway</h3>
+          <h2>What you buy anyway</h2>
           <span className="spacer" />
           <button className="btn btn-sm btn-ghost" onClick={onGoNeeds}>
             All needs
@@ -396,7 +401,7 @@ export function Home({
 
       {me ? (
         <Block title="What Pool may decide for you">
-          <div className="grid grid-2">
+          <div className="grid grid-lede">
             <p className="small muted prose">
               Pool acts only when every stored limit passes; otherwise it asks you.
             </p>
@@ -446,7 +451,7 @@ export function Home({
 
       {lastRun && lastRun.tool_calls.length > 0 ? (
         <details>
-          <summary className="tiny faint" style={{ cursor: "pointer" }}>
+          <summary className="tiny faint">
             Last coordination run · {lastRun.tool_calls.length} tools · {lastRun.iterations}{" "}
             iterations · {lastRun.termination_reason}
           </summary>

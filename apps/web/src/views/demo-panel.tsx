@@ -17,7 +17,7 @@
  * multi-player product, and it should never look like part of the product.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppState, DemoConfig, Health, api } from "../api";
 import { Chip, IconCheck, IconCross, IconReplay } from "../ui";
 
@@ -152,6 +152,8 @@ export function DemoPanel({
   onShowcase: () => void;
 }) {
   const [people, setPeople] = useState<Identity[]>([]);
+  const sheet = useRef<HTMLElement | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<{ id: string; text: string; ok: boolean } | null>(
     null,
@@ -173,14 +175,44 @@ export function DemoPanel({
       .catch(() => setPeople([]));
   }, [open, people.length]);
 
-  // Escape closes it, because a drawer that traps you is worse than no drawer.
+  // Escape closes it, because a drawer that traps you is worse than no drawer. Tab is
+  // held inside while it is open — a keyboard visitor tabbing out of a modal drawer and
+  // landing silently on the page behind it is the same bug in a quieter form. Focus goes
+  // in on open and returns to whatever opened it on close.
   useEffect(() => {
     if (!open) return undefined;
+    opener.current = document.activeElement as HTMLElement | null;
+    sheet.current?.focus();
+    const focusable = () =>
+      [
+        ...(sheet.current?.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])',
+        ) ?? []),
+      ].filter((el) => !el.hasAttribute("disabled") && el.offsetParent !== null);
     const onKey = (ev: KeyboardEvent) => {
-      if (ev.key === "Escape") onClose();
+      if (ev.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (ev.key !== "Tab") return;
+      const items = focusable();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (!ev.shiftKey && active === last) {
+        ev.preventDefault();
+        first.focus();
+      } else if (ev.shiftKey && (active === first || active === sheet.current)) {
+        ev.preventDefault();
+        last.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      opener.current?.focus();
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -208,10 +240,19 @@ export function DemoPanel({
   return (
     <>
       <div className="sheet-scrim" onClick={onClose} aria-hidden="true" />
-      <aside className="sheet" role="dialog" aria-label="Demo environment">
+      <aside
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="demo-sheet-title"
+        tabIndex={-1}
+        ref={sheet}
+      >
         <div className="sheet-head">
           <div>
-            <h2 style={{ fontSize: 16 }}>Demo University</h2>
+            <h2 id="demo-sheet-title" style={{ fontSize: 16 }}>
+              Demo University
+            </h2>
             <p className="tiny muted">A safe environment you cannot break.</p>
           </div>
           <button className="btn btn-sm btn-ghost" onClick={onClose} aria-label="Close">
@@ -275,6 +316,7 @@ export function DemoPanel({
                   {outcome && outcome.id === control.id ? (
                     <p
                       className="tiny"
+                      role="status"
                       style={{
                         marginTop: 4,
                         color: outcome.ok ? "var(--moss)" : "var(--clay)",
@@ -332,7 +374,7 @@ export function DemoPanel({
             </p>
             {health ? (
               <details className="inset" style={{ marginTop: 14 }}>
-                <summary className="tiny muted" style={{ cursor: "pointer" }}>
+                <summary className="tiny muted">
                   Environment detail
                 </summary>
                 <p className="tiny mono muted" style={{ marginTop: 8 }}>

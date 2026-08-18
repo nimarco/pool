@@ -305,7 +305,7 @@ export function CommunityView({
       {enablement ? (
         <section className="panel">
           <div className="panel-head">
-            <h3>How this Community enables Pool</h3>
+            <h2>How this Community enables Pool</h2>
             <span className="spacer" />
             <Chip>synthetic fixture</Chip>
           </div>
@@ -336,7 +336,7 @@ export function CommunityView({
               <strong>Members choose and collect</strong>
             </div>
             <details className="inset">
-              <summary className="small" style={{ cursor: "pointer" }}>
+              <summary className="small">
                 <strong>Who is responsible for what</strong>
               </summary>
               <ul className="small muted prose" style={{ marginTop: 10, paddingLeft: 20 }}>
@@ -388,7 +388,7 @@ export function CommunityView({
       <section className="grid grid-side">
         <div className="panel">
           <div className="panel-head">
-            <h3>Pools</h3>
+            <h2>Pools</h2>
             <span className="spacer" />
             <span className="tiny faint">{m.pools_locked_or_beyond} locked or beyond</span>
           </div>
@@ -408,7 +408,7 @@ export function CommunityView({
 
         <div className="panel">
           <div className="panel-head">
-            <h3>Where everyone is</h3>
+            <h2>Where everyone is</h2>
           </div>
           <CommunityMap map={map} />
         </div>
@@ -416,7 +416,7 @@ export function CommunityView({
 
       <section className="panel">
         <div className="panel-head">
-          <h3>Decisions waiting on a person</h3>
+          <h2>Decisions waiting on a person</h2>
           <span className="spacer" />
           <span className="tiny faint">
             {state.decisions.length === 0 ? "empty, as usual" : `${state.decisions.length} waiting`}
@@ -443,7 +443,7 @@ export function CommunityView({
       <section className="grid grid-2">
         <div className="panel">
           <div className="panel-head">
-            <h3>Where the money went</h3>
+            <h2>Where the money went</h2>
           </div>
           <div className="panel-pad">
             <div className="ledger">
@@ -462,7 +462,7 @@ export function CommunityView({
 
         <div className="panel">
           <div className="panel-head">
-            <h3>How much attention it cost anyone</h3>
+            <h2>How much attention it cost anyone</h2>
           </div>
           <div className="panel-pad">
             <div className="ledger">
@@ -490,7 +490,7 @@ export function CommunityView({
 
       <section className="panel">
         <div className="panel-head">
-          <h3>What Pool did</h3>
+          <h2>What Pool did</h2>
           <span className="spacer" />
           <span className="actor-key">
             <span className="actor actor-agent">

@@ -342,7 +342,7 @@ export function Needs({
 
       <section className="panel">
         <div className="panel-head">
-          <h3>Yours</h3>
+          <h2>Yours</h2>
           <span className="spacer" />
           <span className="tiny faint">{identity.display_name}</span>
           {editingId === null ? (

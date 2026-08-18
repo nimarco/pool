@@ -3680,3 +3680,117 @@ but it is not blocking.
 `apps/web/src/views/pool.tsx`, `apps/web/src/views/about.tsx`,
 `apps/web/src/views/run.tsx`, `apps/web/src/views/live.tsx`,
 `apps/web/src/views/operations.tsx`, `apps/web/src/views/demo-panel.tsx` and their focused tests.
+
+---
+
+### #0035 — [2026-08-18] — The visual-polish pass, and one identity bug it surfaced
+`[DEMO]` `[FRONTEND]` `[ARCHITECTURE]`
+
+**Goal / user intent**
+Run the final visual, responsive, interaction and accessibility pass over the frontend before
+presentation work, against the frozen scope in `docs/IMPECCABLE_HANDOFF.md`. No product,
+information-architecture, demo-choreography or proof-semantics changes.
+
+**Starting state**
+Entry #0034 left the Product and Showcase copy compressed and the proof evidence prioritised, but
+that pass could not complete rendered browser QA in-session and relied on the owner's manual visual
+sign-off afterwards. The design system itself had not been audited: disclosure affordances,
+disabled states, focus behaviour, heading structure and touch targets were whatever each view had
+reached for locally.
+
+**Decision**
+Fix causes at the system level rather than per view, and treat the technical proof's central claim
+as a layout problem rather than a copy problem.
+
+**Why**
+Three of the worst defects were one defect each, repeated. Every `<summary>` styled as a flex row
+(`.panel-head`) silently suppressed the native disclosure marker, so five panels that open looked
+exactly like panels that do not. Disabled controls were a 45% opacity ghost of the enabled control,
+which fails both legibility and inertness at once and fails worst on a recorded screen. Every view
+jumped `h1 → h3`, and Showcase's run reader began at `h2` with no `h1` above it.
+
+The proof card's central claim — the pool carries the id of the run that created it — was four
+sibling cells in an auto-fit grid, with the equality asserted in a trailing text fragment
+(`· matches run id`). Two identifiers being *equal* is not something a flat grid can show. Setting
+them as a ledger, on consecutive rows, in the same column, makes the match visible rather than
+readable. No evidence was removed to achieve it.
+
+**Implementation**
+Status: **tested**. Deployment is recorded in a separate update below, once observed.
+
+Shared primitives: `ProofIdentity` and `ExecutionPath` in `ui.tsx`, now the single source for the
+proof block in both Product's compact Activity card and the full technical view — the two had been
+independent copies of the same markup. `Block` gained an explicit heading level. `TracePills` gained
+an ordered form, because the order *is* the evidence.
+
+Design system: one disclosure grammar (drawn rotating chevron, hover on the whole header); disabled
+as a flat unlit surface with a legible label, with the primary action keeping its shape while a run
+is in flight; focus rings drawn inside controls that sit in horizontal scroll rails, where an offset
+ring was being clipped; `.token`, `.push`, `.grid-lede`, `.facts-wide`, `.figure-tail` and the
+`.provenance` block, the last sized by container query so it re-flows from the width it is given
+rather than the viewport.
+
+Accessibility: corrected heading outline across all views; real tab semantics on the pool record
+(`aria-controls`, `role="tabpanel"`, roving tab order, arrow-key navigation); the demo drawer became
+a true modal (`aria-modal`, focus in on open, Tab held inside, focus restored to the opener);
+`role="status"` on action outcomes; the Operations one-time-code input moved from `.btn` to
+`.control`. The pool tab strip now scrolls its selected tab into view — entering the record directly
+on Activity left the tab, and the proof behind it, invisible on a phone.
+
+**One semantic defect fixed, deliberately and separately.** Home's opportunity card and its
+"technical proof for this run" action arrived at their pool independently: the card rendered
+`state.pools[0]`, and `App.tsx` looked up `state.pools[0]` again inside the handler. In the
+canonical single-pool scenario they always agree, which is exactly what makes it worth fixing — the
+failure only appears once a second pool exists, and by then it is a judge being shown the wrong
+run. The card now emits the id of the pool it drew and the handler opens that pool.
+
+**AWS / external services touched**
+None. No AWS resource was read, changed, created or destroyed during the pass. The local API ran
+offline with the deterministic planner; no AgentCore or Bedrock run was invoked.
+
+**Cost-relevant activity**
+None during the pass. No schedules, no paid tools, no model calls.
+
+**Validation**
+`make qa` passed in full: Python ruff, ESLint, TypeScript, Python tests, frontend Vitest
+**23 tests in 9 files**, Vite production build, secret scan. `git diff --check` clean.
+
+Rendered browser QA was completed this session, closing the gap #0034 recorded. Inspected at
+1512×804, 1920×1080, 1024×1366 and 390px, plus a dark-scheme pass: Home (empty and with a pool),
+Pools, Needs including the open form, Community, all five pool tabs, Activity → technical proof in
+both compact and full form, the 13-stage reader at stages 1, 8 and 13, the demo drawer, and all five
+Showcase destinations. Measured across those screens: no contrast failure below 4.5:1 / 3:1, no
+body-level horizontal overflow, no element overflowing the viewport. Console clean on a fresh tab
+after a full traversal; all `/api/*` requests 200.
+
+The proof-link fix has a focused regression test (`apps/web/src/views/home.test.tsx`) using a
+two-pool fixture. It was confirmed to **fail against the previous code** before being accepted —
+the old handler received a React synthetic event rather than a pool id.
+
+**Failures / dead ends**
+Three Vitest failures appeared mid-pass. Two were changes to strings the tests correctly guard —
+the readback separator and the stage counter — and were reverted to the asserted wording rather
+than having the tests edited around them. The third was real: `scrollIntoView` is absent under
+jsdom and was crashing `PoolRecord`; the call is now guarded. Bolding the current stage index split
+`01 / 13` across elements for no proportionate gain, so the emphasis moved to CSS instead. An
+attempt to name the current act in the stage bar was reverted — it duplicated the act label twenty
+pixels below it.
+
+**What we learned**
+A design system's worst defects are usually one defect repeated. The disclosure markers, the
+disabled state and the heading levels were each a single rule, and each was wrong in every view at
+once. Separately: an identity bug that is invisible in the canonical scenario is not a small bug —
+it is a bug that will first appear in front of an audience.
+
+**Article fodder**
+Article 2 and the demo. The provenance block is the clearest artifact of the project's central
+technical claim: same-run proof shown as alignment rather than asserted as prose.
+
+**Evidence worth preserving**
+Before/after of the technical proof card — a flat four-cell fact grid versus the aligned provenance
+ledger with the two identical run ids stacked, the `matches run id` chip, and the checked
+authoritative readback verdict.
+
+**Relevant commits / files**
+`apps/web/src/styles.css`, `apps/web/src/ui.tsx`, `apps/web/src/App.tsx` and every view under
+`apps/web/src/views/`, plus the new `apps/web/src/views/home.test.tsx`.

@@ -148,6 +148,15 @@ a {
   outline-offset: 2px;
   border-radius: 3px;
 }
+/* Controls that live inside a horizontally scrolling rail would have an offset ring
+   clipped by the scroll container, so theirs is drawn inside the control instead. */
+.tabs button:focus-visible,
+.nav button:focus-visible {
+  outline-offset: -2px;
+}
+.nav button[aria-current="page"]:focus-visible {
+  outline-color: var(--paper);
+}
 
 .skip-link {
   position: absolute;
@@ -235,6 +244,17 @@ a {
 .nowrap {
   white-space: nowrap;
 }
+/* Identifiers and other unbreakable tokens: wrap between words, never mid-token, so a
+   run id stays copyable and readable at any width. */
+.token {
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+/* Pins a trailing element to the bottom of a stretched flex column, so two panels
+   sharing a row end on the same line instead of one floating in dead space. */
+.push {
+  margin-top: auto;
+}
 
 /* =================================================================== layout */
 
@@ -284,6 +304,14 @@ a {
 }
 .grid-side {
   grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  align-items: start;
+}
+/* A short statement standing to the left of a list or ledger. The statement is a label
+   for the thing beside it, not a column of equal weight, so it is set narrow — a
+   half-width sentence next to a full list leaves a hole where neither belongs. */
+.grid-lede {
+  grid-template-columns: minmax(0, 0.6fr) minmax(0, 1fr);
+  gap: clamp(20px, 4vw, 46px);
   align-items: start;
 }
 
@@ -347,6 +375,7 @@ a {
   background: none;
   border: none;
   cursor: pointer;
+  min-height: 30px;
   padding: 6px 11px;
   border-radius: 7px;
   color: var(--ink-muted);
@@ -385,7 +414,7 @@ a {
 .linkish {
   background: none;
   border: none;
-  padding: 0;
+  padding: 2px 0;
   cursor: pointer;
   font: inherit;
   color: inherit;
@@ -423,9 +452,19 @@ a {
 .btn:active:not(:disabled) {
   transform: translateY(1px);
 }
+/* Disabled is a state, not a dimmed copy of the enabled one. A flat, unlit surface
+   reads as inert while keeping the label legible — a 45% ghost of the label failed
+   both at once, and worst of all on a recorded screen. */
 .btn:disabled {
-  opacity: 0.45;
   cursor: not-allowed;
+  background: var(--paper-sunken);
+  border-color: var(--rule);
+  color: var(--ink-faint);
+  box-shadow: none;
+}
+.btn-ghost:disabled {
+  background: none;
+  border-color: transparent;
 }
 .btn-primary {
   background: var(--ink);
@@ -437,6 +476,14 @@ a {
   background: color-mix(in srgb, var(--ink) 88%, var(--moss));
   border-color: color-mix(in srgb, var(--ink) 88%, var(--moss));
   box-shadow: var(--shadow-md);
+}
+/* The primary action keeps its shape while it is running — this is the button a demo
+   is watching — but loses its charge. */
+.btn-primary:disabled {
+  background: color-mix(in srgb, var(--ink) 62%, var(--paper));
+  border-color: transparent;
+  color: var(--paper-raised);
+  box-shadow: none;
 }
 .btn-accept {
   background: var(--moss);
@@ -452,8 +499,14 @@ a {
   background: var(--moss-bright);
   border-color: var(--moss-bright);
 }
+.btn-accept:disabled {
+  background: color-mix(in srgb, var(--moss) 55%, var(--paper));
+  border-color: transparent;
+  color: var(--paper-raised);
+}
 .btn-sm {
   padding: 6px 11px;
+  min-height: 32px;
   font-size: 13px;
   border-radius: 7px;
 }
@@ -496,7 +549,9 @@ a {
   padding: 14px 22px;
   border-bottom: 1px solid var(--rule);
 }
-.panel-head h3 {
+.panel-head h2,
+.panel-head h3,
+.panel-head h4 {
   font-size: 14.5px;
   font-weight: 600;
   letter-spacing: -0.005em;
@@ -519,6 +574,51 @@ a {
 }
 .block > .section-title {
   margin-bottom: 12px;
+}
+
+/* ============================================================== disclosure */
+
+/* One disclosure grammar for the whole product. Several of these summaries are flex
+   rows (`.panel-head`), which suppresses the native marker entirely — a panel that
+   opens looked exactly like a panel that does not. So the marker is drawn here: one
+   chevron on the icon set's stroke weight, rotating rather than swapping shape. */
+details > summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 26px;
+  cursor: pointer;
+  list-style: none;
+  transition: color 0.13s ease, background 0.13s ease;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+details > summary::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: none;
+  margin-inline: 1px 0;
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
+  border-radius: 1px;
+  opacity: 0.6;
+  transform: translateY(-1px) rotate(-45deg);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.13s ease;
+}
+details[open] > summary::before {
+  transform: translateY(-2px) rotate(45deg);
+}
+details > summary:hover::before {
+  opacity: 1;
+}
+details > summary:hover {
+  color: var(--ink);
+}
+/* A whole panel header is the affordance, so it lights up as one. */
+details > summary.panel-head:hover {
+  background: var(--paper-sunken);
 }
 
 /* ================================================================== actors */
@@ -660,12 +760,27 @@ a {
 .figure-accent {
   color: var(--moss);
 }
+/* A figure set against the end of a wrapping row. It stops being a tail once the row
+   wraps on a phone, so it stops pretending to be right-aligned there. */
+.figure-tail {
+  text-align: right;
+}
+@media (max-width: 560px) {
+  .figure-tail {
+    text-align: left;
+  }
+}
 
 /* Small key/value pairs in a responsive grid — facts, not figures. */
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 13px 20px;
+}
+/* The same grid, sized for values that must not break: identifiers, model ids, ARNs. */
+.facts-wide {
+  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+  gap: 14px 26px;
 }
 .fact-label {
   font-size: 11.5px;
@@ -678,6 +793,97 @@ a {
   overflow-wrap: anywhere;
   font-size: 14px;
   margin-top: 1px;
+}
+
+/* ============================================================== provenance */
+
+/* The one claim the technical proof exists to make: this pool carries the id of the
+   run that created it. Two identifiers being *equal* is not something a flat grid of
+   facts can show, so the pair is set as a ledger — labels in one column, values in
+   another — and the two identical strings land directly above one another. Nothing is
+   summarised away; the layout is doing the arguing the caption used to do alone. */
+.provenance {
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper-sunken);
+  overflow: hidden;
+  /* The block is shared between a full-width card and a half-width one, so it sizes
+     itself from the space it is actually given rather than from the viewport. */
+  container-type: inline-size;
+}
+@container (max-width: 440px) {
+  .prov-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+}
+.prov-row {
+  display: grid;
+  grid-template-columns: minmax(0, 15.5rem) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 18px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--rule);
+}
+.prov-row:last-child {
+  border-bottom: none;
+}
+.prov-label {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  font-weight: 550;
+}
+.prov-value {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow-wrap: normal;
+  word-break: keep-all;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+/* The matched pair reads as one bracketed unit rather than two adjacent rows. */
+.prov-row.linked {
+  background: var(--moss-soft);
+  border-bottom-color: var(--moss-line);
+}
+.prov-row.linked .prov-value {
+  color: var(--moss);
+}
+.prov-verdict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 13.5px;
+  color: var(--ink);
+  background: var(--paper-raised);
+}
+.prov-verdict .ok {
+  color: var(--moss);
+  display: flex;
+}
+.prov-verdict .bad {
+  color: var(--stop);
+  display: flex;
+}
+
+/* The deployed path, set as evidence rather than as a note. */
+.path {
+  display: block;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  letter-spacing: -0.01em;
+  color: var(--graphite);
+  background: var(--graphite-soft);
+  border: 1px solid var(--graphite-line);
+  border-radius: var(--radius);
+  padding: 11px 15px;
 }
 
 /* ================================================================== meter */
@@ -986,13 +1192,31 @@ table.data th.r {
 }
 .trace-pill {
   font-family: var(--mono);
-  font-size: 11px;
-  padding: 2px 7px;
+  font-size: 12px;
+  padding: 3px 8px;
   border-radius: 5px;
   background: var(--paper-sunken);
   border: 1px solid var(--rule);
   color: var(--ink-muted);
   white-space: nowrap;
+}
+/* Numbered where the order is the evidence: the sequence a judge reads off the proof
+   card is the sequence the model actually chose. */
+.trace-inline.ordered {
+  counter-reset: tool;
+  gap: 6px;
+}
+.trace-inline.ordered .trace-pill {
+  counter-increment: tool;
+  color: var(--ink);
+  background: var(--paper-raised);
+  border-color: var(--rule-strong);
+}
+.trace-inline.ordered .trace-pill::before {
+  content: counter(tool, decimal-leading-zero);
+  color: var(--ink-faint);
+  margin-right: 7px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ================================================================== banners */
@@ -1115,6 +1339,7 @@ table.data th.r {
   border-top: 1px solid var(--rule-strong);
   align-items: start;
 }
+.claim h2,
 .claim h3 {
   font-family: var(--display);
   font-weight: 400;
@@ -1148,9 +1373,11 @@ table.data th.r {
 }
 .stage-count {
   font-family: var(--mono);
-  font-size: 12px;
-  color: var(--ink-faint);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .stage-body {
   padding: clamp(22px, 3.2vw, 38px);
@@ -1202,7 +1429,8 @@ table.data th.r {
 }
 .ruler button {
   flex: 1;
-  height: 22px;
+  height: 26px;
+  min-width: 14px;
   padding: 0;
   border: none;
   background: none;
@@ -1214,7 +1442,7 @@ table.data th.r {
 .ruler button::after {
   content: "";
   position: absolute;
-  inset: 9px 0 auto 0;
+  inset: 11px 0 auto 0;
   height: 3px;
   border-radius: 2px;
   background: var(--rule-strong);
@@ -1228,8 +1456,9 @@ table.data th.r {
 }
 .ruler button.current::after {
   background: var(--ink);
-  height: 5px;
-  inset: 8px 0 auto 0;
+  height: 7px;
+  inset: 9px 0 auto 0;
+  border-radius: 3px;
 }
 
 /* ================================================================== live */
@@ -1429,6 +1658,7 @@ table.data th.r {
   border: none;
   border-bottom: 2px solid transparent;
   cursor: pointer;
+  min-height: 38px;
   padding: 9px 13px;
   margin-bottom: -1px;
   color: var(--ink-muted);
@@ -1565,8 +1795,14 @@ select.control {
 @media (max-width: 940px) {
   .grid-2,
   .grid-3,
-  .grid-side {
+  .grid-side,
+  .grid-lede {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* The label column no longer earns its width once the values wrap under it. */
+  .prov-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
   }
   .hero-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -1623,6 +1859,35 @@ select.control {
   }
   .topbar-tail {
     margin-left: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  /* The pool record's own tabs scroll on a phone exactly as the top nav does, so they
+     get the same honest signal that something sits past the edge — without it, the
+     Activity tab (and the technical proof behind it) is simply invisible. */
+  .tabs {
+    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  }
+  /* Comfortable on a thumb without becoming a phone-sized button on a laptop. */
+  .btn-sm {
+    min-height: 38px;
+    padding-inline: 13px;
+  }
+  .ruler button {
+    height: 32px;
+  }
+  .ruler button::after {
+    inset: 14px 0 auto 0;
+  }
+  .ruler button.current::after {
+    inset: 12px 0 auto 0;
+  }
+  .prov-row,
+  .prov-verdict {
+    padding-inline: 14px;
+  }
+  .prov-value {
+    font-size: 14px;
   }
   .panel-pad,
   .panel-head,
@@ -1630,6 +1895,10 @@ select.control {
   .trace-step,
   .hop,
   .empty {
+    padding-inline: 16px;
+  }
+  .sheet-body,
+  .sheet-head {
     padding-inline: 16px;
   }
   .stage-bar,

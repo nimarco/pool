@@ -498,14 +498,11 @@ export default function App() {
               onFind={findOpportunities}
               onOpenPool={openPoolDetail}
               onRespond={respond}
-              onShowAgent={() => {
-                const pool = state.pools[0];
-                if (pool)
-                  void openPoolDetail(pool.pool_id, {
-                    tab: "activity",
-                    deep: "execution",
-                  });
-              }}
+              /* The card names the pool it drew; the proof opens for that exact pool
+                 rather than for whichever one happens to sort first. */
+              onShowAgent={(poolId) =>
+                void openPoolDetail(poolId, { tab: "activity", deep: "execution" })
+              }
               onGoNeeds={() => navigate("needs")}
               liveDiscovery={Boolean(demoConfig?.live_agent_available)}
             />

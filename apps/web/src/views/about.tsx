@@ -95,21 +95,21 @@ export function About({
 
       <section className="claims">
         <article className="claim">
-          <h3>Nobody creates the group</h3>
+          <h2>Nobody creates the group</h2>
           <p>
             Members declare recurring needs independently; Pool finds the overlap. There is
             no create-a-group or invite flow.
           </p>
         </article>
         <article className="claim">
-          <h3>Somebody still has to carry the box</h3>
+          <h2>Somebody still has to carry the box</h2>
           <p>
             Pool ranks willing fulfillers on job facts and pays the best eligible fit. Every
             unit is sold before the host collects it.
           </p>
         </article>
         <article className="claim">
-          <h3>The price includes everything</h3>
+          <h2>The price includes everything</h2>
           <p>
             Buyers see merchandise, host pay, processing and Pool's fee against retail. If
             fair host pay erases the saving, no pool forms.
@@ -119,9 +119,9 @@ export function About({
 
       <section className="grid grid-2">
         <div className="block">
-          <h3 className="section-title" style={{ marginBottom: 12 }}>
+          <h2 className="section-title" style={{ marginBottom: 12 }}>
             Why this needs an agent
-          </h3>
+          </h2>
           <p className="small muted prose">
             The agent chooses what to investigate, who to ask and how to recover as buyer,
             host and supplier conditions change.
@@ -134,7 +134,7 @@ export function About({
             quantity, eligibility check and lifecycle transition.
           </p>
           <details className="inset" style={{ marginTop: 12 }}>
-            <summary className="small" style={{ cursor: "pointer" }}>
+            <summary className="small">
               <strong>Implementation boundary</strong>
             </summary>
             <p className="small muted prose" style={{ marginTop: 10 }}>
@@ -151,9 +151,9 @@ export function About({
         </div>
 
         <div className="block">
-          <h3 className="section-title" style={{ marginBottom: 12 }}>
+          <h2 className="section-title" style={{ marginBottom: 12 }}>
             What is real, and what is not
-          </h3>
+          </h2>
           <div className="stack-sm">
             <p className="small">
               <Chip tone="ok">real</Chip> Strands, matching, case arithmetic, host ranking,
@@ -177,7 +177,7 @@ export function About({
             </p>
             {health ? (
               <details className="inset">
-                <summary className="tiny muted" style={{ cursor: "pointer" }}>
+                <summary className="tiny muted">
                   Environment detail
                 </summary>
                 <p className="tiny mono muted" style={{ marginTop: 8 }}>
@@ -193,7 +193,7 @@ export function About({
       </section>
 
       <details className="block">
-        <summary className="section-title" style={{ cursor: "pointer" }}>
+        <summary className="section-title">
           Who this is for
         </summary>
         <p className="small muted prose" style={{ marginTop: 12 }}>

@@ -13,7 +13,7 @@
  * that difference is a fact about the pool rather than a rounding error.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
   ActivityEvent,
   Checklist,
@@ -35,7 +35,7 @@ import {
   Block,
   Chip,
   Empty,
-  Fact,
+  ExecutionPath,
   Figure,
   IconArrowLeft,
   IconCheck,
@@ -43,6 +43,7 @@ import {
   IconDot,
   LedgerLine,
   Meter,
+  ProofIdentity,
   TracePills,
 } from "../ui";
 import { groupSavingsCaption } from "../labels";
@@ -98,8 +99,34 @@ export function PoolRecord({
   onRunScenario: () => void;
 }) {
   const [tab, setTab] = useState<Tab>((entry?.tab as Tab) ?? "overview");
+  const tablist = useRef<HTMLElement | null>(null);
   const s = statusCopy(pool.status);
   const declined = pool.member_count - pool.buyer_count;
+
+  /* The tab strip scrolls on a phone, and the record can be entered directly on
+     Activity — so the selected tab has to bring itself into view or it is simply not
+     there. */
+  useEffect(() => {
+    const selected = tablist.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    // Guarded: not every rendering environment implements it, and a tab strip that
+    // cannot self-scroll should still show its tabs.
+    selected?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [tab]);
+
+  /* Roving tab order: one stop for the whole strip, arrows between the tabs. */
+  const onTabKey = (event: KeyboardEvent) => {
+    const at = TABS.findIndex((t) => t.id === tab);
+    const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    let next = -1;
+    if (step !== 0) next = (at + step + TABS.length) % TABS.length;
+    if (event.key === "Home") next = 0;
+    if (event.key === "End") next = TABS.length - 1;
+    if (next < 0) return;
+    event.preventDefault();
+    setTab(TABS[next].id);
+    const buttons = tablist.current?.querySelectorAll<HTMLElement>('[role="tab"]');
+    buttons?.[next]?.focus();
+  };
 
   return (
     <div className="stack">
@@ -156,12 +183,21 @@ export function PoolRecord({
 
       <Meter value={pool.provisional_units} max={pool.threshold_units} />
 
-      <nav className="tabs" role="tablist" aria-label="Pool sections">
+      <nav
+        className="tabs"
+        role="tablist"
+        aria-label="Pool sections"
+        ref={tablist}
+        onKeyDown={onTabKey}
+      >
         {TABS.map((t) => (
           <button
             key={t.id}
+            id={`pooltab-${t.id}`}
             role="tab"
             aria-selected={tab === t.id}
+            aria-controls={`poolpanel-${t.id}`}
+            tabIndex={tab === t.id ? 0 : -1}
             onClick={() => setTab(t.id)}
           >
             {t.label}
@@ -169,6 +205,12 @@ export function PoolRecord({
         ))}
       </nav>
 
+      <div
+        role="tabpanel"
+        id={`poolpanel-${tab}`}
+        aria-labelledby={`pooltab-${tab}`}
+        className="stack"
+      >
       {tab === "overview" ? <OverviewTab pool={pool} /> : null}
       {tab === "people" ? (
         <PeopleTab pool={pool} identity={identity} onRefresh={onRefresh} />
@@ -192,6 +234,7 @@ export function PoolRecord({
           onRunScenario={onRunScenario}
         />
       ) : null}
+      </div>
     </div>
   );
 }
@@ -203,9 +246,9 @@ function OverviewTab({ pool }: { pool: PoolView }) {
     <div className="stack">
       <section className="grid grid-2">
         <div className="panel panel-pad">
-          <h3 className="section-title" style={{ marginBottom: 12 }}>
+          <h2 className="section-title" style={{ marginBottom: 12 }}>
             Who is carrying it
-          </h3>
+          </h2>
           {pool.host ? (
             <>
               <div className="display" style={{ fontSize: 26 }}>
@@ -228,9 +271,9 @@ function OverviewTab({ pool }: { pool: PoolView }) {
           )}
         </div>
         <div className="panel panel-pad">
-          <h3 className="section-title" style={{ marginBottom: 12 }}>
+          <h2 className="section-title" style={{ marginBottom: 12 }}>
             Where it is collected
-          </h3>
+          </h2>
           <div className="display" style={{ fontSize: 26 }}>
             {pool.pickup_site}
           </div>
@@ -245,7 +288,7 @@ function OverviewTab({ pool }: { pool: PoolView }) {
       {pool.viability ? (
         <section className="panel">
           <div className="panel-head">
-            <h3>Can this go ahead?</h3>
+            <h2>Can this go ahead?</h2>
             <Chip tone={pool.viability.viable ? "ok" : "warn"}>
               {pool.viability.viable
                 ? "every check passes"
@@ -260,7 +303,7 @@ function OverviewTab({ pool }: { pool: PoolView }) {
               returns the complete blocking list.
             </p>
             <details className="inset">
-              <summary className="small" style={{ cursor: "pointer" }}>
+              <summary className="small">
                 <strong>View all {pool.viability.checks.length} deterministic checks</strong>
               </summary>
               <div className="rows" style={{ marginTop: 10, borderTop: "1px solid var(--rule)" }}>
@@ -347,7 +390,7 @@ function PeopleTab({
     <div className="stack">
       <section className="panel">
         <div className="panel-head">
-          <h3>Buyers</h3>
+          <h2>Buyers</h2>
           <span className="spacer" />
           <span className="tiny faint">
             display names only · no contact, address or payment data
@@ -397,7 +440,7 @@ function PeopleTab({
 
       {me ? (
         <section className="panel panel-pad stack-sm">
-          <h3 className="section-title">Your part in this</h3>
+          <h2 className="section-title">Your part in this</h2>
           <p className="small muted prose">
             You are in for {me.units} units at{" "}
             {me.final_cost_display || me.estimated_cost_display}
@@ -437,7 +480,7 @@ function PeopleTab({
             ) : null}
           </div>
           {outcome ? (
-            <div className={outcome.ok ? "banner" : "banner banner-warn"}>
+            <div className={outcome.ok ? "banner" : "banner banner-warn"} role="status">
               <span>{outcome.text}</span>
             </div>
           ) : null}
@@ -446,7 +489,7 @@ function PeopleTab({
 
       {pool.host_candidates && pool.host_candidates.length > 0 ? (
         <details className="panel">
-          <summary className="panel-head" style={{ cursor: "pointer" }}>
+          <summary className="panel-head">
             <strong>Considered for the job · {pool.host_candidates.length} candidates</strong>
             <span className="spacer" />
             <ActorTag actor="engine" label="Ranked on facts" />
@@ -512,7 +555,7 @@ function EconomicsTab({ pool }: { pool: PoolView }) {
     <div className="stack">
       <section className="panel">
         <div className="panel-head">
-          <h3>Where the money goes</h3>
+          <h2>Where the money goes</h2>
           <span className="spacer" />
           <ActorTag actor="engine" label="Every figure computed" />
         </div>
@@ -543,9 +586,9 @@ function EconomicsTab({ pool }: { pool: PoolView }) {
 
       <section className="grid grid-2">
         <div className="panel panel-pad">
-          <h3 className="section-title" style={{ marginBottom: 12 }}>
+          <h2 className="section-title" style={{ marginBottom: 12 }}>
             Nothing left over
-          </h3>
+          </h2>
           <p className="small muted">
             {e.packages.cases} case{e.packages.cases === 1 ? "" : "s"} of{" "}
             {e.packages.case_units} = {e.packages.units_purchased} units for{" "}
@@ -556,7 +599,7 @@ function EconomicsTab({ pool }: { pool: PoolView }) {
           </p>
           {e.packages.surplus_resolved ? (
             <details style={{ marginTop: 10 }}>
-              <summary className="tiny muted" style={{ cursor: "pointer" }}>
+              <summary className="tiny muted">
                 Why exact cases matter
               </summary>
               <p className="tiny muted prose" style={{ marginTop: 8 }}>
@@ -567,7 +610,7 @@ function EconomicsTab({ pool }: { pool: PoolView }) {
           ) : null}
         </div>
         <details className="panel">
-          <summary className="panel-head" style={{ cursor: "pointer" }}>
+          <summary className="panel-head">
             <strong>Why Pool charges anything</strong>
           </summary>
           <div className="panel-pad">
@@ -633,7 +676,7 @@ function FulfilmentTab({ pool, onRefresh }: { pool: PoolView; onRefresh: () => v
 
       <section className="panel">
         <div className="panel-head">
-          <h3>Pickup credentials</h3>
+          <h2>Pickup credentials</h2>
           <span className="spacer" />
           <span className="tiny faint">one-time, hashed at rest</span>
         </div>
@@ -642,7 +685,7 @@ function FulfilmentTab({ pool, onRefresh }: { pool: PoolView; onRefresh: () => v
             Every handoff requires a one-time buyer credential; only hashes are stored.
           </p>
           <details className="inset">
-            <summary className="small" style={{ cursor: "pointer" }}>
+            <summary className="small">
               <strong>Credential mechanics</strong>
             </summary>
             <p className="small muted prose" style={{ marginTop: 10 }}>
@@ -675,7 +718,7 @@ function FulfilmentTab({ pool, onRefresh }: { pool: PoolView; onRefresh: () => v
             </div>
           ) : null}
           {error ? (
-            <div className="banner">
+            <div className="banner" role="status">
               <span>
                 Refused by the server: <strong>{error}</strong>. A credential is bound to
                 one uncollected allocation and works exactly once.
@@ -703,7 +746,7 @@ function FulfilmentTab({ pool, onRefresh }: { pool: PoolView; onRefresh: () => v
       {checklist ? (
         <section className="panel">
           <div className="panel-head">
-            <h3>Orders</h3>
+            <h2>Orders</h2>
           </div>
           <div className="rows">
             {checklist.orders.map((o) => (
@@ -819,56 +862,38 @@ function ActivityTab({
 
   return (
     <div className="stack">
-      <section className="grid grid-2">
+      <section className="grid grid-side">
         <div className="panel panel-pad stack-sm">
           <div className="row-between">
-            <h3 className="section-title">Technical proof for this run</h3>
+            <h2 className="section-title">Technical proof for this run</h2>
             {proof ? (
               <Chip tone={proof.execution.live ? "live" : "info"}>
                 {proof.execution.live ? "AgentCore live" : proof.run.model_provider}
               </Chip>
             ) : null}
           </div>
-          <p className="small muted">
-            The pool and run below were read from the same authoritative workspace.
-          </p>
           {proof ? (
             <>
-              <div className="facts">
-                <Fact label="Run id" value={<span className="mono">{proof.run.run_id}</span>} />
-                <Fact label="Pool id" value={<span className="mono">{proof.pool_id}</span>} />
-                <Fact
-                  label="Pool created_by_run"
-                  value={
-                    <span>
-                      <span className="mono">{proof.created_by_run}</span>
-                      {proof.created_by_run === proof.run.run_id ? " · matches run id" : " · mismatch"}
-                    </span>
-                  }
-                />
-                <Fact
-                  label="Authoritative same-workspace readback"
-                  value={sameWorkspaceReadback ? "verified · run + pool present" : "not verified"}
-                />
-              </div>
+              <ProofIdentity
+                runId={proof.run.run_id}
+                poolId={proof.pool_id}
+                createdByRun={proof.created_by_run}
+                sameWorkspace={sameWorkspaceReadback}
+              />
               <div>
-                <div className="fact-label">Selected tool sequence</div>
-                <TracePills names={proof.run.tool_calls} />
+                <div className="fact-label" style={{ marginBottom: 6 }}>
+                  Selected tool sequence
+                </div>
+                <TracePills names={proof.run.tool_calls} ordered />
               </div>
-              <div className="banner">
-                <span className="mono">
-                  {proof.execution.live
-                    ? "browser → Lambda → AgentCore → Bedrock / Strands → typed tools → DynamoDB → browser"
-                    : "browser → server → Strands planner → typed tools → database → browser"}
-                </span>
-              </div>
+              <ExecutionPath live={proof.execution.live} />
             </>
           ) : (
             <p className="tiny faint">
               This pool has no server-verified run relationship to display.
             </p>
           )}
-          <div className="btn-row">
+          <div className="btn-row push">
             <button className="btn btn-sm" onClick={() => setDeep("execution")}>
               Open complete proof
             </button>
@@ -876,12 +901,18 @@ function ActivityTab({
         </div>
 
         <div className="panel panel-pad stack-sm">
-          <h3 className="section-title">How this pool happened</h3>
+          <h2 className="section-title">How this pool happened</h2>
           <p className="small muted">
             Thirteen recorded stages from discovery through decline, repair, lock and
             handover.
           </p>
-          <div className="btn-row">
+          {!scenario ? (
+            <p className="tiny faint">
+              Replays Demo University from the beginning and records every stage, so it
+              starts this community over.
+            </p>
+          ) : null}
+          <div className="btn-row push">
             {scenario ? (
               <button className="btn btn-sm" onClick={() => setDeep("walkthrough")}>
                 Open the walkthrough
@@ -892,18 +923,12 @@ function ActivityTab({
               </button>
             )}
           </div>
-          {!scenario ? (
-            <p className="tiny faint">
-              Replays Demo University from the beginning and records every stage, so it
-              starts this community over.
-            </p>
-          ) : null}
         </div>
       </section>
 
       <section className="panel">
         <div className="panel-head">
-          <h3>What happened to this pool</h3>
+          <h2>What happened to this pool</h2>
           <span className="spacer" />
           <span className="actor-key">
             <span className="actor actor-agent">

@@ -245,8 +245,7 @@ export function DemoPanel({
               )}
             </select>
             <p className="tiny muted" style={{ marginTop: 8 }}>
-              Everyone here is invented. Switching account changes whose needs, questions
-              and pools you are looking at — it does not change any of the data.
+              Everyone is invented. Switching identity changes the viewpoint, not the data.
             </p>
           </section>
 
@@ -255,9 +254,8 @@ export function DemoPanel({
               Demo controls
             </h3>
             <p className="tiny muted" style={{ marginBottom: 14 }}>
-              Pool needs a community to work. These act on behalf of the other synthetic
-              participants, using the same endpoints they would use themselves — so the
-              state machine, the economics and every viability check still apply.
+              These act for other synthetic participants through their normal endpoints;
+              state, economics and viability rules still apply.
             </p>
             <div className="stack-sm">
               {controls.map((control) => (
@@ -320,27 +318,30 @@ export function DemoPanel({
               </div>
             </div>
             <p className="small muted" style={{ marginBottom: 12 }}>
-              <Chip tone="ok">real</Chip> The application, Strands loop, typed tools,
-              timing and matching engines, exact-cent economics, viability checks,
-              payment state machine, recovery workflow and one-time pickup credentials.
-              State is stored and read back, not held in the page.
+              <Chip tone="ok">real</Chip> App, Strands loop, typed tools, deterministic
+              matching/economics/viability, recovery and pickup credentials. State is stored
+              and read back.
             </p>
             <p className="small muted" style={{ marginBottom: 12 }}>
-              <Chip tone="warn">synthetic</Chip> The university, the people, the supplier
-              catalogue and the prices in it. No wholesale relationship exists.
+              <Chip tone="warn">synthetic</Chip> University, people, supplier catalogue and
+              prices; no wholesale relationship exists.
             </p>
             <p className="small muted">
-              <Chip tone="warn">simulated</Chip> Money and the supplier order. No card is
-              charged, no goods exist, and every purchase record is flagged as simulated
-              wherever it appears.
+              <Chip tone="warn">simulated</Chip> Payments and supplier order; no card is
+              charged, no goods exist, and purchase records are labelled simulated.
             </p>
             {health ? (
-              <p className="tiny mono muted" style={{ marginTop: 14 }}>
-                store {health.repository} · lifecycle planner {health.model_provider} ·
-                payments {health.payment_mode} · purchase{" "}
-                {health.purchase_simulated ? "simulated" : health.purchase_executor} ·
-                background schedules {health.schedules_enabled ? "on" : "off"}
-              </p>
+              <details className="inset" style={{ marginTop: 14 }}>
+                <summary className="tiny muted" style={{ cursor: "pointer" }}>
+                  Environment detail
+                </summary>
+                <p className="tiny mono muted" style={{ marginTop: 8 }}>
+                  store {health.repository} · lifecycle planner {health.model_provider} ·
+                  payments {health.payment_mode} · purchase{" "}
+                  {health.purchase_simulated ? "simulated" : health.purchase_executor} ·
+                  background schedules {health.schedules_enabled ? "on" : "off"}
+                </p>
+              </details>
             ) : null}
           </section>
 
@@ -349,8 +350,7 @@ export function DemoPanel({
               For judges
             </h3>
             <p className="tiny muted" style={{ marginBottom: 12 }}>
-              Everything technical hangs off the object it explains rather than off the
-              navigation, so none of it is in a member's way. Here are the direct routes.
+              Direct judge routes; Product mode remains the normal member experience.
             </p>
             <div className="stack-sm">
               <div>
@@ -362,10 +362,7 @@ export function DemoPanel({
                   Open Showcase mode
                 </button>
                 <p className="tiny faint" style={{ marginTop: 4 }}>
-                  The guided tour: Overview, the thirteen-stage run, the deployed agent,
-                  the community and the operations console, each as its own destination.
-                  Same data and same code as the product — a different order, built for
-                  being walked through rather than used.
+                  Same data and code, reordered into a guided judge walkthrough.
                 </p>
               </div>
               <div>
@@ -377,8 +374,7 @@ export function DemoPanel({
                   What Pool is
                 </button>
                 <p className="tiny faint" style={{ marginTop: 4 }}>
-                  The argument, the agent/deterministic boundary, and what the three marks
-                  used throughout the product mean.
+                  Product thesis, actor key, and model/deterministic boundary.
                 </p>
               </div>
               <div>
@@ -390,8 +386,7 @@ export function DemoPanel({
                   Technical proof
                 </button>
                 <p className="tiny faint" style={{ marginTop: 4 }}>
-                  The exact stored run-to-pool relationship, tool sequence, bounds and
-                  authoritative readback. A new AgentCore invocation is secondary.
+                  Same-run link, exact tools, bounds and authoritative readback.
                 </p>
               </div>
               <div>
@@ -403,10 +398,7 @@ export function DemoPanel({
                   How a pool happens, stage by stage
                 </button>
                 <p className="tiny faint" style={{ marginTop: 4 }}>
-                  All thirteen stages with the figures behind each: the timing split, the
-                  host ranking, the exact price, the declined card, the repair, the lock
-                  and the handover. Runs the whole lifecycle server-side first if this
-                  session has not recorded one.
+                  All 13 stages and figures; runs the server lifecycle first if needed.
                 </p>
               </div>
               <div>
@@ -418,9 +410,7 @@ export function DemoPanel({
                   Operations console
                 </button>
                 <p className="tiny faint" style={{ marginTop: 4 }}>
-                  The fulfilment job as the host sees it, the supplier quotes a final price
-                  may not rest on, and every authorisation and capture with its failure
-                  code intact.
+                  Host job, quote freshness, authorizations, captures and failure codes.
                 </p>
               </div>
             </div>

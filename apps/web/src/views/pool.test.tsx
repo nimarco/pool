@@ -136,10 +136,26 @@ describe("pool evidence and financial language", () => {
     expect(screen.getByText("pool_exact")).toBeTruthy();
   });
 
+  it("prioritizes same-run proof on the Activity overview", () => {
+    renderPool({ tab: "activity" });
+
+    expect(screen.getByRole("heading", { name: "Technical proof for this run" })).toBeTruthy();
+    expect(screen.getByText("Pool created_by_run")).toBeTruthy();
+    expect(screen.getByText(/matches run id/i)).toBeTruthy();
+    expect(screen.getByText(/verified · run \+ pool present/i)).toBeTruthy();
+    expect(screen.getByText("Selected tool sequence")).toBeTruthy();
+    expect(screen.getByText("AgentCore live")).toBeTruthy();
+    expect(
+      screen.getByText(
+        /browser → Lambda → AgentCore → Bedrock \/ Strands → typed tools → DynamoDB → browser/i,
+      ),
+    ).toBeTruthy();
+  });
+
   it("describes host compensation as earned and recorded, not paid out", () => {
     renderPool();
 
-    expect(screen.getByText(/Earns/)).toBeTruthy();
+    expect(screen.getByText(/earns/i)).toBeTruthy();
     expect(screen.getByText(/recorded on the simulated transaction/i)).toBeTruthy();
     expect(screen.queryByText(/Paid \$82\.00/)).toBeNull();
   });

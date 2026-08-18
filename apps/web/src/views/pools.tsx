@@ -21,17 +21,15 @@ export function Pools({
       <header className="stack-sm">
         <h1 className="title">Pools</h1>
         <p className="lede">
-          An order several people are making together. Each one exists because their
-          standing needs lined up, not because anybody created a group.
+          Orders Pool found by matching standing needs; nobody created a group.
         </p>
       </header>
 
       {state.pools.length === 0 ? (
         <section className="panel">
           <Empty>
-            No pool yet. Pool forms one when enough compatible demand exists to clear a
-            supplier's minimum without anybody being asked to buy earlier than they agreed
-            to.
+            No pool yet. Pool forms one only when compatible, authorised demand clears a
+            supplier's minimum.
           </Empty>
           <div className="panel-pad" style={{ paddingTop: 0 }}>
             <button className="btn btn-primary" onClick={onFind} disabled={running}>

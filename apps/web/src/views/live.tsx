@@ -29,7 +29,6 @@ import {
 } from "../api";
 import {
   ActorTag,
-  Block,
   Chip,
   Empty,
   Fact,
@@ -176,6 +175,10 @@ function StoredExecutionProof({
 }) {
   const run = proof.run;
   const isLive = proof.execution.live;
+  const sameWorkspace =
+    proof.workspace_readback.run_recorded &&
+    proof.workspace_readback.pool_recorded &&
+    proof.workspace_readback.same_workspace;
   return (
     <section className="panel reveal" data-testid="stored-execution-proof">
       <div className="panel-head">
@@ -187,56 +190,64 @@ function StoredExecutionProof({
         <ActorTag actor="agent" label="Stored causal record" />
       </div>
       <div className="panel-pad stack-sm">
-        <p className="small prose">
-          The server read this pool and this run back from the same workspace. The pool’s
-          stored <span className="mono">created_by_run</span> value is the exact run id
-          below; this is not a “latest run” guess made by the browser.
-        </p>
         <div className="facts">
-          <Fact
-            label="Service"
-            value={proof.execution.service}
-          />
-          <Fact label="Region" value={<span className="mono">{proof.execution.region}</span>} />
-          <Fact
-            label="Model provider / model"
-            value={<span className="mono">{run.model_provider} / {run.model_id}</span>}
-          />
           <Fact label="Run id" value={<span className="mono">{run.run_id}</span>} />
           <Fact label="Resulting pool id" value={<span className="mono">{proof.pool_id}</span>} />
           <Fact
             label="Pool created_by_run"
-            value={<span className="mono">{proof.created_by_run}</span>}
+            value={
+              <span>
+                <span className="mono">{proof.created_by_run}</span>
+                {proof.created_by_run === run.run_id ? " · matches run id" : " · mismatch"}
+              </span>
+            }
+          />
+          <Fact
+            label="Authoritative same-workspace readback"
+            value={sameWorkspace ? "verified · run + pool present" : "not verified"}
+          />
+        </div>
+        <div>
+          <div className="fact-label">Exact selected tool sequence</div>
+          <TracePills names={run.tool_calls} />
+        </div>
+        <div className="banner">
+          <span className="mono">
+            {isLive
+              ? "browser → Lambda → AgentCore → Bedrock / Strands → typed tools → DynamoDB → browser"
+              : "browser → server → Strands planner → typed tools → database → browser"}
+          </span>
+        </div>
+        <p className="tiny muted">
+          Typed tools delegate money, policy, allocation and writes to deterministic domain
+          services.
+        </p>
+        <div className="facts">
+          <Fact label="Service" value={proof.execution.service} />
+          <Fact label="Region" value={<span className="mono">{proof.execution.region}</span>} />
+          <Fact
+            label="Model provider / model"
+            value={<span className="mono">{run.model_provider} / {run.model_id}</span>}
           />
           <Fact label="Outcome" value={run.outcome.replace(/_/g, " ")} />
           <Fact
             label="Termination"
             value={<span className="mono">{run.termination_reason}</span>}
           />
-          <Fact
-            label="Authoritative readback"
-            value={
-              proof.workspace_readback.run_recorded &&
-              proof.workspace_readback.pool_recorded &&
-              proof.workspace_readback.same_workspace
-                ? "run + pool present in the same workspace"
-                : "not verified"
-            }
-          />
         </div>
+        <p className="tiny faint">
+          Read from stored records, not a browser “latest run” guess; no model reasoning text
+          is part of this proof.
+        </p>
+        <details className="inset">
+          <summary className="small" style={{ cursor: "pointer" }}>
+            <strong>Detailed hop evidence</strong>
+          </summary>
+          <div style={{ marginTop: 10 }}>
+            <HopChain state="done" />
+          </div>
+        </details>
       </div>
-      <div className="panel-head">
-        <h3>Exact tool sequence</h3>
-        <span className="spacer" />
-        <span className="tiny faint">read from the stored run record</span>
-      </div>
-      <div className="panel-pad">
-        <TracePills names={run.tool_calls} />
-      </div>
-      <div className="panel-head">
-        <h3>Request, execution, authoritative return</h3>
-      </div>
-      <HopChain state="done" />
     </section>
   );
 }
@@ -272,14 +283,12 @@ function InvocationPanel({
         {available ? (
           <>
             <p className="small">
-              Starts one bounded coordinator run on Amazon Bedrock AgentCore in{" "}
-              <strong>{config?.region}</strong>, against this session’s own DynamoDB workspace.
+              One bounded AgentCore run in <strong>{config?.region}</strong>, against this
+              session's DynamoDB workspace.
             </p>
             <p className="tiny muted">
-              The server owns the instruction, creates a one-use runtime session, and
-              re-reads the database after AWS answers. The cap is{" "}
-              {config?.max_live_per_session} live runs per visitor; only one may write a
-              workspace at a time.
+              Server-owned instruction · one-use runtime session · authoritative readback ·
+              {" "}{config?.max_live_per_session} live runs per visitor · one workspace writer.
             </p>
             <div className="btn-row" style={{ marginTop: 4 }}>
               <button className="btn btn-primary btn-lg" onClick={onRun} disabled={busy}>
@@ -295,9 +304,8 @@ function InvocationPanel({
           </>
         ) : (
           <p className="small muted prose">
-            This build has no AgentCore runtime configured, so no live button is offered.
-            Local coordination uses the same bounded loop and typed tools with an offline
-            planner in the model’s place.
+            No AgentCore runtime is configured here. Local coordination uses the bounded
+            loop and typed tools with a deterministic planner.
           </p>
         )}
       </div>
@@ -364,20 +372,28 @@ export function AgentExecution({
             Which one answered is a fact per run, and every run below carries it. */}
         <p className="lede">
           {available
-            ? `Finding an opportunity on this site invokes Pool's coordinator where it is
-               deployed — on Amazon Bedrock AgentCore, against this session's own data, so
-               the pool it forms is formed there. The rest of the lifecycle runs the same
-               Strands loop on this server with a deterministic planner in the model's
-               place, so the lifecycle is free to rehearse and repeatable. Every run below records which
-               of the two answered.`
-            : `Pool's coordinator runs on this server for every action you take — the real
-               Strands event loop, the real tools, the real domain arithmetic, driven by a
-               deterministic planner rather than a model so local rehearsal is free and
-               repeatable. The same coordinator is also deployed on AWS.`}
+            ? `Product discovery runs on AgentCore against this session's DynamoDB workspace.
+               Lifecycle rehearsal uses the same bounded Strands/tool path with a deterministic
+               planner; every run records which executor answered.`
+            : `This server runs the bounded Strands loop, typed tools and domain arithmetic
+               with a deterministic planner for repeatable local rehearsal.`}
         </p>
       </header>
 
       {proof ? <StoredExecutionProof proof={proof} /> : null}
+
+      {proof ? (
+        <div className="banner">
+          <span>
+            <strong>Execution:</strong>{" "}
+            {proof.execution.live ? "real AgentCore / Bedrock" : proof.execution.service} ·{" "}
+            <strong>inputs:</strong> synthetic community and supplier catalogue ·{" "}
+            <strong>rails:</strong> simulated payments and supplier purchase ·{" "}
+            <strong>truth:</strong> deterministic tools plus DynamoDB readback; no model
+            reasoning stored
+          </span>
+        </div>
+      ) : null}
 
       {proof ? (
         <details className="panel">
@@ -399,13 +415,13 @@ export function AgentExecution({
       )}
 
       {result?.ok ? (
-        <section className="panel reveal">
-          <div className="panel-head">
-            <h3>Latest live invocation response</h3>
+        <details className="panel reveal">
+          <summary className="panel-head" style={{ cursor: "pointer" }}>
+            <strong>Latest live invocation details</strong>
             <Chip tone="ok">{result.run.outcome.replace(/_/g, " ")}</Chip>
             <span className="spacer" />
             <ActorTag actor="agent" label="Chosen by the model" />
-          </div>
+          </summary>
           <div className="panel-pad stack-sm">
             <div className="grid grid-3">
               <Figure
@@ -469,25 +485,24 @@ export function AgentExecution({
             </div>
             <p className="tiny muted">{result.note}</p>
           </div>
-        </section>
+        </details>
       ) : null}
 
-      <section className="panel">
-        <div className="panel-head">
-          <h3>{chosen.length > 0 ? "The twelve doors, and the ones it opened" : "What the agent may reach"}</h3>
+      <details className="panel">
+        <summary className="panel-head" style={{ cursor: "pointer" }}>
+          <strong>
+            {chosen.length > 0
+              ? `Typed tool boundary · ${tools.length} tools`
+              : "What the agent may reach"}
+          </strong>
           <span className="spacer" />
           <span className="tiny faint">served from the running agent's own tool list</span>
-        </div>
+        </summary>
         <div className="panel-pad">
           <p className="small muted prose" style={{ marginBottom: 14 }}>
-            The model has no shell, no query language, and no generic mutation. It reaches
-            the world through these typed functions and nothing else. Each one is labelled
-            by what it actually writes, and a test calls every tool marked{" "}
-            <em>reads only</em> against a snapshot of the whole workspace to prove the
-            label — because a door described as harmless is worth exactly what the check
-            behind it is worth. The ones that commit are idempotent by an explicit key,
-            because agent systems retry and a repeated{" "}
-            <span className="mono">create_candidate_pool</span> must not produce two pools.
+            No shell, query language or generic mutation: the model reaches state only
+            through these typed functions. Read-only claims are snapshot-tested, and
+            committing tools use explicit idempotency keys.
           </p>
           {tools.length === 0 ? (
             <Empty>The tool catalogue was not available from this server.</Empty>
@@ -496,32 +511,28 @@ export function AgentExecution({
           )}
           {health ? (
             <p className="tiny muted" style={{ marginTop: 14 }}>
-              Every run is bounded inside the event loop, not by asking the model nicely:{" "}
-              {health.bounds.max_iterations} iterations, {health.bounds.max_tool_calls} tool
-              calls, {health.bounds.max_duplicate_tool_calls} identical calls before the next
-              one is refused, and a {health.bounds.workflow_timeout_seconds}s wall clock
-              checked before every model and tool call. That cooperative bound stops the
-              loop between steps; it cannot interrupt a call already in progress. The
-              layers that own the process provide the outer deadlines — the runtime
-              invocation at 60s and Lambda at 90s. A run that hits a bound ends loudly as
-              a recorded fault, never a silent truncation that looks like an answer.
+              Bounds: {health.bounds.max_iterations} iterations · {health.bounds.max_tool_calls}{" "}
+              tool calls · {health.bounds.max_duplicate_tool_calls} duplicate calls ·{" "}
+              {health.bounds.workflow_timeout_seconds}s checked between calls. It cannot
+              interrupt an in-flight call; AgentCore (60s) and Lambda (90s) own the outer
+              deadlines. A bound hit is recorded as a fault.
             </p>
           ) : null}
         </div>
-      </section>
+      </details>
 
-      <section className="panel">
-        <div className="panel-head">
+      <details className="panel">
+        <summary className="panel-head" style={{ cursor: "pointer" }}>
           {/* Every run this session has had, wherever it executed. A run on AWS writes
               its record to the same workspace as one that ran here, so this list is the
               audit trail rather than a local subset of it — `model_provider` on each row
               says which. */}
-          <h3>Every run in this session</h3>
+          <strong>Every run in this session · {runs.length}</strong>
           <span className="spacer" />
           <span className="tiny faint">
             no model reasoning text is stored, and tool arguments are kept as hashes
           </span>
-        </div>
+        </summary>
         {runs.length === 0 ? (
           <Empty>Nothing has run yet in this session.</Empty>
         ) : (
@@ -546,9 +557,13 @@ export function AgentExecution({
             ))}
           </div>
         )}
-      </section>
+      </details>
 
-      <Block title="What is running where">
+      <details className="panel">
+        <summary className="panel-head" style={{ cursor: "pointer" }}>
+          <strong>What is running where</strong>
+        </summary>
+        <div className="panel-pad">
         <div className="arch">
           {[
             ["React app", "one Lambda serves it from the same origin as the API — no CORS, no bucket"],
@@ -564,7 +579,8 @@ export function AgentExecution({
             </div>
           ))}
         </div>
-      </Block>
+        </div>
+      </details>
     </div>
   );
 }

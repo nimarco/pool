@@ -174,7 +174,7 @@ describe("declaring a standing need", () => {
     await userEvent.clear(early);
     await userEvent.type(early, "0");
 
-    expect(await screen.findByText(/nothing will ever be brought forward/i)).toBeTruthy();
+    expect(await screen.findByText(/never bought early/i)).toBeTruthy();
   });
 
   it("offers only substitution policies the domain can act on", async () => {

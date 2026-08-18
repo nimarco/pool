@@ -93,11 +93,19 @@ describe("stored execution evidence", () => {
     const proof = screen.getByTestId("stored-execution-proof");
     expect(within(proof).getAllByText("run_exact")).toHaveLength(2);
     expect(within(proof).getByText("pool_exact")).toBeTruthy();
-    expect(within(proof).getByText(/run \+ pool present in the same workspace/i)).toBeTruthy();
+    expect(within(proof).getByText(/matches run id/i)).toBeTruthy();
+    expect(within(proof).getByText(/verified · run \+ pool present/i)).toBeTruthy();
+    expect(
+      within(proof).getByText(
+        /browser → Lambda → AgentCore → Bedrock \/ Strands → typed tools → DynamoDB → browser/i,
+      ),
+    ).toBeTruthy();
     expect(within(proof).getByText(/amazon\.nova-lite-v1:0/)).toBeTruthy();
+    expect(within(proof).getByText("candidate_pool_created")).toBeTruthy();
     expect(within(proof).queryByText("unrelated_tool")).toBeNull();
 
     const runAgain = screen.getByText("Run again", { selector: "strong" });
+    expect((runAgain.closest("details") as HTMLDetailsElement).open).toBe(false);
     expect(proof.compareDocumentPosition(runAgain) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

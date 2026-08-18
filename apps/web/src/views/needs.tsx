@@ -175,8 +175,8 @@ function NeedForm({
           />
           <span className="field-note">
             {draft.flexibility_days === 0
-              ? "Nothing will ever be brought forward."
-              : `Pool may complete someone else's order up to ${draft.flexibility_days} days before you need this — and no earlier.`}
+              ? "Never bought early."
+              : `May be bought up to ${draft.flexibility_days} days early — never earlier.`}
           </span>
         </label>
 
@@ -335,10 +335,8 @@ export function Needs({
       <header className="stack-sm">
         <h1 className="title">What you buy anyway</h1>
         <p className="lede">
-          Tell Pool once, then forget about it. Two numbers do different jobs: how often
-          you restock, and how far ahead you are willing to buy if it saves money. Only
-          the second one lets Pool bring your order forward to complete somebody else's —
-          and if you set it to nothing, nothing is ever moved.
+          Set your restock cadence and any days-early window. Saving a need never commits
+          money; only that window permits Pool to bring it forward.
         </p>
       </header>
 
@@ -373,8 +371,7 @@ export function Needs({
 
         {mine.length === 0 && editingId !== "" ? (
           <Empty>
-            Nothing declared yet. Add what you buy anyway — Pool does the rest without
-            being asked again.
+            Nothing declared yet. Add what you buy anyway; Pool watches from there.
           </Empty>
         ) : (
           <div className="rows">
@@ -442,10 +439,8 @@ export function Needs({
         }
       >
         <p className="small muted prose">
-          {needs.length} standing needs across the community, and not one of them is part
-          of a group. Nobody has created a chat, a sign-up sheet or a spreadsheet — they
-          each told Pool what they buy and got on with their week. Finding the overlap is
-          Pool's job, not theirs.
+          {needs.length} independent declarations. Pool finds the overlap; members do not
+          create or organise a group.
         </p>
         {!hasPool ? (
           <div className="stack-sm" style={{ marginTop: 14 }}>

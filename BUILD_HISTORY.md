@@ -3594,3 +3594,89 @@ no runtime code or configuration changed.
 `services/agent/pool/api/app.py`, `services/agent/pool/services/payments.py`,
 `services/agent/pool/services/coordination.py`, `apps/web/src/views/live.tsx`,
 `apps/web/src/views/community.tsx`.
+
+---
+
+### #0034 — [2026-08-18] — Make the proof scan like software without removing the proof
+`[DEMO]` `[FRONTEND]` `[AGENT]`
+
+**Goal / user intent**
+Audit the Product and Showcase copy after the structural pass, then reduce reading effort
+without changing the information architecture, product semantics, Product/Showcase roles,
+demo path, same-run proof, thirteen-stage reader or real/synthetic/simulated boundaries.
+
+**Starting state**
+The correct information was present, but many Product views explained what their controls,
+figures and records already showed. Activity placed its strongest same-run evidence after a
+long event feed. The technical page mixed primary causal proof with secondary architecture,
+tool-catalogue and invocation detail, while the lifecycle reader repeated editorial explanation
+beside already-complete figures and stored stage summaries.
+
+**Decision**
+Keep status, actions, numbers and truth boundaries visible; compress explanatory prose; turn
+supporting mechanics into native disclosure; and lead Activity with the exact stored relationship
+and execution chain. The thirteen server-recorded stage summaries and every stage destination
+remain intact. This is hierarchy and copy work only, not a visual-system or component redesign.
+
+**Implementation**
+Status: **Implemented and Tested; not Deployed.** Product introductions, empty states and
+contextual explanations were shortened across Home, Pools, Needs, Community and the pool tabs.
+Community responsibilities, viability details, host-candidate ranking, credential mechanics,
+fee rationale and secondary run traces remain available in disclosures. The Product Activity
+overview now leads with run id, pool id, `created_by_run` equality, authoritative same-workspace
+readback, AgentCore live status, exact tool sequence and the complete browser-to-browser causal
+chain. The technical view gives the same evidence priority while disclosing hop detail, bounds,
+tool catalogue, run history and deployment tiers. Showcase Overview, drawer and Operations copy
+was compressed without weakening synthetic, simulated, payment, purchase or payout language.
+All thirteen lifecycle stages remain navigable; deterministic figures and server-recorded stage
+summaries stay visible, while supporting explanation is progressively disclosed.
+
+**AWS / external services touched**
+None. No AWS resource was read, changed, created or destroyed, and no AgentCore or Bedrock run was
+invoked.
+
+**Cost-relevant activity**
+None. Local fixture tests and a local frontend production build only; no schedules or paid tools.
+
+**Validation**
+Frontend Vitest passed **22 tests in 8 files**, including new assertions for proof priority and
+all 13 lifecycle destinations. ESLint, TypeScript typecheck, Vite production build and
+`git diff --check` passed. Route wiring in `App.tsx` and the Product/Showcase navigation constants
+were inspected and are unchanged. Existing responsive rules were inspected for the 1512×804 and
+approximately 390px layouts: grids collapse below 940px, facts use wrapping minimum columns,
+long ids wrap, and mobile panel padding and lifecycle height rules remain in force. Actual rendered
+browser inspection at those viewports was **not completed in-session**: the in-app browser rejected
+both the local and deployed origins under its navigation policy, and the local API bind escalation
+was unavailable due the approval service's usage limit. No alternate browser was used to bypass
+that policy.
+
+**Update — 2026-08-18.** The human owner launched the full local stack (`services/agent` API on
+:8000, `apps/web` Vite dev server on :5173) outside this session's browser restriction and
+manually inspected the modified Product and Showcase views. Hierarchy, disclosures, density and
+layout received manual visual sign-off. The viewport-inspection gap noted above is resolved by
+that sign-off; no further screenshot capture is pending.
+
+**Failures / dead ends**
+The first local API start could not bind inside the sandbox. The required escalation was rejected
+because the approval service had reached its usage limit. The in-app browser then rejected both
+the local Vite origin and deployed origin, so visual viewport QA and a click-through demo rehearsal
+could not be claimed. An initial Vitest invocation included a Jest-only `--runInBand` option; the
+normal repository test command was used instead and passed.
+
+**What we learned**
+Technical proof becomes easier to trust when its causal keys and equality checks are the visual
+entry point. Progressive disclosure is safest for explanation and catalogues, not for identities,
+outcomes, financial state or truth boundaries.
+
+**Evidence worth preserving**
+Manual visual sign-off (2026-08-18) covered Home, Pools, Needs, Community, a pool's Activity tab
+and technical proof, and the Showcase 13-stage run at desktop and mobile widths. No screenshot
+artifact was captured during that session; a future pass may still want one for the written record,
+but it is not blocking.
+
+**Relevant files**
+`apps/web/src/views/home.tsx`, `apps/web/src/views/pools.tsx`,
+`apps/web/src/views/needs.tsx`, `apps/web/src/views/community.tsx`,
+`apps/web/src/views/pool.tsx`, `apps/web/src/views/about.tsx`,
+`apps/web/src/views/run.tsx`, `apps/web/src/views/live.tsx`,
+`apps/web/src/views/operations.tsx`, `apps/web/src/views/demo-panel.tsx` and their focused tests.

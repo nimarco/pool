@@ -311,11 +311,8 @@ export function CommunityView({
           </div>
           <div className="panel-pad stack-sm">
             <p className="small muted prose">
-              Pool is designed as recurring purchasing infrastructure for existing
-              communities — campuses, apartment buildings, neighbourhoods and workplaces.
-              The Community supplies demand density, a bounded membership and possible
-              shared collection sites; Pool remains responsible for discovering demand and
-              coordinating a viable transaction.
+              Existing communities provide a bounded membership, independent demand and
+              possible pickup sites; Pool discovers and coordinates each viable transaction.
             </p>
             <div className="grid grid-3">
               <Fact
@@ -338,21 +335,32 @@ export function CommunityView({
               <span>→</span>
               <strong>Members choose and collect</strong>
             </div>
-            <p className="tiny muted prose">
-              The Community may verify membership, permit a site or window, set site rules
-              and tell members the service exists. Pool handles matching, economics, host
-              coordination, commitments, recovery, records and pickup coordination. Members
-              set their own needs and constraints, approve and fund their own allocations,
-              and collect them.
-            </p>
-            <p className="tiny muted prose">
-              The Community does not buy or front inventory, choose products, create or
-              invite the group, collect money, or chase payment failures.
-            </p>
+            <details className="inset">
+              <summary className="small" style={{ cursor: "pointer" }}>
+                <strong>Who is responsible for what</strong>
+              </summary>
+              <ul className="small muted prose" style={{ marginTop: 10, paddingLeft: 20 }}>
+                <li>
+                  <strong>Community:</strong> verifies membership, permits sites or windows,
+                  sets site rules and tells members the service exists.
+                </li>
+                <li>
+                  <strong>Pool:</strong> handles matching, economics, hosts, commitments,
+                  recovery, records and pickup coordination.
+                </li>
+                <li>
+                  <strong>Members:</strong> set needs and constraints, approve and fund their
+                  allocations, and collect them.
+                </li>
+                <li>
+                  The Community does not buy or front inventory, choose products, create or
+                  invite the group, collect money, or chase payment failures.
+                </li>
+              </ul>
+            </details>
             <p className="tiny faint">
-              “Demo” verification and pickup permission describe synthetic records only;
-              they do not imply an institutional partnership, endorsement or real-world
-              permission.
+              Synthetic records only — no institutional partnership, endorsement or
+              real-world permission is implied.
             </p>
           </div>
         </section>
@@ -362,18 +370,18 @@ export function CommunityView({
         <Figure
           label="If everyone bought alone"
           value={money(m.estimated_retail_spend_cents)}
-          sub="what these members would have paid at retail, individually"
+          sub="recorded retail baseline"
         />
         <Figure
           label="All-in through Pool"
           value={money(m.pool_spend_cents)}
-          sub="merchandise, host compensation, card processing and Pool's fee together"
+          sub="merchandise + host + processing + Pool fee"
         />
         <Figure
           label="Kept in the community"
           value={money(m.collective_savings_cents)}
           accent
-          sub={`${money(m.average_buyer_savings_cents)} each on average, after merchandise, host compensation, card processing and Pool's fee`}
+          sub={`${money(m.average_buyer_savings_cents)} average after every buyer-funded cost`}
         />
       </section>
 
@@ -386,9 +394,8 @@ export function CommunityView({
           </div>
           {state.pools.length === 0 ? (
             <Empty>
-              No pool yet. Pool forms one when compatible demand across the community
-              clears a supplier's minimum — press <strong>Find opportunities</strong> on
-              Home to have the coordinator look.
+              No pool yet. Use <strong>Find opportunities</strong> on Home to scan the
+              community's standing needs.
             </Empty>
           ) : (
             <div className="rows">
@@ -417,9 +424,7 @@ export function CommunityView({
         </div>
         {state.decisions.length === 0 ? (
           <Empty>
-            Nobody is waiting. Pool asks a person only when a rule that person set did not
-            pass — an inbox that is usually empty is the design working, not a missing
-            feature.
+            Nobody is waiting. Pool asks only when a person's stored rule does not pass.
           </Empty>
         ) : (
           <div className="rows">
@@ -502,11 +507,8 @@ export function CommunityView({
 
       <Block title="Behind the counter">
         <p className="small muted prose">
-          Host compensation has to be accounted for and somebody has to reconcile a
-          declined card. The operations console holds the fulfilment job as the person
-          carrying the boxes sees it, the supplier quotes that a final offer must never
-          rest on once stale, and every authorisation and capture with its failure code
-          intact.
+          Inspect the host job, supplier-quote freshness, and every authorization, capture
+          and failure code.
         </p>
         <div className="btn-row" style={{ marginTop: 14 }}>
           <button className="btn btn-sm" onClick={onOperations}>

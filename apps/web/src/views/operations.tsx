@@ -30,8 +30,7 @@ function HostConsole({ poolId }: { poolId: string | null }) {
           <h3>The fulfilment job</h3>
         </div>
         <Empty>
-          No job is open. Once a pool has a host and the order has been placed, the
-          fulfilment run and its checklist appear here.
+          No job is open. A host checklist appears after the supplier order is recorded.
         </Empty>
       </section>
     );
@@ -67,11 +66,17 @@ function HostConsole({ poolId }: { poolId: string | null }) {
 
         <div className="inset stack-sm">
           <p className="small">
-            <strong>Confirm a handoff.</strong> Type a buyer's one-time code. The server
-            checks it — a host cannot mark an order collected without one, and the only
-            other route is an operator override that requires a stated reason and is
-            audited.
+            <strong>Confirm a handoff.</strong> Enter the buyer's one-time code; the server
+            verifies it before marking the order collected.
           </p>
+          <details>
+            <summary className="tiny muted" style={{ cursor: "pointer" }}>
+              Override boundary
+            </summary>
+            <p className="tiny muted" style={{ marginTop: 8 }}>
+              The only other route is an audited operator override with a stated reason.
+            </p>
+          </details>
           <div className="btn-row">
             <input
               className="btn"
@@ -152,13 +157,9 @@ export function OperationsView({
             Back
           </button>
         </div>
-        <h1 className="title" style={{ maxWidth: "24ch" }}>
-          Compensation has to be accounted for, and somebody has to reconcile it
-        </h1>
+        <h1 className="title">Operations</h1>
         <p className="lede">
-          The parts of a coordination product that are never in the pitch: the job as the
-          person carrying the boxes sees it, the supplier quotes a final price is not
-          allowed to rest on, and every authorisation and capture with its failure code
+          Host fulfilment, supplier-quote freshness, and payment records with failure codes
           intact.
         </p>
       </header>
@@ -299,10 +300,8 @@ export function OperationsView({
               Pool's own economics
             </h3>
             <p className="tiny muted" style={{ marginBottom: 12 }}>
-              Every figure is computed from stored records. Money is simulated throughout:
-              cards are authorised and captured against a simulated provider, and host
-              compensation is earned and accounted for but never disbursed — Pool has no
-              payout rail.
+              Stored-record figures. Payments are simulated; host compensation is earned
+              and accounted for, never disbursed — no payout rail exists.
             </p>
             <div className="ledger">
               <LedgerLine
@@ -326,12 +325,15 @@ export function OperationsView({
                 kind="total"
               />
             </div>
-            <p className="tiny muted" style={{ marginTop: 12 }}>
-              Pool's own viability is one of the conditions a pool must satisfy before it
-              may lock. A platform that quietly subsidises a transaction is a platform
-              that stops existing, so "we lose a little on this one" is not an outcome the
-              engine will accept.
-            </p>
+            <details style={{ marginTop: 12 }}>
+              <summary className="tiny muted" style={{ cursor: "pointer" }}>
+                Platform viability rule
+              </summary>
+              <p className="tiny muted" style={{ marginTop: 8 }}>
+                Pool's own economics must pass before lock; the engine refuses transactions
+                that require a hidden platform subsidy.
+              </p>
+            </details>
           </section>
         </>
       )}

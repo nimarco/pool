@@ -35,6 +35,7 @@ import {
   Block,
   Chip,
   Empty,
+  Fact,
   Figure,
   IconArrowLeft,
   IconCheck,
@@ -211,11 +212,12 @@ function OverviewTab({ pool }: { pool: PoolView }) {
                 {pool.host.display_name}
               </div>
               <p className="small muted" style={{ marginTop: 6 }}>
-                Earns <strong>{pool.host.reward_display}</strong> for{" "}
-                {pool.host.handled_orders} orders and a{" "}
-                {pool.host.supplier_distance_km} km round trip. The compensation is
-                included in buyer economics and recorded on the simulated transaction;
-                Pool does not claim a real payout rail.
+                {pool.host.handled_orders} orders · {pool.host.supplier_distance_km} km round
+                trip · earns <strong>{pool.host.reward_display}</strong>
+              </p>
+              <p className="tiny faint" style={{ marginTop: 6 }}>
+                Included in buyer economics and recorded on the simulated transaction; no
+                real payout rail exists.
               </p>
             </>
           ) : (
@@ -234,8 +236,8 @@ function OverviewTab({ pool }: { pool: PoolView }) {
           </div>
           <p className="small muted" style={{ marginTop: 6 }}>
             {pool.pickup_is_public ? "A public spot on campus" : "Not a public site"}
-            {pool.pickup_permission ? ` · permission: ${pool.pickup_permission}` : ""}.
-            Chosen for the members who actually joined, not fixed in advance.
+            {pool.pickup_permission ? ` · permission: ${pool.pickup_permission}` : ""} ·
+            selected for the members who joined.
           </p>
         </div>
       </section>
@@ -254,31 +256,35 @@ function OverviewTab({ pool }: { pool: PoolView }) {
           </div>
           <div className="panel-pad">
             <p className="small muted" style={{ marginBottom: 14 }}>
-              A pool only goes ahead when it works for the buyers, the supplier, the host
-              and Pool itself. Every check runs — none is skipped once one fails — so the
-              reason a pool cannot proceed is always the complete list.
+              Buyers, supplier, host and Pool must all pass. Every check runs, so a refusal
+              returns the complete blocking list.
             </p>
-            <div className="rows" style={{ borderTop: "1px solid var(--rule)" }}>
-              {pool.viability.checks.map((c) => (
-                <div key={c.name} className="row" style={{ paddingInline: 0, gap: 11 }}>
-                  <span
-                    style={{
-                      color: c.passed ? "var(--moss)" : "var(--clay)",
-                      display: "flex",
-                      marginTop: 2,
-                    }}
-                  >
-                    {c.passed ? <IconCheck size={15} /> : <IconCross size={15} />}
-                  </span>
-                  <div className="row-body">
-                    <span className="small" style={{ fontWeight: 600 }}>
-                      {c.name.replace(/_/g, " ")}
+            <details className="inset">
+              <summary className="small" style={{ cursor: "pointer" }}>
+                <strong>View all {pool.viability.checks.length} deterministic checks</strong>
+              </summary>
+              <div className="rows" style={{ marginTop: 10, borderTop: "1px solid var(--rule)" }}>
+                {pool.viability.checks.map((c) => (
+                  <div key={c.name} className="row" style={{ paddingInline: 0, gap: 11 }}>
+                    <span
+                      style={{
+                        color: c.passed ? "var(--moss)" : "var(--clay)",
+                        display: "flex",
+                        marginTop: 2,
+                      }}
+                    >
+                      {c.passed ? <IconCheck size={15} /> : <IconCross size={15} />}
                     </span>
-                    <span className="small muted"> — {c.detail}</span>
+                    <div className="row-body">
+                      <span className="small" style={{ fontWeight: 600 }}>
+                        {c.name.replace(/_/g, " ")}
+                      </span>
+                      <span className="small muted"> — {c.detail}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </details>
           </div>
         </section>
       ) : null}
@@ -344,17 +350,15 @@ function PeopleTab({
           <h3>Buyers</h3>
           <span className="spacer" />
           <span className="tiny faint">
-            display names only — no address, phone, email or payment reference exists in
-            this payload
+            display names only · no contact, address or payment data
           </span>
         </div>
         {declined > 0 ? (
           <div className="panel-pad" style={{ paddingBottom: 0 }}>
             <p className="small muted">
-              <strong>{pool.buyer_count} people are buying</strong>, and the record carries{" "}
-              {pool.member_count} memberships. The difference is {declined} whose payment
-              was declined: the membership stays here rather than being deleted, because a
-              record that edits out its failures is not a record.
+              <strong>{pool.buyer_count} buying · {pool.member_count} memberships · {declined}{" "}
+              declined.</strong>{" "}
+              The failed membership remains in the audit record.
             </p>
           </div>
         ) : null}
@@ -441,12 +445,12 @@ function PeopleTab({
       ) : null}
 
       {pool.host_candidates && pool.host_candidates.length > 0 ? (
-        <section className="panel">
-          <div className="panel-head">
-            <h3>Considered for the job</h3>
+        <details className="panel">
+          <summary className="panel-head" style={{ cursor: "pointer" }}>
+            <strong>Considered for the job · {pool.host_candidates.length} candidates</strong>
             <span className="spacer" />
             <ActorTag actor="engine" label="Ranked on facts" />
-          </div>
+          </summary>
           <div className="rows">
             {pool.host_candidates.map((c) => (
               <div key={c.household_id} className="row">
@@ -485,7 +489,7 @@ function PeopleTab({
               </div>
             ))}
           </div>
-        </section>
+        </details>
       ) : null}
     </div>
   );
@@ -515,8 +519,8 @@ function EconomicsTab({ pool }: { pool: PoolView }) {
         <div className="panel-pad">
           <p className="small muted" style={{ marginBottom: 14 }}>
             {e.host_is_estimated
-              ? "Host compensation is still an estimate, so this is a range rather than a precise-looking price nobody can be held to."
-              : "Every component is fixed. This is the exact amount offered to buyers."}
+              ? "Estimated range: host compensation is not fixed yet."
+              : "Final: every component is fixed at the exact buyer offer."}
           </p>
           <div className="ledger">
             <LedgerLine label="Bulk merchandise" value={money(e.merchandise_cents)} />
@@ -547,22 +551,33 @@ function EconomicsTab({ pool }: { pool: PoolView }) {
             {e.packages.case_units} = {e.packages.units_purchased} units for{" "}
             {e.packages.total_units} ordered.{" "}
             {e.packages.surplus_resolved
-              ? "Cases rarely divide evenly into demand, so Pool picks the set of buyers that fills whole cases exactly. The alternative is buying stock nobody ordered and billing somebody for it."
+              ? "No speculative surplus."
               : `${e.packages.surplus_units} unit(s) would be unallocated, which is why this cannot lock.`}
           </p>
+          {e.packages.surplus_resolved ? (
+            <details style={{ marginTop: 10 }}>
+              <summary className="tiny muted" style={{ cursor: "pointer" }}>
+                Why exact cases matter
+              </summary>
+              <p className="tiny muted prose" style={{ marginTop: 8 }}>
+                Pool selects the buyer set that fills whole cases exactly instead of buying
+                stock nobody ordered and billing somebody for it.
+              </p>
+            </details>
+          ) : null}
         </div>
-        <div className="panel panel-pad">
-          <h3 className="section-title" style={{ marginBottom: 12 }}>
-            Why Pool charges anything
-          </h3>
-          <p className="small muted">
-            Pool's fee is a share of the saving it created, so no saving means no fee. If
-            paying the host fairly erased the discount, this pool should not form — and it
-            would not. Card processing is grossed up per buyer so the charge covers the
-            processor's cut of that charge; doing it the obvious way under-recovers a few
-            cents each time, which is a platform quietly subsidising itself.
-          </p>
-        </div>
+        <details className="panel">
+          <summary className="panel-head" style={{ cursor: "pointer" }}>
+            <strong>Why Pool charges anything</strong>
+          </summary>
+          <div className="panel-pad">
+            <p className="small muted">
+              Pool's fee is a share of the saving it created, so no saving means no fee. If
+              fair host pay erased the discount, the pool would not form. Processing is
+              grossed up per buyer so the platform does not silently subsidise the charge.
+            </p>
+          </div>
+        </details>
       </section>
     </div>
   );
@@ -624,15 +639,20 @@ function FulfilmentTab({ pool, onRefresh }: { pool: PoolView; onRefresh: () => v
         </div>
         <div className="panel-pad stack-sm">
           <p className="small muted prose">
-            Every buyer gets their own credential — a long token behind the QR and a short
-            code for when scanning is awkward. Only hashes are stored, the plaintext exists
-            once in the response that issued it, and issuing a new one voids the old. A
-            host cannot mark an order collected without one.
+            Every handoff requires a one-time buyer credential; only hashes are stored.
           </p>
+          <details className="inset">
+            <summary className="small" style={{ cursor: "pointer" }}>
+              <strong>Credential mechanics</strong>
+            </summary>
+            <p className="small muted prose" style={{ marginTop: 10 }}>
+              A QR token and short code are shown once in the issuing response. Reissuing
+              voids the prior pair, and a host cannot mark an order collected without one.
+            </p>
+          </details>
           {pool.status === "completed" ? (
             <p className="small muted prose">
-              Every handoff here is confirmed, so there is nothing left to collect and the
-              server will refuse a fresh credential — which is the guarantee holding.
+              Every handoff is confirmed; the server now refuses fresh credentials.
             </p>
           ) : null}
           {first ? (
@@ -746,6 +766,12 @@ function ActivityTab({
   const [deep, setDeep] = useState<"none" | "walkthrough" | "execution">(
     (entryDeep as "walkthrough" | "execution") ?? "none",
   );
+  const proof = pool.execution_proof;
+  const sameWorkspaceReadback = Boolean(
+    proof?.workspace_readback.run_recorded &&
+      proof.workspace_readback.pool_recorded &&
+      proof.workspace_readback.same_workspace,
+  );
 
   if (deep === "walkthrough" && scenario) {
     return (
@@ -793,51 +819,67 @@ function ActivityTab({
 
   return (
     <div className="stack">
-      <section className="panel">
-        <div className="panel-head">
-          <h3>What happened to this pool</h3>
-          <span className="spacer" />
-          <span className="actor-key">
-            <span className="actor actor-agent">
-              <ActorGlyph actor="agent" />
-              Pool acted
-            </span>
-            <span className="actor actor-human">
-              <ActorGlyph actor="human" />A person answered
-            </span>
-          </span>
-        </div>
-        <Feed events={activity} limit={12} />
-      </section>
-
       <section className="grid grid-2">
         <div className="panel panel-pad stack-sm">
-          <h3 className="section-title">How Pool coordinated this</h3>
-          <p className="small muted">
-            The exact run stored on this pool: its run id, tool sequence, termination,
-            model and authoritative database readback. A fresh invocation is secondary.
-          </p>
-          <div className="btn-row">
-            <button className="btn btn-sm" onClick={() => setDeep("execution")}>
-              Technical proof for this run
-            </button>
-            {demoConfig?.live_agent_available ? <Chip tone="live">AWS available</Chip> : null}
+          <div className="row-between">
+            <h3 className="section-title">Technical proof for this run</h3>
+            {proof ? (
+              <Chip tone={proof.execution.live ? "live" : "info"}>
+                {proof.execution.live ? "AgentCore live" : proof.run.model_provider}
+              </Chip>
+            ) : null}
           </div>
-          {pool.execution_proof ? (
-            <TracePills names={pool.execution_proof.run.tool_calls} />
+          <p className="small muted">
+            The pool and run below were read from the same authoritative workspace.
+          </p>
+          {proof ? (
+            <>
+              <div className="facts">
+                <Fact label="Run id" value={<span className="mono">{proof.run.run_id}</span>} />
+                <Fact label="Pool id" value={<span className="mono">{proof.pool_id}</span>} />
+                <Fact
+                  label="Pool created_by_run"
+                  value={
+                    <span>
+                      <span className="mono">{proof.created_by_run}</span>
+                      {proof.created_by_run === proof.run.run_id ? " · matches run id" : " · mismatch"}
+                    </span>
+                  }
+                />
+                <Fact
+                  label="Authoritative same-workspace readback"
+                  value={sameWorkspaceReadback ? "verified · run + pool present" : "not verified"}
+                />
+              </div>
+              <div>
+                <div className="fact-label">Selected tool sequence</div>
+                <TracePills names={proof.run.tool_calls} />
+              </div>
+              <div className="banner">
+                <span className="mono">
+                  {proof.execution.live
+                    ? "browser → Lambda → AgentCore → Bedrock / Strands → typed tools → DynamoDB → browser"
+                    : "browser → server → Strands planner → typed tools → database → browser"}
+                </span>
+              </div>
+            </>
           ) : (
             <p className="tiny faint">
               This pool has no server-verified run relationship to display.
             </p>
           )}
+          <div className="btn-row">
+            <button className="btn btn-sm" onClick={() => setDeep("execution")}>
+              Open complete proof
+            </button>
+          </div>
         </div>
 
         <div className="panel panel-pad stack-sm">
           <h3 className="section-title">How this pool happened</h3>
           <p className="small muted">
-            The full lifecycle as a reader: discovery, the timing split, the host ranking,
-            the exact price, the declined card, the repair, the lock and the handover —
-            thirteen stages with the figures behind each one.
+            Thirteen recorded stages from discovery through decline, repair, lock and
+            handover.
           </p>
           <div className="btn-row">
             {scenario ? (
@@ -859,10 +901,26 @@ function ActivityTab({
         </div>
       </section>
 
+      <section className="panel">
+        <div className="panel-head">
+          <h3>What happened to this pool</h3>
+          <span className="spacer" />
+          <span className="actor-key">
+            <span className="actor actor-agent">
+              <ActorGlyph actor="agent" />
+              Pool acted
+            </span>
+            <span className="actor actor-human">
+              <ActorGlyph actor="human" />A person answered
+            </span>
+          </span>
+        </div>
+        <Feed events={activity} limit={12} />
+      </section>
+
       <p className="tiny faint">
-        Run records keep the trigger, the tool sequence, iteration counts, the termination
-        reason and token usage. No model reasoning text is stored, and tool arguments are
-        kept as hashes so a run log cannot carry a member's details.
+        Audit records keep trigger, tools, iterations, termination and tokens — no model
+        reasoning text; tool arguments are hashed.
       </p>
     </div>
   );

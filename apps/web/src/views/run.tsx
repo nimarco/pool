@@ -12,7 +12,7 @@
  * which of the three actors was responsible.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ScenarioResult, ScenarioStep } from "../api";
 import {
   Actor,
@@ -145,6 +145,25 @@ function chapterFor(step: ScenarioStep): Chapter {
   );
 }
 
+function StageNote({
+  children,
+  label = "Why this matters",
+}: {
+  children: ReactNode;
+  label?: string;
+}) {
+  return (
+    <details className="inset">
+      <summary className="small" style={{ cursor: "pointer" }}>
+        <strong>{label}</strong>
+      </summary>
+      <div className="stack-sm" style={{ marginTop: 10 }}>
+        {children}
+      </div>
+    </details>
+  );
+}
+
 /* ---------------------------------------------------------------- step bodies */
 
 function SeedBody({ f }: { f: Facts }) {
@@ -167,12 +186,15 @@ function SeedBody({ f }: { f: Facts }) {
           sub={`${s(f, "offers")} price quotes across ${s(f, "products")} products`}
         />
       </div>
-      <p className="small muted prose">
-        This is the whole starting position. There is no organiser, no sign-up sheet, and
-        nobody has committed a cent. The next pool day for this community is{" "}
-        <strong>{s(f, "next_pool_day")}</strong> — a fixed weekly moment when a collection
-        can happen, which is what makes separate people's timing comparable at all.
-      </p>
+      <div className="inset">
+        <Fact label="Next pool day" value={s(f, "next_pool_day")} />
+      </div>
+      <StageNote>
+        <p className="small muted prose">
+          There is no organiser, sign-up sheet or financial commitment. The fixed weekly
+          collection moment makes separate members' timing comparable.
+        </p>
+      </StageNote>
     </>
   );
 }
@@ -228,16 +250,17 @@ function DiscoveryBody({ f }: { f: Facts }) {
         </div>
       </div>
 
-      <p className="small muted prose">
-        The agent decided this was worth investigating and which product to investigate.
-        The deterministic timing engine decided who is actually eligible — same product,
-        same community, and a purchase date they had already authorised. The people in the
-        second row would not have bought for weeks; Pool may bring them forward{" "}
-        <em>only</em> because each of them said in advance how far early was acceptable.
-        Without them this pool is short of the minimum and does not happen. A member who
-        authorised nothing is never moved, however convenient it would be for the case
-        count.
+      <p className="small muted">
+        The agent chose what to investigate; deterministic timing policy decided who was
+        eligible.
       </p>
+      <StageNote>
+        <p className="small muted prose">
+          Eligibility requires the same product, same Community, and a purchase date each
+          member already authorised. Pulled-forward members move only within their stored
+          window; a member who authorised zero days is never moved.
+        </p>
+      </StageNote>
       <Block title={`Tools the agent called · ${s(f, "iterations")} iterations`}>
         <TracePills names={list(f, "tools_called")} />
       </Block>
@@ -260,12 +283,6 @@ function HostCandidatesBody({ f }: { f: Facts }) {
   const candidates: Candidate[] = Array.isArray(raw) ? (raw as Candidate[]) : [];
   return (
     <>
-      <p className="small muted prose">
-        Candidates come from two places: people who signed up as standing hosts, and
-        members of this pool who offered. Offering does not claim the job. A deterministic
-        evaluator checks facts — vehicle, capacity, weight, distance, availability, and
-        the minimum pay that person will accept — and ranks whoever survives.
-      </p>
       <div className="rows" style={{ borderTop: "1px solid var(--rule-strong)" }}>
         {candidates.map((c) => (
           <div key={c.household_id} className="row" style={{ paddingInline: 0 }}>
@@ -294,11 +311,14 @@ function HostCandidatesBody({ f }: { f: Facts }) {
           </div>
         ))}
       </div>
-      <p className="tiny muted">
-        {s(f, "eligible_count")} of {candidates.length} eligible. The reasons are factual
-        and stated, never a silent rejection — someone turned down for a job deserves to
-        know it was the fifty-five kilo load, not a scoring mystery.
-      </p>
+      <p className="tiny muted">{s(f, "eligible_count")} of {candidates.length} eligible.</p>
+      <StageNote label="How candidates are ranked">
+        <p className="small muted prose">
+          Standing hosts and members who offer are checked on vehicle, capacity, weight,
+          distance, availability and minimum pay. Offering does not claim the job; factual
+          ineligibility reasons remain visible.
+        </p>
+      </StageNote>
     </>
   );
 }
@@ -333,13 +353,16 @@ function HostAcceptedBody({ f }: { f: Facts }) {
           <LedgerLine label="Total" value={s(f, "reward_total")} kind="total" />
         </div>
       </div>
-      <p className="small muted prose">
-        This number has to exist before anyone is asked to authorize, because host
-        compensation is part
-        of every buyer's price. Pool will never authorise $42 and then charge $47. Only
-        the handoff component is contingent — a buyer who does not turn up cannot erase
-        pay for a trip that was already made.
+      <p className="small muted">
+        Host pay is fixed before buyer authorization; Pool never authorizes one amount and
+        later charges another.
       </p>
+      <StageNote>
+        <p className="small muted prose">
+          Only the handoff component is contingent. A buyer no-show cannot erase pay for a
+          supplier trip already completed.
+        </p>
+      </StageNote>
     </>
   );
 }
@@ -379,14 +402,13 @@ function FinalOfferBody({ f }: { f: Facts }) {
           />
         </div>
       </div>
-      <p className="small muted prose">
-        Two details in this table are load-bearing. Pool's fee is a share of{" "}
-        <em>gross</em> savings, so it is defined without reference to the total it belongs
-        to — no saving, no fee. And card processing is grossed up per buyer so the charge
-        covers the processor's cut <em>of that charge</em>; computing it the obvious way
-        under-recovers by a few cents each time, which is a platform quietly subsidising
-        itself into trouble.
-      </p>
+      <StageNote label="How the fee and processing stay viable">
+        <p className="small muted prose">
+          Pool's fee is a share of gross savings, so no saving means no fee. Processing is
+          grossed up per buyer so the charge covers the processor's cut without a hidden
+          platform subsidy.
+        </p>
+      </StageNote>
     </>
   );
 }
@@ -403,12 +425,12 @@ function PaymentFailureBody({ f }: { f: Facts }) {
         />
         <Figure label="Payment provider" value={s(f, "provider")} small sub="no real card, no real money" />
       </div>
-      <p className="small muted prose">
-        This is not narration. The payment provider genuinely refused a saved method, and
-        those units stopped counting toward the funded order the moment it happened. In a
-        group chat this is where the whole thing quietly dies: someone has to notice,
-        work out how short they are, and go find another buyer.
-      </p>
+      <StageNote>
+        <p className="small muted prose">
+          The simulated provider genuinely refused the saved method, and those units
+          immediately stopped counting toward the funded order.
+        </p>
+      </StageNote>
     </>
   );
 }
@@ -432,11 +454,11 @@ function DecisionBody({ f }: { f: Facts }) {
         />
       </div>
       <Meter value={funded} max={threshold} />
-      <p className="small muted prose">
-        Pool asks a person only when a rule that person set did not pass. Everyone else is
-        left alone, which is the point: the product exists so people can stop paying
-        attention to a chore. An inbox that is usually empty is the design working.
-      </p>
+      <StageNote>
+        <p className="small muted prose">
+          Pool asks only when a stored rule does not pass; everyone else is left alone.
+        </p>
+      </StageNote>
     </>
   );
 }
@@ -464,25 +486,24 @@ function RecoveryBody({ f }: { f: Facts }) {
           sub={`${s(f, "memberships_on_record")} memberships on the record — the extra one is the declined card, kept rather than deleted`}
         />
       </div>
-      <p className="small muted prose">
-        The agent chose to attempt a repair; the deterministic engine decided who was
-        eligible to fill the hole. It replaces what was lost rather than recruiting
-        freely — over-recruiting would trade a funding gap for surplus stock somebody
-        still has to pay for — and it does not go back to the buyers who had already
-        committed, because their price and their authorisation are already settled.
+      <p className="small muted">
+        <strong>Count:</strong> {s(f, "members_matched_at_discovery")} matched −{" "}
+        {s(f, "memberships_that_failed")} decline + {s(f, "replacements_authorised")} replacement
+        = {s(f, "buyers_after_recovery")} buyers; {s(f, "memberships_on_record")} memberships
+        remain on record.
       </p>
-      {/* The one moment in the run where the counts stop agreeing, so it is spelled out
-          rather than left for a judge to reconcile from three separate screens. */}
-      <p className="small muted prose">
-        <strong>The count, reconciled.</strong> Pool matched{" "}
-        {s(f, "members_matched_at_discovery")} people at discovery. Of those,{" "}
-        {s(f, "memberships_that_failed")} had a card declined and took their units with
-        them, and {s(f, "replacements_authorised")} replacement was authorised in their
-        place. So <strong>{s(f, "buyers_after_recovery")} people buy</strong>, while the
-        pool's record carries <strong>{s(f, "memberships_on_record")} memberships</strong>.
-        The declined one stays visible on the pool page rather than quietly disappearing,
-        because a record that edits out its failures is not a record.
-      </p>
+      <StageNote label="Recovery and count reconciliation">
+        <p className="small muted prose">
+          The agent chose to attempt a repair; deterministic policy chose eligible demand.
+          Pool replaced exactly the lost units without repricing committed buyers or creating
+          surplus stock.
+        </p>
+        <p className="small muted prose">
+          One matched member's authorization failed and one replacement was authorized, so
+          the buyer count returns to {s(f, "buyers_after_recovery")} while the audit record
+          retains all {s(f, "memberships_on_record")} memberships, including the decline.
+        </p>
+      </StageNote>
       <Block title="Tools called across the pricing and recovery runs">
         <TracePills names={list(f, "tools_called")} />
       </Block>
@@ -503,15 +524,14 @@ function LockBody({ f }: { f: Facts }) {
           sub="simulated end to end — no card network was contacted"
         />
       </div>
-      <p className="small muted prose">
-        Locking runs one viability engine over stored facts, and all thirteen checks run —
-        never short-circuited — so the reason a pool <em>cannot</em> lock is always the
-        complete list: supplier minimum, offer still active, quote freshness, whole-case
-        allocation, host assigned, host compensation clearing their own minimum, buyers genuinely
-        saving, every buyer having authorised, every buyer's decision settled, Pool's own
-        economics, timing, the pickup site, and funding. Capture happens after that gate
-        and never before it.
-      </p>
+      <StageNote label="All lock checks">
+        <p className="small muted prose">
+          All thirteen checks run without short-circuiting: supplier minimum, active offer,
+          quote freshness, whole-case allocation, host assignment and pay floor, buyer saving,
+          every authorization and decision, Pool economics, timing, pickup and funding.
+          Capture happens only after that gate.
+        </p>
+      </StageNote>
     </>
   );
 }
@@ -533,12 +553,12 @@ function PurchaseBody({ f }: { f: Facts }) {
           sub="simulated, and labelled that way in every record it appears in"
         />
       </div>
-      <p className="small muted prose">
-        Cases rarely divide evenly into demand. Rather than buy the remainder and bill
-        somebody for it, Pool searches for the set of buyers whose quantities fill whole
-        cases exactly, preferring people whose need is already due. If no combination
-        lands on a case boundary, the pool does not lock and says why.
-      </p>
+      <StageNote label="Why there is no surplus">
+        <p className="small muted prose">
+          Pool selects buyers whose quantities fill whole cases, preferring needs already
+          due. If no exact allocation exists, the pool does not lock.
+        </p>
+      </StageNote>
     </>
   );
 }
@@ -551,11 +571,13 @@ function DistributionBody({ f }: { f: Facts }) {
         <Figure label="Units collected from the supplier" value={s(f, "units")} />
         <Figure label="The host earns" value={s(f, "host_earnings")} accent />
       </div>
-      <p className="small muted prose">
-        The host is not a reseller taking a risk. Every unit in that vehicle is allocated
-        and its buyer payment was captured by the simulated provider before the supplier
-        order was recorded. Host compensation is recorded; Pool has no payout rail.
-      </p>
+      <StageNote>
+        <p className="small muted prose">
+          The host carries no speculative inventory: every unit is allocated and its
+          simulated payment captured before the order record. Compensation is recorded;
+          Pool has no payout rail.
+        </p>
+      </StageNote>
     </>
   );
 }
@@ -584,12 +606,13 @@ function PickupBody({ f }: { f: Facts }) {
           </span>
         </div>
       ) : null}
-      <p className="small muted prose">
-        Every buyer gets their own one-time credential — a long token for the QR and a
-        short code for when scanning is awkward. Only hashes are stored; the plaintext
-        exists exactly once, in the response that issued it, and re-issuing invalidates
-        the previous pair. A host cannot mark an order collected without one.
-      </p>
+      <StageNote label="Credential mechanics">
+        <p className="small muted prose">
+          Each buyer gets a QR token and short code. Only hashes are stored; plaintext is
+          returned once, reissue invalidates the prior pair, and collection requires a valid
+          credential.
+        </p>
+      </StageNote>
     </>
   );
 }
@@ -640,10 +663,8 @@ function ImpactBody({ f }: { f: Facts }) {
           </div>
         </div>
       </div>
-      <p className="small muted prose">
-        Bulk pricing normally favours whoever can afford a bigger purchase up front and
-        has somewhere to put it. Nothing here is charity or a projection — every figure is
-        a sum over stored rows in a synthetic community, and no goods moved.
+      <p className="small muted">
+        Stored-row results from a synthetic community; no money or goods moved.
       </p>
     </>
   );
@@ -741,17 +762,15 @@ export function RunView({
         <header className="stack-sm">
           <h1 className="title">One purchase, from nobody asking for it to somebody carrying it home</h1>
           <p className="lede">
-            Thirteen steps run on the server in a single call: the agent discovers the
-            demand, the deterministic engine prices it, a person is asked only where a
-            person is needed, a card is declined, the order is repaired, and the goods are
-            handed over against a one-time code. Then you walk through what happened.
+            Run all 13 server stages in one call, then inspect the recorded discovery,
+            pricing, decline, repair, lock and handover.
           </p>
         </header>
         <div className="panel panel-pad stack-sm">
           <ActorKey />
           <p className="small muted prose">
-            Nothing on this screen is on a timer. The run finishes before you see the
-            first step, and the round trip is printed at the top so you can check.
+            The run finishes before the reader opens; its measured round trip appears at
+            the top. Nothing is animated as if work were still happening.
           </p>
           <div className="btn-row" style={{ marginTop: 6 }}>
             <button className="btn btn-primary btn-lg" onClick={onRun} disabled={running}>
@@ -863,11 +882,11 @@ export function RunView({
       </div>
 
       {last && scenario.ok ? (
-        <section className="block reveal">
-          <h3 className="section-title" style={{ marginBottom: 12 }}>
+        <details className="block reveal">
+          <summary className="section-title" style={{ cursor: "pointer" }}>
             What just happened
-          </h3>
-          <p className="small muted prose">
+          </summary>
+          <p className="small muted prose" style={{ marginTop: 12 }}>
             Nobody in that community created a group, and nobody organised anything. An
             agent decided there was an opportunity worth investigating and which actions
             to take; deterministic code decided every price, every eligibility, every
@@ -889,7 +908,7 @@ export function RunView({
               </button>
             ) : null}
           </div>
-        </section>
+        </details>
       ) : null}
 
       <ActorKey />

@@ -86,9 +86,13 @@ describe("Community enablement", () => {
     expect(screen.getByText(/20 of 20 fixture memberships verified/i)).toBeTruthy();
     expect(screen.getByText(/13 members declared needs separately/i)).toBeTruthy();
     expect(screen.getByText("Community enables", { selector: "strong" })).toBeTruthy();
-    expect(screen.getByText(/Pool handles matching, economics, host coordination/i)).toBeTruthy();
+    expect(screen.getByText(/handles matching, economics, hosts/i)).toBeTruthy();
     expect(screen.getByText(/does not buy or front inventory/i)).toBeTruthy();
-    expect(screen.getByText(/do not imply an institutional partnership/i)).toBeTruthy();
+    expect(screen.getByText(/no institutional partnership/i)).toBeTruthy();
+    expect(
+      (screen.getByText("Who is responsible for what").closest("details") as HTMLDetailsElement)
+        .open,
+    ).toBe(false);
     expect(screen.getByText(/simulated capture recorded ·/i)).toBeTruthy();
     expect(screen.queryByText(/payment captured ·/i)).toBeNull();
   });

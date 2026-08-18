@@ -194,10 +194,8 @@ function WatchingCard({
       <div className="grid grid-side" style={{ gap: 0, alignItems: "stretch" }}>
         <div className="panel-pad stack-sm">
           <p className="small muted prose">
-            Nobody in Demo University has organised anything, and nobody is going to.{" "}
-            {memberCount} people have each told Pool what they routinely buy — {needCount}{" "}
-            standing needs between them — and then forgotten about it. Pool is looking for
-            the moment several of those line up into one order worth placing together.
+            {memberCount} members declared {needCount} standing needs independently. Pool
+            watches for overlaps worth buying together; nobody has to organise a group.
           </p>
           <div className="btn-row">
             <button className="btn btn-primary btn-lg" onClick={onFind} disabled={running}>
@@ -206,9 +204,6 @@ function WatchingCard({
             </button>
           </div>
           {running ? <CoordinatorWait live={liveDiscovery} /> : null}
-          <p className="tiny faint">
-            Runs Pool's coordinator over the community's standing needs.
-          </p>
         </div>
         <div className="panel-pad" style={{ borderLeft: "1px solid var(--rule)" }}>
           <ConvergenceFigure />
@@ -403,9 +398,7 @@ export function Home({
         <Block title="What Pool may decide for you">
           <div className="grid grid-2">
             <p className="small muted prose">
-              Pool commits on your behalf only while every one of these holds. If any of
-              them fails it asks you instead, which is why a question can appear where you
-              might have expected a charge.
+              Pool acts only when every stored limit passes; otherwise it asks you.
             </p>
             <div className="ledger">
               <LedgerRow label="Minimum saving before it acts" value={me.autonomy_display.min_savings} />
@@ -452,13 +445,15 @@ export function Home({
       </Block>
 
       {lastRun && lastRun.tool_calls.length > 0 ? (
-        <div>
-          <p className="tiny faint">
-            Last coordination run: {lastRun.tool_calls.length} tools ·{" "}
-            {lastRun.iterations} iterations · {lastRun.termination_reason}
-          </p>
-          <TracePills names={lastRun.tool_calls.map((t) => t.name)} />
-        </div>
+        <details>
+          <summary className="tiny faint" style={{ cursor: "pointer" }}>
+            Last coordination run · {lastRun.tool_calls.length} tools · {lastRun.iterations}{" "}
+            iterations · {lastRun.termination_reason}
+          </summary>
+          <div style={{ marginTop: 8 }}>
+            <TracePills names={lastRun.tool_calls.map((t) => t.name)} />
+          </div>
+        </details>
       ) : null}
     </div>
   );

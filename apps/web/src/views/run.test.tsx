@@ -25,6 +25,7 @@ const SCENARIO: ScenarioResult = {
   ok: true,
   failure: "",
   pool_id: "pool_complete",
+  workspace: "wtestsession01-showcase",
   steps: STAGES.map((name) => ({
     name,
     detail: `Recorded ${name.replace(/_/g, " ")}`,

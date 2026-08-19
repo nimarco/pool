@@ -81,7 +81,28 @@ logger = logging.getLogger(__name__)
 #: Session workspaces the public client is allowed to ask for. Deliberately narrower
 #: than the API's own ``WORKSPACE_RE``: the public client generates exactly this shape,
 #: so anything else is either a mistake or someone probing.
-PUBLIC_WORKSPACE_RE = re.compile(r"^w[a-z0-9]{8,32}$")
+#: The canonical scripted showcase runs in its own partition, derived from the visitor's
+#: session by :func:`showcase_workspace`. Two properties matter and both come from the
+#: hyphen: a browser-generated session id can never contain one, so a visitor's *own*
+#: workspace and their showcase workspace can never be the same partition; and reaching
+#: somebody else's showcase still means guessing their session id, which is the property
+#: that already protects ``/api/state``.
+SHOWCASE_SUFFIX = "-showcase"
+
+PUBLIC_WORKSPACE_RE = re.compile(rf"^w[a-z0-9]{{8,32}}({re.escape(SHOWCASE_SUFFIX)})?$")
+
+
+def showcase_workspace(ws: str) -> str:
+    """The partition the scripted showcase runs in, for a given visitor session.
+
+    Idempotent, so a surface already reading the showcase can pass its own workspace
+    without accumulating suffixes.
+    """
+    return ws if ws.endswith(SHOWCASE_SUFFIX) else f"{ws}{SHOWCASE_SUFFIX}"
+
+
+def is_showcase_workspace(ws: str) -> bool:
+    return ws.endswith(SHOWCASE_SUFFIX)
 
 #: Never reachable as a workspace prefix — ``WORKSPACE_RE`` requires a leading
 #: ``[a-z0-9]`` — so quota and lease rows cannot collide with a session's data.

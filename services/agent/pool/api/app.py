@@ -1639,28 +1639,33 @@ def reset(workspace: str = Query("demo")) -> dict[str, Any]:
 
 @app.post("/api/demo/scenario")
 def scenario(workspace: str = Query("demo")) -> dict[str, Any]:
-    """Run the full showcase end to end and return the transcript."""
-    ws = check_workspace(workspace)
-    # The showcase reseeds the workspace and then drives the entire lifecycle through
-    # it — several hundred writes. A live agent run, a reset, or a second tab's scenario
-    # landing anywhere inside that produces a workspace that is inconsistent without
-    # looking broken, so it holds the lease for the whole thing.
+    """Run the full canonical showcase end to end, in its own workspace.
+
+    **The showcase never touches the visitor's account.** It declares a flagship whey
+    need, drives host recruitment, a payment failure, a recovery, a lock, a purchase and
+    ten pickups — as its own scripted consumer, in a partition derived from the caller's
+    session and reserved for exactly this. A coffee-only visitor who watches the scripted
+    lifecycle does not come back to a Needs page saying they also buy whey.
+
+    It used to run in the visitor's own workspace and skip the reseed when they had
+    onboarded, which was an attempt to avoid wiping their account and instead wrote the
+    canonical declaration *into* it. Labelling the row ``declared_by: scenario`` did not
+    make that acceptable product behaviour; separating the state does.
+
+    So the replay always starts from a known clean fixture, which is also what makes the
+    copy — "this starts the community over" — literally true.
+    """
+    visitor = check_workspace(workspace)
+    ws = public_demo.showcase_workspace(visitor)
+    # The lease is taken on the showcase partition, because that is the one being
+    # rewritten. A visitor's own coordinator run is now free to proceed alongside it:
+    # they are different partitions, and that is the whole point.
     with _public.workspace_mutation(ws, public_demo.WORKSPACE_BUSY):
-        _public.spend_action(ws)
-        # Reseeding wipes the workspace, and that used to include the account the person
-        # at the screen had just set up — they would finish onboarding, replay the
-        # lifecycle to see it end to end, and be thrown back to "what should Pool call
-        # you?" with their own declaration gone. So the replay only starts from a clean
-        # fixture when there is nothing of theirs to lose.
-        me = onboarding.consumer_household(ctx_for(ws))
-        result = run_showcase(
-            repo(),
-            ws,
-            settings=_settings,
-            routing=_routing,
-            reseed=not (me and me.is_onboarded),
-        )
-    return result.to_dict()
+        # The quota is spent against the *visitor*, though. Session caps exist to bound
+        # what one person can start, not what one partition can absorb.
+        _public.spend_action(visitor)
+        result = run_showcase(repo(), ws, settings=_settings, routing=_routing)
+    return {**result.to_dict(), "workspace": ws}
 
 
 @app.get("/api/runs/{run_id}")

@@ -249,8 +249,29 @@ def test_a_local_run_is_refused_while_the_workspace_is_held(client, api):
     assert response.status_code == 409
 
 
-def test_the_scenario_is_refused_while_the_workspace_is_held(client, api):
-    """The showcase reseeds and then drives the whole lifecycle — hundreds of writes."""
+def test_the_scenario_is_refused_while_its_own_workspace_is_held(client, api):
+    """The showcase reseeds and then drives the whole lifecycle — hundreds of writes.
+
+    The lease it takes is on the partition it actually rewrites, which is its own.
+    """
+    other = public_demo.PublicDemoGuard(
+        settings=api._public.settings,
+        quota=public_demo.InMemoryQuotaStore(),
+        lease=api._public.lease,
+    )
+    assert other.hold_workspace(public_demo.showcase_workspace(WS_A)) is True
+
+    response = client.post(f"/api/demo/scenario?workspace={WS_A}")
+
+    assert response.status_code == 409
+
+
+def test_the_scenario_and_the_visitors_own_coordinator_no_longer_block_each_other(
+    client, api
+):
+    """They write different partitions now, so serialising them would be a lock taken
+    for no reason. A visitor watching the scripted lifecycle can still press their own
+    button, and neither can corrupt the other's rows."""
     other = public_demo.PublicDemoGuard(
         settings=api._public.settings,
         quota=public_demo.InMemoryQuotaStore(),
@@ -260,7 +281,8 @@ def test_the_scenario_is_refused_while_the_workspace_is_held(client, api):
 
     response = client.post(f"/api/demo/scenario?workspace={WS_A}")
 
-    assert response.status_code == 409
+    assert response.status_code == 200, response.text
+    assert response.json()["workspace"] == public_demo.showcase_workspace(WS_A)
 
 
 def test_a_live_run_is_refused_while_a_local_action_holds_the_workspace(api):

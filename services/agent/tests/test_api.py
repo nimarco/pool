@@ -28,6 +28,35 @@ def _seed(client: TestClient) -> dict:
     return client.get("/api/state").json()
 
 
+class _Scoped:
+    """A client bound to one workspace, so a test does not repeat the query parameter.
+
+    Needed because the canonical showcase runs in its own partition: it must never
+    rewrite the account a visitor set up for themselves, so a test that wants a finished
+    pool reads the workspace the showcase actually ran in rather than expecting the
+    visitor's own to have been overwritten.
+    """
+
+    def __init__(self, client: TestClient, ws: str) -> None:
+        self._client, self._ws = client, ws
+
+    def _url(self, path: str) -> str:
+        return f"{path}{'&' if '?' in path else '?'}workspace={self._ws}"
+
+    def get(self, path: str, **kwargs):
+        return self._client.get(self._url(path), **kwargs)
+
+    def post(self, path: str, **kwargs):
+        return self._client.post(self._url(path), **kwargs)
+
+
+def _showcase(client: TestClient) -> _Scoped:
+    """Drive the canonical lifecycle, and hand back a client reading where it ran."""
+    body = client.post("/api/demo/scenario").json()
+    assert body["ok"] is True, body.get("failure")
+    return _Scoped(client, body["workspace"])
+
+
 # --------------------------------------------------------------------------- health
 
 
@@ -113,9 +142,16 @@ def test_an_invalid_workspace_is_rejected(client):
 
 
 def test_workspaces_are_isolated(client):
-    client.post("/api/demo/scenario?workspace=one")
-    other = client.get("/api/state?workspace=two").json()
-    assert other["pools"] == []
+    """One workspace's coordination is invisible in another's.
+
+    Driven with a real coordinator run rather than the showcase, because the showcase
+    now writes its own partition — so using it here would prove isolation between two
+    workspaces neither of which was ever written.
+    """
+    client.get("/api/state?workspace=one")
+    client.post("/api/agent/run?workspace=one", json={"trigger": "manual_scan"})
+    assert client.get("/api/state?workspace=one").json()["pools"]
+    assert client.get("/api/state?workspace=two").json()["pools"] == []
 
 
 # --------------------------------------------------------------------------- privacy
@@ -123,7 +159,7 @@ def test_workspaces_are_isolated(client):
 
 def test_no_endpoint_leaks_contact_details_or_payment_references(client):
     """The three things that must never reach a browser (§82, AGENTS.md §4)."""
-    client.post("/api/demo/scenario")
+    client = _showcase(client)
     payloads = [
         client.get("/api/state").text,
         client.get("/api/map").text,
@@ -206,7 +242,7 @@ def test_the_scenario_endpoint_runs_the_whole_lifecycle(client):
 
 
 def test_pool_detail_exposes_economics_hosts_and_viability(client):
-    client.post("/api/demo/scenario")
+    client = _showcase(client)
     pool_id = client.get("/api/state").json()["pools"][0]["pool_id"]
     body = client.get(f"/api/pools/{pool_id}").json()
     assert body["members"]
@@ -223,7 +259,7 @@ def test_a_pool_reports_buyers_and_memberships_separately(client):
     people actually receive something. Collapsing them left a judge reconciling
     "11 members" against "10 handoffs confirmed" with nothing to go on.
     """
-    client.post("/api/demo/scenario")
+    client = _showcase(client)
     pool = client.get("/api/state").json()["pools"][0]
     assert pool["buyer_count"] >= 1
     assert pool["member_count"] >= pool["buyer_count"]
@@ -240,7 +276,7 @@ def test_an_unknown_pool_is_a_404(client):
 
 
 def test_withdrawing_after_lock_is_a_conflict_not_a_silent_success(client):
-    client.post("/api/demo/scenario")
+    client = _showcase(client)
     state = client.get("/api/state").json()
     pool = state["pools"][0]
     detail = client.get(f"/api/pools/{pool['pool_id']}").json()
@@ -266,7 +302,7 @@ def test_volunteering_to_host_does_not_claim_the_job(client):
 
 
 def test_the_operator_console_shows_offers_payments_and_purchases(client):
-    client.post("/api/demo/scenario")
+    client = _showcase(client)
     body = client.get("/api/operator").json()
     assert body["offers"]
     assert any(o["source"] == "synthetic" for o in body["offers"])
@@ -317,7 +353,7 @@ def test_disabling_an_offer_takes_it_out_of_circulation(client):
 
 
 def test_a_pickup_credential_is_returned_once_and_works_once(client):
-    client.post("/api/demo/scenario")
+    client = _showcase(client)
     state = client.get("/api/state").json()
     pool_id = state["pools"][0]["pool_id"]
     allocations = client.get(f"/api/pools/{pool_id}/allocations").json()
@@ -330,7 +366,7 @@ def test_a_pickup_credential_is_returned_once_and_works_once(client):
 
 
 def test_redeeming_a_forged_credential_fails(client):
-    client.post("/api/demo/scenario")
+    client = _showcase(client)
     pool_id = client.get("/api/state").json()["pools"][0]["pool_id"]
     body = client.post(
         f"/api/pools/{pool_id}/redeem", json={"value": "definitely-not-a-token"}
@@ -339,7 +375,7 @@ def test_redeeming_a_forged_credential_fails(client):
 
 
 def test_an_operator_override_requires_a_reason(client):
-    client.post("/api/demo/scenario")
+    client = _showcase(client)
     pool_id = client.get("/api/state").json()["pools"][0]["pool_id"]
     response = client.post(
         f"/api/pools/{pool_id}/override/hh_okafor", json={"reason": "x"}
@@ -374,7 +410,7 @@ def test_an_unsigned_webhook_is_rejected(client, monkeypatch):
 
 
 def test_reset_returns_a_workspace_to_its_starting_state(client):
-    client.post("/api/demo/scenario")
+    client = _showcase(client)
     assert client.get("/api/state").json()["pools"]
     counts = client.post("/api/demo/reset").json()
     assert counts["reset"] is True
@@ -399,7 +435,7 @@ def test_state_reports_the_communitys_own_schedule(client):
 
 
 def test_pool_status_values_are_canonical(client):
-    client.post("/api/demo/scenario")
+    client = _showcase(client)
     statuses = {p["status"] for p in client.get("/api/state").json()["pools"]}
     assert statuses <= {s.value for s in PoolStatus}
     assert client.get("/api/state").json()["community"]["id"] == COMMUNITY_ID
@@ -412,7 +448,7 @@ def test_a_refused_lifecycle_move_is_a_conflict_not_a_server_error(client):
     `open-distribution` is a *public* route, so a judge clicking it twice on a finished
     pool got one. Handled once at the app level so no route can miss it.
     """
-    client.post("/api/demo/scenario")
+    client = _showcase(client)
     pool_id = client.get("/api/state").json()["pools"][0]["pool_id"]
     assert client.get(f"/api/pools/{pool_id}").json()["status"] == "completed"
 
@@ -424,7 +460,7 @@ def test_a_refused_lifecycle_move_is_a_conflict_not_a_server_error(client):
 
 def test_no_lifecycle_refusal_anywhere_returns_a_500(client):
     """The general property, not just the one route that exposed it."""
-    client.post("/api/demo/scenario")
+    client = _showcase(client)
     pool_id = client.get("/api/state").json()["pools"][0]["pool_id"]
 
     for path in (

@@ -466,6 +466,8 @@ export interface ScenarioResult {
   failure: string;
   pool_id: string;
   steps: ScenarioStep[];
+  /** The partition the scripted lifecycle ran in — never the visitor's own. */
+  workspace: string;
 }
 
 export interface Checklist {
@@ -714,6 +716,28 @@ function freshWorkspaceId(): string {
  *  stable session for the tab rather than a new one on every request. */
 let cachedWorkspace: string | null = null;
 
+/** The suffix the server derives the canonical showcase's own partition with.
+ *  Mirrors `public_demo.SHOWCASE_SUFFIX`; a session id can never contain a hyphen, so
+ *  the two can never collide. */
+const SHOWCASE_SUFFIX = "-showcase";
+
+/** Showcase mode is a different world, not a different screen.
+ *
+ *  The scripted lifecycle declares a flagship need, drives a payment failure, a
+ *  recovery, a lock and ten pickups. None of that may land in the account the person at
+ *  the screen set up for themselves — so while showcase mode is on, every request this
+ *  module makes addresses the showcase partition instead. Turning it off restores the
+ *  visitor's own session exactly, because nothing about it was ever written. */
+let showcaseScope = false;
+
+export function setShowcaseScope(on: boolean): void {
+  showcaseScope = on;
+}
+
+export function inShowcaseScope(): boolean {
+  return showcaseScope;
+}
+
 /** Each visitor gets an isolated dataset, so two judges cannot corrupt each other. */
 function workspaceId(): string {
   if (cachedWorkspace) return cachedWorkspace;
@@ -737,6 +761,12 @@ function workspaceId(): string {
   return fresh;
 }
 
+/** The workspace this request should address: the visitor's own, or the showcase's. */
+function activeWorkspace(): string {
+  const base = workspaceId();
+  return showcaseScope ? `${base}${SHOWCASE_SUFFIX}` : base;
+}
+
 export function resetWorkspaceId(): void {
   cachedWorkspace = null;
   try {
@@ -750,7 +780,7 @@ const BASE = import.meta.env.VITE_API_BASE ?? "";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const sep = path.includes("?") ? "&" : "?";
-  const response = await fetch(`${BASE}${path}${sep}workspace=${workspaceId()}`, {
+  const response = await fetch(`${BASE}${path}${sep}workspace=${activeWorkspace()}`, {
     headers: { "content-type": "application/json" },
     ...init,
   });
@@ -850,6 +880,10 @@ export const api = {
     }),
   reset: () => post<Record<string, unknown>>("/api/demo/reset"),
   scenario: () => post<ScenarioResult>("/api/demo/scenario"),
+  /** Point every subsequent request at the showcase's own partition, or back at the
+   *  visitor's. The scripted lifecycle is a different world, not a different screen. */
+  setShowcaseScope,
+  inShowcaseScope,
 
   /** What this deployment can do. Answers everywhere; `live_agent_available` is false
    *  when no AgentCore runtime is configured, so the UI describes the action rather

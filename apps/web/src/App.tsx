@@ -153,12 +153,23 @@ export default function App() {
     state?.activity.length,
   ]);
 
-  const navigate = useCallback((next: View) => {
-    setShowcase(null);
-    setView(next);
-    setPanelOpen(false);
-    window.scrollTo({ top: 0 });
-  }, []);
+  /** Leaving showcase mode points every request back at the visitor's own session.
+   *
+   *  Their state is not "restored" so much as never touched: the scripted lifecycle
+   *  writes a separate partition, so stepping out is a matter of addressing the right
+   *  one again. */
+  const navigate = useCallback(
+    (next: View) => {
+      api.setShowcaseScope(false);
+      setShowcase(null);
+      setOpenPool(null);
+      setView(next);
+      setPanelOpen(false);
+      void refresh();
+      window.scrollTo({ top: 0 });
+    },
+    [refresh],
+  );
 
   /** A product picked on Home, handed to the Needs form so the member does not have to
    *  search for the same thing twice. Cleared as soon as the form has taken it. */
@@ -170,11 +181,22 @@ export default function App() {
     [navigate],
   );
 
-  const showcaseTo = useCallback((next: ShowcaseView) => {
-    setShowcase(next);
-    setPanelOpen(false);
-    window.scrollTo({ top: 0 });
-  }, []);
+  /** Entering showcase mode points every request at the showcase's own partition, so
+   *  the scripted world is read from where it actually lives. */
+  const showcaseTo = useCallback(
+    (next: ShowcaseView) => {
+      const entering = !api.inShowcaseScope();
+      api.setShowcaseScope(true);
+      setShowcase(next);
+      setPanelOpen(false);
+      if (entering) {
+        setOpenPool(null);
+        void refresh();
+      }
+      window.scrollTo({ top: 0 });
+    },
+    [refresh],
+  );
 
   /** Re-reads the pool currently open, so an action taken in the drawer is visible on
    *  the record behind it without a manual refresh. */
@@ -300,36 +322,33 @@ export default function App() {
     await invokeDeployedAgent();
   }, [invokeDeployedAgent]);
 
+  /** Replay the canonical scripted lifecycle — in its own world.
+   *
+   *  It always lands in showcase mode, because that is where it happened. The visitor's
+   *  own account is in a different partition and is not read, written, or reseeded by
+   *  any of this: a coffee-only member who watches the whey lifecycle end to end comes
+   *  back to their own Needs page unchanged. */
   const runScenario = useCallback(async () => {
     setRunning(true);
     setPanelOpen(false);
+    api.setShowcaseScope(true);
     try {
       const started = performance.now();
       const result = await api.scenario();
       setScenarioMs(Math.round(performance.now() - started));
       setScenario(result);
-      const fresh = await api.state();
-      setState(fresh);
+      setState(await api.state());
       setMap(await api.map());
-      if (result.pool_id) {
-        setOpenPool(await api.pool(result.pool_id));
-        if (showcase) {
-          // Showcase already has a dedicated reader, so land there.
-          setShowcase("run");
-        } else {
-          // In the product the lifecycle exists to be *read*, so open the record on the
-          // reader rather than on its front page.
-          setPoolEntry({ tab: "activity", deep: "walkthrough" });
-          setView("pool");
-        }
-      }
+      setShowcase("run");
+      setView("home");
+      if (result.pool_id) setOpenPool(await api.pool(result.pool_id));
       window.scrollTo({ top: 0 });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setRunning(false);
     }
-  }, [showcase]);
+  }, []);
 
   const respond = useCallback(
     async (decisionId: string, approve: boolean) => {
@@ -685,7 +704,6 @@ export default function App() {
               onBack={() => navigate("pools")}
               onRefresh={() => void openPoolDetail(openPool.pool_id)}
               onRunLive={runLiveAgent}
-              onRunScenario={runScenario}
             />
           ) : null}
 
@@ -735,13 +753,13 @@ export default function App() {
           setPanelOpen(false);
           window.scrollTo({ top: 0 });
         }}
+        /* Both branches land in the showcase, because that is the world the scripted
+           lifecycle happened in. It used to open `state.pools[0]` — the oldest pool in
+           whatever workspace was loaded, which after isolation is the visitor's own and
+           has nothing to do with the replay. */
         onLifecycle={() => {
-          const pool = state?.pools[0];
-          if (pool && scenario) {
-            void openPoolDetail(pool.pool_id, { tab: "activity", deep: "walkthrough" });
-          } else {
-            void runScenario();
-          }
+          if (scenario) showcaseTo("run");
+          else void runScenario();
         }}
       />
     </div>

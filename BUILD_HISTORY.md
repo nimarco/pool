@@ -4741,3 +4741,99 @@ model reasoning, and why only one of them is safe to show a user.
 **Evidence worth preserving**
 The two-tier whey reproduction. It is a small, complete example of an agent system producing
 confident, plausible, wrong evidence, caught only because something finally consumed it.
+
+---
+
+### #0043 — [2026-08-19] — The scripted proof gets its own community
+`[product]` `[demo]` `[architecture]`
+
+**Goal / user intent**
+Stop the canonical showcase writing into the visitor's account.
+
+**Starting state**
+`/api/demo/scenario` ran in the caller's own workspace. `run_showcase` opens by declaring the
+flagship whey need for `CONSUMER_HOUSEHOLD` — which *is* the household a real visitor uses — so a
+person who had declared coffee, pressed "run the full lifecycle" to see how a pool works, and gone
+back to Needs found Pool believing they also buy whey protein.
+
+The endpoint had already been patched once around this: reseeding wipes the partition, and that
+included the account somebody had just set up, so the reseed was skipped whenever the visitor had
+onboarded. That fixed the symptom (their account surviving) by causing the disease (the canonical
+declaration landing in it), and it made the interface's own copy false — "this starts the community
+over" could not be true of a replay that deliberately did not start anything over.
+
+Labelling the row `declared_by: scenario` was the third patch. A provenance tag on a row that
+should not exist is not consent.
+
+**Decision**
+Separate the state, not the labels. The showcase runs in `f"{workspace}-showcase"`, derived
+server-side from the caller's session. Two properties come free from the hyphen: a
+browser-generated session id can never contain one, so a visitor's own partition and their showcase
+partition can never collide; and reaching somebody else's showcase still requires guessing their
+session id, which is the property already protecting `/api/state`.
+
+The replay therefore always reseeds, unconditionally, which is what makes the copy literally true.
+
+On the client, showcase mode became a *world* rather than a screen: one module-level scope flag in
+`api.ts` decides which partition every request addresses. Entering showcase points everything at
+the showcase partition; leaving points it back. The visitor's state is not "restored" — it was
+never touched.
+
+**Why not thread a workspace through every call**
+Considered and rejected. The pool drawer is shared between the product and the showcase and carries
+real actions — approve a decision, redeem a credential, open distribution. Threading a workspace
+argument through each of those is the version of this change that silently misses one, and the one
+it misses writes a member's real account from inside a scripted replay. A single scope has exactly
+one thing to get right.
+
+**Also moved**
+`Run the full lifecycle` is gone from the ordinary consumer pool record. It replays a whole
+community from scratch, and offering that from inside a member's own order is an invitation to
+"start over" that reads as being about their order. It remains in Showcase and in Demo controls,
+where the surrounding copy says what it does.
+
+The demo panel's own entry point was reading `state.pools[0]` to decide where to land — the oldest
+pool in whatever workspace happened to be loaded, which after this change is the visitor's own and
+has nothing to do with the replay.
+
+**Implementation**
+`api/app.py`, `api/public_demo.py` (`SHOWCASE_SUFFIX`, `showcase_workspace`, widened
+`PUBLIC_WORKSPACE_RE`), `apps/web/src/api.ts` (scope), `App.tsx`, `views/pool.tsx`, `views/run.tsx`,
+`views/demo-panel.tsx`. Status: **tested**.
+
+**AWS / external services touched**
+None. The showcase partition inherits the same 24 h TTL as every other demo workspace, so it
+sweeps itself; no new table, no new resource.
+
+**Cost-relevant activity**
+Marginally *lower* contention: the lease the scenario takes is now on the partition it actually
+rewrites, so a visitor's own coordinator run and the scripted replay no longer block each other.
+
+**Validation**
+868 backend tests pass, 79 web tests pass. Four new tests pin the boundary: the visitor's consumer
+record, needs list, pools and personal opportunity are all identical across a full scripted
+lifecycle; the showcase workspace holds the canonical pool; a second replay produces a *different*
+pool id and leaves exactly one pool, proving the reseed is real; and a showcase workspace is only
+addressable by knowing the session it belongs to.
+
+**Failures / dead ends**
+Eleven existing tests used the scenario as a convenient way to populate a workspace and then read
+`/api/state`. They now read an empty one, which is the isolation working — but two of them,
+`test_workspaces_are_isolated` and `test_two_anonymous_judges_cannot_see_each_others_demo`, would
+have gone on *passing* while proving nothing, because they compared two workspaces neither of which
+was written any more. Both were rewritten to drive a real coordinator run instead.
+
+**What we learned**
+Three patches in a row around one endpoint, each fixing the previous one's side effect, is the
+signal that the shape is wrong rather than the code. The tell here was the copy: the interface had
+to be softened twice to stay honest about what the button did, and text bending around a behaviour
+is usually cheaper to notice than the behaviour itself.
+
+**Article fodder**
+Article 1 — a demo that mutates the user's own account to prove itself is not a demo of the
+product, and the fix is architectural rather than editorial.
+
+**Evidence worth preserving**
+The before/after of the demo panel copy. The old version had to explain that the replay would
+declare a whey need on your account and that you could retire it afterwards; the new one does not,
+because it does not.

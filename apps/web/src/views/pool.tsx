@@ -96,7 +96,10 @@ export function PoolRecord({
   onBack: () => void;
   onRefresh: () => void;
   onRunLive: () => void;
-  onRunScenario: () => void;
+  /** Only the showcase and the demo controls may start the scripted lifecycle: it
+   *  replays a different world, and offering it from an ordinary pool record invited a
+   *  member to "start the community over" from inside their own order. */
+  onRunScenario?: () => void;
 }) {
   const [tab, setTab] = useState<Tab>((entry?.tab as Tab) ?? "overview");
   const tablist = useRef<HTMLElement | null>(null);
@@ -833,7 +836,10 @@ function ActivityTab({
   live: LiveAgentResult | null;
   liveBusy: boolean;
   onRunLive: () => void;
-  onRunScenario: () => void;
+  /** Only the showcase and the demo controls may start the scripted lifecycle: it
+   *  replays a different world, and offering it from an ordinary pool record invited a
+   *  member to "start the community over" from inside their own order. */
+  onRunScenario?: () => void;
 }) {
   const [deep, setDeep] = useState<"none" | "walkthrough" | "execution">(
     (entryDeep as "walkthrough" | "execution") ?? "none",
@@ -937,8 +943,9 @@ function ActivityTab({
           </p>
           {!scenario ? (
             <p className="tiny faint">
-              Replays Demo University from the beginning and records every stage, so it
-              starts this community over.
+              {onRunScenario
+                ? "Replays Demo University from the beginning in the showcase's own copy of the community, and records every stage. Your own account is not touched."
+                : "Available from Showcase and from Demo controls, where it replays the community from the beginning in its own copy."}
             </p>
           ) : null}
           <div className="btn-row push">
@@ -946,11 +953,11 @@ function ActivityTab({
               <button className="btn btn-sm" onClick={() => setDeep("walkthrough")}>
                 Open the walkthrough
               </button>
-            ) : (
+            ) : onRunScenario ? (
               <button className="btn btn-sm" onClick={onRunScenario} disabled={running}>
                 {running ? "Running…" : "Run the full lifecycle"}
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </section>

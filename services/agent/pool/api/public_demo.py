@@ -214,6 +214,10 @@ ALLOWED_POST = frozenset(
         # be declared against and can never combine with anybody else's demand. Bounded
         # by the same session quota as every other mutation here.
         "/api/products/custom",
+        # Finishing account setup: the name Pool should use, and how much authority it
+        # has. Both are this member's own facts about themselves, both are validated
+        # server-side, and neither touches another household or any money.
+        "/api/onboarding",
     }
 )
 
@@ -233,9 +237,14 @@ ALLOWED_POST = frozenset(
 #: * ``operator/offers`` — supplier price mutation. A stranger could poison the
 #:   economics every other number on the site is derived from.
 #: * ``webhooks/payments`` — a client-submitted "payment succeeded" is never trusted.
-#: * ``payment-method``, ``threads``, ``issues``, ``close-pickup`` — no product surface
-#:   in the demo needs them, and an endpoint nobody calls is an endpoint nobody has to
-#:   reason about.
+#: * ``threads``, ``issues``, ``close-pickup`` — no product surface in the demo needs
+#:   them, and an endpoint nobody calls is an endpoint nobody has to reason about.
+#:
+#: ``payment-method`` used to be on that list for the same reason, and is not any more:
+#: onboarding asks the person at the screen to save one, because a member who reaches a
+#: final offer without one becomes a second authorisation failure. It stores an opaque
+#: simulated reference and creates no charge and no hold (§55), so the worst a stranger
+#: can do with it is give a synthetic household in their own workspace a card.
 #: * ``host-response`` — the host's own accept/decline route. Real, and reachable on the
 #:   full API, but the product answers host offers through the decision inbox like every
 #:   other question Pool asks, so exposing a second path here would widen the surface
@@ -252,6 +261,8 @@ ALLOWED_POST_PATTERNS = tuple(
         rf"^/api/pools/{_ID}/host-offer/{_ID}$",
         rf"^/api/pools/{_ID}/open-distribution$",
         rf"^/api/pools/{_ID}/withdraw/{_ID}$",
+        # Saving a simulated payment method during onboarding. No charge, no hold.
+        rf"^/api/members/{_ID}/payment-method$",
     )
 )
 

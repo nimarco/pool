@@ -19,10 +19,15 @@ cannot create it.
 
 **<https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/>**
 
-No account, no signup, no credentials, no configuration. You land inside Demo University
-as one of its members. Start by telling Pool something you buy — type `vanilla whey` and
-pick the tub you recognise. That standing declaration is the entire user input of the
-product; nothing about it creates a group or invites anybody.
+No signup, no password, no credentials. Pool opens on four short questions — what to call
+you, roughly where you are, something you buy, and how much it may do without asking — and
+knows nothing about you until you answer them. Type `vanilla whey` and pick the tub you
+recognise. That standing declaration is the entire user input of the product; nothing
+about it creates a group or invites anybody.
+
+**On location:** Pool never asks your browser for a position, and never claims you are
+near the people in the demo. The community is invented, and the setup screen says so.
+Whatever city you are in, you explore Demo University from the inside.
 
 Then press **Run Pool now** and the coordinator goes looking for overlapping demand it was
 never told about. When it finds some, open the pool it formed and drive the rest — the
@@ -109,7 +114,7 @@ make demo        # the full lifecycle end to end, printed as a transcript
 make dev         # API on :8000, web on :5173
 ```
 
-Then open <http://localhost:5173>, add something you buy, and press **Run Pool now**.
+Then open <http://localhost:5173>, set an account up, and press **Run Pool now**.
 
 `make demo-local` runs the same app in **judge mode** — the reduced configuration the
 public demo deploys in, served from a single origin on :8000.
@@ -155,7 +160,7 @@ both the web app and a twenty-four-endpoint API, plus one DynamoDB table.
 ```
 browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
                                              ├─ the built SPA (same origin, no CORS)
-                                             ├─ 26 allowlisted API paths
+                                             ├─ 28 allowlisted API paths
                                              ├─ DynamoDB — this session only, 24 h TTL
                                              └─ InvokeAgentRuntime — bound to this session
                                                        │
@@ -174,7 +179,7 @@ What judge mode changes, and why each one matters:
 
 | Reduction | Why |
 | --- | --- |
-| 26 of 42 endpoints exist; the rest 404 | Supplier-offer mutation, the operator pickup override, the payment webhook, and direct `lock`/`purchase` calls have no business on an anonymous URL |
+| 28 of 43 endpoints exist; the rest 404 | Supplier-offer mutation, the operator pickup override, the payment webhook, and direct `lock`/`purchase` calls have no business on an anonymous URL |
 | **No prompt surface.** The client sends an action *name*; the server owns the prompt | `coordinator.run(instruction=…)` replaces the entire run prompt — forwarding a client string would let a stranger write the agent's instructions |
 | Per-session and per-day caps on every action that costs anything | An anonymous URL is a cost surface before it is a demo |
 | One session per visitor, isolated by DynamoDB partition, expiring in 24 h | Two judges cannot see or corrupt each other's demo |
@@ -438,6 +443,8 @@ no background schedule exists there.
 | Payments | `LocalSimulatedPaymentProvider` | Stripe **TEST** provider (refuses non-test keys) |
 | Purchase | `SimulatedPurchaseExecutor` — every record flagged synthetic | A merchant-of-record decision, not a code change |
 | Community | Demo University, entirely invented | A real Community with real verification |
+| Your account | Real — the name and choices you enter during setup | Add authentication; this is a profile, not a login |
+| Your location | **Never collected.** Setup names the community instead | Device location, once there are real neighbours to find |
 | Product identity | **Real.** A dated Open Food Facts snapshot, bundled | Widen the snapshot; add first-party photography |
 | Supplier offers | Invented — price, case size, minimum | Operator-verified quotes (`ManualVerifiedOfferProvider` exists) |
 

@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { AppState, DemoConfig, Health, api } from "../api";
+import { AppState, Consumer, DemoConfig, Health, api } from "../api";
 import { Chip, IconCheck, IconCross, IconReplay } from "../ui";
 
 export interface Identity {
@@ -126,8 +126,9 @@ export function DemoPanel({
   state,
   health,
   demoConfig,
-  identity,
-  onIdentity,
+  consumer,
+  actingAs,
+  onActAs,
   onReset,
   onRefresh,
   onAbout,
@@ -141,8 +142,10 @@ export function DemoPanel({
   state: AppState | null;
   health: Health | null;
   demoConfig: DemoConfig | null;
-  identity: Identity;
-  onIdentity: (next: Identity) => void;
+  consumer: Consumer | null;
+  /** Non-null only while the operator has stepped into a synthetic participant. */
+  actingAs: Identity | null;
+  onActAs: (next: Identity | null) => void;
   onReset: () => void;
   onRefresh: () => Promise<void>;
   onAbout: () => void;
@@ -261,33 +264,54 @@ export function DemoPanel({
         </div>
 
         <div className="sheet-body">
+          {/* Operator tooling, and framed as such.
+              This used to be headed "You are signed in as", which made a roster of
+              invented students look like the account model — the first thing a visitor
+              met was a question about which fictional person to be. Pool is a
+              multi-person product being demonstrated by one person, so the capability
+              has to stay; what changed is that stepping into somebody else is now an
+              explicit, visibly-temporary act rather than the default state. */}
           <section className="block" style={{ borderTop: "none", paddingTop: 0 }}>
             <h3 className="section-title" style={{ marginBottom: 10 }}>
-              You are signed in as
+              Act as a synthetic participant
             </h3>
             <select
               className="btn"
               style={{ width: "100%", justifyContent: "flex-start" }}
-              value={identity.id}
+              value={actingAs?.id ?? ""}
               onChange={(ev) => {
+                if (!ev.target.value) {
+                  onActAs(null);
+                  return;
+                }
                 const next = people.find((p) => p.id === ev.target.value);
-                if (next) onIdentity(next);
+                if (next) onActAs(next);
               }}
-              aria-label="Signed in as"
+              aria-label="Act as a synthetic participant"
             >
-              {people.length === 0 ? (
-                <option value={identity.id}>{identity.display_name}</option>
-              ) : (
-                people.map((p) => (
+              <option value="">
+                {consumer?.display_name ? `You — ${consumer.display_name}` : "You"}
+              </option>
+              {people
+                .filter((p) => p.id !== consumer?.household_id)
+                .map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.display_name}
                   </option>
-                ))
-              )}
+                ))}
             </select>
-            <p className="tiny muted" style={{ marginTop: 8 }}>
-              Everyone is invented. Switching identity changes the viewpoint, not the data.
-            </p>
+            {actingAs ? (
+              <p className="tiny" style={{ marginTop: 8, color: "var(--clay)" }}>
+                <strong>You are acting as {actingAs.display_name}.</strong> Their screens,
+                their decisions — not yours. Choose <em>You</em> to come back.
+              </p>
+            ) : (
+              <p className="tiny muted" style={{ marginTop: 8 }}>
+                Pool is a product for many people and this demo has one. Everyone here is
+                invented; acting as them answers the questions they would answer, through
+                their own endpoints. It changes the viewpoint, not the data.
+              </p>
+            )}
           </section>
 
           <section className="block">

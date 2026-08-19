@@ -379,27 +379,30 @@ def test_the_activity_feed_tells_the_story_without_reasoning_text(repo):
     assert result.ok
 
 
-def test_a_fresh_seed_does_not_declare_the_flagship_need_for_rosa(repo):
+def test_a_fresh_workspace_knows_nothing_about_the_person_using_it(repo):
     """The premise of the whole first-use flow.
 
-    Rosa is the account a visitor acts as. If her whey declaration were seeded, the demo
-    would open on a need nobody was shown creating — the pre-populated dashboard this
-    design exists to remove — and "Pool found something for you" would be a claim about a
-    row that appeared from nowhere.
+    Exactly one household in the fixture is the person at the screen. If Pool arrived
+    already holding their name, their card, or things they supposedly buy, the first
+    honest question the product asks would be a lie — and "Pool found something for you"
+    would be a claim about rows that appeared from nowhere.
+
+    So a fresh workspace has: no declarations, no saved payment method, no completed
+    setup, and a placeholder where a name will go.
     """
-    from pool.data.seed import seed
-    from pool.services.demo import FLAGSHIP_MEMBER, FLAGSHIP_PRODUCT
+    from pool.data.seed import CONSUMER_HOUSEHOLD, seed
 
     seed(repo, WS)
-    hers = [
-        n
-        for n in repo.list_needs(WS)
-        if n.household_id == FLAGSHIP_MEMBER and n.product_id == FLAGSHIP_PRODUCT
-    ]
-    assert hers == [], "the fixture seeded the need the member is supposed to declare"
 
-    # She is still an account with history, not an empty onboarding screen.
-    assert [n for n in repo.list_needs(WS) if n.household_id == FLAGSHIP_MEMBER]
+    assert [n for n in repo.list_needs(WS) if n.household_id == CONSUMER_HOUSEHOLD] == []
+
+    me = repo.get_household(WS, CONSUMER_HOUSEHOLD)
+    assert not me.is_onboarded
+    assert not me.payment_method_ref, "a first-run member must not arrive holding a card"
+    # A placeholder, not one of the synthetic neighbours' names.
+    assert me.display_name not in {
+        h.display_name for h in repo.list_households(WS) if h.id != CONSUMER_HOUSEHOLD
+    }
 
 
 def test_the_scenario_declares_it_through_the_real_service(repo):

@@ -1,4 +1,4 @@
-# Demo rehearsal script — about 4:45
+# Demo rehearsal script — about 4:53
 
 This is a navigation and timing rehearsal, not a final word-for-word voiceover. The
 presentation pass happens later.
@@ -19,57 +19,65 @@ The defining technical rule is equally simple:
 2. Use the deployed URL, open a fresh disposable workspace, and reset Demo University.
 3. Confirm the drawer says: discovery uses AgentCore / Bedrock; the lifecycle uses the
    deterministic planner; payments and supplier ordering are simulated.
-4. Leave the Product on **Home**, signed in as Rosa. A fresh reset gives her one standing
-   need (paper towels) and **no whey declaration** — she makes that one on camera, which is
-   the whole opening.
-5. Keep one continuous browser journey. A short edit over the real AgentCore wait is
-   permitted but no longer wanted — see 0:52. Switching to a different run or workspace
+4. A fresh reset opens on **setup**, not on somebody's home screen. Pool knows nothing
+   about you: no name, no card, no declarations. That is the opening.
+5. Decide the name you will type. Any name works and none is special — the product is
+   not built around one.
+6. Keep one continuous browser journey. A short edit over the real AgentCore wait is
+   permitted but no longer wanted — see 1:04. Switching to a different run or workspace
    is never permitted.
 
-## 0:00–0:20 — Tell Pool something you buy
+## 0:00–0:10 — Who is using this
 
-**Product → Home.**
+**A brand-new workspace.** Pool opens on *What should Pool call you?*
 
-Rosa's home screen opens on one instruction and one box: *Anything else you buy
-regularly?* Type `vanilla whey`.
+Type a name. That is the first thing to say out loud, because it is the thing the old
+build got wrong: this is your account, not a seeded persona you have been cast as.
 
-Four products appear with their actual photographs. Pick the Optimum Nutrition tub. This
-is the whole point of the opening — she said what she buys in her own words, recognised
-the thing, and tapped it. She never saw a product code, a supplier, or a minimum order.
+## 0:10–0:22 — Where you are, honestly
+
+**Continue.** *Where are you?*
+
+Two sentences, and do not rush the second one. Pool is local — the people it finds have
+to be close enough to share a pickup. And this demo's community is invented, so Pool has
+not asked the browser for a position and has not guessed one. Whoever is watching, in
+whatever city, is exploring Demo University from the inside.
+
+That is worth twelve seconds because it is the one place a demo like this normally lies.
+
+## 0:22–0:42 — What you buy
+
+**Continue.** Type `vanilla whey`.
+
+Four products appear with their actual photographs. Pick the Optimum Nutrition tub, then
+answer the only two questions Pool ever needs: how many, and how often. Read the line
+under the date aloud — *Pool may buy any time in the 14 days before that, if it saves
+money* — because that window is the permission the coordinator uses later.
 
 Say once, over the results: these are real products from a public catalogue; the supplier
 prices later in the demo are invented, and the app says so on its About page.
 
-## 0:20–0:36 — The two questions that matter
+## 0:42–0:52 — How much Pool may do
 
-**The form opens on the chosen product.**
+**Continue.** Choose **Ask me first**, add the test card, finish.
 
-Two tubs, about every 30 days, needed in a fortnight — and the one line that does real
-work: *Pool may buy any time in the 14 days before that, if it saves money.* That window
-is permission, and it is the exact constraint the coordinator consults minutes later when
-it pulls two other people forward.
+Both parts in one breath: the card is simulated and no real money exists, and *ask me
+first* is why Pool will stop and put a question in front of you later rather than
+spending on your behalf. Then setup is over — four screens, no group created, nobody
+invited.
 
-Open **Fine-tune when Pool may act on this need** once to show the savings floor and spend
-ceiling exist and are already set. Close it again. Save.
+## 0:52–1:04 — Thirty-two declarations, no groups
 
-Say plainly: that saved nothing to anybody's card, created no group, and invited nobody.
+**Needs → `Show all 32`, then back to Home.**
 
-## 0:36–0:48 — Thirty-three declarations, no groups
+Your declaration is now one row among thirty-two, made by twenty-four people who have
+never spoken to each other and cannot see each other's lists. Land on Home's convergence
+figure and say the one line: nobody chose the same week, their restocks did.
 
-**Needs → `Show all 33`.**
+Two beats merged into one on purpose — the table and the figure make the same point, and
+setup has already spent the audience's patience for premise.
 
-Rosa's new declaration is now one row among thirty-three, made by twenty-four people who
-have never spoken to each other. This is the premise, and it is the one thing the
-interface cannot say in a sentence.
-
-## 0:48–0:56 — Independent latent demand
-
-**Go to Home.**
-
-The convergence figure, and one line: nobody chose the same week, their restocks did.
-Do not read the expanded arithmetic aloud; it is behind a disclosure for that reason.
-
-## 0:56–1:14 — One live discovery run
+## 1:04–1:22 — One live discovery run
 
 **Click `Run Pool now` exactly once.**
 
@@ -84,7 +92,7 @@ that is the strongest AWS evidence in the recording, and cutting it throws that 
 
 Do not open Showcase's live page and do not press `Run again` later.
 
-## 1:14–1:34 — The resulting pool, from her side
+## 1:22–1:42 — The resulting pool, from your side
 
 **Stay on Home.**
 
@@ -95,7 +103,7 @@ fulfiller's pay is part of the price**, which is the invariant, not a missing nu
 The pool exists because the live coordinator created it, not because the browser drew a
 result.
 
-## 1:34–1:54 — Host first, then final terms
+## 1:42–2:02 — Host first, then final terms
 
 **Demo University drawer → Gio accepts the fulfilment job → Let Pool work the queue.**
 
@@ -103,7 +111,7 @@ Offering to host did not claim the job: Pool ranked candidates and offered it to
 eligible one. Only after acceptance can host compensation enter the exact buyer price,
 which is why the estimate above was labelled an estimate.
 
-## 1:54–2:12 — The one question, and why it was asked
+## 2:02–2:20 — The one question, and why it was asked
 
 **Home.**
 
@@ -113,7 +121,7 @@ words: *member is on Ask Me — commitment requires explicit approval*. Answer i
 Then point at the strip below: **things Pool did on its own**, **times it had to ask a
 person**. Eight of the ten buyers were never asked at all.
 
-## 2:12–2:36 — Exact economics
+## 2:20–2:44 — Exact economics
 
 **Pool → Economics.**
 
@@ -121,7 +129,7 @@ Show the final ledger: $861.44 all-in versus $1,127.76 retail, $266.32 collectiv
 savings, after merchandise, host compensation, processing and Pool's fee. Say that these
 figures are deterministic outputs. Payments and the supplier order are simulated.
 
-## 2:36–3:00 — Failure retained, recovery visible
+## 2:44–3:08 — Failure retained, recovery visible
 
 **Pool → People.**
 
@@ -130,7 +138,7 @@ the failed membership remains visible, and one compatible replacement restores e
 24 units. The per-buyer chips say which rows Pool decided for and which it asked. Do not
 say the failed buyer paid.
 
-## 3:00–3:24 — Lock, order, pickup
+## 3:08–3:32 — Lock, order, pickup
 
 Use only the existing drawer controls:
 
@@ -142,7 +150,7 @@ These controls call participant and scheduler endpoints; they do not set lifecyc
 directly. Authorizations, simulated captures, the simulated supplier order, and one-time
 handoff credentials remain distinct.
 
-## 3:24–3:40 — Fulfilment completes
+## 3:32–3:48 — Fulfilment completes
 
 **Pool → Fulfilment.**
 
@@ -150,7 +158,7 @@ Show 10/10 handoffs. `Show my code` issues the signed-in member's own one-time
 credential. Host compensation is earned and recorded in the simulated transaction; Pool
 does not claim that a payout rail exists.
 
-## 3:40–4:18 — Same-run technical proof
+## 3:48–4:26 — Same-run technical proof
 
 **Pool → Activity.** Briefly show the stored recovery event, then click
 **`Technical proof for this run`**.
@@ -171,7 +179,7 @@ One optional sentence, if the take has room: the deterministic planner and the m
 choose different tool paths through the same twelve tools, which is what makes the model
 load-bearing rather than decorative.
 
-## 4:18–4:45 — Both currencies, and the close
+## 4:26–4:53 — Both currencies, and the close
 
 **Community.**
 

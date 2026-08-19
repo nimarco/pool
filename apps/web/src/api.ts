@@ -249,8 +249,35 @@ export interface CommunityView {
   };
 }
 
+/** The local network a member coordinates inside, as onboarding presents it.
+ *
+ *  No coordinates: Pool never asks the browser for a position, and this demo's community
+ *  is invented, so the honest thing to show is the network's name and size rather than a
+ *  place on Earth. */
+export interface Place {
+  community_id: string;
+  community_name: string;
+  member_count: number;
+  pickup_site_count: number;
+  synthetic: boolean;
+}
+
+/** Who the app should present as "you", and what setup is outstanding.
+ *
+ *  Authoritative server state, not a browser preference: a reset has to be able to clear
+ *  it, and the name it carries is the one the activity feed and decision inbox use. */
+export interface Consumer {
+  household_id: string;
+  display_name: string;
+  onboarded: boolean;
+  has_payment_method: boolean;
+  autonomy_mode: string;
+  place: Place;
+}
+
 export interface AppState {
   workspace: string;
+  consumer: Consumer;
   community: CommunityView | null;
   pools: PoolView[];
   decisions: Decision[];
@@ -701,6 +728,18 @@ export const api = {
   state: () => request<AppState>("/api/state"),
   map: () => request<MapData>("/api/map"),
   needs: () => request<NeedsView>("/api/needs"),
+  /** Finish account setup. The household id is a server constant, so this can only ever
+   *  write the caller's own account. */
+  completeOnboarding: (displayName: string, autonomyMode: string) =>
+    post<Consumer>("/api/onboarding", {
+      display_name: displayName,
+      autonomy_mode: autonomyMode,
+    }),
+  /** Save a simulated payment method. Creates no charge and no hold. */
+  savePaymentMethod: (householdId: string) =>
+    post<{ ok: boolean; has_payment_method: boolean }>(
+      `/api/members/${householdId}/payment-method`,
+    ),
   /** Resolve free text into products a member might mean.
    *
    *  Ranked server-side against a bundled snapshot by a pure function: no model call,

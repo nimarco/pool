@@ -4122,3 +4122,121 @@ limits; the 0/0/1 household coverage probe; before/after of the Home first-use s
 `services/agent/pool/domain/models.py` · `services/agent/pool/services/{needs.py,demo.py}` ·
 `services/agent/pool/api/{app.py,public_demo.py}` · `apps/web/src/{product-search.tsx,products.ts,api.ts}` ·
 `apps/web/src/views/{home.tsx,needs.tsx,about.tsx}` · `services/agent/tests/test_catalog.py`
+
+---
+
+### #0038 — [2026-08-19] — Whose account is this?
+`[PRODUCT]` `[FRONTEND]` `[DOMAIN]` `[IDENTITY]` `[PRIVACY]`
+
+**Goal / user intent**
+The last consumer-entry problem. A visitor opened Pool and was silently cast as a seeded
+student: greeted as "Rosa N.", holding a card they never added, apparently buying paper
+towels they had never mentioned, with a dropdown of twenty-four invented people presented
+as the account model. Fine as operator scaffolding; wrong as a product. It also undercut
+the sentence the whole project rests on — *I tell Pool what I buy and Pool does the rest*
+— because it was never clear who "I" was.
+
+**Starting state**
+`#0037` had fixed *what* a member declares. This fixes *who* is declaring it.
+`DEFAULT_IDENTITY = { id: "hh_navarro", display_name: "Rosa N." }` was a constant compiled
+into `App.tsx`.
+
+**Decision**
+Four setup screens — who you are, where you are, what you buy, how much Pool may do — and
+a hard separation between the consumer and the operator's ability to act for synthetic
+participants.
+
+Underneath, deliberately small: exactly one household per workspace is *the consumer*, and
+onboarding writes a display name, an autonomy mode, a saved payment method and a
+completion timestamp onto it. The household **id never changes**, because matching,
+economics, case fitting and every asserted figure key off it.
+
+**Why**
+
+*Identity.* `display_name` was already presentational — grep proved it appears only in
+serializers and messages — so renaming the consumer's household is the whole mechanism. No
+new entity, no second source of truth, no auth system. That claim is now measured rather
+than argued: `test_the_display_name_cannot_change_a_single_number` runs the entire
+scenario with a name applied and compares every membership, every per-buyer cent and the
+complete economics against a run without one.
+
+*Location — the interesting one.* The obvious build is "Share my location". It was
+rejected, and not for effort. The deployed `Permissions-Policy` denies geolocation
+outright and this pass leaves that alone. The demo's community is an invented campus at
+invented coordinates, and a judge could be in any city; taking a real position and
+treating it as a room on that campus would be a lie about the exact thing location is
+*for*, while taking one only to discard it would be collecting a sensitive value for
+nothing. There is also a margin problem: the consumer sits 1.1 km from the pickup site the
+coordinator chooses, against a 1.6 km formation radius, so a location control that moved
+their coordinates could silently drop them out of their own pool.
+
+So the step asks the real question and collects nothing. It names the local network, shows
+what being in it is worth in real numbers off the server, and says plainly: *Pool has not
+asked your browser for your location and has not tried to guess it.* It is impossible to
+lie about a coordinate you never took, and the screen works identically from anywhere.
+
+*Payment, decided by measurement not preference.* The plan allowed deferring it. Removing
+the consumer's seeded card and running the scenario settled it: a member who reaches a
+final offer without a saved method becomes a **second** authorisation failure — twelve
+membership rows instead of eleven — quietly breaking the reconciliation the recovery story
+rests on. So payment belongs in setup, sharing the autonomy screen because "may Pool spend
+without asking" and "here is the money" are one question.
+
+**Implementation** — implemented and tested.
+- `Household.onboarded_at` (additive; `from_dict` already defaulted, so no migration).
+- `pool/services/onboarding.py` — `consumer_view`, `describe_place`, `complete_onboarding`.
+- `POST /api/onboarding`; `consumer` block on `/api/state`; `payment-method` and
+  `/api/onboarding` allowlisted (counts 42→43 total, 26→28 public).
+- Seed: the consumer household starts with a placeholder name, **no card, no needs**.
+- `apps/web/src/views/onboarding.tsx`; identity derived from server state; demo drawer
+  reframed to *Act as a synthetic participant* with a persistent "acting as" banner.
+
+**AWS / external services touched**
+None. **Cost-relevant activity:** $0 — no Bedrock, no AgentCore, no deploy.
+
+**Validation**
+- 794 Python tests (was 771), 70 web tests (was 58). `make qa` green.
+- Canonical scenario re-verified from state a human produced: **10 buyers, 11 membership
+  rows, 1 retained failure, 1 exact replacement, 24 funded / 24 purchased / 24 pickup
+  units, 2 cases, no surplus, $861.44 all-in vs $1127.76 retail.** Unchanged.
+- Full loop driven in the browser at 1512×804 and 390×844: fresh → setup → Home → act as a
+  synthetic participant → back to you → reset → setup again. No console errors, every
+  request same-origin.
+
+**Failures / dead ends**
+The good one. Adding `onboarded_at` to the scripted setup broke
+`test_the_deployed_store_and_the_local_store_produce_the_same_demo` — deterministically,
+in DynamoDB only. Cause: `onboard_consumer` read the household, called
+`setup_payment_method` (which writes the row), then wrote back its **stale local copy**,
+clobbering `payment_method_ref` to empty. `InMemoryRepository` hands back the *same
+object*, so the aliasing hid it completely; DynamoDB deserialises a fresh one, so it did
+not. The symptom was not an error — it was the consumer failing authorisation later and
+the pool ending with twelve rows.
+
+A store-parity test written for a one-cent ordering bug caught a read-modify-write race
+two passes later. That is the argument for testing the seam rather than the symptom.
+
+**What we learned**
+Two things worth writing up.
+
+Deciding by measurement beats deciding by taste: "should payment be in onboarding?" was
+answered by deleting the seeded card and reading the membership count, not by reasoning
+about friction.
+
+And the honest answer to a location-first product in a synthetic demo is not a better
+fallback — it is not asking. Every design that requested a position had to end by
+discarding it, and a permission prompt whose answer you throw away is worse than the
+question you never asked.
+
+**Article fodder**
+Article 1 and Article 3. The location decision is the strongest small example in the
+project of choosing truthfulness over a demo flourish, and it is falsifiable: the
+`Permissions-Policy` still denies geolocation, and a test asserts the setup screen never
+calls it.
+
+**Relevant commits / files**
+`services/agent/pool/services/onboarding.py` · `services/agent/pool/domain/models.py` ·
+`services/agent/pool/data/seed.py` · `services/agent/pool/services/demo.py` ·
+`services/agent/pool/api/{app.py,public_demo.py}` ·
+`apps/web/src/views/{onboarding.tsx,demo-panel.tsx,home.tsx}` · `apps/web/src/App.tsx` ·
+`services/agent/tests/test_onboarding.py` · `apps/web/src/views/onboarding.test.tsx`

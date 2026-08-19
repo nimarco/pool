@@ -14,6 +14,7 @@ import {
 import { BrandMark } from "./brand";
 import { IconArrowLeft, IconCross } from "./ui";
 import { About } from "./views/about";
+import { Onboarding } from "./views/onboarding";
 import { CommunityView } from "./views/community";
 import { DemoPanel, Identity } from "./views/demo-panel";
 import { Home } from "./views/home";
@@ -51,11 +52,11 @@ const NAV: { id: View; label: string }[] = [
   { id: "community", label: "Community" },
 ];
 
-/** Who the visitor is signed in as by default. Rosa is a member with two standing needs
- *  who joins the whey pool and — because one of her own rules does not clear — is one of
- *  the people Pool has to *ask* rather than decide for. That makes the first thing a
- *  judge sees a real question addressed to them, which is the product working. */
-const DEFAULT_IDENTITY: Identity = { id: "hh_navarro", display_name: "Rosa N." };
+/** Until the first state read lands, nobody. The consumer's identity is server state —
+ *  the account they set up during onboarding — rather than a constant compiled into the
+ *  app. It used to be a hardcoded seeded student, which is how a visitor ended up being
+ *  greeted by somebody else's name. */
+const NOBODY: Identity = { id: "", display_name: "" };
 
 export default function App() {
   const [view, setView] = useState<View>("home");
@@ -73,7 +74,9 @@ export default function App() {
   const [demoConfig, setDemoConfig] = useState<DemoConfig | null>(null);
   const [live, setLive] = useState<LiveAgentResult | null>(null);
   const [liveBusy, setLiveBusy] = useState(false);
-  const [identity, setIdentity] = useState<Identity>(DEFAULT_IDENTITY);
+  /** Set only when the operator is deliberately acting for a synthetic participant.
+   *  Null means "me", and "me" is whatever the server says the consumer account is. */
+  const [actingAs, setActingAs] = useState<Identity | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   /** Which tab (and which deep view within Activity) a pool record should open on, so
    *  "see it run on AWS" can land on the evidence rather than on the front page of a
@@ -104,6 +107,19 @@ export default function App() {
     const label = NAV.find((item) => item.id === view)?.label;
     document.title = label && view !== "home" ? `${label} — Pool` : "Pool";
   }, [view]);
+
+  /** Who the app is acting as right now.
+   *
+   *  Normally the consumer's own account. When the operator has deliberately stepped
+   *  into a synthetic participant, that participant — and the shell says so, loudly,
+   *  because acting as somebody else should never be a state you are in by accident. */
+  const consumer = state?.consumer ?? null;
+  const identity: Identity =
+    actingAs ??
+    (consumer && consumer.household_id
+      ? { id: consumer.household_id, display_name: consumer.display_name }
+      : NOBODY);
+  const needsOnboarding = Boolean(consumer && !consumer.onboarded);
 
   const navigate = useCallback((next: View) => {
     setShowcase(null);
@@ -348,6 +364,11 @@ export default function App() {
                 </button>
               ))}
             </nav>
+          ) : needsOnboarding ? (
+            /* Nothing behind these links exists for somebody who has not finished
+               setting up, and offering navigation into an account that is not ready yet
+               is how a setup flow starts feeling optional. */
+            <span className="nav-setup small muted">Setting up</span>
           ) : (
             <nav className="nav" aria-label="Sections">
               {NAV.map((item) => (
@@ -388,6 +409,21 @@ export default function App() {
 
       <main className="main wrap" id="main">
         <div className="stack">
+          {/* Stepping into a synthetic participant is operator work, and it is the one
+              state where every screen below is answering somebody else's questions.
+              Saying so continuously beats saying it once in a drawer nobody has open. */}
+          {actingAs ? (
+            <div className="acting-banner" role="status">
+              <span>
+                Demo controls — you are acting as <strong>{actingAs.display_name}</strong>,
+                not as yourself.
+              </span>
+              <span className="spacer" />
+              <button className="btn btn-sm" onClick={() => setActingAs(null)}>
+                Back to you
+              </button>
+            </div>
+          ) : null}
           {error ? (
             <div className="banner banner-stop">
               <span>{error}</span>
@@ -493,7 +529,23 @@ export default function App() {
             <p className="empty">Loading…</p>
           ) : null}
 
-          {!showcase && view === "home" && state ? (
+          {/* Setup comes before the product, and replaces it rather than sitting beside
+              it — a half-configured account looking at a working Home is how the old
+              build ended up greeting people by a stranger's name. Showcase mode skips
+              it: that is the guided walkthrough, and it is explicitly not the consumer
+              experience. */}
+          {!showcase && needsOnboarding && consumer ? (
+            <Onboarding
+              consumer={consumer}
+              onDone={async () => {
+                setActingAs(null);
+                await refresh();
+                navigate("home");
+              }}
+            />
+          ) : null}
+
+          {!showcase && !needsOnboarding && view === "home" && state ? (
             <Home
               state={state}
               identity={identity}
@@ -514,7 +566,7 @@ export default function App() {
             />
           ) : null}
 
-          {!showcase && view === "pools" && state ? (
+          {!showcase && !needsOnboarding && view === "pools" && state ? (
             <Pools
               state={state}
               onOpen={openPoolDetail}
@@ -525,7 +577,7 @@ export default function App() {
             />
           ) : null}
 
-          {!showcase && view === "needs" ? (
+          {!showcase && !needsOnboarding && view === "needs" ? (
             <Needs
               identity={identity}
               communityName={communityName}
@@ -539,7 +591,7 @@ export default function App() {
             />
           ) : null}
 
-          {!showcase && view === "community" && state ? (
+          {!showcase && !needsOnboarding && view === "community" && state ? (
             <CommunityView
               state={state}
               map={map}
@@ -550,7 +602,7 @@ export default function App() {
             />
           ) : null}
 
-          {!showcase && view === "operations" ? (
+          {!showcase && !needsOnboarding && view === "operations" ? (
             <OperationsView
               hostPoolId={
                 state?.pools.find(
@@ -564,7 +616,7 @@ export default function App() {
             />
           ) : null}
 
-          {!showcase && view === "about" ? (
+          {!showcase && !needsOnboarding && view === "about" ? (
             <About
               health={health}
               demoConfig={demoConfig}
@@ -579,7 +631,7 @@ export default function App() {
             />
           ) : null}
 
-          {!showcase && view === "pool" && openPool ? (
+          {!showcase && !needsOnboarding && view === "pool" && openPool ? (
             <PoolRecord
               pool={openPool}
               runs={state?.runs ?? []}
@@ -630,8 +682,9 @@ export default function App() {
         state={state}
         health={health}
         demoConfig={demoConfig}
-        identity={identity}
-        onIdentity={setIdentity}
+        consumer={consumer}
+        actingAs={actingAs}
+        onActAs={setActingAs}
         onReset={reset}
         onRefresh={refreshAll}
         onAbout={() => navigate("about")}

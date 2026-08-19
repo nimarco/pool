@@ -68,7 +68,7 @@ from ..domain.models import (
 from ..domain.money import bps_to_pct_str, format_cents
 from ..domain.state import IllegalTransition
 from ..domain.viability import ViabilityStage
-from ..services import communication, fulfillment, hosting
+from ..services import communication, fulfillment, hosting, onboarding
 from ..services import coordination as coord
 from ..services import needs as needs_service
 from ..services import payments as payment_service
@@ -661,6 +661,10 @@ def get_state(workspace: str = Query("demo")) -> dict[str, Any]:
             else None
         ),
         "pools": [_pool_view(ws, p) for p in r.list_pools(ws)],
+        # Who the client should present as "you", and whether setup is still outstanding.
+        # Served here rather than from its own route so a fresh workspace can be routed
+        # into onboarding on the first read the app already makes.
+        "consumer": onboarding.consumer_view(ctx),
         "decisions": decisions,
         "activity": [e.to_dict() for e in r.list_activity(ws, limit=80)],
         "metrics": coord.impact_metrics(ctx),
@@ -771,6 +775,35 @@ def search_products(
         # So the client can render the licence obligation next to what it obliges.
         "attribution": catalog.attribution().to_dict(),
     }
+
+
+class OnboardingRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=onboarding.MAX_NAME_LENGTH)
+    autonomy_mode: str = Field(max_length=20)
+
+
+@app.post("/api/onboarding")
+def complete_onboarding(
+    body: OnboardingRequest, workspace: str = Query("demo")
+) -> dict[str, Any]:
+    """Finish setting up the account of the person at the screen.
+
+    Writes a display name and an autonomy mode onto the one household that is *theirs*.
+    The household id is a server constant and is not accepted from the client, so this
+    cannot be pointed at a synthetic neighbour, and the name is presentational
+    everywhere — matching, economics and the state machine all key off the id, which
+    never changes.
+    """
+    ws = check_workspace(workspace)
+    ensure_seeded(ws)
+    try:
+        return onboarding.complete_onboarding(
+            ctx=ctx_for(ws),
+            display_name=body.display_name,
+            autonomy_mode=body.autonomy_mode,
+        )
+    except onboarding.OnboardingError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 class CustomProductRequest(BaseModel):
@@ -1566,7 +1599,19 @@ def scenario(workspace: str = Query("demo")) -> dict[str, Any]:
     # looking broken, so it holds the lease for the whole thing.
     with _public.workspace_mutation(ws, public_demo.WORKSPACE_BUSY):
         _public.spend_action(ws)
-        result = run_showcase(repo(), ws, settings=_settings, routing=_routing)
+        # Reseeding wipes the workspace, and that used to include the account the person
+        # at the screen had just set up — they would finish onboarding, replay the
+        # lifecycle to see it end to end, and be thrown back to "what should Pool call
+        # you?" with their own declaration gone. So the replay only starts from a clean
+        # fixture when there is nothing of theirs to lose.
+        me = onboarding.consumer_household(ctx_for(ws))
+        result = run_showcase(
+            repo(),
+            ws,
+            settings=_settings,
+            routing=_routing,
+            reseed=not (me and me.is_onboarded),
+        )
     return result.to_dict()
 
 

@@ -50,8 +50,9 @@ describe("demo truth labels", () => {
         state={null}
         health={health}
         demoConfig={config}
-        identity={{ id: "hh_navarro", display_name: "Rosa N." }}
-        onIdentity={() => {}}
+        consumer={null}
+        actingAs={null}
+        onActAs={() => {}}
         onReset={() => {}}
         onRefresh={async () => {}}
         onAbout={() => {}}

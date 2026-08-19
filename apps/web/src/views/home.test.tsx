@@ -122,6 +122,20 @@ const METRICS = {
 function appState(pools: PoolView[], decisions: Decision[] = []): AppState {
   return {
     workspace: "w_test",
+  consumer: {
+    household_id: "hh_navarro",
+    display_name: "Alex",
+    onboarded: true,
+    has_payment_method: true,
+    autonomy_mode: "ask_me",
+    place: {
+      community_id: "comm_demo_university",
+      community_name: "Demo University",
+      member_count: 24,
+      pickup_site_count: 4,
+      synthetic: true,
+    },
+  },
     community: null,
     pools,
     decisions,

@@ -24,7 +24,7 @@ from ..adapters.repository import Repository
 from ..adapters.routing import RoutingService
 from ..agent.coordinator import PoolCoordinator
 from ..config import Settings
-from ..data.seed import COMMUNITY_ID, seed
+from ..data.seed import COMMUNITY_ID, CONSUMER_HOUSEHOLD, seed
 from ..domain.models import (
     AllocationState,
     DecisionKind,
@@ -33,6 +33,7 @@ from ..domain.models import (
     ParticipationState,
     PaymentState,
     PoolStatus,
+    iso,
     parse_iso,
     utcnow,
 )
@@ -41,6 +42,7 @@ from ..domain.timing import evaluate_timing
 from . import communication, fulfillment, hosting
 from . import coordination as coord
 from . import needs as needs_service
+from . import payments as payment_service
 from .context import PoolContext
 
 #: The member who offers to host from inside the pool (§27, second source of hosts).
@@ -80,7 +82,7 @@ class ScenarioResult:
 #: makes a group order work. Nothing here is tuned to hit a threshold; they are simply
 #: what the seeded fixture's other students already look like, and the arithmetic lands
 #: where it lands (AGENTS.md §8).
-FLAGSHIP_MEMBER = "hh_navarro"
+FLAGSHIP_MEMBER = CONSUMER_HOUSEHOLD
 FLAGSHIP_PRODUCT = "prod_whey_vanilla"
 FLAGSHIP_QUANTITY = 2
 FLAGSHIP_CADENCE_DAYS = 40
@@ -93,8 +95,18 @@ FLAGSHIP_MIN_SAVINGS_PCT = 20
 FLAGSHIP_MAX_SPEND_CENTS = 9000
 
 
-def declare_flagship_need(ctx: PoolContext) -> Step:
-    """Make Rosa's standing declaration, unless she already made it herself.
+def onboard_consumer(ctx: PoolContext) -> Step:
+    """Set the consumer's account up the way the onboarding does, then declare.
+
+    The fixture seeds this household with nothing — no saved card, no declaration, no
+    completed setup — because a first-run member should not find Pool already believing
+    things about them. So an automated run has to do what a person does, through the same
+    services, or it starts from a state the product never produces.
+
+    The payment method is not decoration here. Without one this member's authorisation
+    fails at the final offer, and the scenario ends with *two* failed memberships instead
+    of one — twelve rows rather than eleven — quietly breaking the reconciliation the
+    whole recovery story rests on. Measured, not assumed.
 
     Idempotent on purpose. A judge watching the live demo declares this through the form
     a minute before pressing "run", and ``declare_need`` correctly refuses a second
@@ -116,6 +128,18 @@ def declare_flagship_need(ctx: PoolContext) -> Step:
     name = member.display_name if member else FLAGSHIP_MEMBER
     product = ctx.repo.get_product(ctx.ws, FLAGSHIP_PRODUCT)
 
+    # Whatever else happened, this member needs a saved method before Pool may ask them
+    # to authorise anything. Adding one creates no charge and no hold (§55).
+    if member is not None and not member.payment_method_ref:
+        payment_service.setup_payment_method(ctx=ctx, household_id=FLAGSHIP_MEMBER)
+        # Re-read, because that call wrote the row. The in-memory store hands back the
+        # *same object* every time, so a stale local copy silently stays correct there;
+        # DynamoDB deserialises a fresh one, and writing the pre-call copy back would put
+        # `payment_method_ref` to empty again — which does not fail loudly, it just makes
+        # this member's authorisation fail later and turns eleven membership rows into
+        # twelve. Found by the store-parity test, which exists for exactly this.
+        member = ctx.repo.get_household(ctx.ws, FLAGSHIP_MEMBER)
+
     if existing is not None:
         return Step(
             "member_declared_need",
@@ -132,6 +156,15 @@ def declare_flagship_need(ctx: PoolContext) -> Step:
                 "created_here": False,
             },
         )
+
+    # An automated replay has to leave the workspace in a state a person could actually
+    # be in. Half-set-up — holding a saved card while still being asked for a name — is
+    # not one of those, so the scripted path finishes setup too. It supplies no name: it
+    # is not a person, and inventing one on their behalf would be worse than the
+    # placeholder the interface already knows how to keep quiet about.
+    if member is not None and not member.is_onboarded:
+        member.onboarded_at = iso(utcnow())
+        ctx.repo.put_household(ctx.ws, member)
 
     today = ctx.now.date()
     need = needs_service.declare_need(
@@ -250,7 +283,7 @@ def run_showcase(
     #    ``declare_need`` service, with the real validation, writing the real row the
     #    coordinator later reads — so the automated showcase and a human using the form
     #    start from the same premise instead of two that merely resemble each other.
-    steps.append(declare_flagship_need(ctx))
+    steps.append(onboard_consumer(ctx))
 
     # 1. Background scan. The agent picks the product and the pickup site itself, and
     #    decides whether flexible future demand is worth investigating.

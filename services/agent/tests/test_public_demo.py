@@ -101,7 +101,6 @@ DENIED = [
     ("POST", "/api/pools/pool_1/announce/hh_okafor"),
     ("POST", "/api/pools/pool_1/exception/hh_okafor"),
     ("POST", "/api/pools/pool_1/issues/hh_okafor"),
-    ("POST", "/api/members/hh_okafor/payment-method"),
     ("POST", "/api/threads/th_1/messages/hh_okafor"),
     ("GET", "/api/threads/th_1"),
 ]
@@ -116,6 +115,11 @@ PARTICIPANT_ACTIONS = [
     ("POST", "/api/pools/pool_1/withdraw/hh_okafor"),
     ("POST", "/api/pools/pool_1/open-distribution"),
     ("GET", "/api/members/hh_okafor"),
+    # Saving a simulated payment method. Opened when onboarding started asking the person
+    # at the screen for one — a member who reaches a final offer without a saved method
+    # becomes an authorisation failure, which is a worse outcome than the endpoint being
+    # reachable. It creates no charge and no hold.
+    ("POST", "/api/members/hh_okafor/payment-method"),
 ]
 
 
@@ -1255,7 +1259,7 @@ def test_the_published_endpoint_counts_are_the_real_ones():
 
     public = {e for e in endpoints if reachable(*e)}
 
-    assert len(endpoints) == 42, f"the full API is now {len(endpoints)} endpoints"
-    assert len(public) == 26, f"judge mode now exposes {len(public)} endpoints"
+    assert len(endpoints) == 43, f"the full API is now {len(endpoints)} endpoints"
+    assert len(public) == 28, f"judge mode now exposes {len(public)} endpoints"
     # The reduction is the point: most of the application is not on the public URL.
     assert len(public) < len(endpoints) / 1.5

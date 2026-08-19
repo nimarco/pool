@@ -591,6 +591,18 @@ class Household:
     #: Opaque provider reference for a saved payment method (§55). Not a card number.
     payment_method_ref: str = ""
     synthetic: bool = True
+    #: When the person using this account finished setting it up, if they ever did.
+    #:
+    #: Exactly one household per workspace is the *consumer* — the person actually at
+    #: the screen — and everybody else is a synthetic neighbour who exists so there is
+    #: something to coordinate with. This is what tells them apart, and it lives here
+    #: rather than in the browser for two reasons: the display name and payment state it
+    #: gates are authoritative server state, and a demo reset has to be able to clear it.
+    onboarded_at: str = ""
+
+    @property
+    def is_onboarded(self) -> bool:
+        return bool(self.onboarded_at)
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -609,6 +621,7 @@ class Household:
             contact_email=d.get("contact_email", ""),
             payment_method_ref=d.get("payment_method_ref", ""),
             synthetic=bool(d.get("synthetic", True)),
+            onboarded_at=d.get("onboarded_at", ""),
         )
 
 

@@ -296,9 +296,22 @@ _MEMBERS: list[tuple] = [
     ("hh_soderberg",  "Elin S.",     0.0048, -0.0161, AutonomyMode.SMART_JOIN, 18,  9000, 18),
 ]
 
+#: The one household a real person actually uses. Everybody else in this fixture is a
+#: synthetic neighbour who exists so there is something to coordinate with.
+#:
+#: It is seeded **empty** — no saved card, no whey declaration, no completed setup — so a
+#: fresh workspace has nothing about "you" that you did not put there yourself. Its
+#: display name is a placeholder the onboarding overwrites; the id never changes, because
+#: matching, economics and every asserted figure in the scenario key off it.
+CONSUMER_HOUSEHOLD = "hh_navarro"
+CONSUMER_PLACEHOLDER_NAME = "You"
+
 #: Members who set up a saved payment method. Everyone in the showcase ring has one;
 #: one of them has a card that will decline, which is how the recovery branch is real.
-_NO_PAYMENT_METHOD = {"hh_moreau"}
+#: The consumer is here because they add their own during onboarding — and if they did
+#: not, they would become a *second* authorisation failure and the scenario's
+#: ten-buyers/eleven-memberships reconciliation would stop being true.
+_NO_PAYMENT_METHOD = {"hh_moreau", CONSUMER_HOUSEHOLD}
 #: Pia is in the inner ring with current demand, so she is reliably selected into the
 #: showcase pool — which is what makes the payment-failure branch fire every run instead
 #: of only when the geometry happens to include her.
@@ -316,6 +329,8 @@ def _zone(dlat: float, dlon: float) -> str:
 def build_households() -> list[Household]:
     out: list[Household] = []
     for hid, name, dlat, dlon, mode, min_pct, max_spend, max_travel in _MEMBERS:
+        if hid == CONSUMER_HOUSEHOLD:
+            name = CONSUMER_PLACEHOLDER_NAME
         if hid in _NO_PAYMENT_METHOD:
             method = ""
         elif hid in _DECLINING_CARD:
@@ -448,7 +463,11 @@ _NEEDS: list[tuple] = [
 
     # --- Paper towels: demand exists, but never enough to clear the minimum.
     ("need_towels_okafor",   "hh_okafor",     "prod_paper_towels", 2, 30, 14, 14,  7, 20, 9000),
-    ("need_towels_navarro",  "hh_navarro",    "prod_paper_towels", 2, 30, 15, 15,  7, 20, 9000),
+    # The consumer household declares nothing here. It used to hold a paper-towel need so
+    # the account "did not look empty", which stopped making sense the moment onboarding
+    # existed: a first-run member would open Pool and find Pool already believed they buy
+    # paper towels. Nothing is lost — this product exists to show demand that *cannot*
+    # reach a supplier minimum, and 4 units misses a 48-unit minimum exactly as 6 did.
     ("need_towels_castellanos", "hh_castellanos", "prod_paper_towels", 2, 35, 16, 16, 8, 18, 9500),
 ]
 

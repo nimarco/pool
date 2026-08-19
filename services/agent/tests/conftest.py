@@ -34,7 +34,7 @@ from pool.domain.models import (
     utcnow,
 )
 from pool.services.context import PoolContext
-from pool.services.demo import declare_flagship_need
+from pool.services.demo import onboard_consumer
 
 WS = "test"
 COMM = "comm_test"
@@ -110,7 +110,7 @@ def declared_ctx(seeded_ctx) -> PoolContext:
     create by using the product — rather than from a fixture row that quietly stood in
     for them.
     """
-    declare_flagship_need(seeded_ctx)
+    onboard_consumer(seeded_ctx)
     return seeded_ctx
 
 

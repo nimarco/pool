@@ -521,11 +521,13 @@ export function Home({
         </section>
       ))}
 
-      {/* Before any pool exists, the member's own job comes first and the coordinator's
-          comes second. A cold visitor previously landed on "24 members declared 33
-          standing needs" above a button marked *Find opportunities*, and had to work out
-          from a diagram what they were meant to do. The order is the fix. */}
-      {!pool ? <FirstUseCard onStartNeed={onStartNeed} /> : null}
+      {/* Only for an account that has told Pool nothing yet.
+          Setting up now ends with the member declaring something, so leading Home with
+          "tell Pool what you buy" would ask again, thirty seconds later, for what they
+          just did — a second onboarding wearing the product's clothes. Once they have a
+          declaration the coordinator's card leads instead, and adding another lives with
+          the rest of their needs further down where it belongs. */}
+      {!pool && mine.length === 0 ? <FirstUseCard onStartNeed={onStartNeed} /> : null}
 
       {pool ? (
         <OpportunityCard

@@ -20,9 +20,13 @@ cannot create it.
 **<https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/>**
 
 No account, no signup, no credentials, no configuration. You land inside Demo University
-as one of its members. Press **Find opportunities** and Pool's coordinator goes looking
-for overlapping demand; when it finds some, open the pool it formed and drive the rest —
-the host answering, a card being declined, the repair, the order, the handover — from the
+as one of its members. Start by telling Pool something you buy — type `vanilla whey` and
+pick the tub you recognise. That standing declaration is the entire user input of the
+product; nothing about it creates a group or invites anybody.
+
+Then press **Run Pool now** and the coordinator goes looking for overlapping demand it was
+never told about. When it finds some, open the pool it formed and drive the rest — the
+host answering, a card being declined, the repair, the order, the handover — from the
 **Demo controls** drawer, which acts for the other synthetic participants.
 
 Then, on that same pool's **Activity** tab, open **Technical proof for this run**. It
@@ -105,7 +109,7 @@ make demo        # the full lifecycle end to end, printed as a transcript
 make dev         # API on :8000, web on :5173
 ```
 
-Then open <http://localhost:5173> and press **Find opportunities**.
+Then open <http://localhost:5173>, add something you buy, and press **Run Pool now**.
 
 `make demo-local` runs the same app in **judge mode** — the reduced configuration the
 public demo deploys in, served from a single origin on :8000.
@@ -151,7 +155,7 @@ both the web app and a twenty-four-endpoint API, plus one DynamoDB table.
 ```
 browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
                                              ├─ the built SPA (same origin, no CORS)
-                                             ├─ 24 allowlisted API paths
+                                             ├─ 26 allowlisted API paths
                                              ├─ DynamoDB — this session only, 24 h TTL
                                              └─ InvokeAgentRuntime — bound to this session
                                                        │
@@ -170,7 +174,7 @@ What judge mode changes, and why each one matters:
 
 | Reduction | Why |
 | --- | --- |
-| 24 of 40 endpoints exist; the rest 404 | Supplier-offer mutation, the operator pickup override, the payment webhook, and direct `lock`/`purchase` calls have no business on an anonymous URL |
+| 26 of 42 endpoints exist; the rest 404 | Supplier-offer mutation, the operator pickup override, the payment webhook, and direct `lock`/`purchase` calls have no business on an anonymous URL |
 | **No prompt surface.** The client sends an action *name*; the server owns the prompt | `coordinator.run(instruction=…)` replaces the entire run prompt — forwarding a client string would let a stranger write the agent's instructions |
 | Per-session and per-day caps on every action that costs anything | An anonymous URL is a cost surface before it is a demo |
 | One session per visitor, isolated by DynamoDB partition, expiring in 24 h | Two judges cannot see or corrupt each other's demo |
@@ -434,6 +438,8 @@ no background schedule exists there.
 | Payments | `LocalSimulatedPaymentProvider` | Stripe **TEST** provider (refuses non-test keys) |
 | Purchase | `SimulatedPurchaseExecutor` — every record flagged synthetic | A merchant-of-record decision, not a code change |
 | Community | Demo University, entirely invented | A real Community with real verification |
+| Product identity | **Real.** A dated Open Food Facts snapshot, bundled | Widen the snapshot; add first-party photography |
+| Supplier offers | Invented — price, case size, minimum | Operator-verified quotes (`ManualVerifiedOfferProvider` exists) |
 
 The offline planner replaces **the LLM and only the LLM**. The Strands event loop, the
 tools, the domain maths, the state machine, the policy engine, the payment state machine,
@@ -445,6 +451,20 @@ records `model_provider`, and the UI shows it.
 
 **Not real, and labelled as such everywhere:** the Community, the members, the suppliers,
 the offers, the money, and the purchase. No goods move. No traction is claimed.
+
+**Real, because it costs nothing to be:** the products themselves. A member types
+`vanilla whey` and picks a tub they recognise, with the actual photograph. That comes from
+a curated Open Food Facts snapshot committed to this repository — 294 products, bundled
+rather than fetched, so the first interaction in the product works with the network
+unplugged and ranks identically on the tenth rehearsal as on the first.
+
+The line between those two paragraphs is the one to hold. A real brand beside an invented
+wholesale price could imply a relationship that does not exist, so the catalogue supplies
+**identity only** — name, brand, flavour, photograph — and never a price, a case size or a
+supplier minimum. Those stay curated, and the six products Pool quotes a synthetic price
+for deliberately publish **no barcode**, because a barcode names one specific retail
+package and Pool's case structure was invented for the scenario. Details and licence
+obligations: [`services/agent/pool/data/CATALOG_LICENSE.md`](services/agent/pool/data/CATALOG_LICENSE.md).
 
 ---
 
@@ -550,4 +570,11 @@ docs/              architecture, pilot readiness, thesis, demo script, scorecard
 
 ## Licence
 
-MIT — see [`LICENSE`](LICENSE).
+MIT — see [`LICENSE`](LICENSE) — with one deliberate exception.
+
+The bundled product catalogue (`services/agent/pool/data/catalog.json` and the images in
+`apps/web/src/assets/products/`) is a curated subset of Open Food Facts and its sister
+projects, used under **ODbL 1.0** with product photographs under **CC-BY-SA 4.0**. It is
+kept in its own files so that boundary is unambiguous, and the attribution the licence
+requires is rendered in the app under *About → Product data and credits*. See
+[`services/agent/pool/data/CATALOG_LICENSE.md`](services/agent/pool/data/CATALOG_LICENSE.md).

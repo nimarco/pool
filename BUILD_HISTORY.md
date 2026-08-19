@@ -3983,3 +3983,142 @@ in ordinary case.
 `apps/web/src/labels.ts`, `apps/web/src/api.ts`, `apps/web/src/brand.tsx`,
 `apps/web/src/styles.css`, `apps/web/src/App.tsx`, `apps/web/src/ui.test.tsx`,
 `docs/DEMO_SCRIPT.md`, `README.md`.
+
+---
+
+### #0037 — [2026-08-19] — A real product catalogue, and the boundary that keeps it honest
+`[PRODUCT]` `[FRONTEND]` `[DOMAIN]` `[DATA]` `[LICENSING]`
+
+**Goal / user intent**
+Fix the actual first-use experience. A cold visitor could open Pool, see "24 members
+declared 33 standing needs" above a button marked *Find opportunities*, and have no idea
+what they were supposed to do. The one thing the product asks of a person — say what you
+buy — was a `<select>` over six invented products (Northfield, Voltside, Clearwash).
+
+**Starting state**
+`Product` / `Offer` / `substitution` / `economics` were well-separated and heavily tested.
+The missing piece was narrow and specific: **no layer existed between free text and a
+`product_id`.** Two earlier passes established this (`docs/CATALOG_RESEARCH.md`); this
+entry is the implementation.
+
+**Decision**
+Add a consumer identity + resolution layer *above* `product_id`, and change nothing
+beneath it. Concretely:
+
+- A curated 294-product snapshot of Open Food Facts (plus Open Beauty/Products Facts),
+  committed as `pool/data/catalog.json` with 289 committed images.
+- Search is SQLite-free: an in-process pure function over that snapshot, ranked
+  deterministically. No index server, no vector store, no model call.
+- `Product` gained optional identity fields (`gtin`, `image_ref`, `synonyms`,
+  `display_size`, `source`, …). `from_dict` already defaulted every non-core field, so
+  **zero data migration** was required.
+- Rosa's flagship whey declaration was removed from the seed. She makes it herself — in
+  the form, or in the scripted showcase, both through the real `declare_need` service.
+
+**Why**
+Three findings from the research drove every one of those choices.
+
+*The API cannot be a dependency.* Open Food Facts documents 10 searches/min and warns
+against using search for autocomplete. In practice it returned **HTTP 503 repeatedly at
+~8.5 req/min** while this catalogue was being built — the build script needed exponential
+backoff and five retries to get through some categories. A demo whose first interaction
+depends on that breaks in front of judges. Hence: bundled snapshot, and a test that
+asserts search makes no socket call.
+
+*Identity is not structure.* Sampling US protein powders returned package sizes of
+`"43.2 oz ("`, `""`, `"80 x 31g"`, `"I tablesp"` and `"30.5 g"` (a serving, not a package)
+— seven formats in eight records. The real US Gold Standard barcode returns a correct
+name, brand and photograph with **no quantity at all**. Pool's economics live entirely in
+package structure, so the catalogue supplies identity and nothing else; `display_size` is
+a string for humans and nothing multiplies it.
+
+*Household goods have no open catalogue.* Probing Open Products Facts for US rows
+returned **0 laundry detergents, 0 toilet papers, 1 paper towel**. Those five products are
+curated by hand and carry no brand — inventing one would put a fictional brand beside two
+hundred real ones. They render with the category fallback tile, which is also how that
+path gets exercised for real rather than only in a test.
+
+**Implementation** — implemented and tested.
+
+- `scripts/build_catalog.py` — the offline builder. Cached, resumable, backoff-aware.
+- `pool/data/catalog.py` — load, rank, materialise. Four `lru_cache`s and a `reset_cache`.
+- `pool/data/catalog.json` + `apps/web/src/assets/products/*.jpg` (294 rows, 289 images,
+  2.6 MB) + `pool/data/CATALOG_LICENSE.md`.
+- `GET /api/products/search`, `POST /api/products/custom`; both added to the public
+  allowlist (counts moved 40→42 total, 24→26 public).
+- `apps/web/src/product-search.tsx`, `products.ts`; Needs rebuilt as product-first;
+  Home leads with the member's action instead of the coordinator's.
+- `services/demo.py: declare_flagship_need()` — idempotent, shared with
+  `scripts/recovery_scenario.py`.
+
+**AWS / external services touched**
+None at runtime. The build script fetched Open Food Facts from a laptop, once.
+
+**Cost-relevant activity**
+$0. No Bedrock, no AgentCore, no deployment. The catalogue costs nothing to serve because
+it is a file, and search costs nothing because it is a function.
+
+**Validation**
+- 770 Python tests pass (was 734; +36, of which 32 are the new `test_catalog.py`).
+- 57 web tests pass (was 48).
+- `make qa` green: lint, typecheck, both suites, production build, secret scan.
+- Canonical end state re-audited directly from `run_showcase`: **10 buyers, 11 membership
+  rows, 1 `authorization_failed` retained for audit, 1 exact replacement, 24 funded units,
+  24 purchased, 2 cases, $756.00, no surplus.** Unchanged.
+- Determinism: five full scenario runs with a fresh random `need_id` each time produce one
+  distinct outcome signature.
+- Visual QA at 1512×804 and 390×844: search, selection, save, no-result, completed pool.
+  Zero console errors; **every network request is same-origin**.
+
+**Failures / dead ends**
+- First pinned `0748927028669` as the vanilla whey. It is Double Rich Chocolate. Caught by
+  looking the barcode up rather than trusting the guess; the vanilla product with a usable
+  photograph turned out to be a different SKU entirely.
+- Wrote a `_JUNK` regex containing literal control characters, which made the build script
+  unparseable ("source code cannot contain null bytes").
+- The first `ProductCard` put the click handler on a `<button>` nested inside
+  `role="option"`. Invalid ARIA, and the tests caught it as a real bug: clicking the option
+  did nothing.
+- `test_catalog.py` cleared three of the module's four caches, so the missing-file test
+  silently poisoned every later search assertion. Fixed by giving the module a
+  `reset_cache()` that knows about all four.
+- Vite inlined 12 sub-4 kB product images as `data:` URIs, which quietly falsified the CSP
+  comment claiming `data:` existed "for exactly one thing: the inline SVG favicon". Set
+  `assetsInlineLimit: 0` rather than let a security comment drift — and the bundle got
+  smaller anyway (368 K → 312 K; 137 K → 94 K gzipped).
+
+**What we learned**
+The sharpest lesson is the barcode one. Pool holds a *synthetic* quote for the six seeded
+products — a 5 lb tub, twelve to a case. The Open Food Facts record whose photograph makes
+the product recognisable is a specific retail SKU, and the vanilla one is a 24.05 oz tub.
+Publishing that barcode beside an invented case structure would assert a correspondence
+that does not exist, and a barcode is exactly the field a careful judge would check. So
+the rule became: **a product Pool quotes a synthetic price for is identified at the level
+that is true — brand, product line, flavour, photograph — and claims no SKU.** Catalogue
+products Pool has no offer for carry their full identity, barcode included, because
+nothing there can contradict them.
+
+Second lesson: making the product feel real made the truth boundary *sharper*, not
+blurrier. "Synthetic community and catalogue" was adequate when everything was invented.
+With Optimum Nutrition on screen it is not, and About now says which specific things are
+invented — every supplier price, case size and minimum — and that no manufacturer has any
+involvement.
+
+**Article fodder**
+Article 1 and the demo. The demo opening is now a causal chain a judge can watch rather
+than a dashboard they have to be talked through: *she types two words → recognises a tub →
+taps it → answers two questions → Pool finds seven strangers who need the same thing.*
+Also good Article 2 material on where a model belongs and where it does not: there is no
+LLM anywhere on the search path, and the reasons are cost, latency, determinism, and the
+fact that an LLM one step from choosing somebody's product is an LLM one step from
+choosing whose purchases are interchangeable.
+
+**Evidence worth preserving**
+The seven-formats-in-eight-records package-size sample; the 503s under documented rate
+limits; the 0/0/1 household coverage probe; before/after of the Home first-use screen.
+
+**Relevant commits / files**
+`scripts/build_catalog.py` · `services/agent/pool/data/{catalog.py,catalog.json,seed.py,CATALOG_LICENSE.md}` ·
+`services/agent/pool/domain/models.py` · `services/agent/pool/services/{needs.py,demo.py}` ·
+`services/agent/pool/api/{app.py,public_demo.py}` · `apps/web/src/{product-search.tsx,products.ts,api.ts}` ·
+`apps/web/src/views/{home.tsx,needs.tsx,about.tsx}` · `services/agent/tests/test_catalog.py`

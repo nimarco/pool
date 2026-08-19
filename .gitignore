@@ -165,3 +165,8 @@ desktop.ini
 cdk.out.test/
 cdk.out.demo/
 cdk.out.demotest/
+
+# Raw Open Food Facts responses cached by scripts/build_catalog.py. The catalogue it
+# produces is committed; these are only there so a rebuild does not hammer a
+# volunteer-run service.
+.catalog-cache/

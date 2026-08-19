@@ -44,7 +44,7 @@ from ..domain.models import (
     RunOutcome,
 )
 from ..services import coordination as coord
-from ..services import hosting
+from ..services import demo, hosting
 from ..services.context import PoolContext
 
 PRODUCT = "prod_whey_vanilla"
@@ -105,6 +105,12 @@ def build_pre_recovery_state(coordinator, repo, ws: str):
         purchaser=coordinator.purchaser,
         sourcing=coordinator.sourcing,
     )
+    # The same premise the showcase starts from: the fixture no longer seeds Rosa's whey
+    # declaration, so it is made here through the real service before anything is
+    # evaluated. Without it this pool forms from less demand, drops to the worse supplier
+    # tier, and nobody's Smart Join accepts the resulting price — so no authorisation is
+    # attempted, and the payment failure this scenario exists to exercise never happens.
+    demo.declare_flagship_need(ctx)
 
     assessment = coord.evaluate_opportunity(
         ctx=ctx, community_id=COMMUNITY_ID, product_id=PRODUCT, pickup_site_id=SITE

@@ -9,8 +9,8 @@ The line everything hangs off:
 
 The defining technical rule is equally simple:
 
-> **One live AgentCore invocation.** The `Find opportunities` run is the same stored run
-> shown later under `Technical proof for this run`. Never invoke the runtime again in the
+> **One live AgentCore invocation.** The `Run Pool now` run is the same stored run shown
+> later under `Technical proof for this run`. Never invoke the runtime again in the
 > recording.
 
 ## Before recording
@@ -19,48 +19,63 @@ The defining technical rule is equally simple:
 2. Use the deployed URL, open a fresh disposable workspace, and reset Demo University.
 3. Confirm the drawer says: discovery uses AgentCore / Bedrock; the lifecycle uses the
    deterministic planner; payments and supplier ordering are simulated.
-4. Leave the Product on **Needs**, signed in as Rosa.
+4. Leave the Product on **Home**, signed in as Rosa. A fresh reset gives her one standing
+   need (paper towels) and **no whey declaration** — she makes that one on camera, which is
+   the whole opening.
 5. Keep one continuous browser journey. A short edit over the real AgentCore wait is
    permitted but no longer wanted — see 0:52. Switching to a different run or workspace
    is never permitted.
 
-## 0:00–0:14 — The input is a recurring need
+## 0:00–0:20 — Tell Pool something you buy
 
-**Product → Needs.**
+**Product → Home.**
 
-Rosa has two standing declarations and there is nothing else on the screen. Establish only
-the product inversion: she states what she buys anyway. She does not create a group,
-invite anyone, or know who else wants it.
+Rosa's home screen opens on one instruction and one box: *Anything else you buy
+regularly?* Type `vanilla whey`.
 
-## 0:14–0:26 — Thirty-three declarations, no groups
+Four products appear with their actual photographs. Pick the Optimum Nutrition tub. This
+is the whole point of the opening — she said what she buys in her own words, recognised
+the thing, and tapped it. She never saw a product code, a supplier, or a minimum order.
+
+Say once, over the results: these are real products from a public catalogue; the supplier
+prices later in the demo are invented, and the app says so on its About page.
+
+## 0:20–0:36 — The two questions that matter
+
+**The form opens on the chosen product.**
+
+Two tubs, about every 30 days, needed in a fortnight — and the one line that does real
+work: *Pool may buy any time in the 14 days before that, if it saves money.* That window
+is permission, and it is the exact constraint the coordinator consults minutes later when
+it pulls two other people forward.
+
+Open **Fine-tune when Pool may act on this need** once to show the savings floor and spend
+ceiling exist and are already set. Close it again. Save.
+
+Say plainly: that saved nothing to anybody's card, created no group, and invited nobody.
+
+## 0:36–0:48 — Thirty-three declarations, no groups
 
 **Needs → `Show all 33`.**
 
-A table of independent declarations by twenty-four people. This is the premise, and it is
-the one thing the interface cannot say in a sentence.
+Rosa's new declaration is now one row among thirty-three, made by twenty-four people who
+have never spoken to each other. This is the premise, and it is the one thing the
+interface cannot say in a sentence.
 
-## 0:26–0:44 — Change one real constraint
-
-**Rosa's whey declaration → `Change` → set the days-early window → Save.**
-
-The days-early window is a primary field, not an advanced one, and it is the exact
-constraint the coordinator consults minutes later when it pulls two people forward. The
-saved declaration is re-read from the server, so the later opportunity answers current
-stored preferences rather than a pre-rendered scenario.
-
-If the shot needs it, open **Fine-tune when Pool may act on this need** once to show that
-the savings floor and spend ceiling exist and are already set. Close it again.
-
-## 0:44–0:52 — Independent latent demand
+## 0:48–0:56 — Independent latent demand
 
 **Go to Home.**
 
 The convergence figure, and one line: nobody chose the same week, their restocks did.
 Do not read the expanded arithmetic aloud; it is behind a disclosure for that reason.
 
-## 0:52–1:14 — One live discovery run
+## 0:56–1:14 — One live discovery run
 
-**Click `Find opportunities` exactly once.**
+**Click `Run Pool now` exactly once.**
+
+Say the honest version of this button, because the screen already does: in the real
+product Pool watches these declarations on the community's pool day; nothing is scheduled
+in the demo account, so the coordinator starts when you press it.
 
 Hold the wait. It names Amazon Bedrock AgentCore, names the region, runs a real elapsed
 clock, resolves the one thing the browser actually observed — that it sent the request —
@@ -184,7 +199,7 @@ End with the collective outcome, not feature inventory:
 
 ## Continuity rules
 
-- One workspace, one `Find opportunities` click, one live AgentCore invocation.
+- One workspace, one `Run Pool now` click, one live AgentCore invocation.
 - The real wait is content, not dead air. Hold it rather than cutting it; if the take
   must be shortened, a cut may not replace the run or its result.
 - Never say “deployed,” “paid,” “captured,” “final,” or “permission” more strongly than

@@ -438,7 +438,7 @@ export function CommunityView({
           </div>
           {state.pools.length === 0 ? (
             <Empty>
-              No pool yet. Use <strong>Find opportunities</strong> on Home to scan the
+              No pool yet. Use <strong>Run Pool now</strong> on Home to scan the
               community's standing needs.
             </Empty>
           ) : (

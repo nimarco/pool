@@ -27,6 +27,25 @@ def _run(repo: InMemoryRepository):
     return run_showcase(repo, WS)
 
 
+def _ctx(repo):
+    from pool.adapters.payments import LocalSimulatedPaymentProvider
+    from pool.adapters.purchase import SimulatedPurchaseExecutor
+    from pool.adapters.routing import CachingRouting, DeterministicRouting
+    from pool.adapters.sourcing import SyntheticCatalogProvider
+    from pool.domain.models import utcnow
+    from pool.services.context import PoolContext
+
+    return PoolContext(
+        repo=repo,
+        ws=WS,
+        routing=CachingRouting(DeterministicRouting(max_cells=100)),
+        payments=LocalSimulatedPaymentProvider(),
+        purchaser=SimulatedPurchaseExecutor(),
+        sourcing=SyntheticCatalogProvider(),
+        now=utcnow(),
+    )
+
+
 def _step(result, name: str) -> dict:
     return next(s.facts for s in result.steps if s.name == name)
 
@@ -37,6 +56,10 @@ def test_the_whole_lifecycle_completes(repo):
     names = [s.name for s in result.steps]
     assert names == [
         "seed",
+        # The scenario begins where the product begins: a member says what she buys.
+        # The fixture no longer seeds it, so this step is the declaration being made
+        # through the real service rather than a row appearing from nowhere.
+        "member_declared_need",
         "latent_demand_discovered",
         "host_candidates_evaluated",
         "host_accepted",
@@ -354,3 +377,113 @@ def test_the_activity_feed_tells_the_story_without_reasoning_text(repo):
     blob = str([e.to_dict() for e in repo.list_activity(WS, limit=200)])
     assert "@demo.invalid" not in blob
     assert result.ok
+
+
+def test_a_fresh_seed_does_not_declare_the_flagship_need_for_rosa(repo):
+    """The premise of the whole first-use flow.
+
+    Rosa is the account a visitor acts as. If her whey declaration were seeded, the demo
+    would open on a need nobody was shown creating — the pre-populated dashboard this
+    design exists to remove — and "Pool found something for you" would be a claim about a
+    row that appeared from nowhere.
+    """
+    from pool.data.seed import seed
+    from pool.services.demo import FLAGSHIP_MEMBER, FLAGSHIP_PRODUCT
+
+    seed(repo, WS)
+    hers = [
+        n
+        for n in repo.list_needs(WS)
+        if n.household_id == FLAGSHIP_MEMBER and n.product_id == FLAGSHIP_PRODUCT
+    ]
+    assert hers == [], "the fixture seeded the need the member is supposed to declare"
+
+    # She is still an account with history, not an empty onboarding screen.
+    assert [n for n in repo.list_needs(WS) if n.household_id == FLAGSHIP_MEMBER]
+
+
+def test_the_scenario_declares_it_through_the_real_service(repo):
+    """Scripted input, not a fabricated row: the same call the form makes."""
+    result = _run(repo)
+    facts = _step(result, "member_declared_need")
+    assert facts["created_here"] is True
+    assert facts["declared_by"] == "scenario"
+
+    stored = repo.get_need(WS, facts["need_id"])
+    assert stored is not None and stored.active
+    assert stored.product_id == facts["product_id"]
+    # The coordinator later reads this exact row.
+    assert any(m.need_id == stored.id for m in repo.list_memberships(WS, result.pool_id))
+
+
+def test_a_member_who_already_declared_is_not_declared_for_twice(repo):
+    """A judge declares this in the form a minute before pressing run.
+
+    ``declare_need`` correctly refuses a second active declaration for one product, so
+    the scripted path has to notice rather than fail — and must not create a duplicate,
+    which matching would count as demand that does not exist.
+    """
+    from datetime import date, timedelta
+
+    from pool.data.seed import COMMUNITY_ID, seed
+    from pool.services import needs as needs_service
+    from pool.services.demo import FLAGSHIP_MEMBER, FLAGSHIP_PRODUCT
+
+    seed(repo, WS)
+    ctx = _ctx(repo)
+    mine = needs_service.declare_need(
+        ctx=ctx,
+        community_id=COMMUNITY_ID,
+        data=needs_service.NeedInput(
+            household_id=FLAGSHIP_MEMBER,
+            product_id=FLAGSHIP_PRODUCT,
+            quantity=2,
+            cadence_days=40,
+            expected_next_need_date=date.today() + timedelta(days=11),
+            flexibility_days=11,
+            routine_lead_days=11,
+            min_savings_pct=20,
+            max_spend_cents=9000,
+        ),
+    )
+
+    result = run_showcase(repo, WS, reseed=False)
+    assert result.ok, result.failure
+    facts = _step(result, "member_declared_need")
+    assert facts["created_here"] is False
+    assert facts["need_id"] == mine.id
+
+    active = [
+        n
+        for n in repo.list_needs(WS)
+        if n.active and n.household_id == FLAGSHIP_MEMBER and n.product_id == FLAGSHIP_PRODUCT
+    ]
+    assert len(active) == 1, "the scenario created a duplicate declaration"
+
+
+def test_the_random_declaration_id_does_not_move_the_canonical_outcome(repo):
+    """``declare_need`` mints a uuid, and the matcher's last sort key is a need id.
+
+    No two selected candidates tie on the keys ahead of it today, but that is a property
+    of the fixture rather than a guarantee — so it is checked rather than assumed.
+    """
+    from pool.adapters.repository import InMemoryRepository
+
+    signatures = set()
+    for _ in range(5):
+        fresh = InMemoryRepository()
+        outcome = run_showcase(fresh, WS)
+        assert outcome.ok, outcome.failure
+        members = [
+            m
+            for m in fresh.list_memberships(WS, outcome.pool_id)
+            if m.state is ParticipationState.LOCKED
+        ]
+        signatures.add(
+            (
+                len(members),
+                sum(m.allocated_units for m in members),
+                tuple(sorted(m.household_id for m in members)),
+            )
+        )
+    assert len(signatures) == 1, f"the outcome varied across runs: {signatures}"

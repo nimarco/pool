@@ -86,15 +86,15 @@ def test_the_pool_lands_on_an_exact_case_boundary(seeded_ctx):
     assert packages.total_units >= packages.moq_units
 
 
-def test_permitted_future_demand_unlocks_the_better_supplier_tier(seeded_ctx):
+def test_permitted_future_demand_unlocks_the_better_supplier_tier(declared_ctx):
     """Current demand alone cannot reach the 24-unit tier; the pull-forward can (§24).
 
     Without it the pool falls back to a smaller, worse-priced tier — which is the
     honest outcome, not a failure — so the assertion is about which offer wins and how
     much the group actually saves.
     """
-    with_future = _assess(seeded_ctx)
-    without_future = _assess(seeded_ctx, include_future_demand=False)
+    with_future = _assess(declared_ctx)
+    without_future = _assess(declared_ctx, include_future_demand=False)
     assert with_future.viable and without_future.viable
     assert with_future.future_units > 0
     assert without_future.future_units == 0
@@ -208,34 +208,34 @@ def test_offering_to_host_does_not_claim_the_job(seeded_ctx):
     assert seeded_ctx.repo.get_host_assignment(WS, pool.id) is None
 
 
-def test_only_one_host_offer_is_outstanding_at_a_time(seeded_ctx):
-    pool, _ = _candidate_pool(seeded_ctx)
-    hosting.open_host_recruiting(ctx=seeded_ctx, pool_id=pool.id)
-    first = hosting.offer_to_next_host(ctx=seeded_ctx, pool_id=pool.id)
-    second = hosting.offer_to_next_host(ctx=seeded_ctx, pool_id=pool.id)
+def test_only_one_host_offer_is_outstanding_at_a_time(declared_ctx):
+    pool, _ = _candidate_pool(declared_ctx)
+    hosting.open_host_recruiting(ctx=declared_ctx, pool_id=pool.id)
+    first = hosting.offer_to_next_host(ctx=declared_ctx, pool_id=pool.id)
+    second = hosting.offer_to_next_host(ctx=declared_ctx, pool_id=pool.id)
     assert first.offered_household_id == second.offered_household_id
     offered = [
-        c for c in seeded_ctx.repo.list_host_candidates(WS, pool.id)
+        c for c in declared_ctx.repo.list_host_candidates(WS, pool.id)
         if c.state.value == "offered"
     ]
     assert len(offered) == 1
 
 
-def test_a_declined_offer_moves_to_the_next_candidate(seeded_ctx):
-    pool, _ = _candidate_pool(seeded_ctx)
-    hosting.open_host_recruiting(ctx=seeded_ctx, pool_id=pool.id)
+def test_a_declined_offer_moves_to_the_next_candidate(declared_ctx):
+    pool, _ = _candidate_pool(declared_ctx)
+    hosting.open_host_recruiting(ctx=declared_ctx, pool_id=pool.id)
     # Give a second eligible candidate so there is somewhere to go.
     hosting.volunteer_to_host(
-        ctx=seeded_ctx, pool_id=pool.id, household_id="hh_thibault",
+        ctx=declared_ctx, pool_id=pool.id, household_id="hh_thibault",
         profile=HostProfile(
             household_id="hh_thibault", community_id=COMMUNITY_ID, has_vehicle=True,
             vehicle_capacity_units=100, max_orders=60, max_weight_kg=200,
             max_supplier_distance_km=50.0, minimum_compensation_cents=0, standing=False,
         ),
     )
-    first = hosting.offer_to_next_host(ctx=seeded_ctx, pool_id=pool.id)
+    first = hosting.offer_to_next_host(ctx=declared_ctx, pool_id=pool.id)
     result = hosting.respond_to_host_offer(
-        ctx=seeded_ctx, pool_id=pool.id,
+        ctx=declared_ctx, pool_id=pool.id,
         household_id=first.offered_household_id, accept=False,
     )
     assert result["accepted"] is False
@@ -243,7 +243,7 @@ def test_a_declined_offer_moves_to_the_next_candidate(seeded_ctx):
     assert result["next_offered_household_id"] != first.offered_household_id
 
 
-def test_answering_a_host_offer_from_the_decision_inbox_assigns_the_host(seeded_ctx):
+def test_answering_a_host_offer_from_the_decision_inbox_assigns_the_host(declared_ctx):
     """The decision inbox is the one place a person answers anything Pool asks.
 
     A host offer creates a `HOST_OFFER` decision, and `respond_to_decision` used to
@@ -252,73 +252,73 @@ def test_answering_a_host_offer_from_the_decision_inbox_assigns_the_host(seeded_
     UI shipped an "Accept the job" button wired to exactly that path, so the button did
     nothing. Answering here must reach the same service the host's own endpoint calls.
     """
-    pool, _ = _candidate_pool(seeded_ctx)
-    hosting.open_host_recruiting(ctx=seeded_ctx, pool_id=pool.id)
-    offer = hosting.offer_to_next_host(ctx=seeded_ctx, pool_id=pool.id)
+    pool, _ = _candidate_pool(declared_ctx)
+    hosting.open_host_recruiting(ctx=declared_ctx, pool_id=pool.id)
+    offer = hosting.offer_to_next_host(ctx=declared_ctx, pool_id=pool.id)
     decision = next(
         d
-        for d in seeded_ctx.repo.list_decisions(WS)
+        for d in declared_ctx.repo.list_decisions(WS)
         if d.kind == DecisionKind.HOST_OFFER
         and d.household_id == offer.offered_household_id
         and d.state == DecisionState.PENDING
     )
 
-    coord.respond_to_decision(ctx=seeded_ctx, decision_id=decision.id, approve=True)
+    coord.respond_to_decision(ctx=declared_ctx, decision_id=decision.id, approve=True)
 
-    assignment = seeded_ctx.repo.get_host_assignment(WS, pool.id)
+    assignment = declared_ctx.repo.get_host_assignment(WS, pool.id)
     assert assignment is not None
     assert assignment.household_id == offer.offered_household_id
-    assert seeded_ctx.repo.get_pool(WS, pool.id).status == PoolStatus.HOST_SELECTED
+    assert declared_ctx.repo.get_pool(WS, pool.id).status == PoolStatus.HOST_SELECTED
     # And the record says what actually happened, rather than reporting a host's answer
     # as a buyer approving a price.
-    answered = [e for e in seeded_ctx.repo.list_activity(WS) if e.kind == "decision_answered"]
+    answered = [e for e in declared_ctx.repo.list_activity(WS) if e.kind == "decision_answered"]
     assert answered and "Host accepted" in answered[0].summary
 
 
-def test_declining_a_host_offer_from_the_decision_inbox_moves_on(seeded_ctx):
-    pool, _ = _candidate_pool(seeded_ctx)
-    hosting.open_host_recruiting(ctx=seeded_ctx, pool_id=pool.id)
+def test_declining_a_host_offer_from_the_decision_inbox_moves_on(declared_ctx):
+    pool, _ = _candidate_pool(declared_ctx)
+    hosting.open_host_recruiting(ctx=declared_ctx, pool_id=pool.id)
     hosting.volunteer_to_host(
-        ctx=seeded_ctx, pool_id=pool.id, household_id="hh_thibault",
+        ctx=declared_ctx, pool_id=pool.id, household_id="hh_thibault",
         profile=HostProfile(
             household_id="hh_thibault", community_id=COMMUNITY_ID, has_vehicle=True,
             vehicle_capacity_units=100, max_orders=60, max_weight_kg=200,
             max_supplier_distance_km=50.0, minimum_compensation_cents=0, standing=False,
         ),
     )
-    offer = hosting.offer_to_next_host(ctx=seeded_ctx, pool_id=pool.id)
+    offer = hosting.offer_to_next_host(ctx=declared_ctx, pool_id=pool.id)
     decision = next(
         d
-        for d in seeded_ctx.repo.list_decisions(WS)
+        for d in declared_ctx.repo.list_decisions(WS)
         if d.kind == DecisionKind.HOST_OFFER
         and d.household_id == offer.offered_household_id
         and d.state == DecisionState.PENDING
     )
 
-    coord.respond_to_decision(ctx=seeded_ctx, decision_id=decision.id, approve=False)
+    coord.respond_to_decision(ctx=declared_ctx, decision_id=decision.id, approve=False)
 
-    assert seeded_ctx.repo.get_host_assignment(WS, pool.id) is None
+    assert declared_ctx.repo.get_host_assignment(WS, pool.id) is None
     still_offered = [
-        c for c in seeded_ctx.repo.list_host_candidates(WS, pool.id)
+        c for c in declared_ctx.repo.list_host_candidates(WS, pool.id)
         if c.state.value == "offered"
     ]
     assert len(still_offered) == 1
     assert still_offered[0].household_id != offer.offered_household_id
 
 
-def test_an_expired_host_offer_does_not_stall_the_pool(seeded_ctx):
-    pool, _ = _candidate_pool(seeded_ctx)
-    hosting.open_host_recruiting(ctx=seeded_ctx, pool_id=pool.id)
-    offer = hosting.offer_to_next_host(ctx=seeded_ctx, pool_id=pool.id)
-    candidate = seeded_ctx.repo.get_host_candidate(
+def test_an_expired_host_offer_does_not_stall_the_pool(declared_ctx):
+    pool, _ = _candidate_pool(declared_ctx)
+    hosting.open_host_recruiting(ctx=declared_ctx, pool_id=pool.id)
+    offer = hosting.offer_to_next_host(ctx=declared_ctx, pool_id=pool.id)
+    candidate = declared_ctx.repo.get_host_candidate(
         WS, pool.id, offer.offered_household_id
     )
-    candidate.expires_at = iso(seeded_ctx.now - timedelta(hours=1))
-    seeded_ctx.repo.put_host_candidate(WS, candidate)
-    expired = hosting.expire_stale_host_offers(ctx=seeded_ctx, pool_id=pool.id)
+    candidate.expires_at = iso(declared_ctx.now - timedelta(hours=1))
+    declared_ctx.repo.put_host_candidate(WS, candidate)
+    expired = hosting.expire_stale_host_offers(ctx=declared_ctx, pool_id=pool.id)
     assert expired == [offer.offered_household_id]
     decisions = [
-        d for d in seeded_ctx.repo.list_decisions(WS) if d.kind == DecisionKind.HOST_OFFER
+        d for d in declared_ctx.repo.list_decisions(WS) if d.kind == DecisionKind.HOST_OFFER
     ]
     assert all(d.state == DecisionState.EXPIRED for d in decisions)
 
@@ -333,13 +333,13 @@ def test_accepting_assigns_the_job_and_fixes_the_compensation(seeded_ctx):
     assert seeded_ctx.repo.get_pool(WS, pool.id).status == PoolStatus.HOST_SELECTED
 
 
-def test_a_host_who_is_also_a_buyer_keeps_two_separate_ledger_entries(seeded_ctx):
+def test_a_host_who_is_also_a_buyer_keeps_two_separate_ledger_entries(declared_ctx):
     """Buyer allocation and host pay are never netted together invisibly (§30)."""
-    pool, _ = _candidate_pool(seeded_ctx)
-    host_id = _with_host(seeded_ctx, pool, household_id="hh_marchetti")
-    coord.issue_final_offer(ctx=seeded_ctx, pool_id=pool.id)
-    membership = seeded_ctx.repo.get_membership(WS, pool.id, host_id)
-    assignment = seeded_ctx.repo.get_host_assignment(WS, pool.id)
+    pool, _ = _candidate_pool(declared_ctx)
+    host_id = _with_host(declared_ctx, pool, household_id="hh_marchetti")
+    coord.issue_final_offer(ctx=declared_ctx, pool_id=pool.id)
+    membership = declared_ctx.repo.get_membership(WS, pool.id, host_id)
+    assignment = declared_ctx.repo.get_host_assignment(WS, pool.id)
     assert membership is not None and membership.final_cost_cents > 0
     assert assignment.reward_total_cents > 0
     assert membership.final_cost_cents != assignment.reward_total_cents
@@ -372,18 +372,18 @@ def test_the_final_offer_refreshes_the_quote_and_prices_everything(seeded_ctx):
     assert pool.status == PoolStatus.FUNDING
 
 
-def test_smart_join_authorises_and_everyone_else_is_asked(seeded_ctx):
-    pool, _ = _candidate_pool(seeded_ctx)
-    _with_host(seeded_ctx, pool)
-    result = coord.issue_final_offer(ctx=seeded_ctx, pool_id=pool.id)
+def test_smart_join_authorises_and_everyone_else_is_asked(declared_ctx):
+    pool, _ = _candidate_pool(declared_ctx)
+    _with_host(declared_ctx, pool)
+    result = coord.issue_final_offer(ctx=declared_ctx, pool_id=pool.id)
     assert result.auto_authorised
     assert result.awaiting_decision
     for household_id in result.auto_authorised:
-        membership = seeded_ctx.repo.get_membership(WS, pool.id, household_id)
+        membership = declared_ctx.repo.get_membership(WS, pool.id, household_id)
         assert membership.state == ParticipationState.AUTHORIZED
         assert membership.final_cost_cents > 0
     decisions = [
-        d for d in seeded_ctx.repo.list_decisions(WS)
+        d for d in declared_ctx.repo.list_decisions(WS)
         if d.kind == DecisionKind.APPROVE_FINAL_OFFER
     ]
     assert len(decisions) == len(result.awaiting_decision)
@@ -473,16 +473,16 @@ def _fully_funded(ctx):
     return ctx.repo.get_pool(WS, pool.id)
 
 
-def test_a_fully_funded_viable_pool_locks_and_captures(seeded_ctx):
-    pool = _fully_funded(seeded_ctx)
-    if coord.lost_units(seeded_ctx, pool.id):
-        coord.recover_pool(ctx=seeded_ctx, pool_id=pool.id)
-    result = coord.lock_pool(ctx=seeded_ctx, pool_id=pool.id)
+def test_a_fully_funded_viable_pool_locks_and_captures(declared_ctx):
+    pool = _fully_funded(declared_ctx)
+    if coord.lost_units(declared_ctx, pool.id):
+        coord.recover_pool(ctx=declared_ctx, pool_id=pool.id)
+    result = coord.lock_pool(ctx=declared_ctx, pool_id=pool.id)
     assert result["locked"] is True
-    pool = seeded_ctx.repo.get_pool(WS, pool.id)
+    pool = declared_ctx.repo.get_pool(WS, pool.id)
     assert pool.status == PoolStatus.PURCHASE_READY
     captured = [
-        p for p in seeded_ctx.repo.list_payments(WS, pool.id)
+        p for p in declared_ctx.repo.list_payments(WS, pool.id)
         if p.state == PaymentState.CAPTURED
     ]
     assert captured
@@ -502,12 +502,12 @@ def test_an_underfunded_pool_refuses_to_lock(seeded_ctx):
     ]
 
 
-def test_locking_twice_is_a_no_op(seeded_ctx):
-    pool = _fully_funded(seeded_ctx)
-    if coord.lost_units(seeded_ctx, pool.id):
-        coord.recover_pool(ctx=seeded_ctx, pool_id=pool.id)
-    coord.lock_pool(ctx=seeded_ctx, pool_id=pool.id)
-    again = coord.lock_pool(ctx=seeded_ctx, pool_id=pool.id)
+def test_locking_twice_is_a_no_op(declared_ctx):
+    pool = _fully_funded(declared_ctx)
+    if coord.lost_units(declared_ctx, pool.id):
+        coord.recover_pool(ctx=declared_ctx, pool_id=pool.id)
+    coord.lock_pool(ctx=declared_ctx, pool_id=pool.id)
+    again = coord.lock_pool(ctx=declared_ctx, pool_id=pool.id)
     assert again["already_locked"] is True
 
 
@@ -523,30 +523,30 @@ def test_a_buyer_can_leave_freely_before_authorisation(seeded_ctx):
     ).state == ParticipationState.WITHDRAWN
 
 
-def test_withdrawing_after_authorisation_releases_the_hold(seeded_ctx):
-    pool, _ = _candidate_pool(seeded_ctx)
-    _with_host(seeded_ctx, pool)
-    result = coord.issue_final_offer(ctx=seeded_ctx, pool_id=pool.id)
+def test_withdrawing_after_authorisation_releases_the_hold(declared_ctx):
+    pool, _ = _candidate_pool(declared_ctx)
+    _with_host(declared_ctx, pool)
+    result = coord.issue_final_offer(ctx=declared_ctx, pool_id=pool.id)
     leaver = result.auto_authorised[0]
     outcome = coord.withdraw_participant(
-        ctx=seeded_ctx, pool_id=pool.id, household_id=leaver
+        ctx=declared_ctx, pool_id=pool.id, household_id=leaver
     )
     assert outcome["authorization_released"] is True
     assert outcome["below_threshold"] is True
 
 
-def test_withdrawing_after_lock_is_refused(seeded_ctx):
+def test_withdrawing_after_lock_is_refused(declared_ctx):
     """Past the lock the money is captured and the supplier order is committed (§59)."""
-    pool = _fully_funded(seeded_ctx)
-    if coord.lost_units(seeded_ctx, pool.id):
-        coord.recover_pool(ctx=seeded_ctx, pool_id=pool.id)
-    coord.lock_pool(ctx=seeded_ctx, pool_id=pool.id)
+    pool = _fully_funded(declared_ctx)
+    if coord.lost_units(declared_ctx, pool.id):
+        coord.recover_pool(ctx=declared_ctx, pool_id=pool.id)
+    coord.lock_pool(ctx=declared_ctx, pool_id=pool.id)
     member = next(
-        m for m in seeded_ctx.repo.list_memberships(WS, pool.id) if m.counts_as_funded
+        m for m in declared_ctx.repo.list_memberships(WS, pool.id) if m.counts_as_funded
     )
     with pytest.raises(CoordinationError) as exc:
         coord.withdraw_participant(
-            ctx=seeded_ctx, pool_id=pool.id, household_id=member.household_id
+            ctx=declared_ctx, pool_id=pool.id, household_id=member.household_id
         )
     assert "locked" in str(exc.value)
 

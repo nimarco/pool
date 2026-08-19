@@ -1,6 +1,6 @@
 /* The technical view of the one action that leaves this machine.
  *
- * Pressing "Find opportunities" in the Product invokes the coordinator deployed on
+ * Pressing "Run Pool now" in the Product invokes the coordinator deployed on
  * Amazon Bedrock AgentCore Runtime, bound to this session's own workspace. This screen
  * prioritizes the stored proof of that completed invocation. A fresh invocation remains
  * available only as a collapsed, secondary auditor control.

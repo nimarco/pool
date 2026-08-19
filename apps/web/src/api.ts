@@ -100,6 +100,8 @@ export interface PoolView {
   product_name: string;
   unit: string;
   brand: string;
+  variant: string;
+  image_ref: string;
   supplier: string;
   status: PoolStatus;
   pickup_site: string;
@@ -293,6 +295,11 @@ export interface NeedRow {
   product_id: string;
   product_name: string;
   unit: string;
+  /** Enough identity to render the same card the search showed. */
+  brand: string;
+  variant: string;
+  category: string;
+  image_ref: string;
   quantity: number;
   cadence_days: number;
   expected_next_need_date: string;
@@ -313,6 +320,39 @@ export interface ProductRow {
   name: string;
   unit: string;
   brand: string;
+}
+
+/** One product a member might mean, as a card renders it.
+ *
+ *  `product_id` is here because the form has to send it back, and is never displayed:
+ *  a member should not learn that Pool keeps internal identifiers. `image_ref` names a
+ *  *bundled* asset rather than a URL — the demo may not depend on a third-party image
+ *  host, and the deployed CSP is `img-src 'self'`. */
+export interface ProductCandidate {
+  product_id: string;
+  name: string;
+  brand: string;
+  variant: string;
+  display_size: string;
+  unit: string;
+  category: string;
+  image_ref: string;
+}
+
+/** Licence obligations that travel with the bundled catalogue snapshot. */
+export interface CatalogAttribution {
+  source: string;
+  source_url: string;
+  data_license: string;
+  image_license: string;
+  credit: string;
+  snapshot: string;
+}
+
+export interface ProductSearchResult {
+  query: string;
+  results: ProductCandidate[];
+  attribution: CatalogAttribution;
 }
 
 export interface NeedLimits {
@@ -658,6 +698,22 @@ export const api = {
   state: () => request<AppState>("/api/state"),
   map: () => request<MapData>("/api/map"),
   needs: () => request<NeedsView>("/api/needs"),
+  /** Resolve free text into products a member might mean.
+   *
+   *  Ranked server-side against a bundled snapshot by a pure function: no model call,
+   *  no third-party request, same answer every time. That is what lets the first
+   *  interaction in the product work with the network unplugged. */
+  searchProducts: (q: string, limit = 6) =>
+    request<ProductSearchResult>(
+      `/api/products/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+    ),
+  /** Record something the catalogue does not have. The member may declare a need for
+   *  it; Pool simply cannot form a group order until a supplier has been verified. */
+  customProduct: (name: string) =>
+    post<ProductCandidate & { sourceable: boolean; note: string }>(
+      "/api/products/custom",
+      { name },
+    ),
   declareNeed: (draft: NeedDraft) => post<NeedRow>("/api/needs", draft),
   amendNeed: (needId: string, draft: NeedDraft) =>
     post<NeedRow>(`/api/needs/${needId}`, draft),

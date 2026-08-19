@@ -173,6 +173,12 @@ ALLOWED_GET = frozenset(
         "/api/operator",
         "/api/pickup-sites",
         "/api/demo/config",
+        # Resolving what somebody typed into products they might mean. The first half of
+        # the product's primary action, so it has to be reachable for the same reason
+        # `/api/needs` is. Cheap to expose: it reads a bundled snapshot with a pure
+        # function, spends no model tokens, touches no workspace state, and takes no
+        # client string that reaches an agent prompt.
+        "/api/products/search",
         # A member's own account view: their Smart Join rules, their community
         # verification, whether a payment method exists. It already refuses to emit a
         # contact detail or a payment reference, which is what makes it safe to expose.
@@ -203,6 +209,11 @@ ALLOWED_POST = frozenset(
         # group, commits no money, and the service refuses to write a declaration for a
         # household other than the one the request names.
         "/api/needs",
+        # Recording an item the catalogue does not have. Writes one product row into the
+        # caller's own session workspace with no substitute group and no offer, so it can
+        # be declared against and can never combine with anybody else's demand. Bounded
+        # by the same session quota as every other mutation here.
+        "/api/products/custom",
     }
 )
 

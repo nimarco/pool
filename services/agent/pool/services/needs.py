@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
+from ..data import catalog
 from ..domain.models import (
     MembershipStatus,
     NeedDeclaration,
@@ -200,7 +201,7 @@ def _validate(ctx: PoolContext, community_id: str, data: NeedInput) -> None:
         # outside it must not reach an opportunity assessment.
         raise NeedError("only a verified member of this community can declare a need")
 
-    if ctx.repo.get_product(ctx.ws, data.product_id) is None:
+    if not _ensure_product(ctx, data.product_id):
         raise NeedError("unknown product")
 
     if not 1 <= data.quantity <= MAX_QUANTITY:
@@ -234,6 +235,30 @@ def _validate(ctx: PoolContext, community_id: str, data: NeedInput) -> None:
 
     if data.routine_lead_days < 0 or data.routine_lead_days > data.cadence_days:
         raise NeedError("how far ahead you normally restock must fit inside one cycle")
+
+
+def _ensure_product(ctx: PoolContext, product_id: str) -> bool:
+    """Make sure the workspace holds the product this declaration names.
+
+    The bundled catalogue is a few hundred consumer identities; a workspace holds only
+    the handful anyone has actually declared. Writing all of them into every workspace
+    would mean hundreds of stores per reset for rows nobody will ever reference, so a
+    product is materialised the first time a member declares against it — which is also
+    the first moment Pool has any reason to hold it.
+
+    The catalogue supplies identity only. ``substitute_group`` comes across exactly as
+    the curated snapshot recorded it, so an entry from an unreviewed category arrives
+    with none and can then combine with nothing but itself (§21). Nothing here invents
+    a price, a case size, or a supplier: a member may declare a need for something Pool
+    cannot yet source, and the pool simply never forms until an offer exists.
+    """
+    if ctx.repo.get_product(ctx.ws, product_id) is not None:
+        return True
+    entry = catalog.get(product_id)
+    if entry is None:
+        return False
+    ctx.repo.put_product(ctx.ws, entry.to_product())
+    return True
 
 
 def _active_for_product(

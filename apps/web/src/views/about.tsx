@@ -167,9 +167,20 @@ export function About({
                 </>
               ) : null}
             </p>
+            {/* The catalogue made this distinction sharper rather than blurrier, so it
+                is now two sentences instead of one. The products are real things people
+                buy; the prices beside them are not quotes anybody gave us. Saying both
+                plainly is what keeps a recognisable brand from lending credibility to an
+                invented number (AGENTS.md §8, §12). */}
             <p className="small">
-              <Chip tone="warn">synthetic</Chip> Community, members and supplier catalogue;
-              Demo University is invented and no wholesale relationship exists.
+              <Chip tone="ok">real</Chip> Product names, brands and photographs come from
+              Open Food Facts contributors — a public catalogue, bundled here as a dated
+              snapshot so nothing is fetched while you use this.
+            </p>
+            <p className="small">
+              <Chip tone="warn">synthetic</Chip> Community, members, and every supplier
+              price, case size and minimum. Demo University is invented, no wholesale
+              relationship exists, and no manufacturer has any involvement in this project.
             </p>
             <p className="small">
               <Chip tone="warn">simulated</Chip> Payments and supplier order; no card is
@@ -191,6 +202,51 @@ export function About({
           </div>
         </div>
       </section>
+
+      {/* An obligation, not a courtesy. ODbL requires attribution wherever the data is
+          publicly used, and the photographs are CC-BY-SA. The search results carry the
+          credit inline; this is the durable one that does not depend on a member having
+          run a search. */}
+      <details className="block">
+        <summary className="section-title">Product data and credits</summary>
+        <div className="stack-sm" style={{ marginTop: 12 }}>
+          <p className="small muted prose">
+            Consumer product names, brands, barcodes and photographs come from{" "}
+            <a href="https://openfoodfacts.org" target="_blank" rel="noreferrer noopener">
+              Open Food Facts
+            </a>{" "}
+            contributors, together with its Open Beauty Facts and Open Products Facts
+            sister projects. The data is used under the{" "}
+            <a
+              href="https://opendatacommons.org/licenses/odbl/1-0/"
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              Open Database License
+            </a>{" "}
+            and the photographs under{" "}
+            <a
+              href="https://creativecommons.org/licenses/by-sa/4.0/"
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              CC-BY-SA
+            </a>
+            .
+          </p>
+          <p className="small muted prose">
+            Pool holds a curated subset as a dated snapshot rather than calling their API,
+            so this page makes no third-party request and the demo behaves the same every
+            time. Household goods are described generically because no open catalogue
+            covers them.
+          </p>
+          <p className="small muted prose">
+            The catalogue supplies what a product <em>is</em>. It supplies no price, case
+            size or supplier minimum — those are Pool's own, and in this demo they are
+            invented.
+          </p>
+        </div>
+      </details>
 
       <details className="block">
         <summary className="section-title">

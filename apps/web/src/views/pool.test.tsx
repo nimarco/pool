@@ -46,6 +46,8 @@ const pool: PoolView = {
   product_name: "Whey protein",
   unit: "tub",
   brand: "Fixture",
+  variant: "",
+  image_ref: "",
   supplier: "Synthetic Supply",
   status: "final_offer",
   pickup_site: "Commons",

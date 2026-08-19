@@ -1255,7 +1255,7 @@ def test_the_published_endpoint_counts_are_the_real_ones():
 
     public = {e for e in endpoints if reachable(*e)}
 
-    assert len(endpoints) == 40, f"the full API is now {len(endpoints)} endpoints"
-    assert len(public) == 24, f"judge mode now exposes {len(public)} endpoints"
+    assert len(endpoints) == 42, f"the full API is now {len(endpoints)} endpoints"
+    assert len(public) == 26, f"judge mode now exposes {len(public)} endpoints"
     # The reduction is the point: most of the application is not on the public URL.
     assert len(public) < len(endpoints) / 1.5

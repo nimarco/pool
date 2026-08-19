@@ -1,0 +1,5437 @@
+{
+ "attribution": "Product names, brands, barcodes and images from Open Food Facts contributors, used under ODbL (data) and CC-BY-SA (images).",
+ "data_license": "ODbL-1.0",
+ "image_license": "CC-BY-SA-4.0",
+ "note": "Consumer identity only. Package sizes are display text and are never used in Pool's economics; supplier offers, cases and MOQ are separate and are not sourced from here.",
+ "products": [
+  {
+   "brand": "Asta",
+   "category": "beverage",
+   "display_size": "45g",
+   "gtin": "6111101001361",
+   "image_ref": "prod_6111101001361",
+   "name": "Asta",
+   "product_id": "prod_6111101001361",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Brekki",
+   "category": "beverage",
+   "display_size": "150 g",
+   "gtin": "0853330007313",
+   "image_ref": "prod_0853330007313",
+   "name": "cold brew coffee",
+   "product_id": "prod_0853330007313",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Café Bustelo",
+   "category": "beverage",
+   "display_size": "10 oz",
+   "gtin": "0074471000500",
+   "image_ref": "prod_0074471000500",
+   "name": "Café Espresso Molido",
+   "product_id": "prod_0074471000500",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Chobani",
+   "category": "beverage",
+   "display_size": "710 ml",
+   "gtin": "0818290016935",
+   "image_ref": "prod_0818290016935",
+   "name": "Vanilla Coffee Creamer",
+   "product_id": "prod_0818290016935",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Death Wish Coffee Co",
+   "category": "beverage",
+   "display_size": "10 oz",
+   "gtin": "0810063343040",
+   "image_ref": "prod_0810063343040",
+   "name": "Dark Roast Ground",
+   "product_id": "prod_0810063343040",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Everyday Dose",
+   "category": "beverage",
+   "display_size": "180 g",
+   "gtin": "0860004373117",
+   "image_ref": "prod_0860004373117",
+   "name": "Mild Roast Coffee+",
+   "product_id": "prod_0860004373117",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Folgers",
+   "category": "beverage",
+   "display_size": "25.9 oz",
+   "gtin": "0025500304076",
+   "image_ref": "prod_0025500304076",
+   "name": "Classic Roast",
+   "product_id": "prod_0025500304076",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Folgers",
+   "category": "beverage",
+   "display_size": "9.6 OZ (272g)",
+   "gtin": "0025500304014",
+   "image_ref": "prod_0025500304014",
+   "name": "Classic Roast (Medium) Coffee",
+   "product_id": "prod_0025500304014",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Folgers",
+   "category": "beverage",
+   "display_size": "43.5 oz",
+   "gtin": "0025500304212",
+   "image_ref": "prod_0025500304212",
+   "name": "Classic Roast Ground Coffee",
+   "product_id": "prod_0025500304212",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Folgers",
+   "category": "beverage",
+   "display_size": "40.3 oz (2lbs 8.3oz)",
+   "gtin": "0025500304199",
+   "image_ref": "prod_0025500304199",
+   "name": "Coffee",
+   "product_id": "prod_0025500304199",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Folgers",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0028000462987",
+   "image_ref": "prod_0028000462987",
+   "name": "Instant Coffee",
+   "product_id": "prod_0028000462987",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Kirkland",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0096619008063",
+   "image_ref": "prod_0096619008063",
+   "name": "Summit Roast",
+   "product_id": "prod_0096619008063",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Kirkland Signature",
+   "category": "beverage",
+   "display_size": "1.36 Kg",
+   "gtin": "0096619177677",
+   "image_ref": "prod_0096619177677",
+   "name": "Colombian Coffee",
+   "product_id": "prod_0096619177677",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Lavazza",
+   "category": "beverage",
+   "display_size": "226,8 g",
+   "gtin": "0041953014508",
+   "image_ref": "prod_0041953014508",
+   "name": "Caffe Espresso Medium Roast",
+   "product_id": "prod_0041953014508",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "NESCAFÉ",
+   "category": "beverage",
+   "display_size": "7 oz (200g)",
+   "gtin": "0028000466312",
+   "image_ref": "prod_0028000466312",
+   "name": "Clásico",
+   "product_id": "prod_0028000466312",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Nescafe",
+   "category": "beverage",
+   "display_size": "7oz",
+   "gtin": "0028000553609",
+   "image_ref": "prod_0028000553609",
+   "name": "Taster's Choice French Roast",
+   "product_id": "prod_0028000553609",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Nescafé",
+   "category": "beverage",
+   "display_size": "45 g (25 dh)",
+   "gtin": "6111018903161",
+   "image_ref": "prod_6111018903161",
+   "name": "Classic",
+   "product_id": "prod_6111018903161",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Nescafé",
+   "category": "beverage",
+   "display_size": "14oz",
+   "gtin": "0028000743079",
+   "image_ref": "prod_0028000743079",
+   "name": "Coffee",
+   "product_id": "prod_0028000743079",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Nescafé",
+   "category": "beverage",
+   "display_size": "8 oz",
+   "gtin": "0028000774578",
+   "image_ref": "prod_0028000774578",
+   "name": "Ice Roast",
+   "product_id": "prod_0028000774578",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Nestlé",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0050000302116",
+   "image_ref": "prod_0050000302116",
+   "name": "Coffee mate",
+   "product_id": "prod_0050000302116",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Premier Protein",
+   "category": "beverage",
+   "display_size": "11.5 oz",
+   "gtin": "0643843717898",
+   "image_ref": "prod_0643843717898",
+   "name": "Café Latte",
+   "product_id": "prod_0643843717898",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "STŌK",
+   "category": "beverage",
+   "display_size": "48 fl oz",
+   "gtin": "0041271027730",
+   "image_ref": "prod_0041271027730",
+   "name": "Cold Brew Coffee",
+   "product_id": "prod_0041271027730",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Starbucks",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "01288001",
+   "image_ref": "prod_01288001",
+   "name": "Espresso and cream light",
+   "product_id": "prod_01288001",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Starbucks",
+   "category": "beverage",
+   "display_size": "13.7oz",
+   "gtin": "01245200",
+   "image_ref": "prod_01245200",
+   "name": "Frappuccino chilled coffee drink",
+   "product_id": "prod_01245200",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Starbucks",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "",
+   "image_ref": "prod_coffee_beans",
+   "name": "Pike Place Medium Roast",
+   "product_id": "prod_coffee_beans",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee",
+    "medium roast"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Trader Joe's",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "00563321",
+   "image_ref": "prod_00563321",
+   "name": "Coffee",
+   "product_id": "prod_00563321",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "coffee",
+   "synonyms": [
+    "beans",
+    "coffee",
+    "ground coffee"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Alani",
+   "category": "beverage",
+   "display_size": "12 fl oz",
+   "gtin": "0810030518082",
+   "image_ref": "prod_0810030518082",
+   "name": "Energy Drink",
+   "product_id": "prod_0810030518082",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Alani NU",
+   "category": "beverage",
+   "display_size": "12oz",
+   "gtin": "0850645008363",
+   "image_ref": "prod_0850645008363",
+   "name": "Orange Kiss Energy Drink",
+   "product_id": "prod_0850645008363",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Alani Nu",
+   "category": "beverage",
+   "display_size": "355 mL",
+   "gtin": "0810030512257",
+   "image_ref": "prod_0810030512257",
+   "name": "Cherry Slush",
+   "product_id": "prod_0810030512257",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "BUBBL'R",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0028435600428",
+   "image_ref": "prod_0028435600428",
+   "name": "Antioxidant Sparkling Water Tropical Dream'r",
+   "product_id": "prod_0028435600428",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Bloom",
+   "category": "beverage",
+   "display_size": "12 fl oz",
+   "gtin": "0842595135077",
+   "image_ref": "prod_0842595135077",
+   "name": "Energy Drink",
+   "product_id": "prod_0842595135077",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Bloom",
+   "category": "beverage",
+   "display_size": "12 oz",
+   "gtin": "0842595135084",
+   "image_ref": "prod_0842595135084",
+   "name": "Sparkling Energy",
+   "product_id": "prod_0842595135084",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "CELSIUS",
+   "category": "beverage",
+   "display_size": "12 fl oz",
+   "gtin": "0889392021417",
+   "image_ref": "prod_0889392021417",
+   "name": "ARCTIC Vibe SPARKLING FROZEN ENERGY EDITION",
+   "product_id": "prod_0889392021417",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "CELSIUS",
+   "category": "beverage",
+   "display_size": "12 FL OZ (355mL)",
+   "gtin": "0889392010190",
+   "image_ref": "prod_0889392010190",
+   "name": "Peach Vibe Sparkling White Peach Edition",
+   "product_id": "prod_0889392010190",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "CELSIUS",
+   "category": "beverage",
+   "display_size": "12 FL OZ",
+   "gtin": "0889392000917",
+   "image_ref": "prod_0889392000917",
+   "name": "Sparkling Grape Rush",
+   "product_id": "prod_0889392000917",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "CELSIUS",
+   "category": "beverage",
+   "display_size": "12 FL OZ (355mL)",
+   "gtin": "0889392010145",
+   "image_ref": "prod_0889392010145",
+   "name": "Sparkling Kiwi Guava",
+   "product_id": "prod_0889392010145",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "CELSIUS",
+   "category": "beverage",
+   "display_size": "12 FL OZ (355mL)",
+   "gtin": "0889392000313",
+   "image_ref": "prod_0889392000313",
+   "name": "Sparkling Orange",
+   "product_id": "prod_0889392000313",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "CELSIUS",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0889392003628",
+   "image_ref": "prod_0889392003628",
+   "name": "Sparkling Watermelon",
+   "product_id": "prod_0889392003628",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "CELSIUS",
+   "category": "beverage",
+   "display_size": "12 FL OZ (355mL)",
+   "gtin": "0889392000320",
+   "image_ref": "prod_0889392000320",
+   "name": "Sparkling Wild Berry",
+   "product_id": "prod_0889392000320",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "CELSIUS",
+   "category": "beverage",
+   "display_size": "12 FL OZ (355mL)",
+   "gtin": "0889392021394",
+   "image_ref": "prod_0889392021394",
+   "name": "Tropical Vibe Sparkling Starfruit Pineapple Edition",
+   "product_id": "prod_0889392021394",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Celsius",
+   "category": "beverage",
+   "display_size": "12oz",
+   "gtin": "0889392010015",
+   "image_ref": "prod_0889392010015",
+   "name": "Fizz-Free Peach Mango Green Tea",
+   "product_id": "prod_0889392010015",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Glaceau",
+   "category": "beverage",
+   "display_size": "20 fl oz",
+   "gtin": "0786162150004",
+   "image_ref": "prod_0786162150004",
+   "name": "Açai-Blueberry-Pomegranate XXX Nutrient Enhanced Water",
+   "product_id": "prod_0786162150004",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Glacéau",
+   "category": "beverage",
+   "display_size": "20 fl oz",
+   "gtin": "0786162080004",
+   "image_ref": "prod_0786162080004",
+   "name": "Tropical Citrus Energy Nutrient Enhanced Water",
+   "product_id": "prod_0786162080004",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Monster Energy",
+   "category": "beverage",
+   "display_size": "454 g",
+   "gtin": "0070847898245",
+   "image_ref": "prod_0070847898245",
+   "name": "Ultra Blue Hawaiian",
+   "product_id": "prod_0070847898245",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Monster Energy",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0070847012474",
+   "image_ref": "prod_0070847012474",
+   "name": "Zero Ultra",
+   "product_id": "prod_0070847012474",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Powerade",
+   "category": "beverage",
+   "display_size": "20oz",
+   "gtin": "0049000079357",
+   "image_ref": "prod_0049000079357",
+   "name": "Mountain Berry Blast",
+   "product_id": "prod_0049000079357",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Red Bull",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "",
+   "image_ref": "prod_energy_drink",
+   "name": "Energy Drink",
+   "product_id": "prod_energy_drink",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink",
+    "red bull",
+    "redbull"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Red Bull",
+   "category": "beverage",
+   "display_size": "8.4oz",
+   "gtin": "0611269101713",
+   "image_ref": "prod_0611269101713",
+   "name": "Sugarfree",
+   "product_id": "prod_0611269101713",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "STARBUCKS",
+   "category": "beverage",
+   "display_size": "15 oz",
+   "gtin": "0012000028458",
+   "image_ref": "prod_0012000028458",
+   "name": "Doubleshot Energy",
+   "product_id": "prod_0012000028458",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "STARBUCKS",
+   "category": "beverage",
+   "display_size": "15oz",
+   "gtin": "0012000028496",
+   "image_ref": "prod_0012000028496",
+   "name": "Doubleshot Energy Energy Coffee Beverage",
+   "product_id": "prod_0012000028496",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "energy_drink",
+   "synonyms": [
+    "energy",
+    "energy drink"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Bai",
+   "category": "beverage",
+   "display_size": "18 fl oz",
+   "gtin": "0813694026672",
+   "image_ref": "prod_0813694026672",
+   "name": "Zambia Bing Cherry",
+   "product_id": "prod_0813694026672",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Canada Dry",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "07811403",
+   "image_ref": "prod_07811403",
+   "name": "Ginger Ale",
+   "product_id": "prod_07811403",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Coca-Cola",
+   "category": "beverage",
+   "display_size": "355 ml",
+   "gtin": "04965802",
+   "image_ref": "prod_04965802",
+   "name": "Diet Coke",
+   "product_id": "prod_04965802",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Coca-Cola",
+   "category": "beverage",
+   "display_size": "355 ml",
+   "gtin": "0049000042566",
+   "image_ref": "prod_0049000042566",
+   "name": "Zero Sugar",
+   "product_id": "prod_0049000042566",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Coke",
+   "category": "beverage",
+   "display_size": "20 fl. oz (591 mL)",
+   "gtin": "04904403",
+   "image_ref": "prod_04904403",
+   "name": "20z",
+   "product_id": "prod_04904403",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Coke",
+   "category": "beverage",
+   "display_size": "45 fl oz",
+   "gtin": "0049000061017",
+   "image_ref": "prod_0049000061017",
+   "name": "Coca-Cola Original Taste",
+   "product_id": "prod_0049000061017",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Coke",
+   "category": "beverage",
+   "display_size": "20 fl. oz (591 mL)",
+   "gtin": "04904500",
+   "image_ref": "prod_04904500",
+   "name": "Diet Coke",
+   "product_id": "prod_04904500",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Dr Pepper",
+   "category": "beverage",
+   "display_size": "12 fl oz (355 ml)",
+   "gtin": "07831504",
+   "image_ref": "prod_07831504",
+   "name": "Dr Pepper",
+   "product_id": "prod_07831504",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Fresca",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0049000002485",
+   "image_ref": "prod_0049000002485",
+   "name": "Sparkling Soda Water Grapefruit Citrus",
+   "product_id": "prod_0049000002485",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Mountain Dew",
+   "category": "beverage",
+   "display_size": "12 FL OZ (355 mL)",
+   "gtin": "01208500",
+   "image_ref": "prod_01208500",
+   "name": "Mountain Dew",
+   "product_id": "prod_01208500",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "OLIPOP",
+   "category": "beverage",
+   "display_size": "12 fl oz",
+   "gtin": "0850027702896",
+   "image_ref": "prod_0850027702896",
+   "name": "Cream Soda",
+   "product_id": "prod_0850027702896",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Pepsi",
+   "category": "beverage",
+   "display_size": "12oz",
+   "gtin": "01280504",
+   "image_ref": "prod_01280504",
+   "name": "Diet Pepsi",
+   "product_id": "prod_01280504",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Pepsi",
+   "category": "beverage",
+   "display_size": "12 fl oz (355 ml)",
+   "gtin": "01201303",
+   "image_ref": "prod_01201303",
+   "name": "Pepsi",
+   "product_id": "prod_01201303",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Poppi",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0724190812877",
+   "image_ref": "prod_0724190812877",
+   "name": "Prebiotic Soda Drink",
+   "product_id": "prod_0724190812877",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Poppi",
+   "category": "beverage",
+   "display_size": "355 ml / 12oz",
+   "gtin": "0709586514856",
+   "image_ref": "prod_0709586514856",
+   "name": "Strawberry Lemonade Prebiotic Soda",
+   "product_id": "prod_0709586514856",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Sprite",
+   "category": "beverage",
+   "display_size": "12 FL OZ (355 mL)",
+   "gtin": "04913207",
+   "image_ref": "prod_04913207",
+   "name": "Soda Lemon-lime",
+   "product_id": "prod_04913207",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soda",
+   "synonyms": [
+    "cola",
+    "pop",
+    "soda"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Bubly",
+   "category": "beverage",
+   "display_size": "12oz",
+   "gtin": "0012000171253",
+   "image_ref": "prod_0012000171253",
+   "name": "cherry sparkling water",
+   "product_id": "prod_0012000171253",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Bubly",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0012000171246",
+   "image_ref": "prod_0012000171246",
+   "name": "lime sparkling water",
+   "product_id": "prod_0012000171246",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Kirkland Signature",
+   "category": "beverage",
+   "display_size": "500ml",
+   "gtin": "0096619401970",
+   "image_ref": "prod_0096619401970",
+   "name": "Italian Sparkling Mineral Water",
+   "product_id": "prod_0096619401970",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Kirkland Signature",
+   "category": "beverage",
+   "display_size": "355 mL",
+   "gtin": "0096619295203",
+   "image_ref": "prod_0096619295203",
+   "name": "Lime Sparkling Water",
+   "product_id": "prod_0096619295203",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "La Croix",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0012993441128",
+   "image_ref": "prod_0012993441128",
+   "name": "Black Raspberry",
+   "product_id": "prod_0012993441128",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "La Croix",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0073360327513",
+   "image_ref": "prod_0073360327513",
+   "name": "Naturally Essenced Razz-Cranberry Sparkling Water",
+   "product_id": "prod_0073360327513",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "La Croix",
+   "category": "beverage",
+   "display_size": "12 oz",
+   "gtin": "0012993441197",
+   "image_ref": "prod_0012993441197",
+   "name": "Strawberry Peach",
+   "product_id": "prod_0012993441197",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "La croix",
+   "category": "beverage",
+   "display_size": "355ml",
+   "gtin": "0073360237515",
+   "image_ref": "prod_0073360237515",
+   "name": "Sparkling water",
+   "product_id": "prod_0073360237515",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Oulmès",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "6111035003004",
+   "image_ref": "prod_6111035003004",
+   "name": "Oulmes Eau Gazeuse",
+   "product_id": "prod_6111035003004",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "S. Pellegrino",
+   "category": "beverage",
+   "display_size": "750 ml",
+   "gtin": "0041508800129",
+   "image_ref": "prod_0041508800129",
+   "name": "Carbonated Natural Mineral Water",
+   "product_id": "prod_0041508800129",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "SPARKLING ICE",
+   "category": "beverage",
+   "display_size": "240 ml",
+   "gtin": "0016571910303",
+   "image_ref": "prod_0016571910303",
+   "name": "BLACK RASPBERRY Flavored Sparkling Water",
+   "product_id": "prod_0016571910303",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Sparkling Ice",
+   "category": "beverage",
+   "display_size": "240 ml",
+   "gtin": "0016571950842",
+   "image_ref": "prod_0016571950842",
+   "name": "Cherry Limeade Flavored Sparkling Water",
+   "product_id": "prod_0016571950842",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Sparkling Water Tangerine La Croix",
+   "category": "beverage",
+   "display_size": "12 FL OZ (355mL)",
+   "gtin": "0012993441074",
+   "image_ref": "prod_0012993441074",
+   "name": "Sparkling Water",
+   "product_id": "prod_0012993441074",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Spindrift",
+   "category": "beverage",
+   "display_size": "12 fl oz",
+   "gtin": "0856579002194",
+   "image_ref": "prod_0856579002194",
+   "name": "Sparkling Water",
+   "product_id": "prod_0856579002194",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Spindrift",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0850017142190",
+   "image_ref": "prod_0850017142190",
+   "name": "Sparkling Water Real Squeezed Fruit",
+   "product_id": "prod_0850017142190",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Waterloo",
+   "category": "beverage",
+   "display_size": "12 FL OZ (355 ml)",
+   "gtin": "0819215021409",
+   "image_ref": "prod_0819215021409",
+   "name": "Blackberry Lemonade Sparkling Water",
+   "product_id": "prod_0819215021409",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "sparkling_water",
+   "synonyms": [
+    "seltzer",
+    "soda water",
+    "sparkling water"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "AriZona",
+   "category": "beverage",
+   "display_size": "11.5 FL OZ (340mL)",
+   "gtin": "0613008714253",
+   "image_ref": "prod_0613008714253",
+   "name": "Green Tea",
+   "product_id": "prod_0613008714253",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "AriZona",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0613008715120",
+   "image_ref": "prod_0613008715120",
+   "name": "Green Tea with Ginseng and Honey",
+   "product_id": "prod_0613008715120",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Brew Dr. Kombucha",
+   "category": "beverage",
+   "display_size": "14 fl oz",
+   "gtin": "0851107003001",
+   "image_ref": "prod_0851107003001",
+   "name": "Clear Mind",
+   "product_id": "prod_0851107003001",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Health-Ade",
+   "category": "beverage",
+   "display_size": "16 fl oz",
+   "gtin": "0851861006126",
+   "image_ref": "prod_0851861006126",
+   "name": "Kombucha Pink Lady Apple",
+   "product_id": "prod_0851861006126",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "ITO EN",
+   "category": "beverage",
+   "display_size": "500 mL",
+   "gtin": "0835143001047",
+   "image_ref": "prod_0835143001047",
+   "name": "Oi Ocha Unsweetened Green Tea",
+   "product_id": "prod_0835143001047",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "KEVITA",
+   "category": "beverage",
+   "display_size": "450ml",
+   "gtin": "0853311003600",
+   "image_ref": "prod_0853311003600",
+   "name": "Live Probiotic Kombucha Pineapple Peach",
+   "product_id": "prod_0853311003600",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Lipton",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0012000019265",
+   "image_ref": "prod_0012000019265",
+   "name": "Green Tea Citrus",
+   "product_id": "prod_0012000019265",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "PURE LEAF",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0012000286209",
+   "image_ref": "prod_0012000286209",
+   "name": "Real Brewed Tea UNSWEETENED NO SUGAR",
+   "product_id": "prod_0012000286209",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Pure Leaf",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0012000173219",
+   "image_ref": "prod_0012000173219",
+   "name": "Unsweetened Real Brewed Tea",
+   "product_id": "prod_0012000173219",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Sencha Naturals",
+   "category": "beverage",
+   "display_size": "12 oz",
+   "gtin": "0810232020178",
+   "image_ref": "prod_0810232020178",
+   "name": "Organic Everyday Matcha",
+   "product_id": "prod_0810232020178",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Snapple",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0076183003213",
+   "image_ref": "prod_0076183003213",
+   "name": "Diet snapple raspberry tea",
+   "product_id": "prod_0076183003213",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Synergy",
+   "category": "beverage",
+   "display_size": "16 fl Oz 473 ml",
+   "gtin": "0722430500164",
+   "image_ref": "prod_0722430500164",
+   "name": "Mystic Mango",
+   "product_id": "prod_0722430500164",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Uncle Lee's Tea Inc.",
+   "category": "beverage",
+   "display_size": "",
+   "gtin": "0892241000686",
+   "image_ref": "prod_0892241000686",
+   "name": "Legends of china green tea",
+   "product_id": "prod_0892241000686",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "balance Grow",
+   "category": "beverage",
+   "display_size": "48 oz",
+   "gtin": "0888127002967",
+   "image_ref": "prod_0888127002967",
+   "name": "Honey Citron & Ginger Tea",
+   "product_id": "prod_0888127002967",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "tea",
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "",
+   "category": "household",
+   "display_size": "",
+   "gtin": "",
+   "image_ref": "",
+   "name": "Laundry detergent pods, 96 count",
+   "product_id": "prod_detergent_pods",
+   "source": "curated",
+   "source_ref": "pool:curated",
+   "substitute_group": "detergent",
+   "synonyms": [
+    "detergent",
+    "laundry",
+    "laundry detergent",
+    "pods",
+    "washing"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "",
+   "category": "household",
+   "display_size": "",
+   "gtin": "",
+   "image_ref": "",
+   "name": "Dish soap, 30 fl oz",
+   "product_id": "prod_dish_soap",
+   "source": "curated",
+   "source_ref": "pool:curated",
+   "substitute_group": "dish_soap",
+   "synonyms": [
+    "dish soap",
+    "dishwashing",
+    "washing up liquid"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "",
+   "category": "household",
+   "display_size": "",
+   "gtin": "",
+   "image_ref": "",
+   "name": "Paper towels, 6 rolls",
+   "product_id": "prod_paper_towels",
+   "source": "curated",
+   "source_ref": "pool:curated",
+   "substitute_group": "paper_towels",
+   "synonyms": [
+    "kitchen roll",
+    "kitchen towel",
+    "paper towels",
+    "towels"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "Bounty",
+   "category": "household",
+   "display_size": "",
+   "gtin": "0030772167748",
+   "image_ref": "prod_0030772167748",
+   "name": "Select-A-Size White Paper Towels",
+   "product_id": "prod_0030772167748",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "paper_towels",
+   "synonyms": [
+    "kitchen roll",
+    "kitchen towel",
+    "paper towel"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "",
+   "category": "household",
+   "display_size": "",
+   "gtin": "",
+   "image_ref": "",
+   "name": "Toilet paper, 12 rolls",
+   "product_id": "prod_toilet_paper",
+   "source": "curated",
+   "source_ref": "pool:curated",
+   "substitute_group": "toilet_paper",
+   "synonyms": [
+    "bathroom tissue",
+    "loo roll",
+    "toilet paper",
+    "tp"
+   ],
+   "unit": "pack",
+   "variant": ""
+  },
+  {
+   "brand": "",
+   "category": "household",
+   "display_size": "",
+   "gtin": "",
+   "image_ref": "",
+   "name": "Kitchen trash bags, 80 count",
+   "product_id": "prod_trash_bags",
+   "source": "curated",
+   "source_ref": "pool:curated",
+   "substitute_group": "trash_bags",
+   "synonyms": [
+    "bin bags",
+    "bin liners",
+    "garbage bags",
+    "trash bags"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Barebells",
+   "category": "nutrition",
+   "display_size": "55g",
+   "gtin": "0850000429116",
+   "image_ref": "prod_0850000429116",
+   "name": "Cookies & Cream Protein Bar",
+   "product_id": "prod_0850000429116",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Chef Robert Irvine's",
+   "category": "nutrition",
+   "display_size": "1.62 oz (46 g)",
+   "gtin": "0839138003023",
+   "image_ref": "prod_0839138003023",
+   "name": "Fit Crunch Chocolate Peanut Butter",
+   "product_id": "prod_0839138003023",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Clif",
+   "category": "nutrition",
+   "display_size": "2.40 oz",
+   "gtin": "0722252101204",
+   "image_ref": "prod_0722252101204",
+   "name": "ClifBar Crunchy Peanut Butter",
+   "product_id": "prod_0722252101204",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "IQ BAR",
+   "category": "nutrition",
+   "display_size": "816 g",
+   "gtin": "0850004554869",
+   "image_ref": "prod_0850004554869",
+   "name": "18 Protein Bar Variety Pack",
+   "product_id": "prod_0850004554869",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "IQ BAR",
+   "category": "nutrition",
+   "display_size": "1.6 oz",
+   "gtin": "0850004554029",
+   "image_ref": "prod_0850004554029",
+   "name": "Chocolate Sea Salt",
+   "product_id": "prod_0850004554029",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "IQ BAR",
+   "category": "nutrition",
+   "display_size": "45g",
+   "gtin": "0850004554005",
+   "image_ref": "prod_0850004554005",
+   "name": "Peanut Butter Chip",
+   "product_id": "prod_0850004554005",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "KIND",
+   "category": "nutrition",
+   "display_size": "14 oz",
+   "gtin": "0602652176517",
+   "image_ref": "prod_0602652176517",
+   "name": "Dark Chocolate Nuts & Sea Salt",
+   "product_id": "prod_0602652176517",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "KIND",
+   "category": "nutrition",
+   "display_size": "10.58 oz (300 g)",
+   "gtin": "0602652419294",
+   "image_ref": "prod_0602652419294",
+   "name": "breakfast protein Almond Butter",
+   "product_id": "prod_0602652419294",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Kirkland Signature",
+   "category": "nutrition",
+   "display_size": "1.41 oz",
+   "gtin": "0096619160754",
+   "image_ref": "prod_0096619160754",
+   "name": "Chewy Protein Bar Peanut Butter Chocolate",
+   "product_id": "prod_0096619160754",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "PERFECT BAR",
+   "category": "nutrition",
+   "display_size": "71 g",
+   "gtin": "0855569003029",
+   "image_ref": "prod_0855569003029",
+   "name": "Peanut Butter Perfect Bar",
+   "product_id": "prod_0855569003029",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "PURE PROTEIN",
+   "category": "nutrition",
+   "display_size": "50g",
+   "gtin": "0749826126487",
+   "image_ref": "prod_0749826126487",
+   "name": "CHOCOLATE PEANUT BUTTER protein bar",
+   "product_id": "prod_0749826126487",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Quest",
+   "category": "nutrition",
+   "display_size": "60g",
+   "gtin": "0888849000012",
+   "image_ref": "prod_0888849000012",
+   "name": "Chocolate Chip Cookie Dough",
+   "product_id": "prod_0888849000012",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "RXBAR",
+   "category": "nutrition",
+   "display_size": "52 g",
+   "gtin": "0857777004195",
+   "image_ref": "prod_0857777004195",
+   "name": "Blueberry RXBAR",
+   "product_id": "prod_0857777004195",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "RXBAR",
+   "category": "nutrition",
+   "display_size": "52g",
+   "gtin": "0857111004232",
+   "image_ref": "prod_0857111004232",
+   "name": "Chocolate Sea Salt",
+   "product_id": "prod_0857111004232",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "RXBAR",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "0193908007292",
+   "image_ref": "prod_0193908007292",
+   "name": "Protein Bars",
+   "product_id": "prod_0193908007292",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Trubar",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "0859146006243",
+   "image_ref": "prod_0859146006243",
+   "name": "Plant Based Protein Bar",
+   "product_id": "prod_0859146006243",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "protein_bar",
+   "synonyms": [
+    "bar",
+    "protein bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Ascent",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "0815863021495",
+   "image_ref": "prod_0815863021495",
+   "name": "100% Whey Native Whey Protein Blend",
+   "product_id": "prod_0815863021495",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "BODY X FORTRESS",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "0840266300007",
+   "image_ref": "prod_0840266300007",
+   "name": "Super Advanced Whey Protein",
+   "product_id": "prod_0840266300007",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Body Fortress",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "0840266324584",
+   "image_ref": "prod_0840266324584",
+   "name": "Whey Protein",
+   "product_id": "prod_0840266324584",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "DESIGNER WHEY",
+   "category": "nutrition",
+   "display_size": "12 oz",
+   "gtin": "0844334001322",
+   "image_ref": "prod_0844334001322",
+   "name": "Natural 100% Whey Protein Powder",
+   "product_id": "prod_0844334001322",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "ELEVATION",
+   "category": "nutrition",
+   "display_size": "32 oz",
+   "gtin": "4099100116649",
+   "image_ref": "prod_4099100116649",
+   "name": "Whey Protein Blend",
+   "product_id": "prod_4099100116649",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Garden of Life",
+   "category": "nutrition",
+   "display_size": "19 x 45 g",
+   "gtin": "0658010119436",
+   "image_ref": "prod_0658010119436",
+   "name": "Organic Plant-Based Protein Vanilla Flavor",
+   "product_id": "prod_0658010119436",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Garden of Life",
+   "category": "nutrition",
+   "display_size": "544g.",
+   "gtin": "0658010122368",
+   "image_ref": "prod_0658010122368",
+   "name": "Organic Protein",
+   "product_id": "prod_0658010122368",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Garden of Life",
+   "category": "nutrition",
+   "display_size": "494g",
+   "gtin": "0658010122399",
+   "image_ref": "prod_0658010122399",
+   "name": "Organic Protein + Greens",
+   "product_id": "prod_0658010122399",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "ISOPURE",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "0089094025090",
+   "image_ref": "prod_0089094025090",
+   "name": "Clear Low Carb Protein",
+   "product_id": "prod_0089094025090",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "ISOPURE",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "0089094025694",
+   "image_ref": "prod_0089094025694",
+   "name": "Protein Powder",
+   "product_id": "prod_0089094025694",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Isopure",
+   "category": "nutrition",
+   "display_size": "30.5 g",
+   "gtin": "0089094026219",
+   "image_ref": "prod_0089094026219",
+   "name": "Protein Powder Drink Mix",
+   "product_id": "prod_0089094026219",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Kirkland Signature",
+   "category": "nutrition",
+   "display_size": "5.4lb",
+   "gtin": "0196633918901",
+   "image_ref": "prod_0196633918901",
+   "name": "Whey Protein Creamy Chocolate",
+   "product_id": "prod_0196633918901",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Levels",
+   "category": "nutrition",
+   "display_size": "1.48 lb",
+   "gtin": "0857965007427",
+   "image_ref": "prod_0857965007427",
+   "name": "Whey Protein",
+   "product_id": "prod_0857965007427",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Muscle Milk",
+   "category": "nutrition",
+   "display_size": "30.9oz",
+   "gtin": "0660726503270",
+   "image_ref": "prod_0660726503270",
+   "name": "Genuine Protein Powder",
+   "product_id": "prod_0660726503270",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Muscle Milk",
+   "category": "nutrition",
+   "display_size": "907 g",
+   "gtin": "0660726534212",
+   "image_ref": "prod_0660726534212",
+   "name": "Protein Powder Supplement",
+   "product_id": "prod_0660726534212",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Naked",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "0850042128466",
+   "image_ref": "prod_0850042128466",
+   "name": "Whey",
+   "product_id": "prod_0850042128466",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "OPTIMUM NUTRITION",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "0748927028669",
+   "image_ref": "prod_0748927028669",
+   "name": "Gold Standard 100% Whey Protein Double Rich Chocolate",
+   "product_id": "prod_0748927028669",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "OWYN",
+   "category": "nutrition",
+   "display_size": "1.32 g",
+   "gtin": "0850043711605",
+   "image_ref": "prod_0850043711605",
+   "name": "Plant Protein Zero Sugar",
+   "product_id": "prod_0850043711605",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Optimum Nutrition",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "",
+   "image_ref": "prod_whey_vanilla",
+   "name": "100% Whey Protein",
+   "product_id": "prod_whey_vanilla",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "on whey",
+    "protein",
+    "protein powder",
+    "shake",
+    "vanilla protein",
+    "vanilla whey",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": "Vanilla Ice Cream"
+  },
+  {
+   "brand": "Optimum Nutrition",
+   "category": "nutrition",
+   "display_size": "25.6 oz",
+   "gtin": "0748927069563",
+   "image_ref": "prod_0748927069563",
+   "name": "100% Whey Protein",
+   "product_id": "prod_0748927069563",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Optimum Nutrition",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "",
+   "image_ref": "prod_whey_chocolate",
+   "name": "Gold Standard 100% Whey",
+   "product_id": "prod_whey_chocolate",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "chocolate protein",
+    "chocolate whey",
+    "on whey",
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": "Extreme Milk Chocolate"
+  },
+  {
+   "brand": "Optimum Nutrition",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "0748927069518",
+   "image_ref": "prod_0748927069518",
+   "name": "Gold Standard 100% Whey Protein",
+   "product_id": "prod_0748927069518",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Optimum Nutrition",
+   "category": "nutrition",
+   "display_size": "80 x 31g",
+   "gtin": "0748927065404",
+   "image_ref": "prod_0748927065404",
+   "name": "Protein powder",
+   "product_id": "prod_0748927065404",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Orgain",
+   "category": "nutrition",
+   "display_size": "43.2 oz (2.7 lbs) 1.22kg",
+   "gtin": "0851770007566",
+   "image_ref": "prod_0851770007566",
+   "name": "Organic Protein",
+   "product_id": "prod_0851770007566",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Orgain",
+   "category": "nutrition",
+   "display_size": "2.03 lbs",
+   "gtin": "0851770003179",
+   "image_ref": "prod_0851770003179",
+   "name": "Organic Protein Protein Powder",
+   "product_id": "prod_0851770003179",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Premier Protein",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "0643843715887",
+   "image_ref": "prod_0643843715887",
+   "name": "100% Whey Protein Powder",
+   "product_id": "prod_0643843715887",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Premier Protein",
+   "category": "nutrition",
+   "display_size": "1370 g",
+   "gtin": "0643843803225",
+   "image_ref": "prod_0643843803225",
+   "name": "Vanilla Milkshake",
+   "product_id": "prod_0643843803225",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Vital Proteins",
+   "category": "nutrition",
+   "display_size": "",
+   "gtin": "0850019568240",
+   "image_ref": "prod_0850019568240",
+   "name": "Collagen Peptides",
+   "product_id": "prod_0850019568240",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "whey_protein",
+   "synonyms": [
+    "protein",
+    "protein powder",
+    "shake",
+    "whey"
+   ],
+   "unit": "tub",
+   "variant": ""
+  },
+  {
+   "brand": "Catalina Crunch",
+   "category": "pantry",
+   "display_size": "24 oz",
+   "gtin": "0850017468993",
+   "image_ref": "prod_0850017468993",
+   "name": "Cinnamon Toast Protein Cereal",
+   "product_id": "prod_0850017468993",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Cheerios",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0016000435094",
+   "image_ref": "prod_0016000435094",
+   "name": "Toasted Whole Grain Oat Cereal",
+   "product_id": "prod_0016000435094",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "General Mills",
+   "category": "pantry",
+   "display_size": "8.9 oz",
+   "gtin": "0016000275263",
+   "image_ref": "prod_0016000275263",
+   "name": "Cheerios",
+   "product_id": "prod_0016000275263",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "General Mills",
+   "category": "pantry",
+   "display_size": "10.8 oz",
+   "gtin": "0016000124790",
+   "image_ref": "prod_0016000124790",
+   "name": "Honey Nut Cheerios",
+   "product_id": "prod_0016000124790",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Kirkland Signature",
+   "category": "pantry",
+   "display_size": "35.3 oz (1 kg)",
+   "gtin": "0096619194261",
+   "image_ref": "prod_0096619194261",
+   "name": "Ancient Grains Probiotic Granola",
+   "product_id": "prod_0096619194261",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Morning Summit",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0016000147652",
+   "image_ref": "prod_0016000147652",
+   "name": "Lightly Sweetened Maple Berry Blend Cereal",
+   "product_id": "prod_0016000147652",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Nature Valley",
+   "category": "pantry",
+   "display_size": "1.49oz (42 g)",
+   "gtin": "0016000264694",
+   "image_ref": "prod_0016000264694",
+   "name": "Oats 'N Honey Granola Bars",
+   "product_id": "prod_0016000264694",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Nature's Path Organic",
+   "category": "pantry",
+   "display_size": "375g",
+   "gtin": "0058449770206",
+   "image_ref": "prod_0058449770206",
+   "name": "Heritage Flakes",
+   "product_id": "prod_0058449770206",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Nature's Path Organic",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0058449770565",
+   "image_ref": "prod_0058449770565",
+   "name": "Pumpkin Seed + Flax Granola",
+   "product_id": "prod_0058449770565",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "One Degree Organic Foods",
+   "category": "pantry",
+   "display_size": "5 lbs (80 oz) 2.27 kg",
+   "gtin": "0675625371189",
+   "image_ref": "prod_0675625371189",
+   "name": "Sprouted Rolled Oats",
+   "product_id": "prod_0675625371189",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Post",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0884912004710",
+   "image_ref": "prod_0884912004710",
+   "name": "grape-nuts cereal",
+   "product_id": "prod_0884912004710",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Purely Elizabeth",
+   "category": "pantry",
+   "display_size": "34 oz",
+   "gtin": "0810589032312",
+   "image_ref": "prod_0810589032312",
+   "name": "Organic Original Salty-sweet Granola",
+   "product_id": "prod_0810589032312",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Purely Elizabeth.",
+   "category": "pantry",
+   "display_size": "12 oz (340 g)",
+   "gtin": "0855140002175",
+   "image_ref": "prod_0855140002175",
+   "name": "Original Ancient Grain Granola",
+   "product_id": "prod_0855140002175",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "QUAKER",
+   "category": "pantry",
+   "display_size": "1.95 kg",
+   "gtin": "0030000436073",
+   "image_ref": "prod_0030000436073",
+   "name": "Simply Granola Oats, Honey, Raisins & Almonds",
+   "product_id": "prod_0030000436073",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Quaker Oats",
+   "category": "pantry",
+   "display_size": "18 oz (510 g)",
+   "gtin": "0030000010204",
+   "image_ref": "prod_0030000010204",
+   "name": "Old Fashioned 100% Whole Grain Rolled Oats",
+   "product_id": "prod_0030000010204",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Quaker Oats",
+   "category": "pantry",
+   "display_size": "42 oz",
+   "gtin": "0030000010402",
+   "image_ref": "prod_0030000010402",
+   "name": "Old Fashioned Oats",
+   "product_id": "prod_0030000010402",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Quaker Oats",
+   "category": "pantry",
+   "display_size": "42 Oz / 1.19 kg",
+   "gtin": "0030000012000",
+   "image_ref": "prod_0030000012000",
+   "name": "Quick 1-Minute Oats",
+   "product_id": "prod_0030000012000",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Snacks Generation LLC",
+   "category": "pantry",
+   "display_size": "624g",
+   "gtin": "0819562022791",
+   "image_ref": "prod_0819562022791",
+   "name": "nut granola blueberry cinnamon sweet & crunchy",
+   "product_id": "prod_0819562022791",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "cereal",
+   "synonyms": [
+    "breakfast",
+    "cereal"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "BRIMS",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0028293013453",
+   "image_ref": "prod_0028293013453",
+   "name": "Rings",
+   "product_id": "prod_0028293013453",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Bettergoods",
+   "category": "pantry",
+   "display_size": "10 oz",
+   "gtin": "0194346191581",
+   "image_ref": "prod_0194346191581",
+   "name": "Heirloom Blue Corn and Multigrain Tortilla Chips",
+   "product_id": "prod_0194346191581",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Biena",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0810003781048",
+   "image_ref": "prod_0810003781048",
+   "name": "Tasty Thins Veggie Crisps Hawaiian BBQ Flavored",
+   "product_id": "prod_0810003781048",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Cheetos",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0028400623537",
+   "image_ref": "prod_0028400623537",
+   "name": "Baked Flamin' Hot",
+   "product_id": "prod_0028400623537",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Garden",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0829515326890",
+   "image_ref": "prod_0829515326890",
+   "name": "Veggie Puffs Crispy Taco",
+   "product_id": "prod_0829515326890",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "H-E-B",
+   "category": "pantry",
+   "display_size": "16 oz",
+   "gtin": "0041220707225",
+   "image_ref": "prod_0041220707225",
+   "name": "Unsalted Tortilla Chips",
+   "product_id": "prod_0041220707225",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Harvest Snaps",
+   "category": "pantry",
+   "display_size": "8.5 g",
+   "gtin": "0071146009042",
+   "image_ref": "prod_0071146009042",
+   "name": "tomato basil",
+   "product_id": "prod_0071146009042",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Jackson's",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0856823004974",
+   "image_ref": "prod_0856823004974",
+   "name": "Sweet Potato Chips Farmhouse Ranch",
+   "product_id": "prod_0856823004974",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Late July",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0815099021658",
+   "image_ref": "prod_0815099021658",
+   "name": "Organic Chia & Quinoa Restaurant Style Tortilla Chips",
+   "product_id": "prod_0815099021658",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "PopCorners",
+   "category": "pantry",
+   "display_size": "30 oz",
+   "gtin": "0810607024244",
+   "image_ref": "prod_0810607024244",
+   "name": "Popcorners",
+   "product_id": "prod_0810607024244",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Siete",
+   "category": "pantry",
+   "display_size": "4 oz",
+   "gtin": "0810091780381",
+   "image_ref": "prod_0810091780381",
+   "name": "Queso Grain Free Puff Snacks",
+   "product_id": "prod_0810091780381",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Simple Truth",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0011110096845",
+   "image_ref": "prod_0011110096845",
+   "name": "Veggie & Flaxseed Corn Tortilla Chips",
+   "product_id": "prod_0011110096845",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Simply",
+   "category": "pantry",
+   "display_size": "35 oz",
+   "gtin": "0764218651248",
+   "image_ref": "prod_0764218651248",
+   "name": "Quinoa Chips Sea Salt",
+   "product_id": "prod_0764218651248",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Sun Chips",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0028400008839",
+   "image_ref": "prod_0028400008839",
+   "name": "Original Sun Chips",
+   "product_id": "prod_0028400008839",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Trader Joe's",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "00629546",
+   "image_ref": "prod_00629546",
+   "name": "Plantain Chips",
+   "product_id": "prod_00629546",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "WILDE",
+   "category": "pantry",
+   "display_size": "4 oz",
+   "gtin": "0856802008825",
+   "image_ref": "prod_0856802008825",
+   "name": "Sea Salt & Vinegar Flavor Protein Chips",
+   "product_id": "prod_0856802008825",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "chips",
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "KIND",
+   "category": "pantry",
+   "display_size": "10.58 oz",
+   "gtin": "0602652419317",
+   "image_ref": "prod_0602652419317",
+   "name": "Breakfast Protein Bars",
+   "product_id": "prod_0602652419317",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "KIND",
+   "category": "pantry",
+   "display_size": "1.4 oz",
+   "gtin": "0602652170300",
+   "image_ref": "prod_0602652170300",
+   "name": "Caramel Almond & Sea Salt with Almonds",
+   "product_id": "prod_0602652170300",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "KIND",
+   "category": "pantry",
+   "display_size": "10.58 oz (300 g)",
+   "gtin": "0602652419300",
+   "image_ref": "prod_0602652419300",
+   "name": "breakfast protein Dark Chocolate Cocoa",
+   "product_id": "prod_0602652419300",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Kashi GO",
+   "category": "pantry",
+   "display_size": "1.1 lb",
+   "gtin": "0018627115656",
+   "image_ref": "prod_0018627115656",
+   "name": "peanut butter crunch",
+   "product_id": "prod_0018627115656",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Kirkland",
+   "category": "pantry",
+   "display_size": "40 g",
+   "gtin": "0096619215690",
+   "image_ref": "prod_0096619215690",
+   "name": "Nut Bars",
+   "product_id": "prod_0096619215690",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Kirkland Signature",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0096619215607",
+   "image_ref": "prod_0096619215607",
+   "name": "Nut Bars with Cocoa Drizzle & Sea Salt",
+   "product_id": "prod_0096619215607",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "MADE GOOD",
+   "category": "pantry",
+   "display_size": "4.25 oz (120 g)",
+   "gtin": "0687456223551",
+   "image_ref": "prod_0687456223551",
+   "name": "Organic Granola Bites chocolate chip",
+   "product_id": "prod_0687456223551",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "MADE GOOD",
+   "category": "pantry",
+   "display_size": "5.1 oz (144 g)",
+   "gtin": "0687456213057",
+   "image_ref": "prod_0687456213057",
+   "name": "chocolate chip",
+   "product_id": "prod_0687456213057",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "MADE GOOD MORNINGS",
+   "category": "pantry",
+   "display_size": "5.3 oz (150 g)",
+   "gtin": "0687456215648",
+   "image_ref": "prod_0687456215648",
+   "name": "ORGANIC SOFT BAKED OAT BARS chocolate chip",
+   "product_id": "prod_0687456215648",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "MADEGOOD",
+   "category": "pantry",
+   "display_size": "144 g (6 * 24 g)",
+   "gtin": "0687456213064",
+   "image_ref": "prod_0687456213064",
+   "name": "ORGANIC CHEWY GRANOLA BARS mixed berry",
+   "product_id": "prod_0687456213064",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Made Good",
+   "category": "pantry",
+   "display_size": "0.85 oz (24g)",
+   "gtin": "0687456221045",
+   "image_ref": "prod_0687456221045",
+   "name": "Organic Granola Bites",
+   "product_id": "prod_0687456221045",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Nature Valley",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0016000487598",
+   "image_ref": "prod_0016000487598",
+   "name": "Crunchy Granola Bars Oats 'n Honey",
+   "product_id": "prod_0016000487598",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Nature Valley",
+   "category": "pantry",
+   "display_size": "8.94 oz",
+   "gtin": "0016000264601",
+   "image_ref": "prod_0016000264601",
+   "name": "Crunchy Oats 'n Honey",
+   "product_id": "prod_0016000264601",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Nature Valley",
+   "category": "pantry",
+   "display_size": "35 g",
+   "gtin": "0016000442825",
+   "image_ref": "prod_0016000442825",
+   "name": "Sweet & Salty Nut Peanut Chewy Granola Bar",
+   "product_id": "prod_0016000442825",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Nature Valley Sweet & Salty Nut Almond",
+   "category": "pantry",
+   "display_size": "34g",
+   "gtin": "0016000442818",
+   "image_ref": "prod_0016000442818",
+   "name": "Chewy Granola Bar",
+   "product_id": "prod_0016000442818",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Soft & Chewy",
+   "category": "pantry",
+   "display_size": "24 g",
+   "gtin": "0096619313952",
+   "image_ref": "prod_0096619313952",
+   "name": "Granola Bar",
+   "product_id": "prod_0096619313952",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "granola_bar",
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Carmy Richards",
+   "category": "pantry",
+   "display_size": "16 oz (453g)",
+   "gtin": "0074822610631",
+   "image_ref": "prod_0074822610631",
+   "name": "100% Peanuts! Creamy",
+   "product_id": "prod_0074822610631",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Jif",
+   "category": "pantry",
+   "display_size": "16oz",
+   "gtin": "0051500255162",
+   "image_ref": "prod_0051500255162",
+   "name": "Creamy Peanut Butter",
+   "product_id": "prod_0051500255162",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Jif",
+   "category": "pantry",
+   "display_size": "16 oz (1 lb) 454 g",
+   "gtin": "0051500255377",
+   "image_ref": "prod_0051500255377",
+   "name": "Extra Crunchy Peanut Butter",
+   "product_id": "prod_0051500255377",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Jif",
+   "category": "pantry",
+   "display_size": "28oz",
+   "gtin": "0051500241776",
+   "image_ref": "prod_0051500241776",
+   "name": "Peanut Butter",
+   "product_id": "prod_0051500241776",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Jif",
+   "category": "pantry",
+   "display_size": "40 oz",
+   "gtin": "0051500243213",
+   "image_ref": "prod_0051500243213",
+   "name": "Peanut Butter Spread",
+   "product_id": "prod_0051500243213",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Jiffy",
+   "category": "pantry",
+   "display_size": "440g",
+   "gtin": "0051500245408",
+   "image_ref": "prod_0051500245408",
+   "name": "Peanut butter",
+   "product_id": "prod_0051500245408",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Justin's",
+   "category": "pantry",
+   "display_size": "16 oz",
+   "gtin": "0855188003004",
+   "image_ref": "prod_0855188003004",
+   "name": "Peanut Butter Spread",
+   "product_id": "prod_0855188003004",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Kirkland",
+   "category": "pantry",
+   "display_size": "793.8 g",
+   "gtin": "0096619555505",
+   "image_ref": "prod_0096619555505",
+   "name": "Organic Creamy Peanut Butter",
+   "product_id": "prod_0096619555505",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "NuttZo",
+   "category": "pantry",
+   "display_size": "737g",
+   "gtin": "0894697002184",
+   "image_ref": "prod_0894697002184",
+   "name": "Organic 7 Nut & Seed Butter POWER FUEL Crunchy",
+   "product_id": "prod_0894697002184",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Santa Cruz Organic",
+   "category": "pantry",
+   "display_size": "16 oz",
+   "gtin": "0051500902882",
+   "image_ref": "prod_0051500902882",
+   "name": "Creamy Dark Roasted Peanut Butter",
+   "product_id": "prod_0051500902882",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Skippy",
+   "category": "pantry",
+   "display_size": "16.3oz",
+   "gtin": "0037600110754",
+   "image_ref": "prod_0037600110754",
+   "name": "Creamy Peanut Butter",
+   "product_id": "prod_0037600110754",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Skippy",
+   "category": "pantry",
+   "display_size": "40oz",
+   "gtin": "0037600106740",
+   "image_ref": "prod_0037600106740",
+   "name": "Natural Creamy Peanut Butter Spread",
+   "product_id": "prod_0037600106740",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Skippy",
+   "category": "pantry",
+   "display_size": "48 oz",
+   "gtin": "0037600223348",
+   "image_ref": "prod_0037600223348",
+   "name": "Peanut Butter",
+   "product_id": "prod_0037600223348",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Smucker's",
+   "category": "pantry",
+   "display_size": "454g",
+   "gtin": "0051500017005",
+   "image_ref": "prod_0051500017005",
+   "name": "Natural Creamy Peanut Butter",
+   "product_id": "prod_0051500017005",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Smucker's",
+   "category": "pantry",
+   "display_size": "737 g",
+   "gtin": "0051500068243",
+   "image_ref": "prod_0051500068243",
+   "name": "Natural Peanut Butter Creamy",
+   "product_id": "prod_0051500068243",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Smuckers",
+   "category": "pantry",
+   "display_size": "16 oz (1 lb) (454 g)",
+   "gtin": "0051500053300",
+   "image_ref": "prod_0051500053300",
+   "name": "Peanut butter",
+   "product_id": "prod_0051500053300",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "nut_butter",
+   "synonyms": [
+    "nut butter",
+    "peanut butter"
+   ],
+   "unit": "jar",
+   "variant": ""
+  },
+  {
+   "brand": "Banza",
+   "category": "pantry",
+   "display_size": "8 oz",
+   "gtin": "0857183005014",
+   "image_ref": "prod_0857183005014",
+   "name": "Protein Made From Chickpeas",
+   "product_id": "prod_0857183005014",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Barilla",
+   "category": "pantry",
+   "display_size": "16 oz (1LB) 454 grams",
+   "gtin": "0076808516135",
+   "image_ref": "prod_0076808516135",
+   "name": "Elbows",
+   "product_id": "prod_0076808516135",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Barilla",
+   "category": "pantry",
+   "display_size": "12 oz (340 g)",
+   "gtin": "0076808003888",
+   "image_ref": "prod_0076808003888",
+   "name": "Gluten Free Spaghetti",
+   "product_id": "prod_0076808003888",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Barilla",
+   "category": "pantry",
+   "display_size": "1 lb",
+   "gtin": "0076808280739",
+   "image_ref": "prod_0076808280739",
+   "name": "Penne",
+   "product_id": "prod_0076808280739",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Barilla",
+   "category": "pantry",
+   "display_size": "411 g",
+   "gtin": "0076808533583",
+   "image_ref": "prod_0076808533583",
+   "name": "Protein+ Rotini",
+   "product_id": "prod_0076808533583",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Barilla",
+   "category": "pantry",
+   "display_size": "454g",
+   "gtin": "0076808280081",
+   "image_ref": "prod_0076808280081",
+   "name": "Spaghetti",
+   "product_id": "prod_0076808280081",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Barilla",
+   "category": "pantry",
+   "display_size": "16 oz",
+   "gtin": "0076808005851",
+   "image_ref": "prod_0076808005851",
+   "name": "Whole Grain Penne",
+   "product_id": "prod_0076808005851",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Kraft",
+   "category": "pantry",
+   "display_size": "7.25oz",
+   "gtin": "0021000658831",
+   "image_ref": "prod_0021000658831",
+   "name": "mac & cheese",
+   "product_id": "prod_0021000658831",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Lotus Foods",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0708953628134",
+   "image_ref": "prod_0708953628134",
+   "name": "Millet & Brown Rice Ramen Noodles",
+   "product_id": "prod_0708953628134",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Maruchan",
+   "category": "pantry",
+   "display_size": "64g",
+   "gtin": "0041789001215",
+   "image_ref": "prod_0041789001215",
+   "name": "Chicken Ramen",
+   "product_id": "prod_0041789001215",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Maruchan",
+   "category": "pantry",
+   "display_size": "3 oz",
+   "gtin": "0041789002120",
+   "image_ref": "prod_0041789002120",
+   "name": "Ramen Noodle Soup",
+   "product_id": "prod_0041789002120",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Maruchan",
+   "category": "pantry",
+   "display_size": "85 g",
+   "gtin": "0041789002113",
+   "image_ref": "prod_0041789002113",
+   "name": "Ramen Noodle Soup Chicken Flavor",
+   "product_id": "prod_0041789002113",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Nissin",
+   "category": "pantry",
+   "display_size": "3 oz",
+   "gtin": "0070662010037",
+   "image_ref": "prod_0070662010037",
+   "name": "Chicken Ramen Noodle Soup",
+   "product_id": "prod_0070662010037",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Velveeta",
+   "category": "pantry",
+   "display_size": "12 oz (340g)",
+   "gtin": "0021000658930",
+   "image_ref": "prod_0021000658930",
+   "name": "Original Shell Pasta & Cheese Sauce",
+   "product_id": "prod_0021000658930",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "pasta",
+   "synonyms": [
+    "noodles",
+    "pasta"
+   ],
+   "unit": "box",
+   "variant": ""
+  },
+  {
+   "brand": "Ben's Original",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0054800423385",
+   "image_ref": "prod_0054800423385",
+   "name": "Ready Rice BASMATI",
+   "product_id": "prod_0054800423385",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "rice",
+   "synonyms": [
+    "rice"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Ben's Original",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0054800423392",
+   "image_ref": "prod_0054800423392",
+   "name": "Ready Rice Jasmine",
+   "product_id": "prod_0054800423392",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "rice",
+   "synonyms": [
+    "rice"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Ben's Original",
+   "category": "pantry",
+   "display_size": "250 g",
+   "gtin": "0054800423323",
+   "image_ref": "prod_0054800423323",
+   "name": "Ready Rice Spanish Style",
+   "product_id": "prod_0054800423323",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "rice",
+   "synonyms": [
+    "rice"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Ben's Original",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0054800423347",
+   "image_ref": "prod_0054800423347",
+   "name": "Ready Rice Whole Grain Brown",
+   "product_id": "prod_0054800423347",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "rice",
+   "synonyms": [
+    "rice"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Bibigo",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0807176714027",
+   "image_ref": "prod_0807176714027",
+   "name": "Cooked Sticky White Rice",
+   "product_id": "prod_0807176714027",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "rice",
+   "synonyms": [
+    "rice"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Lundberg",
+   "category": "pantry",
+   "display_size": "16 oz",
+   "gtin": "0073416004306",
+   "image_ref": "prod_0073416004306",
+   "name": "wild rice",
+   "product_id": "prod_0073416004306",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "rice",
+   "synonyms": [
+    "rice"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Minute",
+   "category": "pantry",
+   "display_size": "125 g",
+   "gtin": "0017400140045",
+   "image_ref": "prod_0017400140045",
+   "name": "Brown & Wild Rice",
+   "product_id": "prod_0017400140045",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "rice",
+   "synonyms": [
+    "rice"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Minute",
+   "category": "pantry",
+   "display_size": "8 oz",
+   "gtin": "0017400140014",
+   "image_ref": "prod_0017400140014",
+   "name": "Brown Rice",
+   "product_id": "prod_0017400140014",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "rice",
+   "synonyms": [
+    "rice"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Minute",
+   "category": "pantry",
+   "display_size": "46 g",
+   "gtin": "0017400118150",
+   "image_ref": "prod_0017400118150",
+   "name": "White Rice",
+   "product_id": "prod_0017400118150",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "rice",
+   "synonyms": [
+    "rice"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Near East",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0072251001051",
+   "image_ref": "prod_0072251001051",
+   "name": "Rice Pilaf Mix Original",
+   "product_id": "prod_0072251001051",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "rice",
+   "synonyms": [
+    "rice"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "RiceSelect",
+   "category": "pantry",
+   "display_size": "595.3 g",
+   "gtin": "0074401760412",
+   "image_ref": "prod_0074401760412",
+   "name": "Royal Blend Rice Blend",
+   "product_id": "prod_0074401760412",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "rice",
+   "synonyms": [
+    "rice"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Seeds of Change",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "0748404287947",
+   "image_ref": "prod_0748404287947",
+   "name": "Organic Quinoa & Brown Rice with Garlic",
+   "product_id": "prod_0748404287947",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "rice",
+   "synonyms": [
+    "rice"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
+   "brand": "Algabo Foot",
+   "category": "toiletries",
+   "display_size": "200g 7Oz.",
+   "gtin": "7791274009532",
+   "image_ref": "prod_7791274009532",
+   "name": "Polvo desodorante para pies",
+   "product_id": "prod_7791274009532",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Arm & Hammer",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0033200197935",
+   "image_ref": "prod_0033200197935",
+   "name": "Essentials Rosemary Lavender",
+   "product_id": "prod_0033200197935",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Dove",
+   "category": "toiletries",
+   "display_size": "74g",
+   "gtin": "0079400352972",
+   "image_ref": "prod_0079400352972",
+   "name": "Women Cool Essentials",
+   "product_id": "prod_0079400352972",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Gellette",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0047400664685",
+   "image_ref": "prod_0047400664685",
+   "name": "Cool Wave Antiperspirantant",
+   "product_id": "prod_0047400664685",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Gillette",
+   "category": "toiletries",
+   "display_size": "3.8 oz (107 g)",
+   "gtin": "0037000731566",
+   "image_ref": "prod_0037000731566",
+   "name": "Clearshield Wild Rain",
+   "product_id": "prod_0037000731566",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Hey Humans",
+   "category": "toiletries",
+   "display_size": "2 oz",
+   "gtin": "0840797140479",
+   "image_ref": "prod_0840797140479",
+   "name": "Natural Deodorant Cedarwood Sage",
+   "product_id": "prod_0840797140479",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Native",
+   "category": "toiletries",
+   "display_size": "2.65 Oz (75g)",
+   "gtin": "0812154035223",
+   "image_ref": "prod_0812154035223",
+   "name": "Coconut & Vanilla Deodorant Stick",
+   "product_id": "prod_0812154035223",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Old Spice",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0012044038918",
+   "image_ref": "prod_0012044038918",
+   "name": "Pure Sport",
+   "product_id": "prod_0012044038918",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Old Spice",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0012044037560",
+   "image_ref": "prod_0012044037560",
+   "name": "Swagger",
+   "product_id": "prod_0012044037560",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Old Spice",
+   "category": "toiletries",
+   "display_size": "4.3 oz",
+   "gtin": "0012044049891",
+   "image_ref": "prod_0012044049891",
+   "name": "Swagger Spray",
+   "product_id": "prod_0012044049891",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Old Spice",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "7501001309060",
+   "image_ref": "prod_7501001309060",
+   "name": "V-I-P",
+   "product_id": "prod_7501001309060",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Ombia",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "4061458223829",
+   "image_ref": "prod_4061458223829",
+   "name": "deodorant",
+   "product_id": "prod_4061458223829",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Secret",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0030772149379",
+   "image_ref": "prod_0030772149379",
+   "name": "Clinical Dry Spray Antiperspirant / Deodorant",
+   "product_id": "prod_0030772149379",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Speed Stick",
+   "category": "toiletries",
+   "display_size": "3 Oz",
+   "gtin": "0022200941525",
+   "image_ref": "prod_0022200941525",
+   "name": "Regular",
+   "product_id": "prod_0022200941525",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "deodorant",
+   "synonyms": [
+    "antiperspirant",
+    "deodorant"
+   ],
+   "unit": "stick",
+   "variant": ""
+  },
+  {
+   "brand": "Aquaphor",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0072140021092",
+   "image_ref": "prod_0072140021092",
+   "name": "Baby Wash & Shampoo",
+   "product_id": "prod_0072140021092",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "Aussie",
+   "category": "toiletries",
+   "display_size": "778 ml",
+   "gtin": "0381519183379",
+   "image_ref": "prod_0381519183379",
+   "name": "Total Miracle 7in1",
+   "product_id": "prod_0381519183379",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "Cleaf",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "8851932399517",
+   "image_ref": "prod_8851932399517",
+   "name": "Clear",
+   "product_id": "prod_8851932399517",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "Dr Squatch",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0863765000087",
+   "image_ref": "prod_0863765000087",
+   "name": "Cypress Coast",
+   "product_id": "prod_0863765000087",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "Farateb",
+   "category": "toiletries",
+   "display_size": "300g",
+   "gtin": "6262719701645",
+   "image_ref": "prod_6262719701645",
+   "name": "Reyhan Shampoo",
+   "product_id": "prod_6262719701645",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "Garnier",
+   "category": "toiletries",
+   "display_size": "828mL",
+   "gtin": "0603084560691",
+   "image_ref": "prod_0603084560691",
+   "name": "Honey Treasures",
+   "product_id": "prod_0603084560691",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "Kit-sch",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0343165985646",
+   "image_ref": "prod_0343165985646",
+   "name": "Strengthening Solid Shampoo Rice Water Protein",
+   "product_id": "prod_0343165985646",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "MONDAY",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0840191600722",
+   "image_ref": "prod_0840191600722",
+   "name": "Original Dry Shampoo",
+   "product_id": "prod_0840191600722",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "Pipette",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0850008525681",
+   "image_ref": "prod_0850008525681",
+   "name": "Baby Shampoo + Wash",
+   "product_id": "prod_0850008525681",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "Revae Naturals",
+   "category": "toiletries",
+   "display_size": "4.35 oz",
+   "gtin": "0198715773637",
+   "image_ref": "prod_0198715773637",
+   "name": "Rosemary shampoo bar",
+   "product_id": "prod_0198715773637",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "Sasha Pure",
+   "category": "toiletries",
+   "display_size": "355ml",
+   "gtin": "0815413022781",
+   "image_ref": "prod_0815413022781",
+   "name": "Vegan Shampoo - Curls",
+   "product_id": "prod_0815413022781",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "Shampo",
+   "category": "toiletries",
+   "display_size": "300 ml",
+   "gtin": "3574669907842",
+   "image_ref": "prod_3574669907842",
+   "name": "johnsons",
+   "product_id": "prod_3574669907842",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "TRESemmé",
+   "category": "toiletries",
+   "display_size": "24 oz",
+   "gtin": "0022400006741",
+   "image_ref": "prod_0022400006741",
+   "name": "Shampoo Light Moisture Pro Pure",
+   "product_id": "prod_0022400006741",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "The Organic Forest",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "8904406220418",
+   "image_ref": "prod_8904406220418",
+   "name": "Anti-Dandruff Shampoo",
+   "product_id": "prod_8904406220418",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "Tío Nacho",
+   "category": "toiletries",
+   "display_size": "415 ml",
+   "gtin": "0650240035166",
+   "image_ref": "prod_0650240035166",
+   "name": "Anti-Caida Engrosador",
+   "product_id": "prod_0650240035166",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "Wella Professionals",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "4064666301945",
+   "image_ref": "prod_4064666301945",
+   "name": "Invigo Nutri-Enrich Deep Nourishing Shampoo",
+   "product_id": "prod_4064666301945",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "shampoo",
+   "synonyms": [
+    "hair",
+    "shampoo"
+   ],
+   "unit": "bottle",
+   "variant": ""
+  },
+  {
+   "brand": "Alchimia",
+   "category": "toiletries",
+   "display_size": "1000 ml",
+   "gtin": "8059016854406",
+   "image_ref": "prod_8059016854406",
+   "name": "Olive Oil Moisturizing Body Wash",
+   "product_id": "prod_8059016854406",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soap",
+   "synonyms": [
+    "body wash",
+    "hand soap",
+    "soap"
+   ],
+   "unit": "bar",
+   "variant": ""
+  },
+  {
+   "brand": "Carex",
+   "category": "toiletries",
+   "display_size": "500ml",
+   "gtin": "5000101506000",
+   "image_ref": "prod_5000101506000",
+   "name": "Soap",
+   "product_id": "prod_5000101506000",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soap",
+   "synonyms": [
+    "body wash",
+    "hand soap",
+    "soap"
+   ],
+   "unit": "bar",
+   "variant": ""
+  },
+  {
+   "brand": "Dersa",
+   "category": "toiletries",
+   "display_size": "1800 ml",
+   "gtin": "7702166053434",
+   "image_ref": "prod_7702166053434",
+   "name": "Top terra ecologico",
+   "product_id": "prod_7702166053434",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soap",
+   "synonyms": [
+    "body wash",
+    "hand soap",
+    "soap"
+   ],
+   "unit": "bar",
+   "variant": ""
+  },
+  {
+   "brand": "Dove",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0011111018723",
+   "image_ref": "prod_0011111018723",
+   "name": "original beauty bar",
+   "product_id": "prod_0011111018723",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soap",
+   "synonyms": [
+    "body wash",
+    "hand soap",
+    "soap"
+   ],
+   "unit": "bar",
+   "variant": ""
+  },
+  {
+   "brand": "Dr. Bronner's",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0018787761168",
+   "image_ref": "prod_0018787761168",
+   "name": "Magic Soap Almond",
+   "product_id": "prod_0018787761168",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soap",
+   "synonyms": [
+    "body wash",
+    "hand soap",
+    "soap"
+   ],
+   "unit": "bar",
+   "variant": ""
+  },
+  {
+   "brand": "Dr. Bronner's",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0018787772324",
+   "image_ref": "prod_0018787772324",
+   "name": "Magic Soap Baby Unscented",
+   "product_id": "prod_0018787772324",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soap",
+   "synonyms": [
+    "body wash",
+    "hand soap",
+    "soap"
+   ],
+   "unit": "bar",
+   "variant": ""
+  },
+  {
+   "brand": "Ginger Lily Farms",
+   "category": "toiletries",
+   "display_size": "12 FL OZ",
+   "gtin": "0672047001175",
+   "image_ref": "prod_0672047001175",
+   "name": "Conditioning Hand Soap",
+   "product_id": "prod_0672047001175",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soap",
+   "synonyms": [
+    "body wash",
+    "hand soap",
+    "soap"
+   ],
+   "unit": "bar",
+   "variant": ""
+  },
+  {
+   "brand": "Mrs. Meyer's clean day",
+   "category": "toiletries",
+   "display_size": "975 ml",
+   "gtin": "0808124111639",
+   "image_ref": "prod_0808124111639",
+   "name": "Hand soap refill",
+   "product_id": "prod_0808124111639",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soap",
+   "synonyms": [
+    "body wash",
+    "hand soap",
+    "soap"
+   ],
+   "unit": "bar",
+   "variant": ""
+  },
+  {
+   "brand": "Newtis",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0170000540258",
+   "image_ref": "prod_0170000540258",
+   "name": "Milk protein hand wash",
+   "product_id": "prod_0170000540258",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soap",
+   "synonyms": [
+    "body wash",
+    "hand soap",
+    "soap"
+   ],
+   "unit": "bar",
+   "variant": ""
+  },
+  {
+   "brand": "Seventh Generation",
+   "category": "toiletries",
+   "display_size": "12 fl oz",
+   "gtin": "0732913229307",
+   "image_ref": "prod_0732913229307",
+   "name": "Free & Clean Soap",
+   "product_id": "prod_0732913229307",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soap",
+   "synonyms": [
+    "body wash",
+    "hand soap",
+    "soap"
+   ],
+   "unit": "bar",
+   "variant": ""
+  },
+  {
+   "brand": "Unilever",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "8000700000005",
+   "image_ref": "prod_8000700000005",
+   "name": "Dove Kremsåpe 100g",
+   "product_id": "prod_8000700000005",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soap",
+   "synonyms": [
+    "body wash",
+    "hand soap",
+    "soap"
+   ],
+   "unit": "bar",
+   "variant": ""
+  },
+  {
+   "brand": "White Barn",
+   "category": "toiletries",
+   "display_size": "8 fl oz",
+   "gtin": "0667556256925",
+   "image_ref": "prod_0667556256925",
+   "name": "Champagne Toast",
+   "product_id": "prod_0667556256925",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "soap",
+   "synonyms": [
+    "body wash",
+    "hand soap",
+    "soap"
+   ],
+   "unit": "bar",
+   "variant": ""
+  },
+  {
+   "brand": "365",
+   "category": "toiletries",
+   "display_size": "85g",
+   "gtin": "0099482529772",
+   "image_ref": "prod_0099482529772",
+   "name": "Peppermint Fluoride Toothpaste",
+   "product_id": "prod_0099482529772",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  },
+  {
+   "brand": "Burt's Bees",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "0192539000832",
+   "image_ref": "prod_0192539000832",
+   "name": "Bubble Bee",
+   "product_id": "prod_0192539000832",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  },
+  {
+   "brand": "CardioSmile",
+   "category": "toiletries",
+   "display_size": "4oz",
+   "gtin": "0634707505546",
+   "image_ref": "prod_0634707505546",
+   "name": "Fluoride Free Toothpaste",
+   "product_id": "prod_0634707505546",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  },
+  {
+   "brand": "Crest",
+   "category": "toiletries",
+   "display_size": "167g",
+   "gtin": "0030772160558",
+   "image_ref": "prod_0030772160558",
+   "name": "Toothpastes",
+   "product_id": "prod_0030772160558",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  },
+  {
+   "brand": "Dentitex",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "4088600192079",
+   "image_ref": "prod_4088600192079",
+   "name": "Flouride Toothpaste",
+   "product_id": "prod_4088600192079",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  },
+  {
+   "brand": "HiSmile",
+   "category": "toiletries",
+   "display_size": "2.1oz",
+   "gtin": "93568609",
+   "image_ref": "prod_93568609",
+   "name": "Anticavity Toothpaste, Watermelon Flavor",
+   "product_id": "prod_93568609",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  },
+  {
+   "brand": "Himalaya Botanique",
+   "category": "toiletries",
+   "display_size": "5.29 oz",
+   "gtin": "0605069200288",
+   "image_ref": "prod_0605069200288",
+   "name": "Whitening Complete Care Toothpaste",
+   "product_id": "prod_0605069200288",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  },
+  {
+   "brand": "K P NAMBOODIRI'S",
+   "category": "toiletries",
+   "display_size": "150g",
+   "gtin": "0023783714421",
+   "image_ref": "prod_0023783714421",
+   "name": "Toothpaste",
+   "product_id": "prod_0023783714421",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  },
+  {
+   "brand": "Now Solutions",
+   "category": "toiletries",
+   "display_size": "6.4 oz. (181 g)",
+   "gtin": "0733739080912",
+   "image_ref": "prod_0733739080912",
+   "name": "XliWhite",
+   "product_id": "prod_0733739080912",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  },
+  {
+   "brand": "Orajel",
+   "category": "toiletries",
+   "display_size": "4.2 oz",
+   "gtin": "0310310430184",
+   "image_ref": "prod_0310310430184",
+   "name": "Mixed Berry Anticavity Fluoride Toothpaste",
+   "product_id": "prod_0310310430184",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  },
+  {
+   "brand": "Oral B",
+   "category": "toiletries",
+   "display_size": "",
+   "gtin": "3014260279165",
+   "image_ref": "prod_3014260279165",
+   "name": "Dentrifico Niño",
+   "product_id": "prod_3014260279165",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  },
+  {
+   "brand": "Super Teeth",
+   "category": "toiletries",
+   "display_size": "3.4oz",
+   "gtin": "0860005336760",
+   "image_ref": "prod_0860005336760",
+   "name": "Probiotic mineral toothpaste",
+   "product_id": "prod_0860005336760",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  },
+  {
+   "brand": "Tom's of Maine",
+   "category": "toiletries",
+   "display_size": "4 oz",
+   "gtin": "0077326470176",
+   "image_ref": "prod_0077326470176",
+   "name": "Whole Care Anticavity Toothpaste",
+   "product_id": "prod_0077326470176",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  },
+  {
+   "brand": "Tom’s of Maine",
+   "category": "toiletries",
+   "display_size": "3.0oz",
+   "gtin": "0077326832608",
+   "image_ref": "prod_0077326832608",
+   "name": "Natural Flouride-Free Toothpaste Fresh Mint",
+   "product_id": "prod_0077326832608",
+   "source": "open_food_facts",
+   "source_ref": "openfoodfacts:2026-08-19",
+   "substitute_group": "toothpaste",
+   "synonyms": [
+    "tooth paste",
+    "toothpaste"
+   ],
+   "unit": "tube",
+   "variant": ""
+  }
+ ],
+ "snapshot": "2026-08-19",
+ "source": "Open Food Facts, Open Beauty Facts, Open Products Facts",
+ "source_url": "https://openfoodfacts.org"
+}

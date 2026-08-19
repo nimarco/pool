@@ -34,6 +34,7 @@ from pool.domain.models import (
     utcnow,
 )
 from pool.services.context import PoolContext
+from pool.services.demo import declare_flagship_need
 
 WS = "test"
 COMM = "comm_test"
@@ -81,6 +82,14 @@ def seeded(repo: InMemoryRepository) -> InMemoryRepository:
 
 @pytest.fixture
 def seeded_ctx(seeded, routing, payments) -> PoolContext:
+    """The community exactly as ``seed()`` leaves it.
+
+    Rosa has **not** declared the flagship whey need here — the fixture deliberately does
+    not seed it, because the first thing the product asks anyone to do is say what they
+    buy, and a demo that opens on a declaration nobody was shown making is the
+    pre-populated dashboard this design exists to remove. Use ``declared_ctx`` for the
+    canonical scenario.
+    """
     return PoolContext(
         repo=seeded,
         ws=WS,
@@ -90,6 +99,19 @@ def seeded_ctx(seeded, routing, payments) -> PoolContext:
         sourcing=SyntheticCatalogProvider(),
         now=utcnow(),
     )
+
+
+@pytest.fixture
+def declared_ctx(seeded_ctx) -> PoolContext:
+    """``seeded_ctx``, plus the one declaration a member makes for herself.
+
+    Made through the real ``declare_need`` service, exactly as the form and the showcase
+    do, so every canonical-scenario test starts from the same premise a person would
+    create by using the product — rather than from a fixture row that quietly stood in
+    for them.
+    """
+    declare_flagship_need(seeded_ctx)
+    return seeded_ctx
 
 
 @pytest.fixture

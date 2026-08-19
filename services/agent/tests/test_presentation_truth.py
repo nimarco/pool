@@ -16,7 +16,7 @@ def test_architecture_diagram_uses_current_counts_bounds_and_effect_kinds():
     svg = _read("docs/architecture.svg")
     effects = Counter(kind for _, kind in TOOL_SURFACE)
 
-    assert "24 of 40 API paths reachable" in svg
+    assert "26 of 42 API paths reachable" in svg
     assert "45 s cooperative" in svg
     assert (
         f'{effects["read"]} read · {effects["record"]} record · '
@@ -32,12 +32,35 @@ def test_architecture_diagram_uses_current_counts_bounds_and_effect_kinds():
 def test_rehearsal_uses_one_product_invocation_and_later_opens_stored_proof():
     script = _read("docs/DEMO_SCRIPT.md")
 
-    assert "Click `Find opportunities` exactly once" in script
+    assert "Click `Run Pool now` exactly once" in script
     assert "Technical proof for this run" in script
     assert "Do not open it" in script  # collapsed Run again control
     assert "Never invoke the runtime again" in script
     assert "Press **Run the deployed" not in script
     assert "same stored run" in script
+
+
+def test_the_rehearsal_opens_on_the_member_action_not_a_dashboard():
+    """The opening is the whole fix, so it is pinned rather than left to a copy pass.
+
+    A judge has to watch a person say what they buy and recognise it, *before* anything
+    about members, needs, or coordination appears. The previous opening led with "Rosa
+    has two standing declarations" and a table of thirty-three rows, which is a dashboard
+    being explained rather than a product being used.
+    """
+    script = _read("docs/DEMO_SCRIPT.md")
+    # Prose wraps, so match against a single-spaced copy rather than pinning line breaks.
+    flat = " ".join(script.split())
+    headings = [line for line in script.splitlines() if line.startswith("## 0:00")]
+    assert headings, "the rehearsal has no opening beat"
+    assert "buy" in headings[0].lower(), headings[0]
+
+    assert "`vanilla whey`" in flat
+    assert "no whey declaration" in flat  # she declares it on camera
+    # The honest framing of the manual trigger, which the screen also states.
+    assert "nothing is scheduled in the demo account" in flat.lower()
+    # And the boundary that keeps a real brand from vouching for an invented price.
+    assert "supplier prices later in the demo are invented" in flat
 
 
 def test_readme_describes_the_product_run_as_its_own_proof():
@@ -46,4 +69,4 @@ def test_readme_describes_the_product_run_as_its_own_proof():
     assert "No second live invocation is needed" in readme
     assert "`created_by_run`" in readme
     assert "zero EventBridge rules" in readme
-    assert "24 allowlisted API paths" in readme
+    assert "26 allowlisted API paths" in readme

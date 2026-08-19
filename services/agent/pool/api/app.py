@@ -47,6 +47,7 @@ from ..adapters.sourcing import SyntheticCatalogProvider
 from ..agent.coordinator import PoolCoordinator
 from ..agent.tools import TOOL_SURFACE
 from ..config import get_settings
+from ..data import catalog
 from ..data.seed import COMMUNITY_ID, seed
 from ..domain.models import (
     AllocationState,
@@ -58,7 +59,10 @@ from ..domain.models import (
     ParticipationState,
     PickupPermission,
     PoolStatus,
+    Product,
+    ProductSource,
     SubstitutionPolicy,
+    new_id,
     utcnow,
 )
 from ..domain.money import bps_to_pct_str, format_cents
@@ -464,6 +468,9 @@ def _pool_view(ws: str, pool, *, detail: bool = False) -> dict[str, Any]:
         "product_name": product.name if product else pool.product_id,
         "unit": product.unit if product else "unit",
         "brand": product.brand if product else "",
+        "variant": product.variant if product else "",
+        # So the pool card can show the same photograph the member chose from.
+        "image_ref": product.image_ref if product else "",
         "supplier": supplier.name if supplier else "",
         "status": pool.status.value,
         "pickup_site": site.name if site else "",
@@ -731,6 +738,87 @@ def get_map(workspace: str = Query("demo")) -> dict[str, Any]:
     }
 
 
+@app.get("/api/products/search")
+def search_products(
+    q: str = Query("", max_length=80),
+    limit: int = Query(catalog.DEFAULT_LIMIT, ge=1, le=catalog.MAX_LIMIT),
+    workspace: str = Query("demo"),
+) -> dict[str, Any]:
+    """Resolve what a member typed into products they might mean.
+
+    The layer that was missing. Everything downstream of a ``product_id`` was already
+    deterministic; there was simply no way to *reach* one except a dropdown of six
+    invented brands.
+
+    Read-only, free, and offline: it ranks a bundled snapshot with a pure function. No
+    model is called — not here and nowhere else on this path — because a language model
+    on the keystroke path would cost money per character, make the ranking
+    irreproducible, and put an LLM one step away from deciding which product somebody
+    is buying (AGENTS.md §3.3, §5). Interpretation is allowed to be forgiving; the
+    member still confirms, and compatibility is decided later by
+    ``domain.substitution`` from structure alone.
+    """
+    check_workspace(workspace)
+    found = catalog.search(q, limit)
+    return {
+        "query": q.strip(),
+        "results": [e.view() for e in found],
+        # So the client can render the licence obligation next to what it obliges.
+        "attribution": catalog.attribution().to_dict(),
+    }
+
+
+class CustomProductRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+
+
+@app.post("/api/products/custom")
+def create_custom_product(
+    body: CustomProductRequest, workspace: str = Query("demo")
+) -> dict[str, Any]:
+    """Record something a member buys that the catalogue does not know about.
+
+    A product Pool cannot source is still a thing somebody buys, and telling them they
+    may not want it would be the wrong answer. So the declaration is allowed and the
+    *pool* is what waits: the product is stored with **no substitute group**, which
+    ``domain.substitution`` treats as compatible with nothing but itself, and no
+    ``Offer`` exists for it, so ``evaluate_opportunity`` reports that there is no
+    supplier and forms nothing. Demand can be declared before Pool knows how to buy it;
+    money cannot move until an operator has curated the product and verified a quote.
+
+    Deliberately not doing more: no model is asked to guess a category or a substitute
+    group. Guessing the group is precisely the decision that would let two unrelated
+    purchases be combined, and it is the one thing this seam exists to prevent (§21).
+    """
+    ws = check_workspace(workspace)
+    ensure_seeded(ws)
+    name = " ".join(body.name.split())
+    product = Product(
+        id=new_id("prod_custom"),
+        name=name,
+        category="",
+        unit="unit",
+        # Empty on purpose. Fails closed under every substitution policy.
+        substitute_group="",
+        source=ProductSource.MEMBER_SUBMITTED,
+        source_ref="member",
+    )
+    repo().put_product(ws, product)
+    return {
+        "product_id": product.id,
+        "name": product.name,
+        "brand": "",
+        "variant": "",
+        "display_size": "",
+        "unit": product.unit,
+        "category": "",
+        "image_ref": "",
+        "sourceable": False,
+        "note": "Pool has no supplier for this yet, so it cannot form a group order "
+                "for it. Your declaration is stored.",
+    }
+
+
 @app.get("/api/needs")
 def get_needs(workspace: str = Query("demo")) -> dict[str, Any]:
     ws = check_workspace(workspace)
@@ -761,6 +849,13 @@ def get_needs(workspace: str = Query("demo")) -> dict[str, Any]:
                 "product_id": n.product_id,
                 "product_name": products[n.product_id].name if n.product_id in products else "",
                 "unit": products[n.product_id].unit if n.product_id in products else "",
+                # Enough identity for the row to render the same card the search did.
+                # A member who declared "Optimum Nutrition — Vanilla Ice Cream" should
+                # see that again, not a bare internal name.
+                "brand": products[n.product_id].brand if n.product_id in products else "",
+                "variant": products[n.product_id].variant if n.product_id in products else "",
+                "category": products[n.product_id].category if n.product_id in products else "",
+                "image_ref": products[n.product_id].image_ref if n.product_id in products else "",
                 "quantity": n.quantity,
                 "cadence_days": n.cadence_days,
                 "expected_next_need_date": n.expected_next_need_date.isoformat(),

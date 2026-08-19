@@ -205,6 +205,20 @@ class OfferSource(str, Enum):
     LIVE_RETAILER = "live_retailer"          # reserved; not implemented
 
 
+class ProductSource(str, Enum):
+    """Where a product's *consumer identity* came from — never where its price came from.
+
+    This is deliberately a different axis from :class:`OfferSource`. A product can be a
+    real, verifiable item off a public catalogue while the only quote Pool holds for it
+    is synthetic, and the interface has to be able to say exactly that (§41). Collapsing
+    the two would let a real brand name lend credibility to an invented price.
+    """
+
+    CURATED = "curated"                      # hand-authored, e.g. the demo seed
+    OPEN_FOOD_FACTS = "open_food_facts"      # Open Food Facts snapshot (ODbL)
+    MEMBER_SUBMITTED = "member_submitted"    # a member described it; awaiting curation
+
+
 class HostCandidateSource(str, Enum):
     STANDING = "standing"                    # previously registered as willing to host
     POOL_MEMBER_VOLUNTEER = "pool_member_volunteer"  # clicked "Offer to host" on this pool
@@ -600,6 +614,26 @@ class Household:
 
 @dataclass
 class Product:
+    """What a member believes they are buying.
+
+    Two groups of fields, and the boundary between them is load-bearing.
+
+    The first group is **structure Pool computes with**: ``unit`` is the sealed consumer
+    unit an offer is priced against, ``unit_weight_grams`` feeds host capacity, and
+    ``substitute_group`` is the only thing that lets one member's demand combine with
+    another's. Every one of them is curated, because a wrong value here does not look
+    wrong — it silently produces a confident, incorrect price.
+
+    The second group is **identity a person recognises**: brand, variant, GTIN, image,
+    search aliases. These may come from a public catalogue, because being wrong about
+    them is visible to the member the moment they look at the card.
+
+    Public product data is emphatically not admitted to the first group. Open Food Facts
+    package sizes, for instance, are frequently absent, expressed in a serving rather
+    than a package, or free text ("I tablesp") — so ``display_size`` is a string for
+    humans and nothing multiplies it (§48).
+    """
+
     id: str
     name: str
     category: str
@@ -611,8 +645,25 @@ class Product:
     #: Sealed consumer units only. Pool does not open, divide, or repackage (§47).
     individually_sealed: bool = True
 
+    # --- consumer identity. Optional by construction: a product with none of this is
+    #     still a perfectly valid Pool product, which is what keeps the seed and every
+    #     stored row from before this existed readable.
+    gtin: str = ""            # GTIN/UPC/EAN as printed. Identity only; never arithmetic.
+    #: Slug of a *bundled* image asset. Deliberately not a URL — the demo may not depend
+    #: on a third-party image host being alive, and the CSP is ``img-src 'self'``.
+    image_ref: str = ""
+    image_attribution: str = ""
+    #: Package size **as text**, for recognition on a product card. Never parsed.
+    display_size: str = ""
+    #: Extra words a member might type. Curated, not inferred.
+    synonyms: list[str] = field(default_factory=list)
+    source: ProductSource = ProductSource.CURATED
+    source_ref: str = ""      # snapshot provenance, e.g. "openfoodfacts:2026-08-19"
+
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        d["source"] = self.source.value
+        return d
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Product:
@@ -626,7 +677,21 @@ class Product:
             variant=d.get("variant", ""),
             unit_weight_grams=int(d.get("unit_weight_grams", 0)),
             individually_sealed=bool(d.get("individually_sealed", True)),
+            gtin=d.get("gtin", ""),
+            image_ref=d.get("image_ref", ""),
+            image_attribution=d.get("image_attribution", ""),
+            display_size=d.get("display_size", ""),
+            synonyms=list(d.get("synonyms", [])),
+            source=ProductSource(d.get("source", "curated")),
+            source_ref=d.get("source_ref", ""),
         )
+
+    @property
+    def display_name(self) -> str:
+        """Brand and variant folded into one line, the way a card shows it."""
+        parts = [p for p in (self.brand, self.name) if p]
+        base = " ".join(parts) if parts else self.name
+        return f"{base} — {self.variant}" if self.variant else base
 
 
 @dataclass

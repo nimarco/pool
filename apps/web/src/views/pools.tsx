@@ -36,7 +36,7 @@ export function Pools({
           <div className="panel-pad" style={{ paddingTop: 0 }}>
             <button className="btn btn-primary" onClick={onFind} disabled={running}>
               {running ? <span className="spinner" /> : null}
-              {running ? "Coordinator running" : "Find opportunities"}
+              {running ? "Coordinator running" : "Run Pool now"}
             </button>
             {running ? <CoordinatorWait live={liveDiscovery} region={region} /> : null}
           </div>

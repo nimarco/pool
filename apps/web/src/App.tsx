@@ -6,6 +6,7 @@ import {
   LiveAgentResult,
   MapData,
   PoolView,
+  ProductCandidate,
   ScenarioResult,
   api,
   resetWorkspaceId,
@@ -58,6 +59,8 @@ const DEFAULT_IDENTITY: Identity = { id: "hh_navarro", display_name: "Rosa N." }
 
 export default function App() {
   const [view, setView] = useState<View>("home");
+  /** Set when Home hands a chosen product to the Needs form. */
+  const [pendingProduct, setPendingProduct] = useState<ProductCandidate | null>(null);
   const [state, setState] = useState<AppState | null>(null);
   const [map, setMap] = useState<MapData | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
@@ -108,6 +111,16 @@ export default function App() {
     setPanelOpen(false);
     window.scrollTo({ top: 0 });
   }, []);
+
+  /** A product picked on Home, handed to the Needs form so the member does not have to
+   *  search for the same thing twice. Cleared as soon as the form has taken it. */
+  const startNeed = useCallback(
+    (product: ProductCandidate | null) => {
+      setPendingProduct(product);
+      navigate("needs");
+    },
+    [navigate],
+  );
 
   const showcaseTo = useCallback((next: ShowcaseView) => {
     setShowcase(next);
@@ -494,7 +507,7 @@ export default function App() {
               onShowAgent={(poolId) =>
                 void openPoolDetail(poolId, { tab: "activity", deep: "execution" })
               }
-              onGoNeeds={() => navigate("needs")}
+              onStartNeed={startNeed}
               onGoCommunity={() => navigate("community")}
               liveDiscovery={Boolean(demoConfig?.live_agent_available)}
               region={demoConfig?.region ?? null}
@@ -516,6 +529,8 @@ export default function App() {
             <Needs
               identity={identity}
               communityName={communityName}
+              initialProduct={pendingProduct}
+              onConsumeInitialProduct={() => setPendingProduct(null)}
               onFind={findOpportunities}
               running={running}
               hasPool={(state?.pools.length ?? 0) > 0}

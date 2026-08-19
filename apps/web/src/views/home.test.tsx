@@ -53,6 +53,8 @@ function poolView(overrides: Partial<PoolView> = {}): PoolView {
     product_name: "Whey protein, vanilla",
     unit: "tub",
     brand: "Fixture",
+    variant: "",
+    image_ref: "",
     supplier: "Riverbend Wholesale",
     status: "final_offer",
     pickup_site: "North Hall lobby",
@@ -163,7 +165,7 @@ function renderHome(
       onOpenPool={() => {}}
       onRespond={() => {}}
       onShowAgent={options.onShowAgent ?? (() => {})}
-      onGoNeeds={() => {}}
+      onStartNeed={() => {}}
       onGoCommunity={() => {}}
       liveDiscovery={false}
       region={null}

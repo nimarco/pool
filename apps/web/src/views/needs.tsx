@@ -18,7 +18,16 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { NeedDraft, NeedLimits, NeedRow, ProductRow, api, shortDateOnly } from "../api";
+import {
+  NeedDraft,
+  NeedLimits,
+  NeedRow,
+  ProductCandidate,
+  api,
+  shortDateOnly,
+} from "../api";
+import { ProductCard, ProductSearch } from "../product-search";
+import { categoryTone, productImage, productInitials } from "../products";
 import { Block, Chip, CoordinatorWait, Empty, IconArrowRight } from "../ui";
 
 /** Substitution preferences, in the member's words.
@@ -40,17 +49,41 @@ function isoInDays(days: number): string {
   return new Date(Date.now() + days * DAY_MS).toISOString().slice(0, 10);
 }
 
-function blankDraft(householdId: string, products: ProductRow[]): NeedDraft {
+function daysUntil(iso: string): number {
+  const then = new Date(`${iso}T00:00:00`).getTime();
+  return Math.max(0, Math.round((then - new Date().setHours(0, 0, 0, 0)) / DAY_MS));
+}
+
+/** How early Pool may buy, derived from the two things a member actually said.
+ *
+ *  "I need it by the 3rd" already carries the answer: any time between now and then is
+ *  fine. So the default window is the whole of it, clamped to one restock cycle because
+ *  buying more than a cycle ahead would be storing goods the household never agreed to
+ *  hold (§24, MAX_FLEXIBILITY_MULTIPLE). Somebody who wants a narrower window says so in
+ *  the advanced section; nothing is assumed on their behalf beyond the plain reading of
+ *  the date they gave. */
+function defaultFlexibility(nextNeededIso: string, cadenceDays: number): number {
+  return Math.min(daysUntil(nextNeededIso), Math.max(0, cadenceDays));
+}
+
+const DEFAULT_CADENCE = 30;
+const DEFAULT_NEXT_NEEDED_DAYS = 14;
+
+function blankDraft(householdId: string): NeedDraft {
+  const nextNeeded = isoInDays(DEFAULT_NEXT_NEEDED_DAYS);
   return {
     household_id: householdId,
-    product_id: products[0]?.product_id ?? "",
+    // Empty until a product has been chosen. The form will not submit without one, and
+    // pre-selecting somebody else's first catalogue row was the old behaviour this
+    // screen exists to remove.
+    product_id: "",
     quantity: 2,
-    cadence_days: 30,
-    expected_next_need_date: isoInDays(21),
-    flexibility_days: 7,
-    routine_lead_days: 5,
+    cadence_days: DEFAULT_CADENCE,
+    expected_next_need_date: nextNeeded,
+    flexibility_days: defaultFlexibility(nextNeeded, DEFAULT_CADENCE),
+    routine_lead_days: 7,
     min_savings_pct: 15,
-    max_spend_cents: 4000,
+    max_spend_cents: 12000,
     substitution: "exact_only",
     active: true,
   };
@@ -76,30 +109,76 @@ function draftFrom(need: NeedRow): NeedDraft {
 
 function NeedForm({
   draft,
-  products,
+  chosen,
   limits,
   busy,
   error,
   editing,
   onChange,
+  onChooseProduct,
+  onClearProduct,
+  onUnresolved,
   onSubmit,
   onCancel,
   onRetire,
 }: {
   draft: NeedDraft;
-  products: ProductRow[];
+  /** The product as a card renders it. Null while adding, before anything is chosen. */
+  chosen: ProductCandidate | null;
   limits: NeedLimits | null;
   busy: boolean;
   error: string | null;
   editing: boolean;
   onChange: (next: NeedDraft) => void;
+  onChooseProduct: (product: ProductCandidate) => void;
+  onClearProduct: () => void;
+  onUnresolved: (query: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
   onRetire: () => void;
 }) {
+  /** Whether the member has narrowed the buy-early window by hand. Until they do, it
+   *  tracks the date they gave — so changing "next needed" does not silently leave a
+   *  stale window behind, and touching the control does not get overwritten. */
+  const [flexTouched, setFlexTouched] = useState(false);
+
   const set = <K extends keyof NeedDraft>(key: K, value: NeedDraft[K]) =>
     onChange({ ...draft, [key]: value });
+
+  /** Changing the date or the cycle re-derives the window, unless it has been set. */
+  const setTiming = (next: NeedDraft) =>
+    onChange(
+      flexTouched
+        ? next
+        : {
+            ...next,
+            flexibility_days: defaultFlexibility(
+              next.expected_next_need_date,
+              next.cadence_days,
+            ),
+          },
+    );
+
   const maxSpend = limits ? limits.max_spend_cents / 100 : 5000;
+  const unit = chosen?.unit || "units";
+
+  /* Step one. Nothing else is worth asking until Pool knows what the thing is. */
+  if (!draft.product_id || !chosen) {
+    return (
+      <div className="need-form stack-sm">
+        <ProductSearch
+          onSelect={onChooseProduct}
+          onUnresolved={onUnresolved}
+          autoFocus
+        />
+        <div className="btn-row">
+          <button className="btn" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form
@@ -109,86 +188,77 @@ function NeedForm({
         onSubmit();
       }}
     >
-      <div className="field-grid">
-        <label className="field field-wide">
-          <span className="field-label">What you buy</span>
-          <select
-            className="control"
-            value={draft.product_id}
-            onChange={(e) => set("product_id", e.target.value)}
-            required
-          >
-            {products.map((p) => (
-              <option key={p.product_id} value={p.product_id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="chosen-product">
+        <ProductCard product={chosen} />
+        {editing ? null : (
+          <button className="btn btn-sm btn-ghost" type="button" onClick={onClearProduct}>
+            Change
+          </button>
+        )}
+      </div>
 
+      <div className="field-grid">
         <label className="field">
           <span className="field-label">How many</span>
-          <input
-            className="control"
-            type="number"
-            min={1}
-            max={limits?.max_quantity ?? 100}
-            value={draft.quantity}
-            onChange={(e) => set("quantity", Number(e.target.value))}
-            required
-          />
+          <div className="control-suffix">
+            <input
+              className="control"
+              type="number"
+              min={1}
+              max={limits?.max_quantity ?? 100}
+              value={draft.quantity}
+              onChange={(e) => set("quantity", Number(e.target.value))}
+              required
+            />
+            <span className="suffix">{unit}</span>
+          </div>
         </label>
 
         <label className="field">
-          <span className="field-label">Every … days</span>
-          <input
-            className="control"
-            type="number"
-            min={1}
-            max={limits?.max_cadence_days ?? 365}
-            value={draft.cadence_days}
-            onChange={(e) => set("cadence_days", Number(e.target.value))}
-            required
-          />
+          <span className="field-label">You buy this about every</span>
+          <div className="control-suffix">
+            <input
+              className="control"
+              type="number"
+              min={1}
+              max={limits?.max_cadence_days ?? 365}
+              value={draft.cadence_days}
+              onChange={(e) =>
+                setTiming({ ...draft, cadence_days: Number(e.target.value) })
+              }
+              required
+            />
+            <span className="suffix">days</span>
+          </div>
         </label>
 
-        <label className="field">
-          <span className="field-label">Next needed</span>
+        <label className="field field-wide">
+          <span className="field-label">When do you next need it?</span>
           <input
             className="control"
             type="date"
             value={draft.expected_next_need_date}
-            onChange={(e) => set("expected_next_need_date", e.target.value)}
+            onChange={(e) =>
+              setTiming({ ...draft, expected_next_need_date: e.target.value })
+            }
             required
           />
-        </label>
-
-        <label className="field">
-          <span className="field-label">May buy this many days early</span>
-          <input
-            className="control"
-            type="number"
-            min={0}
-            max={draft.cadence_days}
-            value={draft.flexibility_days}
-            onChange={(e) => set("flexibility_days", Number(e.target.value))}
-          />
+          {/* The one genuinely load-bearing consequence, stated in plain words rather
+              than left implicit in a number. This window is the permission the timing
+              engine reads when it decides whether demand may be pulled forward (§24),
+              so it is never hidden — only its exact size is. */}
           <span className="field-note">
-            {draft.flexibility_days === 0
-              ? "Never bought early."
-              : `May be bought up to ${draft.flexibility_days} days early — never earlier.`}
+            {draft.flexibility_days > 0
+              ? `Pool may buy any time in the ${draft.flexibility_days} days before that, if it saves money.`
+              : "Pool will only buy on that date — never earlier."}
           </span>
         </label>
-
       </div>
 
-      {/* The three controls below are an authorisation policy, not a description of what
-          somebody buys. They already hold safe values, the deterministic engine already
-          takes the stricter of these and the member's standing policy, and nobody
-          setting up a restock reminder wants to think about a savings floor first. So
-          they are available rather than absent: closed by default, unchanged in the
-          payload either way. Collapsing a control must never quietly change what it
-          means (AGENTS.md §5). */}
+      {/* Available rather than absent. These already hold safe values, the deterministic
+          engine takes the stricter of these and the member's standing policy, and nobody
+          setting up a restock reminder wants to think about a savings floor first.
+          Collapsing a control must never quietly change what it means (AGENTS.md §5). */}
       <details className="inset need-advanced">
         <summary className="small">
           <strong>Fine-tune when Pool may act on this need</strong>
@@ -199,6 +269,41 @@ function NeedForm({
           </span>
         </summary>
         <div className="field-grid" style={{ marginTop: 14 }}>
+          <label className="field">
+            <span className="field-label">May buy this many days early</span>
+            <input
+              className="control"
+              type="number"
+              min={0}
+              max={draft.cadence_days}
+              value={draft.flexibility_days}
+              onChange={(e) => {
+                setFlexTouched(true);
+                set("flexibility_days", Number(e.target.value));
+              }}
+            />
+            <span className="field-note">
+              {draft.flexibility_days === 0
+                ? "Never bought early."
+                : `Never more than ${draft.flexibility_days} days ahead of when you need it.`}
+            </span>
+          </label>
+
+          <label className="field">
+            <span className="field-label">You normally restock this far ahead</span>
+            <div className="control-suffix">
+              <input
+                className="control"
+                type="number"
+                min={0}
+                max={draft.cadence_days}
+                value={draft.routine_lead_days}
+                onChange={(e) => set("routine_lead_days", Number(e.target.value))}
+              />
+              <span className="suffix">days</span>
+            </div>
+          </label>
+
           <label className="field">
             <span className="field-label">Won't join below … % saving</span>
             <input
@@ -263,7 +368,29 @@ function NeedForm({
           </button>
         ) : null}
       </div>
+      <p className="tiny faint">
+        Saving this commits nothing and joins nothing. It tells Pool what to watch for.
+      </p>
     </form>
+  );
+}
+/** The same photograph the member picked from, at row scale. Falls back to a category
+ *  tile, which is the ordinary state for curated household goods rather than an error. */
+function NeedThumb({ need }: { need: NeedRow }) {
+  const src = productImage(need.image_ref ?? "");
+  return (
+    <span className="need-thumb" aria-hidden="true">
+      {src ? (
+        <img src={src} alt="" loading="lazy" decoding="async" />
+      ) : (
+        <span
+          className="product-thumb-fallback"
+          style={{ background: categoryTone(need.category ?? "") }}
+        >
+          {productInitials(need.brand ?? "", need.product_name)}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -272,6 +399,8 @@ function NeedForm({
 export function Needs({
   identity,
   communityName,
+  initialProduct,
+  onConsumeInitialProduct,
   onFind,
   running,
   hasPool,
@@ -280,6 +409,9 @@ export function Needs({
 }: {
   identity: { id: string; display_name: string };
   communityName: string;
+  /** A product already chosen on Home, so the member does not search twice. */
+  initialProduct: ProductCandidate | null;
+  onConsumeInitialProduct: () => void;
   onFind: () => void;
   running: boolean;
   hasPool: boolean;
@@ -287,12 +419,14 @@ export function Needs({
   region: string | null;
 }) {
   const [needs, setNeeds] = useState<NeedRow[] | null>(null);
-  const [products, setProducts] = useState<ProductRow[]>([]);
   const [limits, setLimits] = useState<NeedLimits | null>(null);
   const [showAll, setShowAll] = useState(false);
   /** `null` = the form is closed. A string = editing that need. "" = adding a new one. */
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<NeedDraft | null>(null);
+  /** The chosen product, as a card renders it. Held beside the draft because the draft
+   *  carries only the id the server needs, and the id is the one thing never shown. */
+  const [chosen, setChosen] = useState<ProductCandidate | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -303,7 +437,6 @@ export function Needs({
   const reload = useCallback(async () => {
     const view = await api.needs();
     setNeeds(view.needs);
-    setProducts(view.products);
     setLimits(view.limits);
     return view;
   }, []);
@@ -311,6 +444,17 @@ export function Needs({
   useEffect(() => {
     reload().catch(() => setNeeds([]));
   }, [reload]);
+
+  /* Arriving from Home with a product already picked opens the form on step two. The
+     hand-off is consumed immediately so a later navigation back here starts clean. */
+  useEffect(() => {
+    if (!initialProduct) return;
+    setError(null);
+    setEditingId("");
+    setChosen(initialProduct);
+    setDraft({ ...blankDraft(identity.id), product_id: initialProduct.product_id });
+    onConsumeInitialProduct();
+  }, [initialProduct, identity.id, onConsumeInitialProduct]);
 
   if (needs === null) return <Empty>Loading…</Empty>;
 
@@ -322,19 +466,57 @@ export function Needs({
   const openAdd = () => {
     setError(null);
     setEditingId("");
-    setDraft(blankDraft(identity.id, products));
+    setChosen(null);
+    setDraft(blankDraft(identity.id));
   };
 
   const openEdit = (need: NeedRow) => {
     setError(null);
     setEditingId(need.need_id);
+    // Editing keeps the product fixed, so the card is rebuilt from what the server
+    // already told us about this declaration rather than searched for again.
+    setChosen({
+      product_id: need.product_id,
+      name: need.product_name,
+      brand: need.brand ?? "",
+      variant: need.variant ?? "",
+      display_size: "",
+      unit: need.unit,
+      category: need.category ?? "",
+      image_ref: need.image_ref ?? "",
+    });
     setDraft(draftFrom(need));
   };
 
   const close = () => {
     setEditingId(null);
     setDraft(null);
+    setChosen(null);
     setError(null);
+  };
+
+  const chooseProduct = (product: ProductCandidate) => {
+    setChosen(product);
+    setDraft((d) => (d ? { ...d, product_id: product.product_id } : d));
+  };
+
+  const clearProduct = () => {
+    setChosen(null);
+    setDraft((d) => (d ? { ...d, product_id: "" } : d));
+  };
+
+  /** Something the catalogue does not have. The server stores it with no substitute
+   *  group and no supplier, so the need is real and no pool can form for it yet. */
+  const recordUnresolved = async (query: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      chooseProduct(await api.customProduct(query));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const save = async (override?: Partial<NeedDraft>) => {
@@ -359,8 +541,8 @@ export function Needs({
       <header className="stack-sm">
         <h1 className="title">What you buy anyway</h1>
         <p className="lede">
-          Set your restock cadence and any days-early window. Saving a need never commits
-          money; only that window permits Pool to bring it forward.
+          Tell Pool what you restock and roughly when. Saving a need never commits money
+          — it is what lets Pool notice that other people near you need the same thing.
         </p>
       </header>
 
@@ -380,12 +562,15 @@ export function Needs({
           <div className="panel-pad">
             <NeedForm
               draft={draft}
-              products={products}
+              chosen={chosen}
               limits={limits}
               busy={busy}
               error={error}
               editing={false}
               onChange={setDraft}
+              onChooseProduct={chooseProduct}
+              onClearProduct={clearProduct}
+              onUnresolved={recordUnresolved}
               onSubmit={() => void save()}
               onCancel={close}
               onRetire={close}
@@ -404,12 +589,15 @@ export function Needs({
                 <div key={n.need_id} className="row-editing">
                   <NeedForm
                     draft={draft}
-                    products={products}
+                    chosen={chosen}
                     limits={limits}
                     busy={busy}
                     error={error}
                     editing
                     onChange={setDraft}
+                    onChooseProduct={chooseProduct}
+                    onClearProduct={clearProduct}
+                    onUnresolved={recordUnresolved}
                     onSubmit={() => void save()}
                     onCancel={close}
                     onRetire={() => void save({ active: false })}
@@ -417,9 +605,12 @@ export function Needs({
                 </div>
               ) : (
                 <div key={n.need_id} className="row">
+                  <NeedThumb need={n} />
                   <div className="row-body">
                     <div className="row-title">
+                      {n.brand ? <span className="need-brand">{n.brand}</span> : null}
                       {n.product_name}
+                      {n.variant ? <span className="need-variant">{n.variant}</span> : null}
                       {n.flexibility_days > 0 ? (
                         <Chip tone="ok">may buy {n.flexibility_days}d early</Chip>
                       ) : (
@@ -471,7 +662,7 @@ export function Needs({
             <div className="btn-row">
               <button className="btn btn-primary" onClick={onFind} disabled={running}>
                 {running ? <span className="spinner" /> : null}
-                {running ? "Coordinator running" : "Find opportunities"}
+                {running ? "Coordinator running" : "Run Pool now"}
                 {running ? null : <IconArrowRight />}
               </button>
             </div>

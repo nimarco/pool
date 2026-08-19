@@ -48,6 +48,7 @@ from ..domain.models import (
     PlatformFeeConfig,
     PoolDaySchedule,
     Product,
+    ProductSource,
     Supplier,
     VerificationMethod,
     iso,
@@ -55,6 +56,7 @@ from ..domain.models import (
 )
 from ..domain.models import NeedDeclaration as Need
 from ..domain.timing import next_pool_day
+from . import catalog
 
 # A made-up campus centroid. Not a real institution's coordinates.
 CENTER_LAT = 38.6488
@@ -111,6 +113,16 @@ def build_community() -> Community:
 
 # --------------------------------------------------------------------------- catalogue
 
+#: What Pool *computes with*: the sealed consumer unit each offer is priced against, the
+#: weight the host-capacity estimate uses, and the substitute group that decides whose
+#: demand may combine with whose. Every one of these is curated, because a wrong value
+#: here does not look wrong — it produces a confident, incorrect price.
+#:
+#: What a member *recognises* — brand, product name, flavour, photograph — is layered on
+#: from the bundled catalogue by :func:`_with_catalog_identity`, so the same six rows a
+#: judge sees are real products rather than invented ones. Structure stays here;
+#: identity comes from there; the ids never change, so the scenario's economics do not
+#: move (docs/CATALOG_RESEARCH.md §4).
 PRODUCTS = [
     Product(
         "prod_whey_vanilla", "Whey protein, vanilla", "nutrition", "tub", "whey_protein",
@@ -137,6 +149,38 @@ PRODUCTS = [
         brand="Mapleline", variant="select-a-size", unit_weight_grams=1200,
     ),
 ]
+
+
+def _with_catalog_identity(product: Product) -> Product:
+    """Curated structure, catalogue identity — and never the other way round.
+
+    Only the fields a person reads are taken: name, brand, flavour, photograph, search
+    aliases, provenance. ``unit``, ``unit_weight_grams`` and ``substitute_group`` are
+    left exactly as declared above, because those are what the economics and the matcher
+    consume, and public catalogue data is not reliable enough to carry them (§48).
+
+    ``gtin`` and ``display_size`` are also left empty for these six. Pool holds a
+    *synthetic* supplier quote for each — a 5 lb tub, twelve to a case — and a barcode
+    identifies one specific retail package. Printing a real barcode beside an invented
+    case structure would assert a correspondence that does not exist, and the barcode is
+    exactly the field a careful judge would check.
+
+    A product with no catalogue entry keeps what the fixture gave it, so the seed still
+    works with the catalogue file absent.
+    """
+    entry = catalog.get(product.id)
+    if entry is None:
+        return product
+    product.name = entry.name
+    product.brand = entry.brand
+    product.variant = entry.variant
+    product.image_ref = entry.image_ref
+    product.image_attribution = catalog.attribution().image_credit
+    product.synonyms = list(entry.synonyms)
+    product.source = ProductSource(entry.source)
+    product.source_ref = entry.source_ref
+    return product
+
 
 SUPPLIERS = [
     Supplier("sup_riverbend", "Riverbend Wholesale", CENTER_LAT + 0.041, CENTER_LON - 0.028),
@@ -351,7 +395,12 @@ _NEEDS: list[tuple] = [
     #     of a clean 12-unit case boundary.
     ("need_whey_okafor",     "hh_okafor",     "prod_whey_vanilla", 2, 45, 12, 12, 12, 20,  9000),
     ("need_whey_bergstrom",  "hh_bergstrom",  "prod_whey_vanilla", 3, 60, 13, 13, 13, 18, 13000),
-    ("need_whey_navarro",    "hh_navarro",    "prod_whey_vanilla", 2, 40, 11, 11, 11, 20,  9000),
+    # Rosa's whey declaration is deliberately absent. She is the account a visitor acts
+    # as, and the first thing the product asks anyone to do is say what they buy — so
+    # that declaration is made through the real service, either by a person using the
+    # form or by the scripted showcase (``services/demo.py``), never by the fixture.
+    # Seeding it would mean the demo opened on a need nobody was shown creating, which
+    # is the exact "pre-populated dashboard" problem this fixture exists to avoid.
     ("need_whey_thibault",   "hh_thibault",   "prod_whey_vanilla", 3, 50, 14, 14, 14, 15, 13000),
     ("need_whey_rasmussen",  "hh_rasmussen",  "prod_whey_vanilla", 2, 45, 12, 12, 12, 22,  9000),
     ("need_whey_delacroix",  "hh_delacroix",  "prod_whey_vanilla", 2, 35, 10, 10, 10, 18,  9500),
@@ -444,7 +493,7 @@ def seed(repo: Repository, workspace: str) -> dict[str, int]:
     repo.put_community(workspace, community)
 
     for p in PRODUCTS:
-        repo.put_product(workspace, p)
+        repo.put_product(workspace, _with_catalog_identity(p))
     for s in SUPPLIERS:
         repo.put_supplier(workspace, s)
     for o in build_offers():

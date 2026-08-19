@@ -164,6 +164,20 @@ export default function App() {
     state?.activity.length,
   ]);
 
+  /** Everything held about *a* workspace, dropped because we are about to address a
+   *  different one.
+   *
+   *  `member` and `report` are server answers scoped to one partition, and the effect
+   *  above only notices a workspace change one render later — by which time Home has
+   *  already asked the new partition for the old partition's pool id and been given a
+   *  404. Dropped in the same callback that moves the scope, alongside `openPool`, which
+   *  was already here for exactly this reason. */
+  const forgetWorkspaceState = useCallback(() => {
+    setOpenPool(null);
+    setMember(null);
+    setReport(null);
+  }, []);
+
   /** Leaving showcase mode points every request back at the visitor's own session.
    *
    *  Their state is not "restored" so much as never touched: the scripted lifecycle
@@ -173,13 +187,13 @@ export default function App() {
     (next: View) => {
       api.setShowcaseScope(false);
       setShowcase(null);
-      setOpenPool(null);
+      forgetWorkspaceState();
       setView(next);
       setPanelOpen(false);
       void refresh();
       window.scrollTo({ top: 0 });
     },
-    [refresh],
+    [refresh, forgetWorkspaceState],
   );
 
   /** A product picked on Home, handed to the Needs form so the member does not have to
@@ -193,7 +207,13 @@ export default function App() {
   );
 
   /** Entering showcase mode points every request at the showcase's own partition, so
-   *  the scripted world is read from where it actually lives. */
+   *  the scripted world is read from where it actually lives.
+   *
+   *  **The only way into showcase mode.** It used to be reachable from the drawer by
+   *  setting the view directly, which left the scope on the visitor's session: the
+   *  showcase's front page then read the visitor's community and printed its member and
+   *  need counts as the showcase's. Moving the screen and moving the scope are one act,
+   *  so they are one function. */
   const showcaseTo = useCallback(
     (next: ShowcaseView) => {
       const entering = !api.inShowcaseScope();
@@ -201,12 +221,12 @@ export default function App() {
       setShowcase(next);
       setPanelOpen(false);
       if (entering) {
-        setOpenPool(null);
+        forgetWorkspaceState();
         void refresh();
       }
       window.scrollTo({ top: 0 });
     },
-    [refresh],
+    [refresh, forgetWorkspaceState],
   );
 
   /** Re-reads the pool currently open, so an action taken in the drawer is visible on
@@ -364,6 +384,9 @@ export default function App() {
     setRunning(true);
     setPanelOpen(false);
     api.setShowcaseScope(true);
+    // Reached from the drawer, this is what moves the scope, so it is also what has to
+    // drop what was read from the partition being left.
+    forgetWorkspaceState();
     try {
       const started = performance.now();
       const result = await api.scenario();
@@ -380,7 +403,7 @@ export default function App() {
     } finally {
       setRunning(false);
     }
-  }, []);
+  }, [forgetWorkspaceState]);
 
   const respond = useCallback(
     async (decisionId: string, approve: boolean) => {
@@ -788,11 +811,12 @@ export default function App() {
           else navigate("pools");
         }}
         onOperations={() => navigate("operations")}
+        /* Through `showcaseTo`, not around it: entering showcase mode has to move the
+           partition every request addresses, and a second copy of that logic here is how
+           the two drifted apart. */
         onShowcase={() => {
           setView("home");
-          setShowcase("overview");
-          setPanelOpen(false);
-          window.scrollTo({ top: 0 });
+          showcaseTo("overview");
         }}
         /* Both branches land in the showcase, because that is the world the scripted
            lifecycle happened in. It used to open `state.pools[0]` — the oldest pool in

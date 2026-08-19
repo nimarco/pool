@@ -2817,3 +2817,49 @@ select.control {
 .scope-theirs {
   color: var(--ink-faint);
 }
+
+/* Importing a supplier quote sheet. Collapsed by default: the operator screen already
+ * has two one-press quotes, and this is the same act done the way it actually happens —
+ * a choice, not the only path. */
+.import-panel > summary {
+  cursor: pointer;
+}
+.import-pick {
+  position: relative;
+  overflow: hidden;
+  align-self: flex-start;
+  cursor: pointer;
+}
+/* The real file input, kept in the accessibility tree and out of the visual one, so the
+ * label is the control and keyboard focus still lands somewhere that works. */
+.import-pick input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.import-pick:focus-within {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.import-result {
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.import-result table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.import-result th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink-faint);
+  padding: 3px 8px 3px 0;
+}
+.import-result td {
+  padding: 3px 8px 3px 0;
+  border-top: 1px solid var(--rule);
+  font-variant-numeric: tabular-nums;
+}

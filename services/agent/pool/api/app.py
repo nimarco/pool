@@ -34,7 +34,7 @@ import time
 from datetime import date
 from typing import Any
 
-from fastapi import Body, FastAPI, HTTPException, Query, Request
+from fastapi import Body, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -77,6 +77,7 @@ from ..services import (
     onboarding,
     relevance,
     run_report,
+    supplier_import,
 )
 from ..services import coordination as coord
 from ..services import needs as needs_service
@@ -103,7 +104,7 @@ _SEED_POLL_SECONDS = 0.15
 _AGENTCORE_ORIGIN_PREFIX = "execution_origin=bedrock_agentcore_runtime:"
 
 #: Judge mode. Off by default, so a local run is the full application; on, it reduces
-#: this API to twenty-four allowlisted paths with no prompt surface. See
+#: this API to a small allowlist of paths with no prompt surface. See
 #: ``pool/api/public_demo.py``. Built before the app because it decides two of its
 #: constructor arguments.
 _public = public_demo.PublicDemoGuard()
@@ -1768,6 +1769,117 @@ def supplier_updates(workspace: str = Query("demo")) -> dict[str, Any]:
         "quotes": [
             {**quote.to_dict(), "recorded": quote.key in held}
             for quote in supplier_updates_svc.QUOTES.values()
+        ],
+    }
+
+
+@app.get("/api/demo/supplier-file")
+def supplier_file() -> dict[str, Any]:
+    """What the committed quote sheet is, before anybody uploads anything.
+
+    So the operator screen can name the file it expects. Carries the digest rather than
+    the contents: this is a description of what will be accepted, and serving the bytes
+    from here would invite the mistake of thinking the server made them up.
+
+    **Not on the public allowlist**, and the operator console tolerates its absence. The
+    browser does not need it — the path is a constant and the digests are committed where
+    a judge reads them, in the repository — so exposing it publicly would add a door for
+    convenience rather than for capability. Fewer reachable endpoints is the whole posture
+    (``api/public_demo.py``), and this is one that can simply not be one.
+    """
+    entries = supplier_import.manifest()
+    return {
+        "path": "demo-data/supplier_quotes.csv",
+        "columns": list(supplier_import.REQUIRED_COLUMNS),
+        "allowlisted": [
+            {"filename": name, **{k: v for k, v in entry.items()}}
+            for name, entry in sorted(entries.items())
+        ],
+        # True where any file is accepted, which is only ever a local process.
+        "accepts_any_file": not _public.enabled,
+        "synthetic": True,
+    }
+
+
+@app.post("/api/demo/supplier-import")
+async def import_supplier_quotes(
+    file: UploadFile = File(...), workspace: str = Query("demo")
+) -> dict[str, Any]:
+    """Read a supplier's quote sheet, and write what it says.
+
+    The bytes are read, the CSV parser runs, the schema is checked and malformed rows are
+    counted and named — on every deployment, for every upload, before anything about
+    permission is consulted. What is gated is only the *write*: on a deployment strangers
+    can reach, the digest has to be in ``demo-data/MANIFEST.json``, because a stranger who
+    can set a price can poison every figure the site derives from it. Locally, where
+    whoever runs the process already owns the database, any file is accepted.
+
+    A refusal still reports what the file contained. "Your file was rejected" and "your
+    file was unreadable" are different facts, and the second one is not true.
+
+    Takes the workspace lease, for the same reason recording one quote does: a supplier
+    price landing halfway through a coordinator run would leave that run's stored evidence
+    describing a world that never existed. Refused against a showcase partition, which is
+    a recording rather than a community.
+    """
+    ws = check_workspace(workspace)
+    if public_demo.is_showcase_workspace(ws):
+        raise HTTPException(
+            400,
+            "The showcase replays one recorded lifecycle. Supplier facts are recorded "
+            "against a live community — leave showcase mode to change the world.",
+        )
+    data = await file.read()
+    try:
+        parsed = supplier_import.parse(data, filename=file.filename or "upload.csv")
+    except supplier_import.SupplierImportError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    matched = supplier_import.allowlisted(data)
+    if _public.enabled and not matched:
+        # Named, not vague. Somebody who edited a price should be told that is what was
+        # detected, and somebody who uploaded the wrong file should be told that too.
+        return {
+            "recorded": False,
+            "refused": "not_allowlisted",
+            "reason": (
+                "This deployment records supplier quotes only from the fixtures committed "
+                "in demo-data/, so a price nobody can audit cannot become an offer here. "
+                "The file was read and parsed — the records below are what it contained."
+            ),
+            **parsed.to_dict(),
+            "offers": [],
+        }
+
+    with _public.workspace_mutation(ws, public_demo.WORKSPACE_BUSY):
+        _public.spend_action(ws)
+        ensure_seeded(ws)
+        ctx = ctx_for(ws)
+        usable, unresolvable = supplier_import.resolvable(ctx, parsed.rows)
+        offers = supplier_import.record(ctx, usable)
+    body = parsed.to_dict()
+    # Rows the schema accepted but this community cannot hold are rejections too, and
+    # they belong in the same count rather than disappearing between two numbers.
+    body["rejections"] = body["rejections"] + [r.to_dict() for r in unresolvable]
+    body["valid"] = len(usable)
+    body["rejected"] = len(body["rejections"])
+    return {
+        "recorded": True,
+        "allowlisted_as": matched,
+        **body,
+        "offers": [
+            {
+                "offer_id": o.id,
+                "product_id": o.product_id,
+                "unit_price_display": format_cents(o.unit_price_cents),
+                "case_units": o.case_units,
+                "min_units": o.min_units,
+                "supplier_reference": o.supplier_reference,
+                "source": o.source.value,
+                "verified_at": o.verified_at,
+                "synthetic": True,
+            }
+            for o in offers
         ],
     }
 

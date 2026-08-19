@@ -302,7 +302,7 @@ member's details into an artifact that gets published.
 | Routing | Pure function of coordinates | Same deterministic adapter; labelled simulated | Amazon Location `geo-routes` adapter available |
 | Payments | Simulated provider | Simulated provider | Stripe **TEST** adapter available; live keys refused |
 | Purchase | Simulated executor | Simulated executor | Simulated executor |
-| API / web | uvicorn + Vite | One Lambda Function URL serves SPA + 24 of 40 API paths | API Gateway + Lambda; S3 + CloudFront |
+| API / web | uvicorn + Vite | One Lambda Function URL serves SPA + 32 of 49 API paths | API Gateway + Lambda; S3 + CloudFront |
 | Background | Manual trigger only | **Absent: zero EventBridge rules deployed** | EventBridge definition exists and defaults disabled if this stack is ever deployed |
 
 The offline planner replaces the LLM and only the LLM: the same Strands event loop, the

@@ -1,0 +1,16 @@
+# Synthetic supplier quotes for the Pool demo.
+#
+# Riverbend Wholesale does not exist. Nobody negotiated these terms, no wholesaler
+# relationship stands behind them, and they are stored as synthetic rather than as
+# verified quotes. They are here so the demo can show what Pool does when a supplier
+# fact arrives that did not exist before — which is the point the sequence is making,
+# and it does not need the numbers to be real to make it.
+#
+# The two rows are the two shapes a wholesaler actually quotes a staple in. The
+# split-case programme asks for a smaller commitment and charges for the handling; the
+# full-case programme asks for more and prices better. Whether either is worth doing is
+# not recorded here and cannot be: that is the evaluator's answer, computed from these
+# numbers when somebody asks.
+product_id,supplier_id,unit_price_cents,case_units,min_units,supplier_reference,quoted_at
+prod_rice_jasmine,sup_riverbend,975,4,12,QUOTE-RICE-SPLIT,2026-08-19T14:02:00Z
+prod_rice_jasmine,sup_riverbend,625,8,16,QUOTE-RICE-CASE,2026-08-19T14:31:00Z

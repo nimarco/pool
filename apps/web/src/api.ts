@@ -1181,3 +1181,85 @@ export function shortDateOnly(value: string, locale?: string): string {
     timeZone: "UTC",
   }).format(date);
 }
+
+/* --------------------------------------------------------- supplier quote sheets */
+
+/** What a quote sheet contained, and whether any of it was written.
+ *
+ *  `recorded: false` with `refused` set is a file that was read and parsed and then not
+ *  written — a real distinction, and the reason `records` is still populated. "Your file
+ *  was rejected" and "your file was unreadable" are different facts. */
+export interface SupplierImportResult {
+  recorded: boolean;
+  refused?: string;
+  reason?: string;
+  allowlisted_as?: string;
+  filename: string;
+  sha256: string;
+  bytes: number;
+  rows_found: number;
+  valid: number;
+  rejected: number;
+  records: {
+    line: number;
+    product_id: string;
+    unit_price_cents: number;
+    case_units: number;
+    min_units: number;
+    supplier_reference: string;
+    quoted_at: string;
+    synthetic: boolean;
+  }[];
+  rejections: { line: number; reason: string }[];
+  offers: {
+    offer_id: string;
+    product_id: string;
+    unit_price_display: string;
+    case_units: number;
+    min_units: number;
+    supplier_reference: string;
+    source: string;
+    verified_at: string;
+  }[];
+}
+
+export interface SupplierFileInfo {
+  path: string;
+  columns: string[];
+  allowlisted: { filename: string; sha256: string; bytes: number }[];
+  accepts_any_file: boolean;
+  synthetic: boolean;
+}
+
+/** Upload a quote sheet. Multipart, because it is a file — the bytes go to the server
+ *  and the server parses them, rather than the browser parsing and posting numbers,
+ *  which would put the economics back in the client's gift. */
+export async function importSupplierQuotes(file: File): Promise<SupplierImportResult> {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch(
+    `${BASE}/api/demo/supplier-import?workspace=${activeWorkspace()}`,
+    { method: "POST", body },
+  );
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try {
+      const parsed = await response.json();
+      if (parsed?.detail) detail = String(parsed.detail);
+    } catch {
+      /* keep the status line */
+    }
+    throw new Error(detail);
+  }
+  return (await response.json()) as SupplierImportResult;
+}
+
+/** What the deployment will accept. Absent on a public deployment, where the browser does
+ *  not need it: the path is a constant and the digests are committed in the repository. */
+export async function supplierFileInfo(): Promise<SupplierFileInfo | null> {
+  try {
+    return await request<SupplierFileInfo>("/api/demo/supplier-file");
+  } catch {
+    return null;
+  }
+}

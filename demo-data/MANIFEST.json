@@ -1,0 +1,10 @@
+{
+  "note": "Digests of the supplier-quote fixtures the public demo will accept. The parser always runs on the bytes it is given; this decides whose bytes may become offer rows on a deployment strangers can reach.",
+  "algorithm": "sha256",
+  "files": {
+    "supplier_quotes.csv": {
+      "sha256": "b391207520aaccf161e029726c3250a0f8f1197eb9149a18e0bc8690753bd876",
+      "bytes": 1067
+    }
+  }
+}

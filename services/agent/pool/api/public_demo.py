@@ -240,6 +240,19 @@ ALLOWED_POST = frozenset(
         # offer row, in the caller's own session workspace, under the same lease and the
         # same action quota as every other mutation here.
         "/api/demo/supplier-updates",
+        # Uploading a supplier quote sheet. The same terms, arriving the way supplier
+        # terms actually arrive, because two buttons made the mechanism honest and the
+        # presentation indistinguishable from a switch.
+        #
+        # This one *does* carry numbers, which is why it is the most carefully bounded
+        # entry on this list. The parser always runs — bytes read, schema checked,
+        # malformed rows named — and then the digest decides whether the result may be
+        # written: here, only bytes committed in `demo-data/MANIFEST.json`. A judge
+        # downloads that file, uploads it, and watches it parse; edit one price and the
+        # response says the file was read, shows what it contained, and records nothing.
+        # So a stranger cannot set a price, which is the property `extra="forbid"` on
+        # `SupplierQuoteRequest` exists to protect, and the pipeline is still real.
+        "/api/demo/supplier-import",
         # Declaring a standing need. The product's primary user action, and the one a
         # judge has to be able to *perform* rather than read about — the whole thesis is
         # that this is all anybody does and the agent finds the overlap. It creates no

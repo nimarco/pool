@@ -6,8 +6,19 @@
  * card, and somebody has to answer for a stale supplier quote.
  */
 
-import { useEffect, useState } from "react";
-import { Checklist, OperatorView, SupplierUpdates, api, money, statusCopy } from "../api";
+import { useEffect, useRef, useState } from "react";
+import {
+  Checklist,
+  OperatorView,
+  SupplierFileInfo,
+  SupplierImportResult,
+  SupplierUpdates,
+  api,
+  importSupplierQuotes,
+  money,
+  statusCopy,
+  supplierFileInfo,
+} from "../api";
 import { Chip, Empty, Figure, IconArrowLeft, IconCheck, IconDot, LedgerLine } from "../ui";
 
 /** Supplier quotes arriving from outside, and what they do to demand that is already
@@ -111,6 +122,14 @@ function SupplierQuotes({ onRecorded }: { onRecorded: () => void }) {
           ))}
         </div>
 
+        <QuoteSheetImport
+          unit={data.unit}
+          onImported={() => {
+            load();
+            onRecorded();
+          }}
+        />
+
         <p className="tiny faint prose">
           These suppliers and terms are invented for this demo and are stored as
           synthetic, not as verified quotes — nobody negotiated them and no wholesaler
@@ -119,6 +138,181 @@ function SupplierQuotes({ onRecorded }: { onRecorded: () => void }) {
         </p>
       </div>
     </section>
+  );
+}
+
+/** Importing a supplier's quote sheet — the same terms, arriving the way terms arrive.
+ *
+ *  The two buttons above make the mechanism honest and the *presentation*
+ *  indistinguishable from a switch, which is a problem for a demo whose whole claim is
+ *  that the world changed rather than that somebody pressed something. A file somebody
+ *  sends you is what actually happens, and `demo-data/supplier_quotes.csv` is committed
+ *  so a judge can read it before uploading it.
+ *
+ *  Everything on screen after an upload is the server's reading of the bytes: the
+ *  filename, the digest, the row counts, and each record. Nothing is precomputed, and a
+ *  malformed row shows its line number because the parser genuinely found it there. */
+function QuoteSheetImport({
+  unit,
+  onImported,
+}: {
+  unit: string;
+  onImported: () => void;
+}) {
+  const [info, setInfo] = useState<SupplierFileInfo | null>(null);
+  const [result, setResult] = useState<SupplierImportResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    void supplierFileInfo().then(setInfo);
+  }, []);
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      const outcome = await importSupplierQuotes(file);
+      setResult(outcome);
+      if (outcome.recorded) onImported();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = "";
+    }
+  };
+
+  return (
+    <details className="inset import-panel">
+      <summary className="small">
+        <strong>Import a supplier quote sheet</strong> — the same terms, from a file
+      </summary>
+      <div className="stack-sm" style={{ marginTop: 12 }}>
+        <p className="tiny muted prose">
+          The file is read here, parsed by a CSV reader, and checked against a schema.
+          Rows can fail, and the ones that do say which line they were on.{" "}
+          {info?.accepts_any_file === false ? (
+            <>
+              This deployment writes offers only from the sheets committed in{" "}
+              <span className="mono">demo-data/</span>, so a price nobody can audit cannot
+              become an offer — any file is still read and reported.
+            </>
+          ) : (
+            <>
+              Any readable sheet is accepted on a local process. On the public deployment
+              only the committed fixtures are written.
+            </>
+          )}
+        </p>
+
+        <p className="tiny faint">
+          Expected columns:{" "}
+          <span className="mono">
+            {(info?.columns ?? ["product_id", "supplier_id", "unit_price_cents", "case_units", "min_units", "supplier_reference"]).join(", ")}
+          </span>
+          <br />
+          Committed sheet: <span className="mono">{info?.path ?? "demo-data/supplier_quotes.csv"}</span>
+          {info?.allowlisted?.[0] ? (
+            <>
+              {" "}· sha256 <span className="mono">{info.allowlisted[0].sha256.slice(0, 16)}…</span>
+            </>
+          ) : null}
+        </p>
+
+        <label className="btn btn-sm import-pick">
+          {busy ? "Reading…" : "Choose a CSV file"}
+          <input
+            ref={input}
+            type="file"
+            accept=".csv,text/csv"
+            disabled={busy}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void upload(file);
+            }}
+          />
+        </label>
+
+        {error ? (
+          <p className="small" style={{ color: "var(--clay)" }}>
+            {error}
+          </p>
+        ) : null}
+
+        {result ? (
+          <div className="stack-sm import-result">
+            <p className="small">
+              <strong className="mono">{result.filename}</strong> · {result.bytes} bytes ·
+              sha256 <span className="mono">{result.sha256.slice(0, 16)}…</span>
+            </p>
+            <p className="small">
+              {result.rows_found} {result.rows_found === 1 ? "record" : "records"} found ·{" "}
+              <strong>{result.valid}</strong> valid · <strong>{result.rejected}</strong>{" "}
+              rejected
+              {result.recorded ? null : (
+                <>
+                  {" "}
+                  · <Chip tone="warn">not recorded</Chip>
+                </>
+              )}
+            </p>
+            {result.reason ? <p className="tiny muted prose">{result.reason}</p> : null}
+            {result.records.length > 0 ? (
+              <table className="ledger-table tiny">
+                <thead>
+                  <tr>
+                    <th>line</th>
+                    <th>product</th>
+                    <th>unit</th>
+                    <th>case</th>
+                    <th>minimum</th>
+                    <th>reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.records.map((r) => (
+                    <tr key={`${r.line}-${r.supplier_reference}`}>
+                      <td className="mono">{r.line}</td>
+                      <td className="mono">{r.product_id}</td>
+                      <td>{money(r.unit_price_cents)}</td>
+                      <td>{r.case_units}</td>
+                      <td>
+                        {r.min_units} {unit}
+                        {r.min_units === 1 ? "" : "s"}
+                      </td>
+                      <td className="mono">{r.supplier_reference}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+            {result.rejections.length > 0 ? (
+              <ul className="tiny" style={{ color: "var(--clay)" }}>
+                {result.rejections.map((r) => (
+                  <li key={`${r.line}-${r.reason}`}>
+                    line {r.line}: {r.reason}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {result.offers.length > 0 ? (
+              <p className="tiny faint">
+                Written as {result.offers.length} synthetic bulk{" "}
+                {result.offers.length === 1 ? "offer" : "offers"}:{" "}
+                <span className="mono">
+                  {result.offers.map((o) => o.offer_id).join(", ")}
+                </span>
+                . No declaration, household, pool or past run record was touched, and no
+                agent ran.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </details>
   );
 }
 

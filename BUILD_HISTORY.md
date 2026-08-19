@@ -166,7 +166,7 @@ synthesized template — which is how rows 17–21 were found at all.
 | Resource | Service | Created | Purpose | Recurring cost? | Destroy by |
 | --- | --- | --- | --- | --- | --- |
 | `CDKToolkit` | CloudFormation | 2026-08-16 | Bootstrap stack, version 32 | No | Manual (see #0023) |
-| `cdk-hnb659fds-assets-860325090409-us-east-1` | S3 | 2026-08-16 | Deploy staging bucket. Measured after the final 2026-08-18 demo deploy: **36 objects, 544,983,237 bytes**. Every `agentcore deploy` and `deploy-demo` publishes hashed assets that do not expire automatically. Re-measure with `aws s3 ls s3://cdk-hnb659fds-assets-860325090409-us-east-1 --recursive --summarize` | **Yes — 545 MB of S3 storage at this measurement.** Growth is per deploy, not per request | Empty + delete before stack |
+| `cdk-hnb659fds-assets-860325090409-us-east-1` | S3 | 2026-08-16 | Deploy staging bucket. Measured after the 2026-08-19 deployment pass: **43 objects, 648,260,603 bytes** (was 36 objects / 544,983,237 bytes on 2026-08-18 — three further deploys of two components, #0048). Every `agentcore deploy` and `deploy-demo` publishes hashed assets that do not expire automatically. Re-measure with `aws s3 ls s3://cdk-hnb659fds-assets-860325090409-us-east-1 --recursive --summarize` | **Yes — 618 MB of S3 storage at this measurement.** Growth is per deploy, not per request | Empty + delete before stack |
 | `cdk-hnb659fds-container-assets-860325090409-us-east-1` | ECR | 2026-08-16 | Bootstrap image repo — **empty, 0 images** (CodeZip needs none) | No (empty) | With CDKToolkit |
 | `/cdk-bootstrap/hnb659fds/version` | SSM Parameter | 2026-08-16 | Bootstrap version marker (`32`) | No (standard tier) | With CDKToolkit |
 | `cdk-hnb659fds-cfn-exec-role-…` | IAM Role | 2026-08-16 | CFN execution — **holds `AdministratorAccess`** | No | With CDKToolkit |
@@ -183,7 +183,7 @@ synthesized template — which is how rows 17–21 were found at all.
 | Resource | Service | Created | Purpose | Recurring cost? | Destroy by |
 | --- | --- | --- | --- | --- | --- |
 | `AgentCore-Pool-default` | CloudFormation | 2026-08-16 | Pool runtime stack | No | `make destroy-agent` |
-| `Pool_PoolCoordinator-TmVqSN9H56` | Bedrock AgentCore Runtime | 2026-08-16 | Deployed coordinator, status `READY`. **Version 4** as of 2026-08-18 (#0031) | **No — billed per invocation only.** No always-on compute; idle session 60 s, max lifetime 300 s | `make destroy-agent` |
+| `Pool_PoolCoordinator-TmVqSN9H56` | Bedrock AgentCore Runtime | 2026-08-16 | Deployed coordinator, status `READY`. **Version 6** as of 2026-08-19 (#0048); was version 4 (#0031) | **No — billed per invocation only.** No always-on compute; idle session 60 s, max lifetime 300 s | `make destroy-agent` |
 | `AgentCore-Pool-default-ApplicationAgentPoolCoordina-Ad6KX4akMhNd` | IAM Role | 2026-08-16 | Runtime execution role | No | `make destroy-agent` |
 | `Agent-Appli-6NpmisJ95ByC` | IAM Policy | 2026-08-16 | Inline policy: Bedrock invoke, scoped Logs, X-Ray, config bundles | No | `make destroy-agent` |
 | `ApplicationAgentPoolCoordinatorRuntimeAdditionalCustomPolicy03BEAE200` | IAM Policy | **2026-08-17** (#0030) | Inline policy from `services/agent/iam/agentcore-dynamodb.json`: `GetItem`, `PutItem`, `Query` on `table/pool-demo-state` and nothing else. Verified by `iam simulate-principal-policy`: `DeleteItem`, `BatchWriteItem`, `UpdateItem`, `Scan`, `DeleteTable` all `implicitDeny`, and any other table `implicitDeny`. **Region pinned to `us-east-1` on 2026-08-18** (#0031) — the resource ARN was `arn:aws:dynamodb:*:*:table/pool-demo-state`, granting the runtime a same-named table in every region for no reason. The account segment stays a wildcard deliberately: the role can only act in its own account | No | `make destroy-agent` |
@@ -5218,3 +5218,164 @@ tier-disagreement output showing 32/24 from the winning tier versus 29/12 from t
 `6ae2d82` showcase scope + `apps/web/src/App.test.tsx` · `7a9d534` script and README figures,
 `api.ts` comments, `test_presentation_truth.py` · `8e03505` `run_report._most_telling` +
 `test_run_report.py` · merge `ef5547b`.
+
+---
+
+### #0048 — [2026-08-19] — Deploying the member trigger, and the 500 only DynamoDB could produce
+`[AWS]` `[COST]` `[AGENT]` `[DEMO]` `[SECURITY]`
+
+**Goal / user intent**
+Deploy the reviewed `main` (#0047) to AWS, update the AgentCore runtime so it understands
+`member_scan`, and spend the minimum number of paid invocations needed to prove the real causal
+path: browser → Lambda → AgentCore → Bedrock → typed tools → deterministic services → DynamoDB →
+API readback. Not another audit, not new features.
+
+**Starting state**
+`main` and `origin/main` both `54899fb`, working tree clean, `fix/consumer-result-relevance`
+retained at `8e03505`. Deployed: `PoolDemoStack` last updated 2026-08-18T18:57Z from `719585a`,
+and AgentCore runtime `Pool_PoolCoordinator-TmVqSN9H56` at **version 4** (2026-08-18T05:43Z).
+Sixteen commits had touched `services/agent/` since that runtime was built, and `member_scan`
+entered `agentcore_app.py` in `d23e2dd` — so the deployed runtime predated the trigger, exactly
+as expected. Credentials: `pool-dev`, `arn:aws:iam::860325090409:user/pool-admin`, `us-east-1`.
+
+**Decision**
+Deploy the runtime **first**, then the demo stack. The deployed Lambda sent `LIVE_TRIGGER =
+"manual"`, and the new allowlist keeps `manual` — so a runtime-first order is backward compatible
+and leaves no window in which the public demo is broken. The reverse order would have put a
+`member_scan`-sending frontend in front of a runtime that rejects it.
+
+**Implementation**
+Both components deployed from the same commit, and both diffs were reviewed before applying.
+Each was a single code-asset change: no IAM statement, no environment variable, no resource
+replacement, no DynamoDB touch. Runtime **4 → 5 → 6** (5 was the reviewed `main`; 6 carried the
+fix below so both components run identical application code). `PoolDemoStack` updated only
+`DemoApi`. Status: deployed.
+
+One fix, committed as `09f06ce`. `DynamoDBRepository._get` handed a caller-supplied empty id
+straight to `GetItem`, which rejects an empty key attribute (`ValidationException … cannot contain
+an empty string value. Key: sk`). `InMemoryRepository` answers `None` for the same lookup, so
+`POST /api/needs` with `household_id: ""` was a clean 400 "unknown member" locally and an uncaught
+**500 on the deployed function**. The guard now lives in `_get`, where both backends have to
+agree, and `FakeTable` in the test suite enforces the real service's rule so the divergence is a
+test failure rather than a production incident. Verified live afterwards: the same request now
+returns 400.
+
+**AWS / external services touched**
+CloudFormation (`AgentCore-Pool-default`, `PoolDemoStack`), Bedrock AgentCore Runtime, Bedrock
+(Nova Lite), Lambda, DynamoDB `pool-demo-state`, S3 staging bucket, CloudWatch Logs, X-Ray.
+
+**Cost-relevant activity**
+**Three paid AgentCore invocations, where one was planned.** All three were member-triggered runs
+on Nova Lite; none created a schedule or any always-on resource.
+
+Two were unintended and are recorded because they were a real mistake, not a rounding error.
+`POST /api/demo/agentcore` takes `action` as a **query** parameter defaulting to `member` and
+accepts no request body. Two probes intended to test refusal paths sent their arguments as JSON
+bodies, which were silently ignored, so both executed as default member runs:
+`run_37151a982fb5` (4,916 in / 116 out) and `run_7a680bc1abe1` (4,944 in / 134 out). Both landed
+in a throwaway workspace whose consumer had no declarations, so both truthfully returned
+`no_action`. The lesson is narrow and worth keeping: *read the endpoint's signature before probing
+a paid endpoint* — a body that cannot be read is not a safe probe, it is an unguarded default. The
+compensating fact is that they proved the deployed runtime accepts `member_scan` before the
+planned run was made.
+
+The planned run, `run_fa577891fcd5`: 7 iterations against a bound of 8, 7 tool calls against 25,
+29,701 input / 568 output tokens, 7,415 ms inside the agent, 13,258 ms inside AWS. Everything else
+verified in this pass was free — the deterministic showcase, the offline coordinator, every read
+endpoint, the refusal probes on `/api/agent/run`, and the whole browser walkthrough.
+
+The staging bucket grew from 36 objects / 545 MB to **43 objects / 648 MB** across three deploys;
+the ledger is updated. `agentcore deploy` re-issued its account-level X-Ray `UpdateIndexingRule`
+(`ModifiedAt` moved to 2026-08-19T19:26), setting the same 100 % it already held — no effective
+change, and the Q18 decision stands, but it confirms the CLI touches account configuration on
+every deploy, not only the first.
+
+**Agent behavior**
+Model `us.amazon.nova-lite-v1:0` on Bedrock via AgentCore Runtime, `member_scan`, objective kind
+`member`, two declarations (`need_4c2ea8c5dc04` whey 2 tubs, `need_9e3ca3e52bc2` towels 2 packs),
+both `exact_only`. Tool sequence: `list_latent_demand` → `evaluate_pool_economics` ×2 →
+`create_candidate_pool` → `find_host_candidates` → `request_host_acceptance` →
+`issue_final_offer`. Terminated `completed`, one HITL decision created (the host offer), which is
+correct for a member on Ask Me.
+
+The most useful thing the run did was fail an action. `issue_final_offer` returned `ok=true` with
+`issued: false` — *"no host has accepted this pool yet"*. The model chose a consequential action
+and deterministic code refused it, inside an otherwise successful run. That is the architecture
+rule observable in production rather than asserted: the model decides what to attempt, and
+deterministic code decides what is true.
+
+**Validation**
+`make qa` green on `09f06ce`: **905 backend** (904 + the new regression), **86 web**, Ruff,
+`tsc -b`, ESLint, production build, secret scan, `git diff --check` clean. The new test fails on
+the pre-fix code, which was checked by reverting the guard and re-running it.
+
+Causality was proven at the storage layer rather than inferred from the response. Before the run
+the live workspace held `RUN` 0, `RUN_EVALUATION` 0, `POOL` 0. After it: exactly one `RUN`
+(`run_fa577891fcd5`), **two `RUN_EVALUATION` rows whose sort keys embed that run id**, one `POOL`
+(`pool_08e7ecf6ce7d`), ten `MEMBERSHIP` rows including the member's own `hh_navarro`, and one
+`DECISION`. `pool.created_by_run == run_id`, `relation_verified: true`, `same_workspace: true`.
+The two earlier accidental runs had already demonstrated the shared partition from the other
+direction: rows written by the AgentCore process, read by the Lambda.
+
+The persisted evaluations, read straight out of DynamoDB, carry the deterministic facts the run
+computed: whey `viable`, 31 matched against a 24 minimum, 16 current + 8 future units, 24
+selected across 10 members, 2 cases, 0 surplus, North Hall lobby from 4 sites considered, and
+`offers_considered` recording 3150 selected over 3980; towels `below_minimum`, 6 against 48, not
+included. A fresh `GET /api/runs/{id}/report` **100 seconds after the runtime returned** came back
+in 293 ms with those same facts — including all six *Why this worked* sentences and the towels
+refusal — and answered both declarations, one of them "no".
+
+That no second model call produced the report is structural, not observational: the API Lambda's
+role grants five DynamoDB actions, `bedrock-agentcore:InvokeAgentRuntime` on one runtime, and
+`AWSLambdaBasicExecutionRole`. It holds **no** `bedrock:InvokeModel`. The function that serves the
+Run Report cannot call a foundation model. One user action produced one invocation, confirmed in
+the runtime log: the four matching lines around the run are two copies each (`otel-rt-logs` plus
+the per-session stream) of **one** session.
+
+Canonical invariants intact on the deployed stack, from a showcase replay in its own partition:
+11 membership rows, 10 locked buyers, 1 retained `authorization_failed`, 24 funded units, 2 cases,
+0 surplus, merchandise $756.00, host $44.68, processing $28.06, fee $32.70, all-in **$861.44**
+against $1,127.76, saved $266.32 at 23.61 %, pickup North Hall lobby. The visitor's own partition
+was byte-for-byte unchanged by that replay. Separately, the live pool converged on the same
+$861.44 / $1,127.76 / $266.32 / 23.61 % / 24 units / 2 cases / 0 surplus once the host accepted.
+
+Sourceability on the deployed search: `coffee` leads with the sourceable Pike Place, `death wish`
+returns only Death Wish, `folgers coffee` keeps five Folgers rows ahead of the sourceable option
+at sixth, and `shampoo` fabricates nothing.
+
+**Failures / dead ends**
+Two, besides the paid-probe mistake. Running `npx aws-cdk diff` directly instead of through `make`
+dropped `AGENTCORE_RUNTIME_ARN` from the environment, and the diff showed it would have **removed**
+the `InvokeAgentRuntime` grant and blanked the ARN — shipping a demo with the live action silently
+off, which is precisely what the Makefile comment warns about. Caught because the diff was read
+before it was applied; the lesson is that the deploy path is the Makefile, not the CDK CLI.
+
+Browser QA against the deployed Function URL was **not possible from this environment** — the
+domain is blocked by the sandbox's policy and no Chrome instance was attached. The walkthrough was
+therefore done against the identical Lambda bundle served locally in the same public-demo mode
+(offline planner, live action off), the approach #0035 used under the same constraint, while every
+data-level and causal claim above was verified against production over HTTP. That split is stated
+plainly rather than papered over: nobody has yet watched the deployed React app render this run.
+
+**What we learned**
+A repository whose entire test suite runs on one storage backend cannot see the other backend's
+error semantics. The 500 was not a logic bug — the validation was correct and the message was
+right — it was two adapters disagreeing about how to say "that row does not exist," and only the
+deployed one could say it wrong. The general form: when two implementations of the same protocol
+are swapped by configuration, the *fake* has to be as strict as the real service, or the suite is
+green about a behaviour it never exercised.
+
+**Article fodder**
+Article 2. The strongest paragraph available on AWS is the negative permission: the reason a judge
+can trust that the Run Report was not re-generated by a model is not a log line, it is that the
+function serving it has no model permission at all. Provenance by IAM rather than by assertion.
+Article 3 gets `issue_final_offer` refusing itself mid-run.
+
+**Evidence worth preserving**
+The pre/post DynamoDB partition counts either side of one button press (0/0/0 → one run, two
+evaluations keyed by that run, one pool, ten memberships), and the Lambda role's policy document
+next to the Run Report it served.
+
+**Relevant commits / files**
+`09f06ce` `pool/adapters/repository.py` + `tests/test_persistence_and_termination.py`. Deployed
+from that commit: AgentCore runtime version 6, `PoolDemoStack` `DemoApi`.

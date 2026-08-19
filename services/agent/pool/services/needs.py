@@ -308,6 +308,26 @@ def _product_name(ctx: PoolContext, product_id: str) -> str:
     return product.name if product else product_id
 
 
+def declared_as(ctx: PoolContext, need: NeedDeclaration) -> str:
+    """What the member should see this declaration called.
+
+    A group declaration stores an exemplar ``product_id`` so the membership lineage keeps
+    resolving to a real product, but the member said "coffee" and never saw the exemplar.
+    Showing them "Pike Place Medium Roast" on their own list would be Pool telling them
+    what they declared, and it is the exemplar's only visible consequence — so this is the
+    one place that decides, and every surface reads it.
+
+    Falls back to the product name whenever the family cannot be resolved, so a
+    declaration is never nameless.
+    """
+    product = ctx.repo.get_product(ctx.ws, need.product_id)
+    if need.substitution == SubstitutionPolicy.GROUP_DECLARED and product is not None:
+        family = catalog.group(product.substitute_group)
+        if family is not None:
+            return family.label
+    return product.name if product else ""
+
+
 def need_view(ctx: PoolContext, need: NeedDeclaration) -> dict[str, Any]:
     """One declaration, shaped for the client. Mirrors the rows ``/api/needs`` serves."""
     product = ctx.repo.get_product(ctx.ws, need.product_id)
@@ -315,7 +335,15 @@ def need_view(ctx: PoolContext, need: NeedDeclaration) -> dict[str, Any]:
         "need_id": need.id,
         "household_id": need.household_id,
         "product_id": need.product_id,
-        "product_name": product.name if product else "",
+        "product_name": declared_as(ctx, need),
+        #: The exact product behind a family declaration, for a surface that needs to say
+        #: what an order actually bought. Empty when the member named the product.
+        "declared_family": (
+            product.substitute_group
+            if product is not None
+            and need.substitution == SubstitutionPolicy.GROUP_DECLARED
+            else ""
+        ),
         "unit": product.unit if product else "",
         "quantity": need.quantity,
         "cadence_days": need.cadence_days,

@@ -59,6 +59,7 @@ from ..domain.models import (
 )
 from . import coordination as coord
 from . import discovery
+from . import needs as needs_service
 from .context import PoolContext
 
 #: Ordering for the pool a member is shown first when they are in more than one. Pools
@@ -222,6 +223,76 @@ OUTLOOK_NOT_MATCHED = "not_matched"  # the demand that exists cannot serve this 
 OUTLOOK_RETIRED = "retired"          # the member stopped buying it
 OUTLOOK_NOT_WORTH_IT = "not_worth_it"  # demand is there; pooling it saves nothing
 OUTLOOK_NOT_IN_ROUND = "not_in_round"  # a round formed for it, without these units
+#: Worth doing, and this member's units did not fit the last whole case. Split out from
+#: ``not_matched`` because they are opposite news wearing the same word: a matcher
+#: rejection means nothing near you can serve this, and a case boundary means the order
+#: happened and was full. Telling somebody whose neighbours just bought the thing they
+#: wanted that "nothing nearby fits" is the single most misleading sentence Pool had.
+OUTLOOK_CASE_BOUNDARY = "case_boundary"
+
+
+#: The five words a member is ever shown for the state of one thing they buy.
+#:
+#: There are far more deterministic outcomes than five, and every one of them stays
+#: readable — as the *reason* underneath. What was wrong was making the member learn a
+#: new sentence per outcome: seven near-identical paragraphs, each having to be read in
+#: full before it could be told apart from the other six. A short status they already
+#: understand, plus the specific fact, says the same thing and can be scanned.
+#:
+#: Decided here because a screen must not re-derive it. Home, the item list and the
+#: order surfaces all read the same field, so they cannot disagree about whether Pool is
+#: waiting on somebody — which is the class of contradiction this grammar exists to make
+#: impossible.
+STATUS_NEEDS_YOU = "needs_you"          # one question, already worked out
+STATUS_COORDINATING = "coordinating"    # an order exists and is moving
+STATUS_READY = "ready_to_collect"       # the pickup window is open
+STATUS_WATCHING = "watching"            # standing, and nothing to do about it yet
+STATUS_DONE = "done"                    # collected and reconciled
+
+CONSUMER_STATUSES = (
+    STATUS_NEEDS_YOU,
+    STATUS_COORDINATING,
+    STATUS_READY,
+    STATUS_WATCHING,
+    STATUS_DONE,
+)
+
+#: Short label for *why* a watching declaration is watching. Four or five words, so it
+#: can sit on the row rather than in a paragraph under it. The full sentence stays in
+#: ``NeedOutlook.reason``, which is what a member reads when they want the detail.
+#:
+#: ``not_in_round`` and the case-boundary case are deliberately different sentences from
+#: ``short``. "Not enough demand" is technically true of what is *left* after an order
+#: formed, and it is the wrong thing to tell somebody whose neighbours just bought the
+#: thing they wanted.
+_WATCHING_HEADLINES = {
+    OUTLOOK_NO_SUPPLY: "No verified supplier yet",
+    OUTLOOK_SHORT: "Not enough demand yet",
+    OUTLOOK_NOT_WORTH_IT: "Supplier found — not cheaper",
+    OUTLOOK_NOT_IN_ROUND: "An order filled without your units",
+    OUTLOOK_CASE_BOUNDARY: "An order filled without your units",
+    OUTLOOK_NOT_MATCHED: "Nothing nearby fits this one",
+    OUTLOOK_RETIRED: "Paused by you",
+    OUTLOOK_READY: "Worth doing — Pool has not run yet",
+}
+
+
+def consumer_status(outlook_state: str) -> str:
+    """The member-facing status for one outlook state.
+
+    ``in_pool`` is the only outlook that is not watching, and the order's own lifecycle
+    then decides between coordinating, needing an answer, and ready to collect — which
+    is a fact about the pool, not about the declaration, so it is resolved where the pool
+    is read rather than guessed here.
+    """
+    if outlook_state == OUTLOOK_IN_POOL:
+        return STATUS_COORDINATING
+    return STATUS_WATCHING
+
+
+def watching_headline(outlook_state: str) -> str:
+    """The short reason a watching declaration is watching."""
+    return _WATCHING_HEADLINES.get(outlook_state, "Pool is watching this")
 
 
 @dataclass(frozen=True)
@@ -248,6 +319,11 @@ class NeedOutlook:
             "pool_id": self.pool_id,
             "units_needed": self.units_needed,
             "units_available": self.units_available,
+            # The consumer grammar, decided here so no screen re-derives it. ``state``
+            # stays exactly what it was — the deterministic outcome every test and the
+            # operator surfaces read — and these two are the reading of it.
+            "status": consumer_status(self.state),
+            "headline": watching_headline(self.state),
             **({"detail": self.detail} if self.detail else {}),
         }
 
@@ -285,8 +361,8 @@ def need_outlook(
 
     Creates nothing, contacts nobody, commits no money.
     """
-    product = ctx.repo.get_product(ctx.ws, need.product_id)
-    name = product.name if product else need.product_id
+    # What the member called it, which for a family declaration is the family.
+    name = needs_service.declared_as(ctx, need) or need.product_id
 
     def outlook(state: str, reason: str, best=None, pool_id: str = "") -> NeedOutlook:
         return NeedOutlook(
@@ -413,7 +489,7 @@ def need_outlook(
         # units. Pool does not buy stock nobody ordered, so the boundary decides who is
         # in this round (§48).
         return outlook(
-            OUTLOOK_NOT_MATCHED,
+            OUTLOOK_CASE_BOUNDARY,
             "There is a group order for this, but it filled to a whole case without "
             "your units this time.",
             best,

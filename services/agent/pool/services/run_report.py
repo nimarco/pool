@@ -113,8 +113,12 @@ def _why_it_worked(evaluation: RunEvaluation, unit: str) -> list[str]:
         )
         facts.append(f"Collect from {evaluation.pickup_site_name}{covered}.")
     if evaluation.net_savings_cents > 0:
+        # "about", because an evaluation is always made before a fulfiller has accepted
+        # and their pay is part of the price (§26). The final figure appears once the
+        # offer is issued, and it moves — a judge comparing this line against the locked
+        # ledger should find the difference already accounted for rather than unexplained.
         facts.append(
-            f"All in, {format_cents(evaluation.all_in_cents)} against "
+            f"All in, about {format_cents(evaluation.all_in_cents)} against "
             f"{format_cents(evaluation.retail_baseline_cents)} buying separately — "
             f"{bps_to_pct_str(evaluation.net_savings_bps)} less."
         )

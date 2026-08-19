@@ -5015,3 +5015,86 @@ answers, and collapsing them is how an agent product starts sounding like it kno
 Before/after of the Home pre-run slot: the convergence diagram against the standing-demand card. It
 is the clearest single illustration of the difference between showing the input and showing the
 answer.
+
+---
+
+### #0046 — [2026-08-19] — A demo that does not need a memorised phrase
+`[demo]` `[docs]`
+
+**Goal / user intent**
+Rewrite the rehearsal around what the product now does, and prove the claim it rests on: that Pool
+behaves correctly for arbitrary supported input rather than for one word.
+
+**Starting state**
+`DEMO_SCRIPT.md` ran 4:53 and opened by instructing the presenter to type `vanilla whey`. That was
+honest at the time — search could not surface what Pool could source, so typing a category was a
+dead end — but it meant the recording could not survive a judge typing anything else, and it spent
+most of its length walking a lifecycle a reader can step through themselves.
+
+**Decision**
+Type a **category**. `whey`, `coffee`, `energy`, `laundry`, `towels` — each leads with the option
+Pool can genuinely source, labelled, and each reaches a different truthful outcome.
+
+Two declarations in setup rather than one, which is the change that makes the demo about the right
+thing. One product proves Pool can find an overlap; two prove it tells the truth about **both**,
+and the second answer is *no*. Measured, from the real endpoints, on the form's own defaults:
+
+- whey → formed, member included, 10 buyers, 24 units, 2 cases, six stored facts behind it
+- paper towels → declined: "6 compatible packs were declared near you, and the supplier will not
+  sell fewer than 48"
+- and with a third — laundry → declined on **economics**: "$398.92 against $367.84 buying it alone"
+
+Three declarations, three genuinely different deterministic verdicts, one button, seven model turns
+against a bound of eight.
+
+The canonical lifecycle becomes the **backup and regression proof** rather than the recording — now
+that it runs in its own copy of the community, saying so is also literally true.
+
+**One inconsistency the rehearsal caught**
+The pre-run card said "the supplier will not sell fewer than 12" and the run afterwards said
+"reached the supplier's 24-unit minimum". Both true — whey has a 12-unit tier at $39.80 and a
+24-unit one at $31.50, and the evaluator takes the second — and side by side they read as a
+contradiction. The pre-run card now reports the *cheapest tier's* minimum, which is both the honest
+"best price starts at" figure and the one the run actually clears.
+
+Also: the run's all-in figure is now prefixed "about", because an evaluation is always made before
+a fulfiller has accepted and their pay is part of the price. A judge comparing $862.45 in the
+explanation against $861.44 in the locked ledger should find the difference already accounted for.
+
+**Documentation reconciled**
+`docs/ARTICLE_NOTES.md` still described "form tight (1.6 km), repair wide (4 km)" as a clean product
+decision. It was quoting a docstring that described a constraint never implemented, so the note now
+records what was actually wrong and why the correction is about *authority* rather than distance.
+`AGENTS.md` §8 gained the two-trigger rule and the showcase-workspace boundary. Endpoint counts in
+`README.md`, `docs/architecture.svg` and `public_demo.py`'s own docstring were three different
+stale numbers; all four now agree at 29 of 45, pinned by the test that noticed.
+
+**Implementation**
+`docs/DEMO_SCRIPT.md` (rewritten), `docs/ARTICLE_NOTES.md`, `AGENTS.md`, `README.md`,
+`docs/architecture.svg`, `services/discovery.py`, `services/run_report.py`,
+`tests/test_presentation_truth.py`. Status: **tested**.
+
+**AWS / external services touched**
+None. No deployment and no paid invocation in this pass.
+
+**Validation**
+`make qa` green: 897 backend, 75 infra, 84 web, lint, typecheck, production build, secret scan.
+Every figure quoted in the script was measured through the real endpoints first; two new
+presentation tests assert the rehearsal shows a refusal as well as a result, and that it says the
+showcase has its own community.
+
+**Failures / dead ends**
+`test_the_rehearsal_opens_on_the_person_not_a_dashboard` asserted the script contained
+``` `vanilla whey` ``` — pinning the magic phrase as a *requirement*. Inverting it (the phrase must
+**not** appear as an instruction) then failed against the paragraph explaining why it was removed,
+which is the right kind of failure: the assertion had to become specific about instructions rather
+than mentions.
+
+**What we learned**
+The strongest beat in the new script is the one that says no. A demo built entirely from successes
+cannot demonstrate the property that actually matters here — that the run answers *your*
+declarations — because a system that always succeeds looks identical to one that always says yes.
+
+**Article fodder**
+Article 1 — "the demo needs a magic word" is a product finding, not a presentation problem, and the
+fix was in search rather than in the script.

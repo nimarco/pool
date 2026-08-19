@@ -227,12 +227,18 @@ def standing_demand_for(
             )
             if n.household_id != need.household_id
         ]
+        # The minimum of the *cheapest* tier, not of all of them. Whey has a 12-unit tier
+        # at $39.80 and a 24-unit one at $31.50, and the evaluator takes the second — so
+        # reporting 12 here put "the supplier will not sell fewer than 12" on the screen
+        # before a run and "reached the supplier's 24-unit minimum" on the screen after
+        # it. Both true, and side by side they read as a contradiction.
         _, bulk = coord.offers_for(ctx, target_id)
+        cheapest = min(bulk, key=lambda o: (o.unit_price_cents, o.min_units), default=None)
         row = {
             **base,
             "compatible_members": len({n.household_id for n in usable}),
             "compatible_units": sum(n.quantity for n in usable),
-            "minimum_units": min((o.min_units for o in bulk), default=0),
+            "minimum_units": cheapest.min_units if cheapest else 0,
             "sourceable_product_id": target_id if target_id != need.product_id else "",
             "sourceable_product_name": target.name if target_id != need.product_id else "",
         }

@@ -160,7 +160,7 @@ both the web app and a twenty-four-endpoint API, plus one DynamoDB table.
 ```
 browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
                                              ├─ the built SPA (same origin, no CORS)
-                                             ├─ 28 allowlisted API paths
+                                             ├─ 29 allowlisted API paths
                                              ├─ DynamoDB — this session only, 24 h TTL
                                              └─ InvokeAgentRuntime — bound to this session
                                                        │

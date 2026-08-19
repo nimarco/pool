@@ -409,7 +409,7 @@ function StandingLine({ demand, need }: { demand: StandingDemand; need: NeedRow 
               <>Nobody else near you has declared anything compatible yet.</>
             )}
             {demand.minimum_units
-              ? ` The supplier will not sell fewer than ${demand.minimum_units}.`
+              ? ` The supplier's best price starts at ${demand.minimum_units}.`
               : ""}
           </p>
           {demand.sourceable_product_name ? (

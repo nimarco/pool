@@ -513,7 +513,7 @@ describe("before Pool has run", () => {
     expect(line.textContent).toMatch(/5.*other.*members have independently declared/s);
     expect(line.textContent).toMatch(/15 bags/);
     expect(line.textContent).toMatch(/With yours, 18/);
-    expect(line.textContent).toMatch(/will not sell fewer than 18/);
+    expect(line.textContent).toMatch(/best price starts at 18/);
     // No verdict, because none has been earned.
     expect(screen.queryByText(/Worth pooling now/)).toBeNull();
     expect(screen.queryByText(/Nothing worth coordinating yet/)).toBeNull();

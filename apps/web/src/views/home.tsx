@@ -21,12 +21,14 @@ import {
   Decision,
   HostOpportunities,
   MemberView,
-  NeedOutlook,
   NeedRow,
   PoolMember,
   PoolStatus,
   PoolView,
   ProductCandidate,
+  RunReport,
+  RunReportResult,
+  StandingDemand,
   api,
   money,
   pct,
@@ -35,7 +37,6 @@ import {
   statusCopy,
 } from "../api";
 import { autonomyModeCopy, blockingRuleExplanation } from "../labels";
-import { ConvergenceFigure } from "../brand";
 import { ProductSearch } from "../product-search";
 import { productImage, productInitials } from "../products";
 import {
@@ -159,6 +160,7 @@ function OpportunityCard({
   pool,
   mine,
   substituteFor,
+  whyItWorked,
   onOpen,
   onShowAgent,
 }: {
@@ -169,6 +171,11 @@ function OpportunityCard({
    *  substitute for it. The card leads with the pool's name and photograph, so
    *  without this the two silently disagree with the declaration behind them. */
   substituteFor: string;
+  /** Why this order worked, as the run that formed it established — supplier minimum,
+   *  case fit, which tier won, which pickup point. Empty unless the run on screen is
+   *  the one that produced this pool, because these are facts about *that* run rather
+   *  than about the world now. */
+  whyItWorked: string[];
   onOpen: () => void;
   /* Takes the pool id rather than firing a bare signal: the card is the only thing that
      knows which pool it drew, and the proof it offers has to be that pool's proof. */
@@ -275,6 +282,19 @@ function OpportunityCard({
             : ""}
         </p>
 
+        {whyItWorked.length > 0 ? (
+          <details className="inset">
+            <summary className="small">
+              <strong>Why this worked</strong>
+            </summary>
+            <ul className="fact-list" style={{ marginTop: 10 }}>
+              {whyItWorked.map((f: string) => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+
         <div className="btn-row" style={{ marginTop: 4 }}>
           <button className="btn btn-primary" onClick={onOpen}>
             Open the pool
@@ -298,6 +318,10 @@ function OpportunityCard({
  *  they were supposed to do. That is backwards: the member's job comes first, and the
  *  agent's job is what happens as a result. So when this account has declared nothing,
  *  Home is one instruction and one box.
+ *
+ *  There is deliberately no **Run Pool now** here. The button asks Pool to look at what
+ *  *you* buy, and an account that has said nothing has asked nothing — offering it would
+ *  promise an answer the run cannot have.
  *
  *  The search is live here rather than a link, because the shortest path from "what is
  *  this" to "oh, I see" is typing something you actually buy and recognising it. */
@@ -336,131 +360,223 @@ function FirstUseCard({ onStartNeed }: { onStartNeed: (p: ProductCandidate) => v
   );
 }
 
-function WatchingCard({
+/* ------------------------------------------------------------- before the run */
+
+/** One declaration, and the overlap that has accumulated around it on its own.
+ *
+ *  Three things, in order: what I told Pool, what already exists near it, and what is
+ *  still genuinely unknown. Every figure is a server count over stored declarations —
+ *  nothing here is a verdict, because none has been earned yet.
+ *
+ *  This replaced a diagram of the canonical whey arithmetic: eight people due, eighteen
+ *  units, two pulled forward, twenty-four. Drawn before the run, it told a judge the
+ *  answer and then asked them to watch Pool produce it. What belongs here is the
+ *  question. */
+function StandingLine({ demand, need }: { demand: StandingDemand; need: NeedRow | null }) {
+  const unit = (n: number) => (n === 1 ? demand.unit : `${demand.unit}s`);
+  const together = demand.compatible_units + demand.my_units;
+  return (
+    <div className="standing-line">
+      <div className="standing-head">
+        <span className="standing-product">{demand.product_name}</span>
+        <span className="small faint">
+          {demand.my_units} {unit(demand.my_units)}
+          {need ? ` · about every ${need.cadence_days} days` : ""}
+          {need && need.flexibility_days > 0
+            ? ` · may be bought up to ${need.flexibility_days} days early`
+            : need
+              ? " · never early"
+              : ""}
+        </span>
+      </div>
+      {!demand.has_supplier ? (
+        <p className="small muted">
+          No supplier Pool has verified sells this in bulk yet, so there is nothing for it
+          to coordinate. Your declaration stays on file.
+        </p>
+      ) : (
+        <>
+          <p className="small muted">
+            {demand.compatible_members > 0 ? (
+              <>
+                <strong>{demand.compatible_members}</strong> other{" "}
+                {demand.compatible_members === 1 ? "member has" : "members have"}{" "}
+                independently declared something this could be bought for —{" "}
+                {demand.compatible_units} {unit(demand.compatible_units)}. With yours,{" "}
+                {together}.
+              </>
+            ) : (
+              <>Nobody else near you has declared anything compatible yet.</>
+            )}
+            {demand.minimum_units
+              ? ` The supplier will not sell fewer than ${demand.minimum_units}.`
+              : ""}
+          </p>
+          {demand.sourceable_product_name ? (
+            <p className="tiny faint">
+              The order Pool could form would buy {demand.sourceable_product_name}, which
+              your substitution rule allows.
+            </p>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function StandingCard({
+  demand,
+  needs,
   running,
   onFind,
-  memberCount,
-  needCount,
   liveDiscovery,
   region,
+  hasAnswer,
 }: {
+  demand: StandingDemand[];
+  needs: NeedRow[];
   running: boolean;
   onFind: () => void;
-  memberCount: number;
-  needCount: number;
   liveDiscovery: boolean;
   region: string | null;
+  /** True once this session has a run report on screen, so the card stops leading and
+   *  becomes the place to run again. */
+  hasAnswer: boolean;
 }) {
+  const byNeed = new Map(needs.map((n) => [n.need_id, n]));
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>Pool is watching</h2>
+        <h2>{hasAnswer ? "Still standing" : "What you buy, and what is around it"}</h2>
       </div>
-      <div className="grid grid-side" style={{ gap: 0, alignItems: "stretch" }}>
-        <div className="panel-pad stack-sm" style={{ justifyContent: "center" }}>
-          <p className="small muted prose">
-            {memberCount} members declared {needCount} standing needs independently. Pool
-            watches for overlaps worth buying together; nobody has to organise a group.
-          </p>
-          <div className="btn-row">
-            <button className="btn btn-primary btn-lg" onClick={onFind} disabled={running}>
-              {running ? <span className="spinner" /> : null}
-              {running ? "Coordinator running" : "Run Pool now"}
-            </button>
-          </div>
-          {/* The honest version of the button. Pool is designed to do this on its own
-              schedule; this deployment has no scheduler running, and saying so is
-              cheaper than implying a background job that does not exist (AGENTS.md §8).
-              The un-deployed `PoolStack` carries the EventBridge rule, and the judge
-              account deliberately has zero rules in it. */}
-          <p className="tiny faint prose">
-            In the real product this runs by itself on the community's pool day. Nothing
-            is scheduled in this demo account, so the coordinator starts when you press
-            the button.
-          </p>
-          {running ? <CoordinatorWait live={liveDiscovery} region={region} /> : null}
+      <div className="panel-pad stack-sm">
+        <div className="standing">
+          {demand.map((d) => (
+            <StandingLine key={d.need_id} demand={d} need={byNeed.get(d.need_id) ?? null} />
+          ))}
         </div>
-        <div className="panel-pad" style={{ borderLeft: "1px solid var(--rule)" }}>
-          <ConvergenceFigure />
+        {/* The honest half. These are the things a run decides and a screen cannot, and
+            naming them is what stops the counts above reading as a promise. */}
+        <p className="small muted prose">
+          Whether an order actually works still depends on things Pool has not checked
+          yet: whether those people can reach one pickup point, whether their restock
+          dates overlap with yours, whether the units fill whole cases, and whether the
+          all-in price beats buying alone.
+        </p>
+        <div className="btn-row">
+          <button className="btn btn-primary" onClick={onFind} disabled={running}>
+            {running ? <span className="spinner" /> : null}
+            {running ? "Coordinator running" : hasAnswer ? "Run Pool again" : "Run Pool now"}
+          </button>
         </div>
+        {/* Pool is designed to do this on its own schedule; this deployment has no
+            scheduler running, and saying so is cheaper than implying a background job
+            that does not exist (AGENTS.md §8). */}
+        <p className="tiny faint prose">
+          In the real product this runs by itself on the community&apos;s pool day. Nothing
+          is scheduled in this demo account, so the coordinator starts when you press the
+          button.
+        </p>
+        {running ? (
+          <CoordinatorWait
+            live={liveDiscovery}
+            region={region}
+            /* Named before the run starts, from the member's own declarations, so this
+               describes the *request* rather than narrating work the browser cannot
+               see. Only when there is exactly one — with several, which of them a
+               bounded run takes on is the server's decision and not this component's
+               to guess. */
+            objective={
+              demand.length === 1
+                ? `Pool is checking your ${demand[0].product_name} declaration against what this community has declared.`
+                : undefined
+            }
+          />
+        ) : null}
       </div>
     </section>
   );
 }
 
-/** What Pool has to say when this member is in no pool.
+/* -------------------------------------------------------------- after the run */
+
+/** What the run concluded about this member's own declarations.
  *
- *  "Nothing yet" is a first-class outcome, not a failure and not a gap to fill with
- *  somebody else's order — but an unexplained one is worthless, so this reports what the
- *  deterministic evaluator actually found for each declaration: how many compatible
- *  units exist nearby against the smallest quantity the supplier will sell, or the rule
- *  that ruled this member out. Every figure and every sentence is a server string.
+ *  Every line is the server's, assembled from the evaluation records that run wrote
+ *  while it was running. The browser decides nothing here: not which pool is theirs, not
+ *  whether a product was evaluated, not why anything was refused. A result the run did
+ *  not reach says so rather than being given a plausible reason.
  *
- *  Pools formed for other people are named as exactly that. Real work, worth seeing —
- *  on the community's terms, never as this member's result. */
-function StandingCard({
-  outlook,
-  running,
-  onFind,
-  elsewhere,
+ *  Orders this member is *in* are deliberately absent — those lead with the order card
+ *  above, and repeating the outcome twice would make one answer look like two. */
+function RunAnswer({
+  results,
   onOpenPool,
-  liveDiscovery,
-  region,
 }: {
-  outlook: NeedOutlook[];
-  running: boolean;
-  onFind: () => void;
-  elsewhere: PoolView[];
+  results: RunReportResult[];
   onOpenPool: (id: string) => void;
-  liveDiscovery: boolean;
-  region: string | null;
 }) {
-  const ready = outlook.filter((o) => o.state === "ready");
+  const nothing = results.every(
+    (r) => r.result === "declined" || r.result === "not_investigated",
+  );
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>{ready.length > 0 ? "Worth pooling now" : "Nothing worth coordinating yet"}</h2>
+        <h2>{nothing ? "Nothing worth coordinating yet" : "What Pool found"}</h2>
         <span className="spacer" />
         <ActorTag actor="agent" label="Pool checked" />
       </div>
       <div className="panel-pad stack-sm">
-        <p className="small muted prose">
-          {ready.length > 0
-            ? "Pool checked what you buy against everything declared near you. There is enough compatible demand for this — run the coordinator to form it."
-            : "Pool checked what you buy against everything declared near you. Your declarations stay standing, and it keeps watching."}
-        </p>
-        <div className="outlook">
-          {outlook.map((o) => (
-            <div key={o.need_id} className="outlook-line">
-              <span className="outlook-product">{o.product_name}</span>
-              <span className="outlook-reason">{o.reason}</span>
+        {results.map((r) => (
+          <div key={r.need_id} className="run-result">
+            <div className="standing-head">
+              <span className="standing-product">{r.product_name}</span>
+              {r.pool_id ? (
+                <button className="linkish small" onClick={() => onOpenPool(r.pool_id)}>
+                  Open the order
+                </button>
+              ) : null}
             </div>
-          ))}
-        </div>
-        <div className="btn-row">
-          <button className="btn btn-primary" onClick={onFind} disabled={running}>
-            {running ? <span className="spinner" /> : null}
-            {running ? "Coordinator running" : "Run Pool now"}
-          </button>
-        </div>
-        {running ? <CoordinatorWait live={liveDiscovery} region={region} /> : null}
-        {elsewhere.length > 0 ? (
-          <div className="banner">
-            <span>
-              Pool is also coordinating{" "}
-              {elsewhere.map((p, i) => (
-                <span key={p.pool_id}>
-                  {i > 0 ? ", " : ""}
-                  <button className="linkish" onClick={() => onOpenPool(p.pool_id)}>
-                    {p.product_name}
-                  </button>
-                </span>
-              ))}{" "}
-              for other members here. You are not in{" "}
-              {elsewhere.length === 1 ? "it" : "those"}.
-            </span>
+            <p className="small">{r.headline}</p>
+            {r.facts.length > 0 ? (
+              <ul className="fact-list">
+                {r.facts.map((f: string) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+            ) : null}
           </div>
-        ) : null}
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Real work Pool is doing for other people. Never this member's answer. */
+function ElsewhereCard({
+  pools,
+  onOpenPool,
+  communityName,
+}: {
+  pools: PoolView[];
+  onOpenPool: (id: string) => void;
+  communityName: string;
+}) {
+  return (
+    <section className="panel panel-muted">
+      <div className="panel-head">
+        <h2>Elsewhere in {communityName}</h2>
+      </div>
+      <div className="panel-pad">
+        {pools.map((p) => (
+          <p key={p.pool_id} className="small muted">
+            Pool is coordinating <strong>{p.product_name}</strong> for {p.buyer_count}{" "}
+            {p.buyer_count === 1 ? "member" : "members"}. You are not part of this order.{" "}
+            <button className="linkish" onClick={() => onOpenPool(p.pool_id)}>
+              See it
+            </button>
+          </p>
+        ))}
       </div>
     </section>
   );
@@ -472,6 +588,7 @@ export function Home({
   state,
   identity,
   member,
+  report,
   running,
   busyDecision,
   onFind,
@@ -489,6 +606,11 @@ export function Home({
    *  Fetched by the shell, because Needs needs the same answer and this is the most
    *  expensive read the API serves. */
   member: MemberView | null;
+  /** What the last member-triggered run concluded about this member's declarations.
+   *  Null before any run in this session, and null whenever the server says the run was
+   *  not this member's — which is what stops a community scan, or a previous member's
+   *  run, becoming the answer on this screen. */
+  report: RunReport | null;
   running: boolean;
   busyDecision: string | null;
   onFind: () => void;
@@ -578,7 +700,31 @@ export function Home({
    * are not in it" about a pool they are in. */
   const notMine = new Set([poolId, ...(member?.other_pool_ids ?? [])]);
   const elsewhere = state.pools.filter((p) => !notMine.has(p.pool_id));
-  const outlook = member?.needs_outlook ?? [];
+
+  /* What the run concluded, split by whether the member ended up in the order.
+   *
+   * An order they are in leads with the order card, and its "why this worked" lines
+   * hang off that rather than becoming a second answer above it. Everything else — a
+   * refusal, an order that filled without them, a declaration the run did not reach —
+   * is what the answer card is for. */
+  const mineFromRun = report?.is_mine ? report.results : [];
+  const included = mineFromRun.filter((r: RunReportResult) => r.result === "formed_included");
+  const answers = mineFromRun.filter(
+    (r: RunReportResult) => r.result !== "formed_included" && r.result !== "already_coordinated",
+  );
+  const whyItWorked = included.find((r: RunReportResult) => r.pool_id === poolId)?.facts ?? [];
+
+  /* Declarations still waiting on Pool. A need already inside an order has its answer
+     on the order card, so listing it here again would ask the same question twice. */
+  const pooledNeedIds = new Set(
+    [
+      member?.opportunity?.need_id,
+      ...mineFromRun.filter((r: RunReportResult) => r.pool_id).map((r: RunReportResult) => r.need_id),
+    ].filter(Boolean) as string[],
+  );
+  const standing = (member?.standing_demand ?? []).filter(
+    (d) => !pooledNeedIds.has(d.need_id),
+  );
 
   return (
     <div className="stack">
@@ -661,6 +807,8 @@ export function Home({
           the rest of their needs further down where it belongs. */}
       {!pool && mine.length === 0 ? <FirstUseCard onStartNeed={onStartNeed} /> : null}
 
+      {/* The order this member is actually in, and — when the run that formed it is the
+          one on screen — the deterministic facts that made it work. */}
       {pool ? (
         <OpportunityCard
           pool={pool}
@@ -670,29 +818,38 @@ export function Home({
               ? member.opportunity.declared_product_name
               : ""
           }
+          whyItWorked={whyItWorked}
           onOpen={() => onOpenPool(pool.pool_id)}
           onShowAgent={onShowAgent}
         />
-      ) : outlook.length > 0 ? (
+      ) : null}
+
+      {/* Everything else the run concluded. Absent before any run in this session, and
+          absent whenever the server says the run was not this member's. */}
+      {answers.length > 0 ? (
+        <RunAnswer results={answers} onOpenPool={onOpenPool} />
+      ) : null}
+
+      {/* What is still standing, and the button that asks Pool about it. */}
+      {standing.length > 0 ? (
         <StandingCard
-          outlook={outlook}
+          demand={standing}
+          needs={mine}
           running={running}
           onFind={onFind}
-          elsewhere={elsewhere}
+          liveDiscovery={liveDiscovery}
+          region={region}
+          hasAnswer={mineFromRun.length > 0}
+        />
+      ) : null}
+
+      {elsewhere.length > 0 ? (
+        <ElsewhereCard
+          pools={elsewhere}
           onOpenPool={onOpenPool}
-          liveDiscovery={liveDiscovery}
-          region={region}
+          communityName={state.community?.name ?? "your community"}
         />
-      ) : (
-        <WatchingCard
-          running={running}
-          onFind={onFind}
-          memberCount={state.counts.members}
-          needCount={state.counts.needs}
-          liveDiscovery={liveDiscovery}
-          region={region}
-        />
-      )}
+      ) : null}
 
       {forOthers > 0 ? (
         <p className="small muted">

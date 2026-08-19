@@ -4919,3 +4919,99 @@ a misleading experience.
 **Article fodder**
 Article 1 — the difference between a demo that works when you type the memorised phrase and a
 product that works when you type what you buy.
+
+---
+
+### #0045 — [2026-08-19] — Home stops answering the question it is supposed to ask
+`[product]` `[ux]` `[agent]`
+
+**Goal / user intent**
+Make the consumer surface tell the truth in both directions: pose the question before a run, and
+answer it afterwards from what the run actually established.
+
+**Starting state — the answer key**
+The pre-run slot drew `ConvergenceFigure`: thirteen restock dates converging on one pool day, eight
+already due, eighteen units, two pulled forward, twenty-four. Every number is real and derived from
+the seed — and drawing it *before* the run tells a judge the answer and then invites them to watch
+Pool produce it. It also hardcodes the canonical scenario into a screen that a member with a coffee
+declaration would also see.
+
+The other half was the outlook. `needs_outlook` is a genuinely good thing — it runs the same
+deterministic evaluator the coordinator's tools use and says why nothing has formed — but on Home,
+before a run, it reads as a verdict ("Worth pooling now", "Nothing worth coordinating yet") for work
+that has not happened.
+
+**Decision — three states, each honest about which it is**
+
+*Before.* `standing_demand` on `/api/members/{id}`: per declaration, how many other members have
+independently declared something this order could serve, how many units that is, and the smallest
+quantity the supplier will sell. **Inputs only, no verdict.** The card then names what is still open
+— whether those people can reach one pickup point, whether their restock dates overlap, whether the
+units fill whole cases, whether the all-in price beats buying alone — because that is what stops the
+counts reading as a promise.
+
+*During.* Unchanged, deliberately: request sent, real elapsed time, no invented per-tool progress.
+One addition, and only when it is knowable in advance — with exactly one un-pooled declaration the
+wait names it ("Pool is checking your Pike Place Medium Roast declaration…"), because the objective
+is derived from stored state *before* anything is invoked. With several it says nothing, since which
+of them a bounded run takes on is the server's decision and not the browser's to guess.
+
+*After.* The run report, from `#0042`'s stored evaluations. An order the member is in leads with the
+order card and hangs "Why this worked" off it; everything else — declined, formed-without-them,
+viable-but-next, not-investigated — is the answer card. Nothing is recomputed in the browser and
+nothing appears for a product the run did not evaluate.
+
+The outlook moved to Needs, beside each declaration, under the label **As things stand**. "Pool
+evaluated this and declined" and "here is how it looks right now" are different claims, and the
+interface now says which one it is making (§15).
+
+**A gap the two-declaration case exposed**
+A member with coffee and whey, both viable: Pool forms one order per run, so the second was reported
+as `declined` with the evaluator's own internal string — *"viable bulk opportunity"*. Two fixes.
+`RESULT_VIABLE_NOT_ACTED` says what is true ("Pool can form this one too, and forms one order at a
+time — so it is next"). And the run now *prefers the viable order that includes the member's own
+declaration*: `evaluate_pool_economics` returns `includes_member_declaration`, a deterministic fact,
+so a run does not form an order its own requester was case-fitted out of when there is one they are
+in. Also made the objective's ordering deterministic — it tie-broke on random need ids, so which of
+two same-day declarations a run acted on moved between runs.
+
+**Implementation**
+`services/discovery.py` (`standing_demand_for`), `api/app.py`, `services/run_report.py`,
+`agent/tools.py`, `agent/projection.py`, `agent/offline_model.py`, `agent/objective.py`,
+`views/home.tsx`, `views/needs.tsx`, `ui.tsx`, `api.ts`, `App.tsx`, `styles.css`. `ConvergenceFigure`
+is kept and still drawn on About, where explaining the mechanism is the whole job. Status:
+**tested**.
+
+**AWS / external services touched**
+None.
+
+**Cost-relevant activity**
+None. The report is deterministic rendering of stored rows — no model is asked to write prose, which
+was the tempting design and would have put a language model between a member and a price.
+
+**Validation**
+`make qa` green: 881 backend, 75 infra, 84 web, lint, typecheck, production build, secret scan. Home
+tests were rewritten around the new states rather than deleted — the invariants they pin (an
+unrelated pool is never this member's result; a pool the member *is* in is never called somebody
+else's; the community's order is openable as the community's) all survive, now expressed against the
+report and the muted "Elsewhere" block.
+
+**Failures / dead ends**
+The first layout rendered the personal outcome twice — once as a run result and again as the order
+card — which made one answer look like two. Merging them, with the run's facts hanging off the order
+under "Why this worked", is both shorter and truer to what the two things are.
+
+**What we learned**
+The convergence figure was the most-admired thing on the screen and the most dishonest, and neither
+was obvious. It was accurate, derived, and tested against the seed; what made it wrong was *when* it
+was shown. Correct content in the wrong moment is still a claim about work that has not happened.
+
+**Article fodder**
+Article 1 — the pre-run screen is where a demo either poses a question or spoils it. Article 3 —
+"investigated and declined", "worth doing but not this run", and "not looked at" are three different
+answers, and collapsing them is how an agent product starts sounding like it knows more than it does.
+
+**Evidence worth preserving**
+Before/after of the Home pre-run slot: the convergence diagram against the standing-demand card. It
+is the clearest single illustration of the difference between showing the input and showing the
+answer.

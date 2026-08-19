@@ -73,8 +73,17 @@ def public_demo_constant(name: str):
     """
     source = (ROOT / "services" / "agent" / "pool" / "api" / "public_demo.py").read_text()
     for node in ast.parse(source).body:
+        # Both forms, because a constant gaining a type annotation turns `Assign` into
+        # `AnnAssign` and would otherwise read as "the constant was renamed".
         if isinstance(node, ast.Assign) and any(
             isinstance(t, ast.Name) and t.id == name for t in node.targets
+        ):
+            return ast.literal_eval(node.value)
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == name
+            and node.value is not None
         ):
             return ast.literal_eval(node.value)
     raise AssertionError(f"{name} is not a module-level constant of public_demo.py")
@@ -492,9 +501,14 @@ class TestSharedWorkspaceContract:
         assert function_env["DYNAMODB_CONSISTENT_READS"] == "true"
         assert agentcore_runtime()["envVars"]["DYNAMODB_CONSISTENT_READS"] == "true"
 
-    def test_the_live_trigger_is_one_the_runtime_accepts(self):
+    def test_every_live_trigger_is_one_the_runtime_accepts(self):
         """The bridge sends a trigger name; the entrypoint validates it against a fixed
-        set. A mismatch is a refusal at the far end, visible only in production."""
+        set. A mismatch is a refusal at the far end, visible only in production.
+
+        Every value, not just the default: the live action now offers two questions — the
+        member's own declarations and the community-wide scan — and the one a judge
+        reaches least often is exactly the one whose mismatch would survive a rehearsal.
+        """
         source = (ROOT / "services" / "agent" / "agentcore_app.py").read_text()
         allowed = next(
             ast.literal_eval(node.value)
@@ -502,7 +516,10 @@ class TestSharedWorkspaceContract:
             if isinstance(node, ast.Assign)
             and any(isinstance(t, ast.Name) and t.id == "ALLOWED_TRIGGERS" for t in node.targets)
         )
-        assert public_demo_constant("LIVE_TRIGGER") in allowed
+        triggers = public_demo_constant("LIVE_TRIGGERS")
+        assert triggers, "the live action must name at least one trigger"
+        for action, trigger in triggers.items():
+            assert trigger in allowed, f"{action} sends {trigger!r}, which the runtime refuses"
 
 
 class TestShape:

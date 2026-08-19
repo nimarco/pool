@@ -571,12 +571,78 @@ export interface PersonalOpportunity {
   declared_product_name: string;
 }
 
+/** What already exists around one declaration, before Pool has evaluated anything.
+ *
+ *  Inputs, deliberately without a verdict: how much compatible demand accumulated on its
+ *  own, and the smallest quantity the supplier will sell. Whether those people can reach
+ *  one pickup point, whether their timing overlaps, whether the units fill a case and
+ *  whether it beats retail are what a run decides — and a screen that answered them in
+ *  advance would be telling somebody the result before Pool had done the work. */
+export interface StandingDemand {
+  need_id: string;
+  product_id: string;
+  product_name: string;
+  unit: string;
+  my_units: number;
+  compatible_members: number;
+  compatible_units: number;
+  minimum_units: number;
+  has_supplier: boolean;
+  /** Set when the order Pool could form would buy an authorised substitute rather than
+   *  the exact product declared. Never silent. */
+  sourceable_product_id: string;
+  sourceable_product_name: string;
+}
+
+/** One declaration's outcome in one run, as the server assembled it from what that run
+ *  actually established. Never recomputed here, and never shown for another run. */
+export interface RunReportResult {
+  need_id: string;
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  unit: string;
+  result:
+    | "formed_included"
+    | "formed_excluded"
+    | "declined"
+    | "viable_not_acted"
+    | "not_investigated"
+    | "already_coordinated";
+  pool_id: string;
+  units: number;
+  reason_code: string;
+  is_exact_product: boolean;
+  declared_product_name: string;
+  headline: string;
+  facts: string[];
+  participation_state?: string;
+  status?: string;
+}
+
+export interface RunReport {
+  run_id: string;
+  trigger: string;
+  objective_kind: string;
+  outcome: string;
+  at: string;
+  model_provider: string;
+  /** False when this run was not anchored to this member — a community-wide scan, or
+   *  somebody else's. The report is then empty by construction. */
+  is_mine: boolean;
+  results: RunReportResult[];
+  evaluated_product_ids: string[];
+  also_evaluated?: { product_id: string; product_name: string; viable: boolean; reason_code: string }[];
+  elsewhere?: { pool_id: string; product_name: string; status: string; buyer_count: number }[];
+}
+
 export interface MemberView {
   id: string;
   display_name: string;
   zone: string;
   opportunity: PersonalOpportunity | null;
   other_pool_ids: string[];
+  standing_demand: StandingDemand[];
   needs_outlook: NeedOutlook[];
   community_membership: {
     community_id: string;
@@ -852,7 +918,12 @@ export const api = {
   // The client picks an action *name*; the server owns the prompt. `instruction`
   // replaces the coordinator's entire run prompt, so a browser that could set it
   // would be writing the agent's instructions (see api/public_demo.py).
-  run: (trigger: "manual_scan" | "manual_advance") =>
+  /** Start one coordination run. A trigger name from the server's own allowlist is the
+   *  entire client surface: `member_scan` asks Pool about this member's own standing
+   *  declarations, `manual_scan` is the community-wide scan a scheduled pool-day
+   *  invocation performs, and `manual_advance` moves blocked pools along. Which
+   *  declarations, whose, and what the model is told are all derived server-side. */
+  run: (trigger: "member_scan" | "manual_scan" | "manual_advance") =>
     post<RunResult>("/api/agent/run", { trigger }),
   respond: (decisionId: string, approve: boolean) =>
     post<Record<string, unknown>>(`/api/decisions/${decisionId}/respond`, { approve }),
@@ -893,12 +964,24 @@ export const api = {
    *  when no AgentCore runtime is configured, so the UI describes the action rather
    *  than offering a button that cannot work. It is also what decides whether the
    *  product's discovery action goes to AWS or runs here. */
+  /** What one run did about this member's own declarations. Server-assembled from the
+   *  evaluation records that run wrote; the browser renders and decides nothing. */
+  runReport: (runId: string, householdId: string) =>
+    request<RunReport>(`/api/runs/${runId}/report?household_id=${householdId}`),
+
   demoConfig: () => request<DemoConfig>("/api/demo/config"),
   /** Run the deployed coordinator against *this session's* workspace. The workspace is
    *  the query parameter every request already carries; the server re-validates it and
    *  builds the runtime payload itself, so the browser names a session it already has,
    *  never one it does not. */
-  liveAgent: () => post<LiveAgentResult>("/api/demo/agentcore"),
+  /** Invoke the deployed coordinator, once, against this session.
+   *
+   *  `action` is a key from the server's own map, never an objective: `member` asks
+   *  about this member's own declarations, `community` runs the scan a scheduled
+   *  pool-day invocation performs. The server turns it into a trigger the runtime's own
+   *  allowlist accepts, and builds every other field of the payload itself. */
+  liveAgent: (action: "member" | "community" = "member") =>
+    post<LiveAgentResult>(`/api/demo/agentcore?action=${action}`),
 };
 
 /* ------------------------------------------------------------------ formatting */

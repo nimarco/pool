@@ -168,6 +168,79 @@ def _opportunity(
     }
 
 
+def standing_demand_for(
+    ctx: PoolContext, community_id: str, need: NeedDeclaration
+) -> dict[str, Any]:
+    """What already exists around one declaration, *before* anything is evaluated.
+
+    The pre-run half of the product's whole claim: nobody organised a group, and here is
+    the overlap that accumulated anyway. It is deliberately **inputs only** — how many
+    other members have independently declared something this order could serve, how many
+    units that is, and the smallest quantity the supplier will sell.
+
+    It reports no verdict, because it has not earned one. Whether those people can reach
+    one pickup point, whether their restock dates overlap, whether the units land on a
+    case boundary and whether the all-in price beats retail are all decided by
+    ``evaluate_opportunity`` during a run — and a screen that answered them in advance
+    would be telling a member the result before Pool had done the work (§8).
+
+    Read-only, and no PII: counts and quantities, never who.
+    """
+    product = ctx.repo.get_product(ctx.ws, need.product_id)
+    targets = coord.sourceable_targets_for_need(ctx, need)
+    base = {
+        "need_id": need.id,
+        "product_id": need.product_id,
+        "product_name": product.name if product else need.product_id,
+        "unit": product.unit if product else "unit",
+        "my_units": need.quantity,
+        "compatible_members": 0,
+        "compatible_units": 0,
+        "minimum_units": 0,
+        "has_supplier": bool(targets),
+        # The target a pool would actually buy, when it is not the declared product —
+        # so the interface can disclose the substitution rather than quietly counting
+        # somebody else's product as this member's demand.
+        "sourceable_product_id": "",
+        "sourceable_product_name": "",
+    }
+    if not targets:
+        return base
+
+    needs = ctx.repo.list_needs(ctx.ws)
+    products = {p.id: p for p in ctx.repo.list_products(ctx.ws)}
+    best: dict[str, Any] | None = None
+    for target_id in targets:
+        target = products.get(target_id)
+        if target is None:
+            continue
+        already = frozenset(coord.pooled_household_ids(ctx, community_id, target_id))
+        usable = [
+            n
+            for n in compatible_needs(
+                target=target,
+                needs=needs,
+                products=products,
+                community_id=community_id,
+                offer_unit_price_cents=coord.best_bulk_unit_price_cents(ctx, target_id),
+                exclude_household_ids=already,
+            )
+            if n.household_id != need.household_id
+        ]
+        _, bulk = coord.offers_for(ctx, target_id)
+        row = {
+            **base,
+            "compatible_members": len({n.household_id for n in usable}),
+            "compatible_units": sum(n.quantity for n in usable),
+            "minimum_units": min((o.min_units for o in bulk), default=0),
+            "sourceable_product_id": target_id if target_id != need.product_id else "",
+            "sourceable_product_name": target.name if target_id != need.product_id else "",
+        }
+        if best is None or row["compatible_units"] > best["compatible_units"]:
+            best = row
+    return best or base
+
+
 def latent_demand(ctx: PoolContext, community_id: str, objective: Any = None) -> dict[str, Any]:
     """Products worth investigating in this Community, most promising first.
 

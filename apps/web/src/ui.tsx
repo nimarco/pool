@@ -190,9 +190,16 @@ export function Elapsed({ running }: { running: boolean }) {
 export function CoordinatorWait({
   live,
   region,
+  objective,
 }: {
   live: boolean;
   region?: string | null;
+  /** What this run was asked about, when the caller knows it *before* the run starts.
+   *
+   *  Permitted here precisely because it is not a claim about progress: the objective is
+   *  derived from the member's own stored declarations before anything is invoked, so
+   *  naming it is describing the request rather than narrating work nobody can see. */
+  objective?: string;
 }) {
   return (
     <div className="wait" role="status" aria-live="polite">
@@ -206,6 +213,7 @@ export function CoordinatorWait({
         <Elapsed running />
       </div>
       <p className="wait-lede">
+        {objective ? `${objective} ` : ""}
         {live
           ? `One bounded run${region ? `, in ${region},` : ""} against this session’s own DynamoDB workspace.`
           : "One bounded run is reading the Community’s standing needs."}

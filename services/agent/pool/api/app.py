@@ -69,7 +69,15 @@ from ..domain.models import (
 from ..domain.money import bps_to_pct_str, format_cents
 from ..domain.state import IllegalTransition
 from ..domain.viability import ViabilityStage
-from ..services import communication, fulfillment, hosting, onboarding, relevance, run_report
+from ..services import (
+    communication,
+    discovery,
+    fulfillment,
+    hosting,
+    onboarding,
+    relevance,
+    run_report,
+)
 from ..services import coordination as coord
 from ..services import needs as needs_service
 from ..services import payments as payment_service
@@ -1043,8 +1051,17 @@ def get_member(household_id: str, workspace: str = Query("demo")) -> dict[str, A
         # them there. Everything else about relevance is derived from this.
         "opportunity": personal[0].to_dict() if personal else None,
         "other_pool_ids": [p.pool.id for p in personal[1:]],
+        # What already exists around each declaration, before anything is evaluated:
+        # how much compatible demand has independently accumulated, and the smallest
+        # quantity the supplier will sell. Inputs, deliberately without a verdict — the
+        # pre-run screen poses the question the run is about to answer (§8).
+        "standing_demand": [
+            discovery.standing_demand_for(ctx, COMMUNITY_ID, need) for need in mine
+        ],
         # Why each standing declaration has not produced a pool, in checkable facts.
-        # Read-only: the same deterministic evaluator the coordinator's own tool uses.
+        # Read-only: the same deterministic evaluator the coordinator's own tool uses,
+        # and labelled everywhere it is shown as a *current outlook* rather than as
+        # something a run concluded.
         "needs_outlook": [
             relevance.need_outlook(ctx, COMMUNITY_ID, need, in_pool=in_pool).to_dict()
             for need in mine

@@ -21,6 +21,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   NeedDraft,
   NeedLimits,
+  NeedOutlook,
   NeedRow,
   ProductCandidate,
   api,
@@ -425,6 +426,7 @@ export function Needs({
   onFind,
   running,
   hasPool,
+  outlook,
   liveDiscovery,
   region,
 }: {
@@ -435,6 +437,14 @@ export function Needs({
   onConsumeInitialProduct: () => void;
   onFind: () => void;
   running: boolean;
+  /** What the deterministic evaluator says about each declaration *right now*.
+   *
+   *  Explicitly a current outlook and not a run's finding: it is recomputed on every
+   *  read, creates nothing and commits nothing, and it lives here rather than on Home
+   *  because Home's job before a run is to pose the question rather than answer it. The
+   *  label beside it says which of the two this is, because "Pool evaluated this and
+   *  declined" and "here is how it looks as things stand" are different claims. */
+  outlook: NeedOutlook[];
   /** Whether *this member* is in a pool — the server's answer, not "does any pool
    *  exist in the workspace". A community order formed for ten other students is not a
    *  reason to stop offering this member the one action they have. */
@@ -491,6 +501,7 @@ export function Needs({
      will act on either. */
   const others = needs.filter((n) => n.household_id !== identity.id && n.active);
   const standing = needs.filter((n) => n.active);
+  const byNeed = new Map(outlook.map((o) => [o.need_id, o]));
 
   const openAdd = () => {
     setError(null);
@@ -654,6 +665,12 @@ export function Needs({
                       Will not join below {n.min_savings_pct}% saving, and never above{" "}
                       {n.max_spend_display}
                     </div>
+                    {byNeed.get(n.need_id) ? (
+                      <div className="tiny muted" style={{ marginTop: 4 }}>
+                        <span className="outlook-tag">As things stand</span>{" "}
+                        {byNeed.get(n.need_id)!.reason}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="row-tail">
                     <div className="fact-value">{shortDateOnly(n.expected_next_need_date)}</div>

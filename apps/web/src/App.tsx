@@ -6,6 +6,7 @@ import {
   LiveAgentResult,
   MapData,
   MemberView,
+  RunReport,
   PoolView,
   ProductCandidate,
   ScenarioResult,
@@ -89,6 +90,13 @@ export default function App() {
    *  request answers both, and the outlook it carries is the most expensive read the
    *  API serves. Never inferred from the pool list. */
   const [member, setMember] = useState<MemberView | null>(null);
+  /** What the last member-triggered run concluded about *this* member's declarations.
+   *
+   *  Kept here because it belongs to a run rather than to a screen: it is fetched once,
+   *  from the server, keyed to that run's id, and cleared whenever the identity or the
+   *  workspace changes. The server refuses to build one for a run that was not this
+   *  member's, so a community scan and a previous visitor's run can never land here. */
+  const [report, setReport] = useState<RunReport | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -135,6 +143,9 @@ export default function App() {
     // Cleared first, so an operator stepping out of a synthetic participant can never
     // carry that participant's opportunity back onto their own screens.
     setMember(null);
+    // A report describes one run, for one member. Stepping into another identity must
+    // never leave the previous one's answer on screen.
+    setReport(null);
     if (!identity.id) return;
     api
       .member(identity.id)
@@ -246,11 +257,12 @@ export default function App() {
    *
    *  The server classifies the outcome. The caller may fall back only when the server
    *  explicitly proves that no remote execution can still mutate this workspace. */
-  const invokeDeployedAgent = useCallback(async (): Promise<LiveAgentResult | null> => {
+  const invokeDeployedAgent = useCallback(
+    async (action: "member" | "community" = "member"): Promise<LiveAgentResult | null> => {
     setLiveBusy(true);
     setLive(null);
     try {
-      const result = await api.liveAgent();
+      const result = await api.liveAgent(action);
       setLive(result);
       // A failure is not proof that nothing changed: the invocation can time out after
       // the agent has written to the shared workspace. The server says when to re-read.
@@ -277,36 +289,54 @@ export default function App() {
     } finally {
       setLiveBusy(false);
     }
-  }, [refresh]);
+    },
+    [refresh],
+  );
 
-  /** The product action. Pool's coordinator looks across the community's standing needs
-   *  and forms an opportunity if one is genuinely worth forming.
+  /** Ask Pool to look at what *this member* buys.
    *
    *  Where it runs depends on the deployment, and the answer is never hidden. On the
    *  public demo it is the coordinator deployed on Bedrock AgentCore, working on this
    *  session's own DynamoDB workspace — so the pool that appears was formed by that run.
    *  Locally, or when the server explicitly confirms that no remote execution can still
    *  mutate the workspace, the same coordinator runs on this server with a deterministic
-   *  planner in the model's place.
-   *  Both are the real Strands loop and the real typed tools; `model_provider` on the
-   *  run record says which one answered, and the technical view shows it. */
+   *  planner in the model's place. Both are the real Strands loop and the real typed
+   *  tools; `model_provider` on the run record says which one answered.
+   *
+   *  `member_scan` is the whole of what the browser sends. The server resolves whose
+   *  declarations that means and builds the run's objective from stored state — there is
+   *  no field here in which to name another household or supply a prompt.
+   *
+   *  Afterwards the run's id is used to read back what it concluded. Nothing about the
+   *  answer is inferred from the response: the report is assembled server-side from the
+   *  evaluation records that run wrote, and it comes back empty if the run was not this
+   *  member's. */
   const findOpportunities = useCallback(async () => {
     setRunning(true);
+    setReport(null);
     try {
+      let runId = "";
       if (demoConfig?.live_agent_available) {
         const liveResult = await invokeDeployedAgent();
         if (liveResult?.ok) {
-          setView("home");
-          window.scrollTo({ top: 0 });
-          return;
-        }
-        if (!liveResult?.allow_local_fallback) {
+          runId = liveResult.run.run_id ?? "";
+        } else if (!liveResult?.allow_local_fallback) {
           if (liveResult) setError(liveResult.reason);
           return;
         }
       }
-      await api.run("manual_scan");
-      await refresh();
+      if (!runId) {
+        runId = (await api.run("member_scan")).run_id;
+        await refresh();
+      }
+      if (runId && identity.id) {
+        try {
+          setReport(await api.runReport(runId, identity.id));
+        } catch {
+          /* The run happened and the state is already re-read. An explanation that
+             could not be fetched is worth losing; the result is not. */
+        }
+      }
       setView("home");
       window.scrollTo({ top: 0 });
     } catch (err) {
@@ -314,12 +344,14 @@ export default function App() {
     } finally {
       setRunning(false);
     }
-  }, [refresh, demoConfig, invokeDeployedAgent]);
+  }, [refresh, demoConfig, invokeDeployedAgent, identity.id]);
 
   /** The same invocation, reached from the technical view rather than from the product.
-   *  One code path, so what a judge audits there is what the product actually did. */
+   *  One code path, so what a judge audits there is what the product actually did — and
+   *  a community-wide scan, because a pool record is not anybody's own button and a
+   *  member-anchored run reached from one would answer a question nobody asked. */
   const runLiveAgent = useCallback(async () => {
-    await invokeDeployedAgent();
+    await invokeDeployedAgent("community");
   }, [invokeDeployedAgent]);
 
   /** Replay the canonical scripted lifecycle — in its own world.
@@ -601,6 +633,7 @@ export default function App() {
               state={state}
               identity={identity}
               member={member}
+              report={report}
               running={running}
               busyDecision={busyDecision}
               onFind={findOpportunities}
@@ -637,6 +670,10 @@ export default function App() {
               onConsumeInitialProduct={() => setPendingProduct(null)}
               onFind={findOpportunities}
               running={running}
+              /* The read-only current outlook, labelled as one where it is shown. Home
+                 poses the question before a run; this says how it looks as things
+                 stand, which is a different claim and belongs beside the declaration. */
+              outlook={member?.needs_outlook ?? []}
               /* This member's own pool, not "some pool exists". Answered by the
                  server from membership and need lineage. */
               hasPool={Boolean(member?.opportunity)}

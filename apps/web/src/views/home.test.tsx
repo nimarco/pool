@@ -176,6 +176,7 @@ function memberView(
     mode?: string;
     opportunity?: PersonalOpportunity | null;
     outlook?: NeedOutlook[];
+    standing?: apiModule.StandingDemand[];
     otherPoolIds?: string[];
   } = {},
 ): MemberView {
@@ -185,6 +186,7 @@ function memberView(
     zone: "Campus core",
     opportunity: options.opportunity ?? null,
     other_pool_ids: options.otherPoolIds ?? [],
+    standing_demand: options.standing ?? [],
     needs_outlook: options.outlook ?? [],
     community_membership: null,
     has_payment_method: true,
@@ -209,6 +211,7 @@ function renderHome(
      *  every pre-existing assertion here was written against. Pass `null` for a member
      *  the server has said nothing about yet. */
     member?: MemberView | null;
+    report?: apiModule.RunReport | null;
     onOpenPool?: (id: string) => void;
   } = {},
 ) {
@@ -221,6 +224,7 @@ function renderHome(
       state={appState(pools, options.decisions ?? [])}
       identity={ROSA}
       member={member}
+      report={options.report ?? null}
       running={false}
       busyDecision={null}
       onFind={() => {}}
@@ -264,7 +268,11 @@ describe("the proof action on Home", () => {
     // the server has said which pool is this member's, so this waits for that answer
     // rather than for React's first paint.
     expect(await screen.findByText(shown.product_name)).toBeTruthy();
-    expect(screen.queryByText(OTHER.product_name)).toBeNull();
+    // The other pool is on screen, but as the community's — never in this member's
+    // slot, and with no proof button of its own competing with theirs.
+    const elsewhere = document.querySelector(".panel-muted") as HTMLElement;
+    expect(elsewhere.textContent).toMatch(OTHER.product_name);
+    expect(elsewhere.textContent).toMatch(/You are not part of this order/);
 
     await userEvent.click(
       screen.getByRole("button", { name: /technical proof for this run/i }),
@@ -375,22 +383,56 @@ describe("a pool that belongs to somebody else", () => {
      correctly formed a whey order out of ten *other* students' declarations, and Home
      led with it because it led with `state.pools[0]`. Which pool is this member's is
      the server's answer now, and "none" is one of the answers it may give. */
-  const COFFEE_OUTLOOK: NeedOutlook = {
+  const COFFEE_STANDING: apiModule.StandingDemand = {
     need_id: "need_rosa_coffee",
     product_id: "prod_coffee_beans",
     product_name: "Pike Place Medium Roast",
-    state: "short",
-    reason:
-      "Not enough of it yet: 12 bags declared nearby, and the supplier will not sell " +
-      "fewer than 18.",
-    pool_id: "",
-    units_needed: 18,
-    units_available: 12,
+    unit: "bag",
+    my_units: 3,
+    compatible_members: 5,
+    compatible_units: 12,
+    minimum_units: 18,
+    has_supplier: true,
+    sourceable_product_id: "",
+    sourceable_product_name: "",
   };
+
+  function declinedReport(): apiModule.RunReport {
+    return {
+      run_id: "run_1",
+      trigger: "member_scan",
+      objective_kind: "member",
+      outcome: "no_action",
+      at: "2026-08-19T10:00:00Z",
+      model_provider: "offline",
+      is_mine: true,
+      evaluated_product_ids: ["prod_coffee_beans"],
+      results: [
+        {
+          need_id: "need_rosa_coffee",
+          product_id: "prod_coffee_beans",
+          product_name: "Pike Place Medium Roast",
+          quantity: 3,
+          unit: "bag",
+          result: "declined",
+          pool_id: "",
+          units: 0,
+          reason_code: "below_minimum",
+          is_exact_product: true,
+          declared_product_name: "",
+          headline:
+            "15 compatible bags were declared near you, and the supplier will not sell " +
+            "fewer than 18.",
+          facts: ["Your declaration stays standing, and Pool keeps watching."],
+        },
+      ],
+    };
+  }
 
   it("never presents it as this member's result", async () => {
     renderHome([poolView()], {
-      member: memberView({ opportunity: null, outlook: [COFFEE_OUTLOOK] }),
+      member: memberView({ opportunity: null, standing: [COFFEE_STANDING] }),
+      report: declinedReport(),
     });
 
     expect(await screen.findByText(/Nothing worth coordinating yet/)).toBeTruthy();
@@ -403,23 +445,27 @@ describe("a pool that belongs to somebody else", () => {
     expect(screen.getByText(/What Pool did across/)).toBeTruthy();
   });
 
-  it("states what Pool actually established about each declaration", async () => {
-    renderHome([], { member: memberView({ opportunity: null, outlook: [COFFEE_OUTLOOK] }) });
+  it("states what the run actually established about each declaration", async () => {
+    renderHome([], {
+      member: memberView({ opportunity: null, standing: [COFFEE_STANDING] }),
+      report: declinedReport(),
+    });
 
     // The server's sentence, passed through — not a shrug, and not recomputed here.
-    expect(await screen.findByText(COFFEE_OUTLOOK.reason)).toBeTruthy();
-    expect(screen.getByText(COFFEE_OUTLOOK.product_name)).toBeTruthy();
+    expect(await screen.findByText(declinedReport().results[0].headline)).toBeTruthy();
+    expect(screen.getAllByText(COFFEE_STANDING.product_name).length).toBeGreaterThan(0);
   });
 
   it("names the community's order as the community's, and can open it", async () => {
     const onOpenPool = vi.fn();
     renderHome([poolView()], {
-      member: memberView({ opportunity: null, outlook: [COFFEE_OUTLOOK] }),
+      member: memberView({ opportunity: null, standing: [COFFEE_STANDING] }),
       onOpenPool,
     });
 
-    expect(await screen.findByText(/for other members here/)).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Whey protein, vanilla" }));
+    expect(await screen.findByText(/You are not part of this order/)).toBeTruthy();
+    expect(screen.getByText(/Whey protein, vanilla/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /see it/i }));
     expect(onOpenPool).toHaveBeenCalledWith("pool_shown");
   });
 
@@ -430,32 +476,89 @@ describe("a pool that belongs to somebody else", () => {
     renderHome([poolView(), settled], {
       member: memberView({
         opportunity: null,
-        outlook: [COFFEE_OUTLOOK],
+        standing: [COFFEE_STANDING],
         otherPoolIds: ["pool_mine_2"],
       }),
     });
 
-    expect(await screen.findByText(/for other members here/)).toBeTruthy();
+    expect(await screen.findByText(/You are not part of this order/)).toBeTruthy();
     expect(screen.queryByText("Energy drink")).toBeNull();
-    expect(screen.getByRole("button", { name: "Whey protein, vanilla" })).toBeTruthy();
+    expect(screen.getByText(/Whey protein, vanilla/)).toBeTruthy();
+  });
+});
+
+describe("before Pool has run", () => {
+  const STANDING: apiModule.StandingDemand = {
+    need_id: "need_rosa_coffee",
+    product_id: "prod_coffee_beans",
+    product_name: "Pike Place Medium Roast",
+    unit: "bag",
+    my_units: 3,
+    compatible_members: 5,
+    compatible_units: 15,
+    minimum_units: 18,
+    has_supplier: true,
+    sourceable_product_id: "",
+    sourceable_product_name: "",
+  };
+
+  it("poses the question rather than answering it", async () => {
+    /* This slot used to draw the canonical whey arithmetic — eight due, eighteen units,
+       two pulled forward, twenty-four — before the run. That told a judge the answer and
+       then invited them to watch Pool produce it. What belongs here is the input. */
+    renderHome([], { member: memberView({ opportunity: null, standing: [STANDING] }) });
+
+    expect(await screen.findByText(/What you buy, and what is around it/)).toBeTruthy();
+    const line = document.querySelector(".standing-line") as HTMLElement;
+    expect(line.textContent).toMatch(/5.*other.*members have independently declared/s);
+    expect(line.textContent).toMatch(/15 bags/);
+    expect(line.textContent).toMatch(/With yours, 18/);
+    expect(line.textContent).toMatch(/will not sell fewer than 18/);
+    // No verdict, because none has been earned.
+    expect(screen.queryByText(/Worth pooling now/)).toBeNull();
+    expect(screen.queryByText(/Nothing worth coordinating yet/)).toBeNull();
+    // And the things a run decides are named as still open.
+    expect(screen.getByText(/has not checked yet/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /run pool now/i })).toBeTruthy();
   });
 
-  it("says a pool is worth forming when the server says the demand is there", async () => {
+  it("says plainly when Pool has no supplier for something", async () => {
     renderHome([], {
       member: memberView({
         opportunity: null,
-        outlook: [
+        standing: [
           {
-            ...COFFEE_OUTLOOK,
-            state: "ready",
-            reason: "Enough compatible demand exists — Pool can form this one.",
+            ...STANDING,
+            product_name: "Cardamom pods, 500g",
+            has_supplier: false,
+            compatible_members: 0,
+            compatible_units: 0,
+            minimum_units: 0,
           },
         ],
       }),
     });
 
-    expect(await screen.findByText(/Worth pooling now/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /run pool now/i })).toBeTruthy();
+    expect(await screen.findByText(/No supplier Pool has verified sells this in bulk/)).toBeTruthy();
+  });
+
+  it("discloses a substitute before anything is bought, not after", async () => {
+    renderHome([], {
+      member: memberView({
+        opportunity: null,
+        standing: [
+          {
+            ...STANDING,
+            sourceable_product_id: "prod_whey_vanilla",
+            sourceable_product_name: "100% Whey Protein",
+          },
+        ],
+      }),
+    });
+
+    expect(
+      await screen.findByText(/would buy 100% Whey Protein, which your substitution rule allows/),
+    ).toBeTruthy();
   });
 });
 
@@ -475,7 +578,6 @@ describe("what Pool handled on its own", () => {
     renderHome([]);
 
     expect(await screen.findByText(/Groups anyone organised/i)).toBeTruthy();
-    expect(screen.getByText(/Pool is watching/i)).toBeTruthy();
     // No settled-outcome claim can appear before there is an outcome.
     expect(screen.queryByText(/Things Pool did on its own/i)).toBeNull();
   });

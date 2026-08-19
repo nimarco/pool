@@ -81,7 +81,10 @@ function needRow(overrides: Partial<apiModule.NeedRow> = {}): apiModule.NeedRow 
   };
 }
 
-function renderNeeds(initialProduct: apiModule.ProductCandidate | null = null) {
+function renderNeeds(
+  initialProduct: apiModule.ProductCandidate | null = null,
+  outlook: apiModule.NeedOutlook[] = [],
+) {
   return render(
     <Needs
       identity={ROSA}
@@ -91,6 +94,7 @@ function renderNeeds(initialProduct: apiModule.ProductCandidate | null = null) {
       onFind={() => {}}
       running={false}
       hasPool={false}
+      outlook={outlook}
       liveDiscovery={false}
       region={null}
     />,
@@ -120,6 +124,28 @@ describe("declaring a standing need", () => {
       results: [WHEY],
       attribution: ATTRIBUTION,
     });
+  });
+
+  it("labels the current outlook as current, not as something a run concluded", async () => {
+    /* Two different claims. "Pool evaluated this and declined" belongs to a run and is
+       reported after one; this is a read-only recomputation of how it looks as things
+       stand, and calling them the same thing would let a screen imply work that never
+       happened. */
+    renderNeeds(null, [
+      {
+        need_id: "need_1",
+        product_id: "prod_paper_towels",
+        product_name: "Paper towels, 6 rolls",
+        state: "short",
+        reason: "Not enough of it yet: 4 packs declared nearby, and the supplier will not sell fewer than 48.",
+        pool_id: "",
+        units_needed: 48,
+        units_available: 4,
+      },
+    ]);
+
+    expect(await screen.findByText(/As things stand/)).toBeTruthy();
+    expect(screen.getByText(/supplier will not sell fewer than 48/)).toBeTruthy();
   });
 
   it("offers the action rather than only describing it", async () => {

@@ -768,6 +768,7 @@ MIRROR = {
     "issues": "put_issue",
     "decisions": "put_decision",
     "runs": "put_run",
+    "run_evaluations": "put_run_evaluation",
 }
 
 
@@ -1082,9 +1083,9 @@ def test_both_stores_return_every_list_in_the_same_order():
         assert a == b, f"{method} came back in a different order"
         compared += 1
         populated += 1 if a else 0
-    # 24 list methods agree, and 22 of them actually held data — a comparison over
+    # 25 list methods agree, and 23 of them actually held data — a comparison over
     # empty lists would pass without proving anything.
-    assert (compared, populated) == (24, 22), (compared, populated)
+    assert (compared, populated) == (25, 23), (compared, populated)
 
 
 def test_a_completed_demo_session_stays_far_inside_dynamodbs_item_limit():
@@ -1259,7 +1260,7 @@ def test_the_published_endpoint_counts_are_the_real_ones():
 
     public = {e for e in endpoints if reachable(*e)}
 
-    assert len(endpoints) == 44, f"the full API is now {len(endpoints)} endpoints"
-    assert len(public) == 28, f"judge mode now exposes {len(public)} endpoints"
+    assert len(endpoints) == 45, f"the full API is now {len(endpoints)} endpoints"
+    assert len(public) == 29, f"judge mode now exposes {len(public)} endpoints"
     # The reduction is the point: most of the application is not on the public URL.
     assert len(public) < len(endpoints) / 1.5

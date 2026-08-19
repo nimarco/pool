@@ -26,6 +26,7 @@ from ..config import Settings, get_settings
 from ..domain.models import ActivityEvent, AgentRun, RunOutcome, iso, new_id, utcnow
 from ..services.context import PoolContext
 from .bounds import BoundedRun, BoundExceeded, RunTelemetry
+from .evidence import build as build_evidence
 from .objective import for_trigger, prompt_for
 from .tools import ToolContext, build_tools
 
@@ -156,6 +157,33 @@ class PoolCoordinator:
 
     # -- run ---------------------------------------------------------------
 
+    def _record_evidence(self, ws: str, run_id: str, ctx: ToolContext, objective) -> None:
+        """Persist what this run's deterministic evaluations established.
+
+        Never allowed to fail the run: the coordination already happened and is already
+        recorded, and losing the explanation is strictly better than losing the pool.
+        The failure is logged rather than swallowed silently.
+        """
+        try:
+            sites = [
+                s
+                for s in self.repo.list_sites(ws)
+                if s.is_public and s.community_id == ctx.community_id
+            ]
+            for evaluation in build_evidence(
+                run_id=run_id,
+                community_id=ctx.community_id,
+                full_results=ctx.full_results,
+                objective=objective,
+                pool_ids_by_product=_pool_ids_by_product(
+                    self.repo, ws, ctx.created_pool_ids + ctx.advanced_pool_ids
+                ),
+                sites_considered=len(sites),
+            ):
+                self.repo.put_run_evaluation(ws, evaluation)
+        except Exception:  # noqa: BLE001 - explanation is not worth failing a run over
+            logger.exception("run %s: could not record evaluation evidence", run_id)
+
     def run(
         self,
         ws: str,
@@ -249,10 +277,21 @@ class PoolCoordinator:
         record.input_tokens = telemetry.input_tokens
         record.output_tokens = telemetry.output_tokens
         record.hitl_decisions_created = ctx.decisions_created
+        record.objective_kind = objective.kind
+        record.objective_household_id = objective.household_id
+        record.objective_need_ids = [n.need_id for n in objective.needs]
+        record.deferred_need_ids = list(objective.deferred_need_ids)
+        record.served_need_ids = list(objective.served_need_ids)
         if ctx.no_action_reason:
             record.notes.append(ctx.no_action_reason)
 
         self.repo.put_run(ws, record)
+        # After the try/except on purpose: a run stopped by a safety bound still did
+        # real work before it stopped, and what it established is exactly what somebody
+        # will want to read afterwards. Written here rather than inside the tools so
+        # `evaluate_pool_economics` stays provably side-effect-free — the member view
+        # calls the same evaluator, and that view must change no row.
+        self._record_evidence(ws, record.id, ctx, objective)
         self.repo.append_activity(
             ws,
             ActivityEvent(
@@ -278,6 +317,15 @@ class PoolCoordinator:
             ),
         )
         return record
+
+
+def _pool_ids_by_product(repo, ws: str, pool_ids: list[str]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for pool_id in pool_ids:
+        pool = repo.get_pool(ws, pool_id)
+        if pool is not None:
+            out.setdefault(pool.product_id, pool.id)
+    return out
 
 
 def _find_bound_exceeded(exc: BaseException) -> BoundExceeded | None:

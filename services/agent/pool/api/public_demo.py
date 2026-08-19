@@ -1,13 +1,13 @@
 """Public judge mode — the narrow surface Pool exposes to an anonymous browser.
 
-The local API (``pool/api/app.py``) is a full four-surface application: 40 endpoints
+The local API (``pool/api/app.py``) is a full four-surface application: 45 endpoints
 covering buyer, host, operator, and demo flows, plus a payment webhook. That is the
 right shape for development and for the test suite. It is **not** the right shape to
 put on the open internet with no authentication, so this module reduces it.
 
 Turned on with ``POOL_PUBLIC_DEMO=true``. What it changes, and why each one matters:
 
-1. **Route allowlist.** Twenty-four of those forty endpoints are reachable; everything
+1. **Route allowlist.** Twenty-nine of those forty-five endpoints are reachable; everything
    else 404s before it reaches a handler. Supplier-offer mutation, the operator pickup
    override, the payment webhook, direct ``lock``/``purchase`` calls, and the private
    message threads are all outside it. The lifecycle still reaches those code paths —
@@ -193,6 +193,10 @@ ALLOWED_GET_PATTERNS = tuple(
         rf"^/api/pools/{_ID}/checklist$",
         rf"^/api/pools/{_ID}/allocations$",
         rf"^/api/runs/{_ID}$",
+        # What one run did about this member's own declarations. A pure read over
+        # records that run already wrote: it creates nothing, spends no model tokens,
+        # and refuses to describe a run that was not this member's.
+        rf"^/api/runs/{_ID}/report$",
         rf"^/api/members/{_ID}$",
     )
 )

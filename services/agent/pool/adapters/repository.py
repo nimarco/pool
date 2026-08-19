@@ -54,6 +54,7 @@ from ..domain.models import (
     Pool,
     Product,
     PurchaseRecord,
+    RunEvaluation,
     Supplier,
 )
 
@@ -90,6 +91,7 @@ class Store:
     decisions: dict[str, DecisionRequest] = field(default_factory=dict)
     activity: list[ActivityEvent] = field(default_factory=list)
     runs: dict[str, AgentRun] = field(default_factory=dict)
+    run_evaluations: dict[str, RunEvaluation] = field(default_factory=dict)
     #: Idempotency key -> the pool id that owns it. See `claim_pool_idempotency`.
     pool_claims: dict[str, str] = field(default_factory=dict)
 
@@ -211,6 +213,8 @@ class Repository(Protocol):
     def list_activity(self, ws: str, limit: int = 100) -> list[ActivityEvent]: ...
 
     def put_run(self, ws: str, r: AgentRun) -> None: ...
+    def put_run_evaluation(self, ws: str, e: RunEvaluation) -> None: ...
+    def list_run_evaluations(self, ws: str, run_id: str | None = None) -> list[RunEvaluation]: ...
     def get_run(self, ws: str, rid: str) -> AgentRun | None: ...
     def list_runs(self, ws: str, limit: int = 25) -> list[AgentRun]: ...
 
@@ -419,6 +423,15 @@ class InMemoryRepository:
         return [e for _, e in items[:limit]]
 
     def put_run(self, ws, r): self.store(ws).runs[r.id] = r
+
+    def put_run_evaluation(self, ws, e): self.store(ws).run_evaluations[e.key] = e
+
+    def list_run_evaluations(self, ws, run_id=None):
+        items = [
+            e for e in self.store(ws).run_evaluations.values()
+            if run_id is None or e.run_id == run_id
+        ]
+        return sorted(items, key=lambda e: (e.at, e.id))
     def get_run(self, ws, rid): return self.store(ws).runs.get(rid)
 
     def list_runs(self, ws, limit=25):
@@ -458,6 +471,7 @@ _TYPES: dict[str, Any] = {
     "DECISION": DecisionRequest,
     "ACTIVITY": ActivityEvent,
     "RUN": AgentRun,
+    "RUN_EVALUATION": RunEvaluation,
 }
 
 
@@ -845,6 +859,14 @@ class DynamoDBRepository:
         return sorted(items, key=lambda e: e.at, reverse=True)[:limit]
 
     def put_run(self, ws, r): self._put(ws, "RUN", r.id, r)
+
+    def put_run_evaluation(self, ws, e): self._put(ws, "RUN_EVALUATION", e.key, e)
+
+    def list_run_evaluations(self, ws, run_id=None):
+        items = self._query(
+            ws, "RUN_EVALUATION", RunEvaluation, f"{run_id}#" if run_id else None
+        )
+        return sorted(items, key=lambda e: (e.at, e.id))
     def get_run(self, ws, rid): return self._get(ws, "RUN", rid, AgentRun)
 
     def list_runs(self, ws, limit=25):

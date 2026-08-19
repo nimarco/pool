@@ -371,7 +371,7 @@ def need_outlook(
 
     excluded = _rejection_for(best, need.id)
     if excluded:
-        return outlook(OUTLOOK_NOT_MATCHED, _plain(excluded), best)
+        return outlook(OUTLOOK_NOT_MATCHED, plain_reason(excluded), best)
 
     if best.reason_code == coord.REASON_NOT_CHEAPER:
         # Enough demand, and it still should not happen. The bulk tier barely beats
@@ -447,7 +447,9 @@ _PLAIN_REASONS = {
 }
 
 
-def _plain(reason: str) -> str:
+def plain_reason(reason: str) -> str:
+    """A matcher rejection reason, in the member's words. Shared with the run report,
+    so the sentence explaining an exclusion is the same wherever it is read."""
     if not reason:
         return ""
     if reason in _PLAIN_REASONS:

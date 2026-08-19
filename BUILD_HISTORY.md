@@ -4625,3 +4625,119 @@ actually stated, and why that is an autonomy bug rather than a tuning one.
 The before/after outcome table for the seeded world. The canonical reconciliation being identical
 across the radius change is the load-bearing measurement: it is what makes "this was a correctness
 fix, not a demo tuning" checkable rather than asserted.
+
+---
+
+### #0042 — [2026-08-19] — Write down what the run found, before the process disappears
+`[agent]` `[observability]` `[product]`
+
+**Goal / user intent**
+Make a run explainable to the person who triggered it, from facts the system genuinely
+established — not from a recomputation, and not from prose a model was asked to write.
+
+**Starting state**
+A run computed a great deal and kept almost none of it. `evaluate_pool_economics` produced a
+complete `OpportunityAssessment` — matched units against the supplier minimum, which bulk tier won
+and what lost to it, the case fit, the per-declaration rejection reasons, the landed economics —
+and the model was shown a projection of it while the authoritative copy went onto
+`ToolContext.full_results`, an in-process object. Locally the API could reach it through
+`coordinator.last_tool_context`. After an AgentCore run it is in a microVM that no longer exists,
+so the deployed path had no way to explain anything. What survived either way was a count and a
+180-character tool summary.
+
+Recomputing afterwards was the obvious alternative and is a different claim: current state and
+"what this run found" diverge the moment anything else changes, and presenting the first as the
+second is retrospective omniscience (§8).
+
+**Decision — a stored evaluation record**
+`RunEvaluation`, one row per (run, product) the run actually costed, written through the repository
+at the end of the coordinator's own execution. Both entrypoints produce identical rows because both
+run the same coordinator.
+
+Written *after* the try/except deliberately: a run stopped by a safety bound still did real work
+first, and what it established is exactly what somebody will want to read. Written from the
+coordinator rather than from inside the tool so `evaluate_pool_economics` stays provably
+side-effect-free — the member outlook calls the same evaluator, and `test_a_member_view_writes_
+nothing` pins that a member opening their home screen changes no row.
+
+Bounded on every axis: a fixed field set, at most 12 evaluations per run, 6 supplier tiers, 8
+per-declaration verdicts, and the reason string capped at 300 characters.
+
+`AgentRun` also gained what the run was *asked* — objective kind, the anchoring household, and the
+declarations it took on, deferred, and skipped as already-served. Without that, "investigated and
+declined" and "never investigated" are indistinguishable after the fact, and a member with more
+declarations than one run takes on cannot be told which is which.
+
+**Privacy**
+An evaluation touches every declaration in the Community. `need_verdicts` carries only the
+declarations the run was asked about — the member's own — so one member's report cannot become a
+readout of why six neighbours were excluded. No names, no contact details, no payment references,
+no model text. A test asserts all of that against the seeded households rather than trusting the
+field list.
+
+**A real defect found on the way in**
+The earlier pass flagged as a risk that `OpportunityAssessment.rejected` might reflect the last
+bulk tier evaluated rather than the winning one. It did. `empty.rejected` was assigned inside the
+tier loop, so a *viable* assessment came back explaining itself with a *losing* tier's rejections —
+and the tiers genuinely disagree, because a member's per-unit price ceiling is applied against each
+tier's own price.
+
+Reproduced: whey has a $31.50/unit tier with a 24-unit minimum and a $39.80/unit tier with a
+12-unit one, evaluated in that order. A member whose substitution rule carries a ceiling between
+them is compatible with the cheap tier that wins and rejected by the expensive one that is
+evaluated last — so the assessment both selected and rejected the same declaration. Nothing
+downstream noticed, because nothing downstream had ever read the list.
+
+`matched_units` and `minimum_units` had a quieter version of the same problem: max-across-tiers
+paired with min-across-tiers, which is two true numbers describing a supplier offer nobody made.
+Both now come from one tier — the winner, or when nothing priced, the one that came closest.
+
+**Implementation**
+`domain/models.py` (`RunEvaluation`, objective fields on `AgentRun`), `agent/evidence.py` (new),
+`services/run_report.py` (new), `services/coordination.py` (per-tier attribution and
+`offers_considered`), `adapters/repository.py` (both stores), `api/app.py`
+(`GET /api/runs/{id}/report`), `api/public_demo.py` (allowlist). Status: **tested**.
+
+**AWS / external services touched**
+None.
+
+**Cost-relevant activity**
+None, and none added: the report is deterministic rendering of stored values. No model call is made
+to explain a run, which was the tempting and wrong design — it would have put a language model
+between a member and a price.
+
+**Validation**
+864 backend tests pass (846 before). The attribution fix was verified adversarially: reinstating
+the old last-tier assignment makes `test_rejections_belong_to_the_offer_that_won_not_the_one_
+evaluated_last` fail with the member appearing in both the selected and rejected sets, which is the
+bug exactly.
+
+**Failures / dead ends**
+First attempt wrote the evaluation from inside `evaluate_pool_economics`, which would have meant
+relabelling it from `read` to `record` in the tool surface. The label would have been honest — the
+kind's own definition is "an evaluation it wants to be able to show its reasoning from" — but it
+would have cost the strongest guarantee in the tool surface, that the read tools are provably inert
+under a whole-workspace snapshot. Not worth it for a write the coordinator can do once at the end.
+
+A structural slip worth recording: inserting `RunEvaluation` immediately after `AgentRun.from_dict`
+silently made `AgentRun.duration_ms` a method of the *new* class. 132 tests failed with
+`AttributeError: 'AgentRun' object has no attribute 'duration_ms'`, which is the good outcome — a
+property quietly landing on the wrong class is exactly the kind of thing a type checker over
+dataclasses does not catch.
+
+**What we learned**
+"The risk exists in principle" and "the risk is real" are worth ten minutes apart. The rejected-list
+attribution had been flagged as a *possible* problem and dismissed as low-impact because nothing
+read the field. Building something that reads it turned a latent inconsistency into a visible one —
+which is the argument for building the explanation feature at all: an unexamined intermediate result
+is where wrong answers accumulate quietly.
+
+**Article fodder**
+Article 2 — the process boundary is the design constraint. Explaining an agent run is easy while
+you are still in the process that ran it, and that is precisely the case that does not survive
+deployment. Article 3 — the difference between persisting deterministic evaluations and persisting
+model reasoning, and why only one of them is safe to show a user.
+
+**Evidence worth preserving**
+The two-tier whey reproduction. It is a small, complete example of an agent system producing
+confident, plausible, wrong evidence, caught only because something finally consumed it.

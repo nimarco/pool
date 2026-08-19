@@ -132,6 +132,76 @@ def test_a_product_whose_bulk_price_does_not_beat_retail_forms_no_pool(seeded_ct
     assert assessment.economics.net_savings_cents <= 0
 
 
+def test_rejections_belong_to_the_offer_that_won_not_the_one_evaluated_last(seeded_ctx):
+    """Which supplier tier a member was measured against changes who it excluded.
+
+    Whey has two tiers: $31.50/unit with a 24-unit minimum, and $39.80/unit with a
+    12-unit one. A member whose substitution rule carries a per-unit ceiling between
+    them is compatible with the cheap tier and rejected by the expensive one — and the
+    expensive one is evaluated second.
+
+    The rejection list used to be written onto one shared record inside the tier loop,
+    so a *winning* assessment came back explaining itself with the *losing* tier's
+    rejections: this member appeared excluded from the very pool they were in. Nothing
+    downstream could have noticed, which is why the run report must not be built on it.
+    """
+    from datetime import date, timedelta
+
+    from pool.domain.models import NeedDeclaration, SubstitutionPolicy
+
+    due = date.today() + timedelta(days=12)
+    seeded_ctx.repo.put_need(
+        WS,
+        NeedDeclaration(
+            id="need_ceiling",
+            household_id="hh_navarro",
+            community_id=COMMUNITY_ID,
+            # A different variant of the same brand, so the substitution rule is what
+            # decides — and the price ceiling then applies, as it does to every
+            # non-exact substitution.
+            product_id="prod_whey_chocolate",
+            quantity=2,
+            cadence_days=40,
+            expected_next_need_date=due,
+            earliest_acceptable_purchase_date=due - timedelta(days=12),
+            latest_acceptable_purchase_date=due,
+            routine_lead_days=12,
+            substitution=SubstitutionPolicy.SAME_PRODUCT_OTHER_VARIANT,
+            max_unit_price_cents=3500,
+        ),
+    )
+    assessment = _assess(seeded_ctx)
+    assert assessment.viable
+    assert assessment.bulk_offer_id == "off_whey_bulk"
+
+    rejected_needs = {r["need_id"] for r in assessment.rejected}
+    selected_needs = {c.need_id for c in assessment.candidates}
+    # The invariant in general form: an assessment never both selects and rejects the
+    # same declaration, whatever the tiers disagreed about.
+    assert not (rejected_needs & selected_needs)
+    assert "need_ceiling" not in rejected_needs
+
+    # And the two quantities a member reads describe the same real offer.
+    winning = seeded_ctx.repo.get_offer(WS, assessment.bulk_offer_id)
+    assert assessment.minimum_units == winning.min_units
+    assert assessment.matched_units >= assessment.minimum_units
+
+
+def test_a_refusal_is_explained_by_the_tier_that_came_closest(seeded_ctx):
+    """When no tier prices, the units-found and units-required a member is shown have to
+    come from one supplier offer. Reporting the largest match from one tier beside the
+    smallest minimum from another is two true numbers describing an offer nobody made."""
+    assessment = coord.evaluate_opportunity(
+        ctx=seeded_ctx, community_id=COMMUNITY_ID,
+        product_id="prod_paper_towels", pickup_site_id=SITE,
+    )
+    assert assessment.viable is False
+    assert assessment.reason_code == coord.REASON_BELOW_MINIMUM
+    tiers = {o.min_units for o in coord.offers_for(seeded_ctx, "prod_paper_towels")[1]}
+    assert assessment.minimum_units in tiers
+    assert assessment.matched_units < assessment.minimum_units
+
+
 def test_an_unknown_product_or_site_is_an_error(seeded_ctx):
     with pytest.raises(CoordinationError):
         coord.evaluate_opportunity(

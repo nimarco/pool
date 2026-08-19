@@ -176,6 +176,23 @@ class CandidateAssessment:
         }
 
 
+#: What happened to one bulk tier inside an evaluation. Values, not prose, so a run
+#: report can group and count them without parsing a sentence.
+TIER_SELECTED = "selected"
+TIER_NO_COMPATIBLE_DEMAND = "no_compatible_demand"
+TIER_BELOW_MINIMUM = "below_minimum"
+TIER_NO_CASE_FIT = "no_case_fit"
+TIER_LOWER_SAVINGS = "lower_savings"
+TIER_OUTCOMES = frozenset(
+    {
+        TIER_SELECTED,
+        TIER_NO_COMPATIBLE_DEMAND,
+        TIER_BELOW_MINIMUM,
+        TIER_NO_CASE_FIT,
+        TIER_LOWER_SAVINGS,
+    }
+)
+
 #: Why an opportunity is not worth forming, as a value rather than a sentence.
 REASON_VIABLE = ""
 REASON_NO_RETAIL_BASELINE = "no_retail_baseline"
@@ -234,9 +251,22 @@ class OpportunityAssessment:
     #: case fitting. Populated on the *unviable* path too, which the prose ``reason``
     #: already carried inside a sentence — a member asking "how far off is this" needs
     #: the number, and parsing it back out of a string is not an answer.
+    #:
+    #: Always read together with :attr:`minimum_units`, and always from the *same*
+    #: supplier tier: the winning one when a tier priced, otherwise the one that came
+    #: closest. Taking the largest match from one tier and the smallest minimum from
+    #: another produces a pair of true numbers that together describe a supplier offer
+    #: nobody made.
     matched_units: int = 0
-    #: The smallest quantity any usable bulk tier will sell.
+    #: The quantity that tier will not sell below.
     minimum_units: int = 0
+    #: Every bulk tier this evaluation actually compared, and what happened to each.
+    #: The agent is never shown it (a tier it cannot name is not a decision it can
+    #: make), but "which supplier offer won, and what lost to it" is one of the few
+    #: genuinely interesting things a run establishes, and it existed nowhere durable.
+    #: Shape: ``{offer_id, unit_price_cents, min_units, case_units, matched_units,
+    #: outcome}`` where outcome is one of :data:`TIER_OUTCOMES`.
+    offers_considered: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         econ = self.economics
@@ -260,6 +290,7 @@ class OpportunityAssessment:
             "future_units": self.future_units,
             "matched_units": self.matched_units,
             "minimum_units": self.minimum_units,
+            "offers_considered": self.offers_considered,
             "economics": econ.to_dict() if econ else None,
             "estimated_savings_pct": bps_to_pct_str(econ.net_savings_bps) if econ else "0.0%",
             "candidates": [c.to_dict() for c in self.candidates],
@@ -544,9 +575,21 @@ def evaluate_opportunity(
     # Compare every bulk tier and keep the one that maximises *net landed* savings
     # while actually clearing its own minimum. The comparison is ours; the decision to
     # investigate this product at all was the agent's.
+    #
+    # Everything a tier establishes is kept *with that tier*. It used to be written onto
+    # one shared record inside the loop, so the rejections a caller read back were
+    # whichever tier happened to be evaluated last — and the tiers genuinely disagree,
+    # because a member's per-unit price ceiling is applied against each tier's own price.
+    # An assessment explaining a *winning* offer with a *losing* offer's rejections is
+    # exactly the kind of plausible-looking evidence a run report must not be built on.
     best: tuple[Offer, LandedEconomics, MatchResult] | None = None
+    best_rejected: list[dict[str, str]] = []
+    best_matched = 0
     shortfalls: list[str] = []
-    empty.minimum_units = min(o.min_units for o in bulk_offers)
+    #: (shortfall, -matched, min_units, offer_id) for every tier that produced no
+    #: economics — the tier that came closest is the one whose numbers explain a refusal.
+    near_misses: list[tuple[int, int, int, str, list[dict[str, str]]]] = []
+    tiers: dict[str, dict[str, Any]] = {}
     for offer in bulk_offers:
         match = find_candidates(
             community_id=community_id,
@@ -563,14 +606,31 @@ def evaluate_opportunity(
             exclude_household_ids=exclude_household_ids,
             include_future_demand=include_future_demand,
         )
-        empty.rejected = [
+        rejected = [
             {"need_id": r.need_id, "household_id": r.household_id, "reason": r.reason}
             for r in match.rejections
         ]
-        empty.matched_units = max(empty.matched_units, match.total_units)
+        near_misses.append(
+            (
+                max(0, offer.min_units - match.total_units),
+                -match.total_units,
+                offer.min_units,
+                offer.id,
+                rejected,
+            )
+        )
+        tiers[offer.id] = {
+            "offer_id": offer.id,
+            "unit_price_cents": offer.unit_price_cents,
+            "min_units": offer.min_units,
+            "case_units": offer.case_units,
+            "matched_units": match.total_units,
+            "outcome": TIER_NO_COMPATIBLE_DEMAND,
+        }
         if not match.candidates:
             continue
         if match.total_units < offer.min_units:
+            tiers[offer.id]["outcome"] = TIER_BELOW_MINIMUM
             shortfalls.append(
                 f"{offer.id} needs {offer.min_units} units, have {match.total_units}"
             )
@@ -579,6 +639,7 @@ def evaluate_opportunity(
         # Case rounding must not create inventory nobody bought, so the buyer set is
         # chosen to fill whole cases exactly rather than trimmed afterwards (§48).
         # Members whose need is already due are preferred over demand pulled forward.
+        pre_fit_units = match.total_units
         fit = fit_to_cases(
             [c.need.quantity for c in match.candidates],
             case_units=offer.case_units,
@@ -586,6 +647,7 @@ def evaluate_opportunity(
             priority=[i for i, c in enumerate(match.candidates) if not c.is_future_pull_forward],
         )
         if not fit.ok:
+            tiers[offer.id]["outcome"] = TIER_NO_CASE_FIT
             shortfalls.append(f"{offer.id}: {fit.reason}")
             continue
 
@@ -611,10 +673,26 @@ def evaluate_opportunity(
             processing_fee=community.processing_fee,
             host_is_estimated=True,
         )
+        tiers[offer.id]["outcome"] = TIER_LOWER_SAVINGS
+        tiers[offer.id]["net_savings_cents"] = economics.net_savings_cents
         if best is None or economics.net_savings_cents > best[1].net_savings_cents:
             best = (offer, economics, match)
+            best_rejected = rejected
+            # Before case fitting, which is what this field documents: how much
+            # compatible, in-range, in-time demand this tier actually found.
+            best_matched = pre_fit_units
 
     if best is None:
+        # No tier priced. The refusal is explained by the tier that came closest, so the
+        # two numbers a member reads — how much exists, how much is required — describe
+        # one real supplier offer rather than being taken from two different ones.
+        empty.offers_considered = list(tiers.values())
+        near_misses.sort()
+        if near_misses:
+            _, negative_matched, minimum, _, rejected = near_misses[0]
+            empty.matched_units = -negative_matched
+            empty.minimum_units = minimum
+            empty.rejected = rejected
         empty.reason = (
             "aggregate demand below every bulk minimum: " + "; ".join(shortfalls)
             if shortfalls
@@ -629,6 +707,11 @@ def evaluate_opportunity(
     empty.bulk_offer_id = bulk_offer.id
     empty.current_units = match.current_units
     empty.future_units = match.future_units
+    empty.matched_units = best_matched
+    empty.minimum_units = bulk_offer.min_units
+    empty.rejected = best_rejected
+    tiers[bulk_offer.id]["outcome"] = TIER_SELECTED
+    empty.offers_considered = list(tiers.values())
 
     if economics.net_savings_cents <= 0:
         empty.economics = economics
@@ -700,6 +783,8 @@ def evaluate_opportunity(
         economics=economics,
         timing=timing,
         candidates=assessments,
+        # The *winning* tier's rejections. Which offer a member was measured against
+        # changes who it excluded, so this list travels with the offer that produced it.
         rejected=empty.rejected,
         routing_provider=provider,
         avg_travel_minutes=round(sum(travel_values) / len(travel_values)),
@@ -708,6 +793,7 @@ def evaluate_opportunity(
         future_units=match.future_units,
         matched_units=empty.matched_units,
         minimum_units=empty.minimum_units,
+        offers_considered=empty.offers_considered,
     )
 
 

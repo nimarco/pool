@@ -69,7 +69,7 @@ from ..domain.models import (
 from ..domain.money import bps_to_pct_str, format_cents
 from ..domain.state import IllegalTransition
 from ..domain.viability import ViabilityStage
-from ..services import communication, fulfillment, hosting, onboarding, relevance
+from ..services import communication, fulfillment, hosting, onboarding, relevance, run_report
 from ..services import coordination as coord
 from ..services import needs as needs_service
 from ..services import payments as payment_service
@@ -1673,6 +1673,36 @@ def get_run(run_id: str, workspace: str = Query("demo")) -> dict[str, Any]:
     d = run.to_dict()
     d["duration_ms"] = run.duration_ms
     return d
+
+
+@app.get("/api/runs/{run_id}/report")
+def get_run_report(
+    run_id: str, household_id: str = Query(""), workspace: str = Query("demo")
+) -> dict[str, Any]:
+    """What one run did about one member's own declarations.
+
+    The consumer answer to **Run Pool now**, assembled server-side from the evaluation
+    records that run wrote while it was running — so it describes what the coordinator
+    actually established rather than what is true now, and it cannot drift into
+    describing a product the run never looked at.
+
+    ``is_mine`` is false when the run was not anchored to this member. That is the guard
+    against a previous run, or a community-wide scan, becoming the answer on somebody's
+    home screen.
+    """
+    ws = check_workspace(workspace)
+    run = repo().get_run(ws, run_id)
+    if run is None:
+        raise HTTPException(404, "run not found")
+    # Read-only for its whole length, like the member view, and for the same reason: it
+    # re-reads the same few tables once per declaration.
+    ctx = relevance.read_only(ctx_for(ws))
+    report = run_report.build(ctx, COMMUNITY_ID, run, household_id)
+    if household_id:
+        report["elsewhere"] = run_report.community_pools_elsewhere(
+            ctx, COMMUNITY_ID, household_id
+        )
+    return report
 
 
 @app.get("/api/pools/{pool_id}/allocations")

@@ -5379,3 +5379,142 @@ next to the Run Report it served.
 **Relevant commits / files**
 `09f06ce` `pool/adapters/repository.py` + `tests/test_persistence_and_termination.py`. Deployed
 from that commit: AgentCore runtime version 6, `PoolDemoStack` `DemoApi`.
+
+---
+
+### #0049 — [2026-08-19] — Cashing "Pool keeps watching": the same demand, three answers
+`[DEMO]` `[ARTICLE-1]` `[FRONTEND]` `[SECURITY]`
+
+**Goal / user intent**
+Pool could truthfully refuse an order and tell a member their declaration stays standing. Nothing
+ever demonstrated that the refusal was a *current* answer rather than a permanent one — so a judge's
+honest next question, "watching for what?", had no reply. Make the changing-world claim
+demonstrable: standing demand that outlives a run, an external condition that changes, and a
+re-evaluation that reaches a different verdict without anybody being recruited.
+
+**Starting state**
+`main` at `360aee7`, clean, one commit past the live AgentCore rehearsal. The seeded world could
+refuse for three reasons — below minimum, no case fit, bad economics — every one of them an answer
+Pool reaches *after* a supplier has quoted a price. The state it had no example of was the one a
+coordination system spends most of its time in: people want the thing, and there is nothing to buy
+it from.
+
+**Decision**
+Four decisions, in the order they mattered.
+
+1. **Missing supply is not missing demand.** `standing_demand_for` returned its empty base row —
+   zero compatible members, zero compatible units — whenever there was no sourceable target. New
+   `discovery.unsourced_demand` computes what the matcher would compute, against the declared
+   product, with no unit price, because there is no offer.
+2. **A seeded product for the class.** Jasmine rice, 5 lb: six independent declarations, 22 bags, a
+   shelf price, and no bulk tier.
+3. **The world changes through one `Offer` row.** `services/supplier_updates.py` holds two
+   server-owned quotes; the client sends an allowlisted key and never a number.
+4. **Two quotes, not one.** A single quote that turns a no into a yes is an answer key.
+
+**Why**
+The mechanism is deliberately not a simulation mode. An `Offer` row is what every price in this
+system already comes from, so the verdict after recording a quote is not written down anywhere —
+the ordinary evaluator sees an ordinary offer and reaches whatever the arithmetic supports. A
+scenario flag would have needed the evaluator taught about it, and at that point the demo proves
+the flag rather than the system.
+
+`OfferSource.MANUAL_VERIFIED` was rejected in favour of `SYNTHETIC`. It is the closer match for the
+*act* — an operator did enter these — and the wrong label for the *fact*: Operations renders it as a
+green "manual verified" chip meaning a human confirmed a real quote with a real supplier, and
+Riverbend Wholesale does not exist. Lending real provenance to an invented price is exactly what
+`OfferSource` and `ProductSource` are kept apart to prevent.
+
+**Implementation** — *tested*, local only.
+- `discovery.unsourced_demand` + `UnsourcedDemand`; wired into `standing_demand_for` and the
+  `no_supply` branch of `relevance.need_outlook`, which now reads demand first and blocker second.
+- `prod_rice_jasmine` in `data/seed.py` and `scripts/build_catalog.py` `CURATED`; retail offer only.
+  Catalogue entry inserted by replicating the generator's own curated emission — the file
+  round-trips byte-for-byte, verified before and after.
+- `services/supplier_updates.py`; `GET`/`POST /api/demo/supplier-updates`, both allowlisted for
+  judge mode. Public surface is now 31 of 47 endpoints (was 29 of 45); README and the module
+  docstring updated with it.
+- `views/operations.tsx` "Supplier updates" panel — operator surface, leads with the standing demand
+  rather than the button.
+
+**Two defects fixed on the way in.**
+- Home → Needs → Home lost the member's own state. `navigate` called `forgetWorkspaceState` on every
+  view change, and the refetch effect is keyed on counts that do not move when a member changes
+  screens — so the state was cleared and never re-asked. Needs was worse than reported: its "As
+  things stand" line never rendered at all.
+- A member-triggered no-op logged "Pool ran a background scan and found nothing worth acting on",
+  on the one screen that states plainly that nothing is scheduled. `_run_summary` had
+  `objective_kind` on the record already and was not reading it.
+
+**A third defect the new tests found.** `run_report._result_for_need` reported
+`formed_included` whenever the member was currently in a pool for that declaration —
+whichever run formed it. So the first run's report, which had truthfully refused for want of a
+supplier, silently became a claim that it had formed the order the moment a second run did. The
+stored `RunEvaluation` rows were byte-identical throughout; the rewriting was in the assembly, which
+is worse, because nothing in the evidence looks wrong. Attribution now reads stored lineage —
+`Pool.created_by_run`, or an evaluation this run wrote naming a pool it acted on. Both already
+existed; neither was being consulted.
+
+**AWS / external services touched**
+None. No deploy, no AgentCore invocation, no Bedrock call, no live payment. The catalogue insert was
+done offline against the committed snapshot rather than by re-running the fetcher.
+
+**Cost-relevant activity**
+None. The new endpoint is deterministic and stateful; it spends no model tokens and has no path to
+one. It takes the existing workspace mutation lease and the existing per-session action quota.
+
+**Validation**
+- `make qa` green: ruff, 926 backend pytest, 75 infra pytest, 97 web vitest, tsc, eslint, production
+  build, secret scan, `git diff --check`. Baseline was 905 / 75 / 86.
+- Every bug fix was verified to *fail* before the fix by reverting the source file and re-running.
+- Browser QA in judge mode (`POOL_PUBLIC_DEMO=true`, offline planner, AgentCore off) at 1280px and
+  390px: onboarding → declare through the real catalogue search → refusal → Home/Needs/Home →
+  quote A → outlook moves with no run → quote B → outlook ready → second run forms the order.
+- Observed end to end in the browser: 38 needs before and after, the six seeded rice declarations
+  unchanged, and the first run's report still `declined / no_bulk_offer` after two quotes and a
+  second run.
+- Canonical showcase re-verified in its own partition: 11 memberships, 10 buyers, 1 authorisation
+  failure, 24 units, 2 cases, 0 surplus, $861.44 against $1,127.76, $266.32 kept, 23.61%.
+- Deterministic outcomes, all read from the evaluator: no quote → `no_bulk_offer`; split-case →
+  `not_cheaper`, $286.66 against $275.76; case-programme → viable, 24 units, 3 cases, 0 surplus,
+  $208.72 against $275.76, 24.3%.
+
+**Failures / dead ends**
+- First attempt at the split-case quote used a 2-unit case with a 6-unit minimum. `fit_to_cases`
+  caps its search a few cases above the minimum, so it took 12 of the 20 available units and lost by
+  21% — a refusal explained by an implementation bound rather than by economics. Reshaped both
+  quotes so each takes the whole buyer set, which makes the comparison purely economic.
+- Seeded quantities were 3 bags each at first. With a 2-bag default declaration the judge could
+  never land inside a whole case, so they were excluded from their own demo. Mixed quantities
+  summing to 22 fixed it, and the arithmetic still decides.
+- Recording a quote left Home stale: the mutation deliberately writes nothing the shell's change
+  detection counts. Fixed with an explicit signal rather than by having the server write a row it
+  does not need — but the first version of that reused the effect that also clears the run report,
+  which wiped the previous run's answer off the screen. That is the one thing here meant to survive
+  the world changing. Clearing is now its own effect. Reverting the split fails a test.
+
+**What we learned**
+The interesting failure mode in an agent product is not a wrong number; it is a *retrospectively
+consistent* one. Two of the three defects here were the interface quietly making the past agree with
+the present — a report that reassigned itself to a later run, and a screen that reported missing
+supply as missing demand. Neither touched a stored value. Keeping "what that run found" and "what is
+true now" as separate, separately-labelled answers is what makes the changing-world claim provable
+at all, and it has to be defended in the assembly layer, not only in the store.
+
+**Article fodder**
+Article 1 — latent demand is a standing fact and coordination is an ongoing job, not a search
+query; "no" as a timestamped answer. Article 3 — an operator action a member deliberately cannot
+take, and why the client sends a key rather than a price. Demo — the whole spine of the rewritten
+script.
+
+**Evidence worth preserving**
+The two-panel Home frame where the run report says *no supplier* and the standing card says *the
+supplier's best price starts at 16*, with nothing having run between them. The Operations panel at
+390px. The three evaluator verdicts with their economics.
+
+**Relevant commits / files**
+Branch `feat/changing-world-demo`: `55b495c` `70d7ba9` `e20dcc5` `88c2d83` `0348a62` `8143948`
+`74aa9d4` `861e3c6`. `services/supplier_updates.py`, `services/discovery.py`,
+`services/relevance.py`, `services/run_report.py`, `data/seed.py`, `api/app.py`,
+`api/public_demo.py`, `views/operations.tsx`, `views/home.tsx`, `App.tsx`,
+`tests/test_supplier_updates.py`, `docs/DEMO_SCRIPT.md`.

@@ -461,16 +461,16 @@ the offers, the money, and the purchase. No goods move. No traction is claimed.
 
 **Real, because it costs nothing to be:** the products themselves. A member types
 `vanilla whey` and picks a tub they recognise, with the actual photograph. That comes from
-a curated Open Food Facts snapshot committed to this repository — 294 products, bundled
+a curated Open Food Facts snapshot committed to this repository — 295 products, bundled
 rather than fetched, so the first interaction in the product works with the network
 unplugged and ranks identically on the tenth rehearsal as on the first.
 
 The line between those two paragraphs is the one to hold. A real brand beside an invented
 wholesale price could imply a relationship that does not exist, so the catalogue supplies
 **identity only** — name, brand, flavour, photograph — and never a price, a case size or a
-supplier minimum. Those stay curated, and the six products Pool quotes a synthetic price
-for deliberately publish **no barcode**, because a barcode names one specific retail
-package and Pool's case structure was invented for the scenario. Details and licence
+supplier minimum. Those stay curated, and the seven products Pool holds a synthetic
+supplier quote for deliberately publish **no barcode**, because a barcode names one
+specific retail package and Pool's case structure was invented for the scenario. Details and licence
 obligations: [`services/agent/pool/data/CATALOG_LICENSE.md`](services/agent/pool/data/CATALOG_LICENSE.md).
 
 ---

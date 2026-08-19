@@ -7,7 +7,7 @@ every claim that rests on a probe records what was actually returned.
 > `BUILD_HISTORY.md` #0037. What was built matches this document with three deliberate
 > changes, recorded here rather than quietly:
 >
-> 1. **The catalogue is a JSON snapshot, not SQLite.** At 294 rows, an in-process pure
+> 1. **The catalogue is a JSON snapshot, not SQLite.** At 295 rows, an in-process pure
 >    function over a parsed list is faster than opening a database, has no build step, and
 >    is trivially diffable in review. SQLite earns its place somewhere past ~10k rows.
 > 2. **Household goods are curated and brand-free.** §5.3 predicted thin coverage; the

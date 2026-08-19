@@ -4837,3 +4837,85 @@ product, and the fix is architectural rather than editorial.
 The before/after of the demo panel copy. The old version had to explain that the replay would
 declare a whey need on your account and that you could retire it afterwards; the new one does not,
 because it does not.
+
+---
+
+### #0044 — [2026-08-19] — Making the sourceable product findable, without lying about the rest
+`[product]` `[demo]`
+
+**Goal / user intent**
+Close the gap between "the catalogue is real" and "Pool can actually buy this", without
+compromising either.
+
+**Starting state**
+Typing `coffee` returned eight real coffees ranked purely by how well the word matched, and the one
+Pool holds a synthetic verified bulk quote for was not among them. "Death Wish Coffee Co" outscored
+it because the noun appears in its *brand*; "Folgers Coffee" outscored it because the phrase appears
+in its label. A member picked one, kept `exact_only`, and Pool correctly reported that nothing could
+be done.
+
+Every step of that is honest and the whole path is a dead end. Worse, it made the demo's actual
+sourcing capability invisible unless you knew to type the magic phrase.
+
+**Decision**
+A ranking and a label, not a rewrite.
+
+`catalog.search` takes the set of products this deployment holds a usable bulk quote for and gives
+them a bounded boost — deliberately larger than a brand-word coincidence and smaller than a full
+phrase match, so `coffee` leads with the sourceable one while `death wish` and `folgers coffee`
+return exactly what was asked for. The boost cannot invent a match: a product the query does not
+hit scores zero and is excluded before any of this applies, so it changes the *order* of things a
+member could legitimately have meant and never what they get if they keep typing.
+
+The set comes from the same `offers_for` the evaluator consults, so nothing can be marked sourceable
+that an opportunity assessment could not price. No offer is fabricated for a catalogue product; the
+separation between real product identity and synthetic supplier economics is the thing this
+constraint exists to protect (§41, §48).
+
+Every result carries `sourceable`, and a card that has it says so — because a ranking a member
+cannot see the reason for is just a mysterious ranking.
+
+**The substitution control moved out of the advanced drawer**
+This is the change with the most product in it. Substitution decides whose demand may combine with
+whose; for a product Pool cannot source it is the *only* setting that could change the answer. It
+was behind a collapsed "fine-tune" disclosure, so a member never saw a choice they had already
+effectively made. It now sits in the main form, phrased as a question, and when the chosen product
+is unsourceable it says so plainly and adds that widening it is their call rather than Pool's.
+
+**What was deliberately not done**
+Auto-converting an unsourceable choice into the neighbouring product Pool can buy; silently
+widening `exact_only`; special-casing the string `coffee`; fabricating a bulk offer for a catalogue
+entry. Each would have made the demo smoother by making the product dishonest — and the first two
+are Pool deciding what somebody buys, which is the one decision it must never take.
+
+**Implementation**
+`data/catalog.py` (`SOURCEABLE_BOOST`, `search(sourceable_ids=…)`, `view(sourceable=…)`),
+`api/app.py` (`_sourceable_product_ids`), `product-search.tsx`, `views/needs.tsx`, `styles.css`.
+Status: **tested**.
+
+**AWS / external services touched**
+None. Still a bundled snapshot ranked by a pure function — no network on the keystroke path, no
+model, no per-character cost.
+
+**Validation**
+881 backend tests pass, 81 web tests pass. Thirteen new tests in `test_sourceability.py`: every
+sourceable product leads its own generic query (`coffee`, `whey`, `energy drink`, `laundry`,
+`paper towels`); a named brand still wins; the boost cannot make an unrelated product appear; the
+flag agrees with `offers_for` for every result of five different queries; and no catalogue entry
+outside the seeded six has an offer at all.
+
+**Failures / dead ends**
+Two existing tests had been quietly relying on `coffee` *not* resolving to the sourceable product —
+the way they expressed "pick something Pool cannot source" was "take the first result". They now say
+what they mean and ask for the first *unsourceable* one, which is a better test and only possible
+because the flag exists.
+
+**What we learned**
+The dead end was not a bug in any one component. Search was correct, substitution was correct, and
+the evaluator was correct; the product failed at the seam between them, where nobody had written
+down that "we can buy this" is a fact worth showing. Seams are where honest components combine into
+a misleading experience.
+
+**Article fodder**
+Article 1 — the difference between a demo that works when you type the memorised phrase and a
+product that works when you type what you buy.

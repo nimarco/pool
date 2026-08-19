@@ -151,7 +151,11 @@ def build_member_objective(
         for n in ctx.repo.list_needs(ctx.ws)
         if n.household_id == household_id and n.active and n.community_id == community_id
     ]
-    mine.sort(key=lambda n: (n.expected_next_need_date, n.id))
+    # Soonest needed first. The tie-break is the product, not the need id: ids are
+    # random, so two declarations due on the same day would otherwise be investigated
+    # in a different order on every run — and which one a run acts on would move with
+    # them.
+    mine.sort(key=lambda n: (n.expected_next_need_date, n.product_id, n.id))
     unserved = [n for n in mine if n.id not in served]
 
     objectives: list[NeedObjective] = []

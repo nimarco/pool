@@ -42,6 +42,10 @@ RESULT_FORMED_EXCLUDED = "formed_excluded"      # it formed for this product, wi
 RESULT_DECLINED = "declined"                    # investigated, and not worth doing
 RESULT_NOT_INVESTIGATED = "not_investigated"    # the run did not reach it
 RESULT_ALREADY_COORDINATED = "already_coordinated"  # its answer is a pool that exists
+#: Worth doing, and not done *this* run. Pool forms at most one order per run so that
+#: members hear from it rarely, so a second viable objective is genuinely next in line —
+#: which is a different thing from being declined, and used to be reported as one.
+RESULT_VIABLE_NOT_ACTED = "viable_not_acted"
 
 
 def _unit_word(unit: str, count: int) -> str:
@@ -219,6 +223,26 @@ def _result_for_need(
                     ),
                     "Nothing was charged, and your declaration stays standing.",
                 ],
+            }
+        if evaluation.viable:
+            # Costed, worth doing, and not the one this run acted on. Reporting it as
+            # "declined" would be false, and reporting the evaluator's own internal
+            # sentence — "viable bulk opportunity" — would be worse.
+            return {
+                **base,
+                "result": RESULT_VIABLE_NOT_ACTED,
+                "reason_code": evaluation.reason_code,
+                "headline": (
+                    "Pool can form this one too, and forms one order at a time — so it "
+                    "is next."
+                ),
+                "facts": [
+                    f"{evaluation.selected_member_count} compatible members and "
+                    f"{evaluation.selected_units} {_unit_word(unit, evaluation.selected_units)} "
+                    f"are ready, against a {evaluation.minimum_units}-unit minimum."
+                ]
+                if evaluation.selected_units
+                else [],
             }
         return {
             **base,

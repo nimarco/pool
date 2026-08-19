@@ -165,6 +165,10 @@ def opportunity_view(full: dict[str, Any]) -> dict[str, Any]:
         "current_units": full.get("current_units", 0),
         "future_units": full.get("future_units", 0),
     }
+    if "includes_member_declaration" in full:
+        # Decision-critical on a member-triggered run: an order this member is not in is
+        # a legitimate outcome, and a worse one than an order they are.
+        view["includes_member_declaration"] = full["includes_member_declaration"]
     if not full.get("viable"):
         # A refusal only has to explain itself well enough for the model to move on.
         # The key keeps the authoritative name so a consumer reading either shape —

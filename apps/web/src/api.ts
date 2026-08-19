@@ -367,6 +367,10 @@ export interface ProductCandidate {
   unit: string;
   category: string;
   image_ref: string;
+  /** Pool currently holds a verified bulk quote it could buy this against. A fact about
+   *  this deployment, not about the product — and never a reason to change what somebody
+   *  declared. Absent on a candidate that came from somewhere other than search. */
+  sourceable?: boolean;
 }
 
 /** Licence obligations that travel with the bundled catalogue snapshot. */

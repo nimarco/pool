@@ -212,6 +212,19 @@ def build_tools(ctx: ToolContext) -> list:
             ),
         )
         payload = assessment.to_dict()
+        # Whether *this run's own member* would be in the order. A deterministic fact,
+        # computed here rather than left to the model, and the difference between "Pool
+        # formed the thing you asked about" and "Pool formed an order you are not in"
+        # (§48). Absent on a community scan, which has no member to be in anything.
+        objective_needs = {
+            entry.need_id
+            for entry in (getattr(ctx.objective, "needs", ()) or ())
+            if product_id in entry.target_product_ids
+        }
+        if objective_needs:
+            payload["includes_member_declaration"] = bool(
+                objective_needs & {c.need_id for c in assessment.candidates}
+            )
         if assessment.viable and assessment.economics:
             econ = assessment.economics
             payload["headline"] = (

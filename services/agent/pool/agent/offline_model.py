@@ -249,16 +249,26 @@ class DeterministicPlannerModel(Model):
         # compares prices is a planner deciding money (AGENTS.md §5).
         if member_run:
             by_product = {a.get("product_id"): a for a in assessments}
-            for opp in queue:
-                found = by_product.get(opp.get("product_id"))
-                if found and found.get("viable"):
-                    return _tool_event(
-                        "create_candidate_pool",
-                        {
-                            "product_id": found["product_id"],
-                            "pickup_site_id": found["pickup_site_id"],
-                        },
-                    )
+            ordered = [
+                found
+                for opp in queue
+                if (found := by_product.get(opp.get("product_id"))) and found.get("viable")
+            ]
+            # An order this member is actually in comes first. Both are legitimate — case
+            # fitting can genuinely leave somebody out — but forming the one they are in
+            # is the better answer to their own button, and only one pool forms per run.
+            chosen = next(
+                (a for a in ordered if a.get("includes_member_declaration")),
+                ordered[0] if ordered else None,
+            )
+            if chosen is not None:
+                return _tool_event(
+                    "create_candidate_pool",
+                    {
+                        "product_id": chosen["product_id"],
+                        "pickup_site_id": chosen["pickup_site_id"],
+                    },
+                )
 
         reasons = [a.get("reason", "") for a in assessments if not a.get("viable")]
         if not queue and member_run:

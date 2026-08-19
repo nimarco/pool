@@ -83,6 +83,19 @@ def _search_first(client: TestClient, query: str) -> str:
     return results[0]["product_id"]
 
 
+def _search_first_unsourceable(client: TestClient, query: str) -> str:
+    """The first result Pool holds no bulk quote for.
+
+    A broad query now leads with what Pool can actually source, which is the honest
+    ranking — so a test about deliberately declaring something *unsourceable* has to say
+    so rather than relying on where the list happens to start.
+    """
+    results = client.get("/api/products/search", params={"q": query}).json()["results"]
+    found = next((r for r in results if not r["sourceable"]), None)
+    assert found is not None, f"every result for {query!r} is sourceable"
+    return found["product_id"]
+
+
 def _run(client: TestClient) -> dict:
     """The consumer's own **Run Pool now**, anchored to their own declarations."""
     response = client.post("/api/agent/run", json={"trigger": "member_scan"})
@@ -259,7 +272,7 @@ def test_a_catalogue_product_with_no_offer_does_not_borrow_another_products_pool
     product Pool *can* source — that would be Pool deciding what somebody buys.
     """
     household = _onboard(client)
-    typed = _search_first(client, "coffee")
+    typed = _search_first_unsourceable(client, "coffee")
     assert typed != "prod_coffee_beans"
     need = _declare(client, household, typed)
 

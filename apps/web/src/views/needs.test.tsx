@@ -276,12 +276,52 @@ describe("declaring a standing need", () => {
     expect(screen.getByText(/Pool may buy any time in the \d+ days before that/i)).toBeTruthy();
   });
 
+  it("says which result Pool can actually source, and does not hide the others", async () => {
+    const sourceable = { ...WHEY, sourceable: true };
+    const other = {
+      ...WHEY,
+      product_id: "prod_other_whey",
+      brand: "Designer Whey",
+      name: "Natural 100% Whey Protein Powder",
+      sourceable: false,
+    };
+    vi.spyOn(apiModule.api, "searchProducts").mockResolvedValue({
+      query: "whey",
+      results: [sourceable, other],
+      attribution: ATTRIBUTION,
+    });
+    renderNeeds();
+    await userEvent.click(await screen.findByRole("button", { name: /add a need/i }));
+    await userEvent.type(screen.getByLabelText(/what do you buy/i), "whey");
+
+    await screen.findByRole("option", { name: /Optimum Nutrition/i });
+    const options = screen.getAllByRole("option");
+    expect(options[0].textContent).toMatch(/Optimum Nutrition/);
+    expect(options[0].textContent).toMatch(/Pool can source this/i);
+    // The rest of the catalogue is still offered. This is a ranking and a label, not a
+    // filter, and a member may declare anything they actually buy.
+    expect(options[1].textContent).toMatch(/Designer Whey/);
+    expect(options[1].textContent).not.toMatch(/Pool can source this/i);
+  });
+
+  it("tells a member what an unsourceable choice means, where they choose it", async () => {
+    renderNeeds({ ...WHEY, sourceable: false });
+    await screen.findByLabelText(/how many/i);
+
+    const substitutes = screen.getByLabelText(/would another product do/i);
+    expect(substitutes).toBeTruthy();
+    const field = substitutes.closest("label") as HTMLElement;
+    expect(field.textContent).toMatch(/no bulk supplier for this exact product yet/i);
+    // Stated, not acted on: the choice stays theirs and the default is unchanged.
+    expect((substitutes as HTMLSelectElement).value).toBe("exact_only");
+  });
+
   it("offers only substitution policies the domain can act on", async () => {
     renderNeeds(WHEY);
     await screen.findByLabelText(/how many/i);
 
     const options = Array.from(
-      screen.getByLabelText(/substitutes/i).querySelectorAll("option"),
+      screen.getByLabelText(/would another product do/i).querySelectorAll("option"),
     ).map((o) => (o as HTMLOptionElement).value);
 
     // The two allowlist-driven policies need data this form does not collect, so
@@ -307,7 +347,10 @@ describe("declaring a standing need", () => {
     // Still real controls, and still reachable.
     expect(screen.getByLabelText(/won't join below/i)).toBeTruthy();
     expect(screen.getByLabelText(/never spend more than/i)).toBeTruthy();
-    expect(screen.getByLabelText(/substitutes/i)).toBeTruthy();
+    // Substitution is deliberately *not* in here. It decides whose demand may combine
+    // with whose, and for a product Pool cannot source it is the only setting that could
+    // change the answer — so it sits in the main form where somebody sees it.
+    expect(advanced.querySelector("select")).toBeNull();
 
     // Moving a control behind a disclosure must not change what it sends.
     await userEvent.click(screen.getByRole("button", { name: /add this need/i }));

@@ -2175,6 +2175,25 @@ select.control {
   font-size: 12px;
   color: var(--ink-muted);
 }
+/* "Pool can source this" — a fact about the deployment, so it reads as a quiet note
+   rather than a badge competing with the product's own name. */
+.product-sourceable {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--moss);
+}
+.product-sourceable::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
 .product-attribution {
   margin: 0;
   line-height: 1.5;

@@ -106,11 +106,18 @@ class CatalogEntry:
             source_ref=self.source_ref,
         )
 
-    def view(self) -> dict:
+    def view(self, *, sourceable: bool = False) -> dict:
         """The shape the client renders a product card from.
 
         ``product_id`` is present because the client has to send it back, and is never
         displayed — a member should not learn that Pool has internal identifiers.
+
+        ``sourceable`` is a fact about *this deployment*, not about the product: it says
+        Pool currently holds a verified bulk quote it could actually buy this against.
+        It is supplied by the caller, because the catalogue does not know and must not
+        pretend to — identity lives here, supplier economics live in ``Offer``, and the
+        whole reason they are separate files is that a real brand name must not lend
+        credibility to an invented quote (§41, §48).
         """
         return {
             "product_id": self.product_id,
@@ -121,6 +128,7 @@ class CatalogEntry:
             "unit": self.unit,
             "category": self.category,
             "image_ref": self.image_ref,
+            "sourceable": sourceable,
         }
 
 
@@ -276,12 +284,35 @@ def _score(query: str, tokens: frozenset[str], label: str, entry: CatalogEntry) 
     return total
 
 
-def search(query: str, limit: int = DEFAULT_LIMIT) -> list[CatalogEntry]:
+#: How much a product Pool can actually source is favoured, for a query it *already*
+#: matches. Enough to lift it past a brand that happens to carry the query word in its
+#: name — "Death Wish Coffee Co" outscored the coffee Pool holds a quote for, on the
+#: query "coffee", purely because its brand contains the noun — and deliberately less
+#: than the bonus a full phrase match earns, so a member who types a specific brand
+#: still gets that brand.
+#:
+#: It cannot invent a match: a product the query does not hit at all scores zero and is
+#: excluded before this applies. So this changes the *order* of things a member could
+#: legitimately have meant. It never changes what they get if they keep typing.
+SOURCEABLE_BOOST = 120
+
+
+def search(
+    query: str,
+    limit: int = DEFAULT_LIMIT,
+    sourceable_ids: frozenset[str] = frozenset(),
+) -> list[CatalogEntry]:
     """Rank catalogue entries against free text. Pure, offline, and stable.
 
     Ties break on ``(brand, name, product_id)`` rather than on iteration order, so the
     ranking is reproducible across processes and across rebuilds of the snapshot — which
     is what lets a test assert that a given query resolves to a given product.
+
+    ``sourceable_ids`` are the products this deployment holds a verified bulk quote for.
+    They are favoured, bounded, for queries they already match — see
+    :data:`SOURCEABLE_BOOST`. Nothing about product identity changes: a sourceable
+    product is not renamed, merged, or substituted for anything, and an unsourceable one
+    a member deliberately picks stays exactly what they picked.
     """
     query = (query or "").strip()
     if len(query) < MIN_QUERY_CHARS:
@@ -289,7 +320,7 @@ def search(query: str, limit: int = DEFAULT_LIMIT) -> list[CatalogEntry]:
     limit = max(1, min(limit, MAX_LIMIT))
 
     scored = [
-        (s, e)
+        (s + (SOURCEABLE_BOOST if e.product_id in sourceable_ids else 0), e)
         for e, tokens, label in _index()
         if (s := _score(query, tokens, label, e)) > 0
     ]

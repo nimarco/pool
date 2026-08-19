@@ -766,14 +766,33 @@ def search_products(
     member still confirms, and compatibility is decided later by
     ``domain.substitution`` from structure alone.
     """
-    check_workspace(workspace)
-    found = catalog.search(q, limit)
+    ws = check_workspace(workspace)
+    ensure_seeded(ws)
+    # What Pool can actually buy right now, read from this workspace's own offers. It is
+    # a deployment fact, not a product fact, so it is computed here rather than baked
+    # into the snapshot — and it is the reason a broad query like "coffee" surfaces the
+    # coffee Pool holds a quote for instead of burying it under eight it does not.
+    sourceable = _sourceable_product_ids(ws)
+    found = catalog.search(q, limit, sourceable_ids=sourceable)
     return {
         "query": q.strip(),
-        "results": [e.view() for e in found],
+        "results": [e.view(sourceable=e.product_id in sourceable) for e in found],
         # So the client can render the licence obligation next to what it obliges.
         "attribution": catalog.attribution().to_dict(),
     }
+
+
+def _sourceable_product_ids(ws: str) -> frozenset[str]:
+    """Products this workspace holds a usable bulk quote for.
+
+    Truthful by construction: it is the same ``offers_for`` the evaluator consults, so a
+    product marked sourceable is one an opportunity assessment could genuinely price.
+    No offer is fabricated for a catalogue product to make this list longer.
+    """
+    ctx = ctx_for(ws)
+    return frozenset(
+        p.id for p in repo().list_products(ws) if coord.offers_for(ctx, p.id)[1]
+    )
 
 
 class OnboardingRequest(BaseModel):

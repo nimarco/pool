@@ -253,6 +253,41 @@ function NeedForm({
               : "Pool will only buy on that date — never earlier."}
           </span>
         </label>
+
+        {/* Out of the advanced drawer, deliberately.
+            This is the one setting that decides whose demand may combine with whose, and
+            it is the difference between joining an order and being told nothing can be
+            done. Somebody who never opens a collapsed section never sees a choice they
+            have already effectively made — and for a product Pool cannot source, it is
+            the *only* thing that could change the answer. The matcher reads the value
+            structurally; the model never decides two products are close enough (§21). */}
+        <label className="field field-wide">
+          <span className="field-label">Would another product do?</span>
+          <select
+            className="control"
+            value={draft.substitution}
+            onChange={(e) => set("substitution", e.target.value)}
+          >
+            {SUBSTITUTION.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <span className="field-note">
+            {chosen.sourceable === false ? (
+              <>
+                Pool has no bulk supplier for this exact product yet, so it cannot form an
+                order for it on its own. Your declaration is still recorded, and widening
+                this is the only thing that would change that — your call, not Pool&apos;s.
+              </>
+            ) : draft.substitution === "exact_only" ? (
+              "Only this exact product will ever be bought for you."
+            ) : (
+              "Pool may use another product that structurally matches this rule — and always tells you which."
+            )}
+          </span>
+        </label>
       </div>
 
       {/* Available rather than absent. These already hold safe values, the deterministic
@@ -335,20 +370,6 @@ function NeedForm({
             </span>
           </label>
 
-          <label className="field field-wide">
-            <span className="field-label">Substitutes</span>
-            <select
-              className="control"
-              value={draft.substitution}
-              onChange={(e) => set("substitution", e.target.value)}
-            >
-              {SUBSTITUTION.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
       </details>
 

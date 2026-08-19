@@ -71,16 +71,24 @@ def _tier_facts(evaluation: RunEvaluation) -> list[str]:
 def _why_it_worked(evaluation: RunEvaluation, unit: str) -> list[str]:
     """The four to six lines that make a formed order checkable rather than asserted."""
     facts: list[str] = []
-    if evaluation.future_units:
+    current, future = evaluation.current_units, evaluation.future_units
+    # Three cases, not two. An order made entirely of demand brought forward is a real
+    # and interesting outcome — and "0 bags were already due, and 18 more were bought
+    # early" is a sentence that opens by telling somebody nothing.
+    if current and future:
         facts.append(
-            f"{evaluation.current_units} {_unit_word(unit, evaluation.current_units)} "
-            f"were already due, and {evaluation.future_units} more were bought early "
-            "under permission those members had already given."
+            f"{current} {_unit_word(unit, current)} were already due, and {future} more "
+            "were bought early under permission those members had already given."
         )
-    elif evaluation.current_units:
+    elif future:
         facts.append(
-            f"{evaluation.current_units} {_unit_word(unit, evaluation.current_units)} "
-            "were already due around now."
+            f"All {future} {_unit_word(unit, future)} were bought ahead of when those "
+            "members actually need them — every one of them had authorised an early "
+            "purchase if it saved money."
+        )
+    elif current:
+        facts.append(
+            f"{current} {_unit_word(unit, current)} were already due around now."
         )
     if evaluation.minimum_units:
         facts.append(

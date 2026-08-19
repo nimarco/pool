@@ -16,7 +16,7 @@ def test_architecture_diagram_uses_current_counts_bounds_and_effect_kinds():
     svg = _read("docs/architecture.svg")
     effects = Counter(kind for _, kind in TOOL_SURFACE)
 
-    assert "28 of 43 API paths reachable" in svg
+    assert "28 of 44 API paths reachable" in svg
     assert "45 s cooperative" in svg
     assert (
         f'{effects["read"]} read · {effects["record"]} record · '

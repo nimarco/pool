@@ -735,11 +735,13 @@ export const api = {
       display_name: displayName,
       autonomy_mode: autonomyMode,
     }),
-  /** Save a simulated payment method. Creates no charge and no hold. */
-  savePaymentMethod: (householdId: string) =>
-    post<{ ok: boolean; has_payment_method: boolean }>(
-      `/api/members/${householdId}/payment-method`,
-    ),
+  /** Save a simulated payment method for this account. Creates no charge and no hold.
+   *
+   *  Takes no id on purpose: the server picks the consumer household, so there is no
+   *  field a caller could point at somebody else — including the synthetic member whose
+   *  card is seeded to decline. */
+  saveOwnPaymentMethod: () =>
+    post<{ ok: boolean; has_payment_method: boolean }>("/api/onboarding/payment-method"),
   /** Resolve free text into products a member might mean.
    *
    *  Ranked server-side against a bundled snapshot by a pure function: no model call,

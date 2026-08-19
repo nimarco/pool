@@ -72,7 +72,18 @@ describe("setting up an account", () => {
       attribution: ATTRIBUTION,
     });
     vi.spyOn(apiModule.api, "declareNeed").mockResolvedValue({} as never);
-    vi.spyOn(apiModule.api, "savePaymentMethod").mockResolvedValue({
+    vi.spyOn(apiModule.api, "needs").mockResolvedValue({
+      needs: [],
+      products: [],
+      limits: {
+        max_quantity: 100,
+        max_cadence_days: 365,
+        max_min_savings_pct: 90,
+        max_spend_cents: 500000,
+        max_horizon_days: 365,
+      },
+    });
+    vi.spyOn(apiModule.api, "saveOwnPaymentMethod").mockResolvedValue({
       ok: true,
       has_payment_method: true,
     });
@@ -129,8 +140,14 @@ describe("setting up an account", () => {
     expect(text).toMatch(/Demo University/);
     expect(text).toMatch(/24 members/);
     expect(text).toMatch(/this community is invented/i);
-    // The sentence that makes this work for a judge in any city on earth.
+    // Why a synthetic area exists at all — without it, "invented" reads as a limitation
+    // rather than as the thing that makes the demo reproducible.
+    expect(text).toMatch(/behave the same way wherever it is opened/i);
+    // And the sentence that makes this work for a judge in any city on earth.
     expect(text).toMatch(/has not asked your browser for your location/i);
+    // The step has no input, so the button is where the choice happens; it should name
+    // the place rather than read as clicking past a screen.
+    expect(screen.getByRole("button", { name: /continue in demo university/i })).toBeTruthy();
   });
 
   it("reuses the real catalogue search rather than a setup-only picker", async () => {
@@ -213,7 +230,7 @@ describe("setting up an account", () => {
 
     await userEvent.click(screen.getByRole("radio", { name: /act when it fits my limits/i }));
     await userEvent.click(screen.getByRole("button", { name: /add a test card/i }));
-    await waitFor(() => expect(apiModule.api.savePaymentMethod).toHaveBeenCalled());
+    await waitFor(() => expect(apiModule.api.saveOwnPaymentMethod).toHaveBeenCalled());
     await userEvent.click(screen.getByRole("button", { name: /finish/i }));
 
     await waitFor(() => expect(apiModule.api.completeOnboarding).toHaveBeenCalledTimes(1));
@@ -222,6 +239,38 @@ describe("setting up an account", () => {
       "smart_join",
     ]);
     await waitFor(() => expect(onDone).toHaveBeenCalled());
+  });
+
+  it("cannot finish while the card request is still in flight", async () => {
+    /* Finishing writes the whole household row. If it read that row before the payment
+       call had landed, it would write back a copy with no saved method — which fails
+       silently now and fails this member's authorisation later, turning eleven
+       membership rows into twelve. The same class of stale write was already found and
+       fixed server-side; a fast click reaches it from here. */
+    let release: (v: { ok: boolean; has_payment_method: boolean }) => void = () => {};
+    vi.spyOn(apiModule.api, "saveOwnPaymentMethod").mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    renderOnboarding();
+    await pastName();
+    await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+    await userEvent.type(screen.getByLabelText(/what do you buy/i), "vanilla whey");
+    await userEvent.click(await screen.findByRole("option", { name: /100% Whey Protein/i }));
+    await userEvent.click(screen.getByRole("button", { name: /add this/i }));
+    await waitFor(() => expect(apiModule.api.declareNeed).toHaveBeenCalled());
+    await userEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+
+    await userEvent.click(screen.getByRole("button", { name: /add a test card/i }));
+    expect(screen.getByRole("button", { name: /finish/i })).toHaveProperty("disabled", true);
+
+    release({ ok: true, has_payment_method: true });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /finish/i })).toHaveProperty("disabled", false),
+    );
+    expect(apiModule.api.completeOnboarding).not.toHaveBeenCalled();
   });
 
   it("shows the server's refusal rather than pretending setup finished", async () => {
@@ -241,6 +290,63 @@ describe("setting up an account", () => {
 
     expect(await screen.findByText(/something to call you/i)).toBeTruthy();
     expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it("resumes an interrupted setup from what was already declared", async () => {
+    /* Somebody adds a declaration, refreshes before finishing, and comes back. The server
+       correctly refuses a second active declaration for the same product, so a setup that
+       only remembered its own session left them unable to continue — re-adding the thing
+       they had chosen failed, and the only escape was declaring something else. */
+    vi.spyOn(apiModule.api, "needs").mockResolvedValue({
+      needs: [
+        {
+          need_id: "need_1",
+          household_id: FRESH.household_id,
+          household_name: "You",
+          product_id: WHEY.product_id,
+          product_name: WHEY.name,
+          unit: WHEY.unit,
+          brand: WHEY.brand,
+          variant: WHEY.variant,
+          category: WHEY.category,
+          image_ref: WHEY.image_ref,
+          quantity: 2,
+          cadence_days: 30,
+          expected_next_need_date: "2026-09-02",
+          earliest_purchase_date: "2026-08-19",
+          latest_purchase_date: "2026-09-02",
+          flexibility_days: 14,
+          routine_lead_days: 7,
+          min_savings_pct: 15,
+          max_spend_display: "$120.00",
+          max_spend_cents: 12000,
+          substitution: "exact_only",
+          active: true,
+        },
+      ],
+      products: [],
+      limits: {
+        max_quantity: 100,
+        max_cadence_days: 365,
+        max_min_savings_pct: 90,
+        max_spend_cents: 500000,
+        max_horizon_days: 365,
+      },
+    });
+
+    renderOnboarding();
+    await pastName();
+    await userEvent.click(screen.getByRole("button", { name: /continue in/i }));
+
+    // Their earlier declaration is shown, and they are not stuck behind it.
+    expect(await screen.findByText(/100% Whey Protein/i)).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^continue$/i })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
+    expect(screen.queryByRole("button", { name: /add one to continue/i })).toBeNull();
   });
 
   it("lets somebody go back and change an earlier answer", async () => {

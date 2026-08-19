@@ -183,15 +183,18 @@ function WhereStep({
             policy page. It is what lets this screen work identically for a judge in
             another hemisphere. */}
         <p className="small muted prose">
-          This community is invented, and so is everyone in it. Pool has not asked your
-          browser for your location and has not tried to guess it — wherever you actually
-          are, you will explore this campus from the inside.
+          This community is invented, and so is everyone in it — which is what lets the
+          demo behave the same way wherever it is opened. Pool has not asked your browser
+          for your location and has not tried to guess it.
         </p>
       </div>
 
       <div className="btn-row">
+        {/* Named rather than "Continue": this step has no input, so the button is where
+            the choice actually happens, and it should read as entering somewhere on
+            purpose rather than as clicking past a screen. */}
         <button className="btn btn-primary btn-lg" onClick={onNext}>
-          Continue
+          Continue in {place?.community_name ?? "the demo community"}
           <IconArrowRight />
         </button>
         <button className="btn" onClick={onBack}>
@@ -463,7 +466,17 @@ function AuthorityStep({
       {error ? <p className="form-error">{error}</p> : null}
 
       <div className="btn-row">
-        <button className="btn btn-primary btn-lg" onClick={onFinish} disabled={busy}>
+        {/* Also blocked while the card request is in flight, and not for tidiness.
+            Finishing writes the whole household row; if it read that row before the
+            payment call had landed, it would write back a copy with no saved method —
+            which fails silently, and then fails this member's authorisation later,
+            turning the scenario's eleven membership rows into twelve. Same class of bug
+            as the stale write in `services/demo.py`, reachable here by a fast click. */}
+        <button
+          className="btn btn-primary btn-lg"
+          onClick={onFinish}
+          disabled={busy || paymentBusy}
+        >
           {busy ? <span className="spinner" /> : null}
           Finish
         </button>
@@ -488,6 +501,45 @@ export function Onboarding({
   const [name, setName] = useState("");
   const [mode, setMode] = useState("ask_me");
   const [added, setAdded] = useState<{ product: ProductCandidate; quantity: number }[]>([]);
+  /* Setup can be interrupted. Somebody who added a declaration and then refreshed before
+     finishing comes back to step one, and the server — correctly — refuses a second
+     active declaration for the same product. Without this, re-adding the thing they
+     already chose failed and "Continue" stayed disabled forever, so the only way out was
+     to declare something else they did not want. Reading what they already told Pool
+     makes resuming show their real state rather than an empty local array. */
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .needs()
+      .then((view) => {
+        if (cancelled) return;
+        const mine = view.needs.filter(
+          (n) => n.household_id === consumer.household_id && n.active,
+        );
+        if (mine.length === 0) return;
+        setAdded(
+          mine.map((n) => ({
+            quantity: n.quantity,
+            product: {
+              product_id: n.product_id,
+              name: n.product_name,
+              brand: n.brand ?? "",
+              variant: n.variant ?? "",
+              display_size: "",
+              unit: n.unit,
+              category: n.category ?? "",
+              image_ref: n.image_ref ?? "",
+            },
+          })),
+        );
+      })
+      .catch(() => {
+        /* A failed read just means setup starts empty, which is the old behaviour. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [consumer.household_id]);
   const [hasPayment, setHasPayment] = useState(consumer.has_payment_method);
   const [busy, setBusy] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState(false);
@@ -519,7 +571,7 @@ export function Onboarding({
     setPaymentBusy(true);
     setError(null);
     try {
-      const result = await api.savePaymentMethod(consumer.household_id);
+      const result = await api.saveOwnPaymentMethod();
       setHasPayment(result.has_payment_method);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

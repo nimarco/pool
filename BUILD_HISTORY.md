@@ -4240,3 +4240,66 @@ calls it.
 `services/agent/pool/api/{app.py,public_demo.py}` ·
 `apps/web/src/views/{onboarding.tsx,demo-panel.tsx,home.tsx}` · `apps/web/src/App.tsx` ·
 `services/agent/tests/test_onboarding.py` · `apps/web/src/views/onboarding.test.tsx`
+
+---
+
+### #0039 — [2026-08-19] — Final review before push: three things the walkthrough found
+`[REVIEW]` `[SECURITY]` `[UX]`
+
+**Goal / user intent**
+Stabilisation pass over the four unpushed commits before publishing them. Not a redesign:
+re-read the diff, use the product cold, fix only what is defensible, push.
+
+**What the review found**
+
+*A stale-write race reachable from the UI.* `complete_onboarding` writes the whole
+household row. **Finish** was disabled only on its own request, so clicking it while the
+"Add a test card" request was still in flight would read the row before the payment write
+landed and put `payment_method_ref` back to empty. Silent, and then not silent: that member
+fails authorisation at the final offer and the scenario ends with twelve membership rows
+instead of eleven. Same class as the bug the store-parity test caught in `#0038`, reachable
+here by a fast click. Fixed by disabling Finish while the card request is outstanding, and
+pinned by a test that resolves the payment promise by hand.
+
+*An allowlist grant wider than its use.* `POST /api/members/{id}/payment-method` had been
+opened publicly for onboarding. It takes an id, and the only household setup ever wants is
+the caller's own — and one synthetic household is seeded with a card that declines *on
+purpose*. Handing that household a working card would silently delete the payment-failure
+branch the recovery story is built on. Replaced with
+`POST /api/onboarding/payment-method`, where the household is a server constant and there
+is no field to point it elsewhere; the id-taking form went back to denied.
+
+*A resume dead-end.* Setup can be interrupted. Somebody who added a declaration and then
+refreshed before finishing came back to step one, and the server correctly refused a second
+active declaration for the same product — so re-adding the thing they had already chosen
+failed and **Continue stayed disabled**. The only way out was declaring something else they
+did not want. Reproduced in the browser, then fixed by seeding the step from the member's
+stored declarations rather than from an empty local array.
+
+**Also changed**
+Two copy edits, both about precision rather than polish. The location step now says *why* a
+synthetic community exists ("which is what lets the demo behave the same way wherever it is
+opened") and its button names the place instead of saying "Continue", because that step has
+no input and the button is where the choice actually happens. And the convergence figure's
+collapsed explainer gained the words "as it stands": its counts are the community's standing
+declarations, and one of those lines is now the reader's own, so which side of "buying about
+now" it falls on depends on the restock habit they described.
+
+**Validation**
+794 Python, 72 web, 75 infrastructure. `make qa` green. Canonical scenario re-proved from
+the scripted showcase **and** from a workspace set up by hand in the browser: 10 buyers,
+11 rows, 1 retained failure, 1 replacement, 24 funded / 24 purchased / 24 pickup, 2 cases,
+no surplus, $861.44 against $1127.76.
+
+**What we learned**
+The human-onboarded run splits 7/16 due and 3/8 pulled forward where the scripted one
+splits 8/18 and 2/6 — same totals, same money, different bucket. That is not drift: the
+consumer told Pool they restock a week ahead and need it in a fortnight, so buying three
+days from now genuinely *is* early, and §24 classifies it exactly right. Making the
+declaration real input made the timing engine's answer depend on real input, which is the
+system working. It did mean a static figure could disagree with a live run by one person,
+which is what the "as it stands" edit is for.
+
+**Relevant commits / files**
+`apps/web/src/views/onboarding.tsx` · `apps/web/src/api.ts` · `apps/web/src/brand.tsx` ·
+`services/agent/pool/api/{app.py,public_demo.py}` · `services/agent/tests/test_public_demo.py`

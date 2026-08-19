@@ -169,12 +169,18 @@ export function ConvergenceFigure() {
         restocks did.
         <details style={{ marginTop: 8 }}>
           <summary className="small faint">How eight becomes twenty-four</summary>
+          {/* The counts are this community's standing declarations, and one of those
+              lines is now the reader's own — so which side of "buying about now" it falls
+              depends on the restock habit they described. The shape never changes:
+              current demand misses the minimum, permitted early demand closes it exactly,
+              and the surplus is left alone. Saying "as it stands" keeps the sentence true
+              on the day somebody's own answer moves a line. */}
           <p className="small muted" style={{ marginTop: 8 }}>
-            <strong>Eight</strong> were going to buy about now anyway — eighteen units,
-            against a supplier minimum of twenty-four. <strong>Five</strong> more
-            authorised an early purchase, and Pool takes exactly <strong>two</strong> of
-            them: their six units close the gap to twenty-four precisely. The other three
-            are left alone — pulling them in too would buy units nobody ordered.
+            As it stands, <strong>eight</strong> were going to buy about now anyway —
+            eighteen units, against a supplier minimum of twenty-four. <strong>Five</strong>{" "}
+            more authorised an early purchase, and Pool takes exactly <strong>two</strong>{" "}
+            of them: their six units close the gap to twenty-four precisely. The other
+            three are left alone — pulling them in too would buy units nobody ordered.
           </p>
         </details>
       </figcaption>

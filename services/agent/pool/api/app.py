@@ -782,6 +782,29 @@ class OnboardingRequest(BaseModel):
     autonomy_mode: str = Field(max_length=20)
 
 
+@app.post("/api/onboarding/payment-method")
+def onboarding_payment_method(workspace: str = Query("demo")) -> dict[str, Any]:
+    """Save a simulated payment method for *this* account, during setup.
+
+    Deliberately separate from ``/api/members/{id}/payment-method`` rather than a public
+    alias for it. That route takes an id, and the only reason setup needs it is for the
+    caller's own household — so exposing the general form publicly would hand out a
+    capability nobody uses. It is not merely untidy: one synthetic household is seeded
+    with a card that declines on purpose, and giving it a working one would silently
+    remove the payment-failure branch the recovery story is built on.
+
+    Here the household is a server constant. There is no field to point it elsewhere.
+    Creates no charge and no hold (§55).
+    """
+    ws = check_workspace(workspace)
+    ensure_seeded(ws)
+    ctx = ctx_for(ws)
+    me = onboarding.consumer_household(ctx)
+    if me is None:
+        raise HTTPException(404, "this workspace has no account to set up")
+    return payment_service.setup_payment_method(ctx=ctx, household_id=me.id)
+
+
 @app.post("/api/onboarding")
 def complete_onboarding(
     body: OnboardingRequest, workspace: str = Query("demo")

@@ -16,7 +16,15 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AppState, Decision, MemberView, PoolMember, PoolView } from "../api";
+import {
+  AppState,
+  Decision,
+  MemberView,
+  NeedOutlook,
+  PersonalOpportunity,
+  PoolMember,
+  PoolView,
+} from "../api";
 import * as apiModule from "../api";
 import { Home } from "./home";
 
@@ -147,15 +155,41 @@ function appState(pools: PoolView[], decisions: Decision[] = []): AppState {
   };
 }
 
-function memberView(mode: string): MemberView {
+/** The server's answer to "which pool is mine, and why". Home reads this and never
+ *  infers it from the pool list — the whole point of the fix these tests pin. */
+function opportunityIn(pool: PoolView, needId = "need_rosa_whey"): PersonalOpportunity {
+  return {
+    pool_id: pool.pool_id,
+    status: pool.status,
+    product_id: pool.product_id,
+    participation_state: "authorized",
+    units: 2,
+    need_id: needId,
+    declared_product_id: pool.product_id,
+    is_exact_product: true,
+    declared_product_name: "",
+  };
+}
+
+function memberView(
+  options: {
+    mode?: string;
+    opportunity?: PersonalOpportunity | null;
+    outlook?: NeedOutlook[];
+    otherPoolIds?: string[];
+  } = {},
+): MemberView {
   return {
     id: "hh_navarro",
     display_name: "Rosa N.",
     zone: "Campus core",
+    opportunity: options.opportunity ?? null,
+    other_pool_ids: options.otherPoolIds ?? [],
+    needs_outlook: options.outlook ?? [],
     community_membership: null,
     has_payment_method: true,
     autonomy_display: {
-      mode,
+      mode: options.mode ?? "ask_me",
       min_savings: "20%",
       max_spend: "$90.00",
       max_travel: "15 min",
@@ -168,16 +202,29 @@ function memberView(mode: string): MemberView {
 
 function renderHome(
   pools: PoolView[],
-  options: { onShowAgent?: (poolId: string) => void; decisions?: Decision[] } = {},
+  options: {
+    onShowAgent?: (poolId: string) => void;
+    decisions?: Decision[];
+    /** Defaults to "this member is in the first pool", which is the ordinary state
+     *  every pre-existing assertion here was written against. Pass `null` for a member
+     *  the server has said nothing about yet. */
+    member?: MemberView | null;
+    onOpenPool?: (id: string) => void;
+  } = {},
 ) {
+  const member =
+    "member" in options
+      ? options.member ?? null
+      : memberView({ opportunity: pools[0] ? opportunityIn(pools[0]) : null });
   return render(
     <Home
       state={appState(pools, options.decisions ?? [])}
       identity={ROSA}
+      member={member}
       running={false}
       busyDecision={null}
       onFind={() => {}}
-      onOpenPool={() => {}}
+      onOpenPool={options.onOpenPool ?? (() => {})}
       onRespond={() => {}}
       onShowAgent={options.onShowAgent ?? (() => {})}
       onStartNeed={() => {}}
@@ -203,7 +250,6 @@ beforeEach(() => {
       max_horizon_days: 365,
     },
   });
-  vi.spyOn(apiModule.api, "member").mockRejectedValue(new Error("not needed"));
   vi.spyOn(apiModule.api, "hostOpportunities").mockRejectedValue(new Error("not needed"));
   vi.spyOn(apiModule.api, "pool").mockRejectedValue(new Error("not needed"));
 });
@@ -214,8 +260,10 @@ describe("the proof action on Home", () => {
     const onShowAgent = vi.fn();
     renderHome([shown, OTHER], { onShowAgent });
 
-    // Whatever the card drew is the pool whose proof must open.
-    expect(screen.getByText(shown.product_name)).toBeTruthy();
+    // Whatever the card drew is the pool whose proof must open. The card appears once
+    // the server has said which pool is this member's, so this waits for that answer
+    // rather than for React's first paint.
+    expect(await screen.findByText(shown.product_name)).toBeTruthy();
     expect(screen.queryByText(OTHER.product_name)).toBeNull();
 
     await userEvent.click(
@@ -258,7 +306,10 @@ describe("the member's own stake in a pool", () => {
     expect(await screen.findByText(/^Your order$/)).toBeTruthy();
   });
 
-  it("falls back to the group's framing for somebody who is not in the pool", async () => {
+  it("shows the group's figures if the pool record has not caught up yet", async () => {
+    /* The server has said this pool is theirs; the membership read has not landed.
+       Leading with the group's numbers is the honest interim — inventing a personal
+       price would not be. */
     const shown = poolView();
     vi.spyOn(apiModule.api, "pool").mockResolvedValue({
       ...shown,
@@ -268,7 +319,6 @@ describe("the member's own stake in a pool", () => {
 
     expect(await screen.findByText(/Pool found overlapping demand/)).toBeTruthy();
     expect(screen.queryByText(/Your 2 tubs/)).toBeNull();
-    // The group percentage, since there is no personal one to show.
     expect(screen.getByText("23.6%")).toBeTruthy();
   });
 
@@ -287,6 +337,125 @@ describe("the member's own stake in a pool", () => {
     // A dash here would read as a missing number rather than as a rule being enforced.
     expect(await screen.findByText(/Not priced yet/)).toBeTruthy();
     expect(screen.getByText(/fixed once a fulfiller accepts/)).toBeTruthy();
+  });
+});
+
+describe("a pool buying an authorised substitute", () => {
+  it("says what the member actually declared, since the card shows the other product", async () => {
+    const shown = poolView();
+    vi.spyOn(apiModule.api, "pool").mockResolvedValue({ ...shown, members: [ROSA_MEMBERSHIP] });
+    renderHome([shown], {
+      member: memberView({
+        opportunity: {
+          ...opportunityIn(shown),
+          product_id: "prod_whey_vanilla",
+          declared_product_id: "prod_whey_chocolate",
+          is_exact_product: false,
+          declared_product_name: "Gold Standard 100% Whey",
+        },
+      }),
+    });
+
+    expect(await screen.findByText(/A substitute for the/)).toBeTruthy();
+    expect(screen.getByText("Gold Standard 100% Whey")).toBeTruthy();
+  });
+
+  it("says nothing extra when the pool buys exactly what was declared", async () => {
+    const shown = poolView();
+    vi.spyOn(apiModule.api, "pool").mockResolvedValue({ ...shown, members: [ROSA_MEMBERSHIP] });
+    renderHome([shown]);
+
+    expect(await screen.findByText(/Your 2 tubs/)).toBeTruthy();
+    expect(screen.queryByText(/A substitute for the/)).toBeNull();
+  });
+});
+
+describe("a pool that belongs to somebody else", () => {
+  /* The reported bug, in the interface. A member declared coffee, the coordinator
+     correctly formed a whey order out of ten *other* students' declarations, and Home
+     led with it because it led with `state.pools[0]`. Which pool is this member's is
+     the server's answer now, and "none" is one of the answers it may give. */
+  const COFFEE_OUTLOOK: NeedOutlook = {
+    need_id: "need_rosa_coffee",
+    product_id: "prod_coffee_beans",
+    product_name: "Pike Place Medium Roast",
+    state: "short",
+    reason:
+      "Not enough of it yet: 12 bags declared nearby, and the supplier will not sell " +
+      "fewer than 18.",
+    pool_id: "",
+    units_needed: 18,
+    units_available: 12,
+  };
+
+  it("never presents it as this member's result", async () => {
+    renderHome([poolView()], {
+      member: memberView({ opportunity: null, outlook: [COFFEE_OUTLOOK] }),
+    });
+
+    expect(await screen.findByText(/Nothing worth coordinating yet/)).toBeTruthy();
+    expect(screen.queryByText(/Pool found something for you/)).toBeNull();
+    expect(screen.queryByText(/Pool found overlapping demand/)).toBeNull();
+    // No figure from the unrelated pool is presented as this member's saving. The
+    // community block below still reports community sums, and says so in its heading.
+    expect(screen.queryByText("23.6%")).toBeNull();
+    expect(screen.queryByText(/you save/)).toBeNull();
+    expect(screen.getByText(/What Pool did across/)).toBeTruthy();
+  });
+
+  it("states what Pool actually established about each declaration", async () => {
+    renderHome([], { member: memberView({ opportunity: null, outlook: [COFFEE_OUTLOOK] }) });
+
+    // The server's sentence, passed through — not a shrug, and not recomputed here.
+    expect(await screen.findByText(COFFEE_OUTLOOK.reason)).toBeTruthy();
+    expect(screen.getByText(COFFEE_OUTLOOK.product_name)).toBeTruthy();
+  });
+
+  it("names the community's order as the community's, and can open it", async () => {
+    const onOpenPool = vi.fn();
+    renderHome([poolView()], {
+      member: memberView({ opportunity: null, outlook: [COFFEE_OUTLOOK] }),
+      onOpenPool,
+    });
+
+    expect(await screen.findByText(/for other members here/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Whey protein, vanilla" }));
+    expect(onOpenPool).toHaveBeenCalledWith("pool_shown");
+  });
+
+  it("never calls a pool the member *is* in somebody else's", async () => {
+    /* A member can be in a settled order and a live one at once. Excluding only the
+       pool being led with would tell them "you are not in it" about the other. */
+    const settled = poolView({ pool_id: "pool_mine_2", product_name: "Energy drink" });
+    renderHome([poolView(), settled], {
+      member: memberView({
+        opportunity: null,
+        outlook: [COFFEE_OUTLOOK],
+        otherPoolIds: ["pool_mine_2"],
+      }),
+    });
+
+    expect(await screen.findByText(/for other members here/)).toBeTruthy();
+    expect(screen.queryByText("Energy drink")).toBeNull();
+    expect(screen.getByRole("button", { name: "Whey protein, vanilla" })).toBeTruthy();
+  });
+
+  it("says a pool is worth forming when the server says the demand is there", async () => {
+    renderHome([], {
+      member: memberView({
+        opportunity: null,
+        outlook: [
+          {
+            ...COFFEE_OUTLOOK,
+            state: "ready",
+            reason: "Enough compatible demand exists — Pool can form this one.",
+          },
+        ],
+      }),
+    });
+
+    expect(await screen.findByText(/Worth pooling now/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /run pool now/i })).toBeTruthy();
   });
 });
 
@@ -314,8 +483,9 @@ describe("what Pool handled on its own", () => {
 
 describe("autonomy, as the member sees it", () => {
   it("leads with whether Pool may commit at all, not with the limits behind it", async () => {
-    vi.spyOn(apiModule.api, "member").mockResolvedValue(memberView("ask_me"));
-    renderHome([poolView()]);
+    renderHome([poolView()], {
+      member: memberView({ mode: "ask_me", opportunity: opportunityIn(poolView()) }),
+    });
 
     expect(await screen.findByText(/No — Pool always asks first/)).toBeTruthy();
     // The limits stay reachable; they are simply not the headline.
@@ -324,8 +494,9 @@ describe("autonomy, as the member sees it", () => {
   });
 
   it("says so when the stored policy does allow Pool to commit", async () => {
-    vi.spyOn(apiModule.api, "member").mockResolvedValue(memberView("smart_join"));
-    renderHome([poolView()]);
+    renderHome([poolView()], {
+      member: memberView({ mode: "smart_join", opportunity: opportunityIn(poolView()) }),
+    });
 
     expect(await screen.findByText(/Yes — when every limit below passes/)).toBeTruthy();
   });

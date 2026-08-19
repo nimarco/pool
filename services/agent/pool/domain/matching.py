@@ -146,6 +146,14 @@ def find_candidates(
         rejections.append(MatchRejection(need.id, household_id, reason))
 
     for need in needs:
+        # A retired declaration is not a declaration. `active` is what a member sets to
+        # False when they stop buying something, and every caller was passing the whole
+        # need table in — so a retired need still counted toward a supplier minimum and
+        # could still have its owner's card authorised. Checked here rather than at each
+        # call site, because "who is even eligible" is this function's whole job.
+        if not need.active:
+            reject(need, need.household_id, "declaration_retired")
+            continue
         if need.community_id != community_id:
             reject(need, need.household_id, "other_community")
             continue

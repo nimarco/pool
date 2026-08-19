@@ -521,10 +521,57 @@ export interface OperatorView {
   metrics: Metrics;
 }
 
+/** Why one of this member's standing declarations has not produced a pool.
+ *
+ *  Server-computed by the same deterministic evaluator the coordinator's own tool
+ *  calls, so the sentence a member reads and the verdict the agent acts on come from
+ *  one implementation. */
+export interface NeedOutlook {
+  need_id: string;
+  product_id: string;
+  product_name: string;
+  state:
+    | "in_pool"
+    | "ready"
+    | "short"
+    | "no_supply"
+    | "not_matched"
+    | "not_worth_it"
+    | "not_in_round"
+    | "retired";
+  reason: string;
+  pool_id: string;
+  units_needed: number;
+  units_available: number;
+}
+
+/** The pool this member is genuinely in, and the declaration that put them there.
+ *
+ *  `null` when they are in none — which is a real answer. A consumer surface must never
+ *  fill that gap with whichever pool happens to exist in the workspace. */
+export interface PersonalOpportunity {
+  pool_id: string;
+  status: PoolStatus;
+  product_id: string;
+  participation_state: ParticipationState;
+  units: number;
+  /** Lineage: the stored `Membership.need_id`, not an inference from product names. */
+  need_id: string;
+  declared_product_id: string;
+  /** False when the pool is buying an authorised substitute rather than the exact
+   *  product this member typed. The card must say so; the photograph will not. */
+  is_exact_product: boolean;
+  /** What they typed, when it differs from what the pool buys. */
+  declared_product_name: string;
+}
+
 export interface MemberView {
   id: string;
   display_name: string;
   zone: string;
+  opportunity: PersonalOpportunity | null;
+  other_pool_ids: string[];
+  needs_outlook: NeedOutlook[];
   community_membership: {
     community_id: string;
     status: string;

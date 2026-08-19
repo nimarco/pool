@@ -465,6 +465,10 @@ export function DemoPanel({
                 </button>
                 <p className="tiny faint" style={{ marginTop: 4 }}>
                   All 13 stages and figures; runs the server lifecycle first if needed.
+                  {" "}That replay is the canonical whey scenario, so it declares the
+                  flagship whey need on your account if you have not — it is a scripted
+                  rehearsal, not something the coordinator does on its own. Your other
+                  declarations are left alone, and you can retire it under Needs.
                 </p>
               </div>
               <div>

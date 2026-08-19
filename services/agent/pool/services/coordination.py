@@ -42,6 +42,7 @@ from ..domain.economics import (
 from ..domain.hosting import estimate_weight_kg
 from ..domain.matching import MatchResult, find_candidates, haversine_km
 from ..domain.models import (
+    LEFT_PARTICIPATION_STATES,
     AutonomyPath,
     Community,
     DecisionKind,
@@ -134,6 +135,27 @@ class CandidateAssessment:
         }
 
 
+#: Why an opportunity is not worth forming, as a value rather than a sentence.
+REASON_VIABLE = ""
+REASON_NO_RETAIL_BASELINE = "no_retail_baseline"
+REASON_NO_BULK_OFFER = "no_bulk_offer"
+REASON_NO_COMPATIBLE_DEMAND = "no_compatible_demand"
+REASON_BELOW_MINIMUM = "below_minimum"
+REASON_NOT_CHEAPER = "not_cheaper"
+REASON_ROUTING_UNAVAILABLE = "routing_unavailable"
+OPPORTUNITY_REASON_CODES = frozenset(
+    {
+        REASON_VIABLE,
+        REASON_NO_RETAIL_BASELINE,
+        REASON_NO_BULK_OFFER,
+        REASON_NO_COMPATIBLE_DEMAND,
+        REASON_BELOW_MINIMUM,
+        REASON_NOT_CHEAPER,
+        REASON_ROUTING_UNAVAILABLE,
+    }
+)
+
+
 @dataclass
 class OpportunityAssessment:
     """A fully-costed candidate opportunity. Not yet a pool; nobody has been contacted.
@@ -153,6 +175,11 @@ class OpportunityAssessment:
     retail_offer_id: str | None
     viable: bool
     reason: str
+    #: Machine-readable form of ``reason``. ``reason`` is a sentence written for a human
+    #: reading a run trace and has been reworded more than once; anything that has to
+    #: *branch* on why an opportunity failed reads this instead of matching on prose.
+    #: One of :data:`OPPORTUNITY_REASON_CODES`.
+    reason_code: str
     economics: LandedEconomics | None
     timing: PoolTiming | None = None
     candidates: list[CandidateAssessment] = field(default_factory=list)
@@ -162,6 +189,13 @@ class OpportunityAssessment:
     max_travel_minutes: int = 0
     current_units: int = 0
     future_units: int = 0
+    #: Compatible, in-range, in-time units this evaluation actually found, before any
+    #: case fitting. Populated on the *unviable* path too, which the prose ``reason``
+    #: already carried inside a sentence — a member asking "how far off is this" needs
+    #: the number, and parsing it back out of a string is not an answer.
+    matched_units: int = 0
+    #: The smallest quantity any usable bulk tier will sell.
+    minimum_units: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         econ = self.economics
@@ -177,11 +211,14 @@ class OpportunityAssessment:
             "retail_offer_id": self.retail_offer_id,
             "viable": self.viable,
             "reason": self.reason,
+            "reason_code": self.reason_code,
             "routing_provider": self.routing_provider,
             "avg_travel_minutes": self.avg_travel_minutes,
             "max_travel_minutes": self.max_travel_minutes,
             "current_units": self.current_units,
             "future_units": self.future_units,
+            "matched_units": self.matched_units,
+            "minimum_units": self.minimum_units,
             "economics": econ.to_dict() if econ else None,
             "estimated_savings_pct": bps_to_pct_str(econ.net_savings_bps) if econ else "0.0%",
             "candidates": [c.to_dict() for c in self.candidates],
@@ -241,7 +278,7 @@ def pooled_household_ids(ctx: PoolContext, community_id: str, product_id: str) -
         if pool.status in {PoolStatus.FAILED, PoolStatus.EXPIRED}:
             continue
         for m in ctx.repo.list_memberships(ctx.ws, pool.id):
-            if m.state not in {ParticipationState.WITHDRAWN, ParticipationState.DECLINED}:
+            if m.state not in LEFT_PARTICIPATION_STATES:
                 out.add(m.household_id)
     return out
 
@@ -367,6 +404,7 @@ def evaluate_opportunity(
         retail_offer_id=None,
         viable=False,
         reason="",
+        reason_code=REASON_NO_COMPATIBLE_DEMAND,
         economics=None,
         timing=timing,
         routing_provider=ctx.routing.name,
@@ -375,10 +413,12 @@ def evaluate_opportunity(
     retail, bulk_offers = offers_for(ctx, product_id)
     if retail is None:
         empty.reason = "no retail baseline offer available for this product"
+        empty.reason_code = REASON_NO_RETAIL_BASELINE
         return empty
     empty.retail_offer_id = retail.id
     if not bulk_offers:
         empty.reason = "no bulk offer available for this product"
+        empty.reason_code = REASON_NO_BULK_OFFER
         return empty
 
     households = {h.id: h for h in ctx.repo.list_households(ctx.ws)}
@@ -390,6 +430,7 @@ def evaluate_opportunity(
     # investigate this product at all was the agent's.
     best: tuple[Offer, LandedEconomics, MatchResult] | None = None
     shortfalls: list[str] = []
+    empty.minimum_units = min(o.min_units for o in bulk_offers)
     for offer in bulk_offers:
         match = find_candidates(
             community_id=community_id,
@@ -410,6 +451,7 @@ def evaluate_opportunity(
             {"need_id": r.need_id, "household_id": r.household_id, "reason": r.reason}
             for r in match.rejections
         ]
+        empty.matched_units = max(empty.matched_units, match.total_units)
         if not match.candidates:
             continue
         if match.total_units < offer.min_units:
@@ -462,6 +504,9 @@ def evaluate_opportunity(
             if shortfalls
             else "no compatible declared demand within range"
         )
+        empty.reason_code = (
+            REASON_BELOW_MINIMUM if shortfalls else REASON_NO_COMPATIBLE_DEMAND
+        )
         return empty
 
     bulk_offer, economics, match = best
@@ -472,6 +517,7 @@ def evaluate_opportunity(
     if economics.net_savings_cents <= 0:
         empty.economics = economics
         empty.reason = "all-in Pool cost does not beat buying retail alone"
+        empty.reason_code = REASON_NOT_CHEAPER
         return empty
 
     try:
@@ -481,6 +527,7 @@ def evaluate_opportunity(
     except Exception as exc:  # noqa: BLE001 - routing failure is reported, never faked
         empty.economics = economics
         empty.reason = f"routing unavailable: {exc}"
+        empty.reason_code = REASON_ROUTING_UNAVAILABLE
         return empty
 
     assessments: list[CandidateAssessment] = []
@@ -533,6 +580,7 @@ def evaluate_opportunity(
         retail_offer_id=retail.id,
         viable=True,
         reason="viable bulk opportunity",
+        reason_code=REASON_VIABLE,
         economics=economics,
         timing=timing,
         candidates=assessments,
@@ -542,6 +590,8 @@ def evaluate_opportunity(
         max_travel_minutes=max(travel_values),
         current_units=match.current_units,
         future_units=match.future_units,
+        matched_units=empty.matched_units,
+        minimum_units=empty.minimum_units,
     )
 
 

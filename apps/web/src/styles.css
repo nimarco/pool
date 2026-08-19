@@ -1008,6 +1008,40 @@ table.data th.r {
 
 /* Money, one component per line, against a rule. The all-in and the saving get a
    heavier rule above them, the way a printed statement subtotals. */
+/* What Pool established about each of this member's standing declarations.
+   Deliberately *not* `.ledger`: that is a money table, its values are tabular numerals
+   set `nowrap`, and putting a full sentence in one pushed the card off a 390 px screen.
+   Here the sentence is the point, so it wraps, and the pair stacks below the measure
+   where two columns stop being readable. */
+.outlook {
+  display: flex;
+  flex-direction: column;
+}
+.outlook-line {
+  display: grid;
+  grid-template-columns: minmax(0, 0.45fr) minmax(0, 1fr);
+  gap: 6px 18px;
+  padding: 9px 0;
+  border-bottom: 1px dotted var(--rule-strong);
+}
+.outlook-line:last-child {
+  border-bottom: none;
+}
+.outlook-product {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.outlook-reason {
+  font-size: 13.5px;
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+@media (max-width: 640px) {
+  .outlook-line {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .ledger {
   display: flex;
   flex-direction: column;

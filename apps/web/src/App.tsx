@@ -5,6 +5,7 @@ import {
   Health,
   LiveAgentResult,
   MapData,
+  MemberView,
   PoolView,
   ProductCandidate,
   ScenarioResult,
@@ -83,6 +84,11 @@ export default function App() {
    *  record the visitor then has to navigate. */
   const [poolEntry, setPoolEntry] = useState<{ tab?: string; deep?: string }>({});
   const [showcase, setShowcase] = useState<ShowcaseView | null>(null);
+  /** The current identity's own view of themselves — including which pool, if any, is
+   *  genuinely theirs. Owned here rather than by each screen: two of them need it, one
+   *  request answers both, and the outlook it carries is the most expensive read the
+   *  API serves. Never inferred from the pool list. */
+  const [member, setMember] = useState<MemberView | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -120,6 +126,32 @@ export default function App() {
       ? { id: consumer.household_id, display_name: consumer.display_name }
       : NOBODY);
   const needsOnboarding = Boolean(consumer && !consumer.onboarded);
+
+  /* Whose pool is whose is a server question, and it is re-asked whenever the identity
+     or the workspace changes. Cleared first so an operator stepping out of a synthetic
+     participant can never carry that participant's pool back to their own screens. */
+  useEffect(() => {
+    let live = true;
+    // Cleared first, so an operator stepping out of a synthetic participant can never
+    // carry that participant's opportunity back onto their own screens.
+    setMember(null);
+    if (!identity.id) return;
+    api
+      .member(identity.id)
+      .then((me) => {
+        if (live) setMember(me);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [
+    identity.id,
+    state?.workspace,
+    state?.pools.length,
+    state?.decisions.length,
+    state?.activity.length,
+  ]);
 
   const navigate = useCallback((next: View) => {
     setShowcase(null);
@@ -549,6 +581,7 @@ export default function App() {
             <Home
               state={state}
               identity={identity}
+              member={member}
               running={running}
               busyDecision={busyDecision}
               onFind={findOpportunities}
@@ -585,7 +618,9 @@ export default function App() {
               onConsumeInitialProduct={() => setPendingProduct(null)}
               onFind={findOpportunities}
               running={running}
-              hasPool={(state?.pools.length ?? 0) > 0}
+              /* This member's own pool, not "some pool exists". Answered by the
+                 server from membership and need lineage. */
+              hasPool={Boolean(member?.opportunity)}
               liveDiscovery={Boolean(demoConfig?.live_agent_available)}
               region={demoConfig?.region ?? null}
             />

@@ -21,6 +21,7 @@ import {
   Decision,
   HostOpportunities,
   MemberView,
+  NeedOutlook,
   NeedRow,
   PoolMember,
   PoolStatus,
@@ -157,12 +158,17 @@ function poolHeading(status: PoolStatus, mine: boolean): string {
 function OpportunityCard({
   pool,
   mine,
+  substituteFor,
   onOpen,
   onShowAgent,
 }: {
   pool: PoolView;
   /** This member's own membership row, when the server says they have one. */
   mine: PoolMember | null;
+  /** What this member actually typed, when the pool is buying an authorised
+   *  substitute for it. The card leads with the pool's name and photograph, so
+   *  without this the two silently disagree with the declaration behind them. */
+  substituteFor: string;
   onOpen: () => void;
   /* Takes the pool id rather than firing a bare signal: the card is the only thing that
      knows which pool it drew, and the proof it offers has to be that pool's proof. */
@@ -200,6 +206,12 @@ function OpportunityCard({
               {pool.brand ? <span className="pool-brand">{pool.brand}</span> : null}
               {pool.product_name}
             </div>
+            {substituteFor ? (
+              <p className="small muted" style={{ marginTop: 6 }}>
+                A substitute for the <strong>{substituteFor}</strong> you declared —
+                allowed by the substitution rule you set.
+              </p>
+            ) : null}
             {mine ? (
               <p className="small" style={{ marginTop: 8 }}>
                 <strong>
@@ -376,11 +388,90 @@ function WatchingCard({
   );
 }
 
+/** What Pool has to say when this member is in no pool.
+ *
+ *  "Nothing yet" is a first-class outcome, not a failure and not a gap to fill with
+ *  somebody else's order — but an unexplained one is worthless, so this reports what the
+ *  deterministic evaluator actually found for each declaration: how many compatible
+ *  units exist nearby against the smallest quantity the supplier will sell, or the rule
+ *  that ruled this member out. Every figure and every sentence is a server string.
+ *
+ *  Pools formed for other people are named as exactly that. Real work, worth seeing —
+ *  on the community's terms, never as this member's result. */
+function StandingCard({
+  outlook,
+  running,
+  onFind,
+  elsewhere,
+  onOpenPool,
+  liveDiscovery,
+  region,
+}: {
+  outlook: NeedOutlook[];
+  running: boolean;
+  onFind: () => void;
+  elsewhere: PoolView[];
+  onOpenPool: (id: string) => void;
+  liveDiscovery: boolean;
+  region: string | null;
+}) {
+  const ready = outlook.filter((o) => o.state === "ready");
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <h2>{ready.length > 0 ? "Worth pooling now" : "Nothing worth coordinating yet"}</h2>
+        <span className="spacer" />
+        <ActorTag actor="agent" label="Pool checked" />
+      </div>
+      <div className="panel-pad stack-sm">
+        <p className="small muted prose">
+          {ready.length > 0
+            ? "Pool checked what you buy against everything declared near you. There is enough compatible demand for this — run the coordinator to form it."
+            : "Pool checked what you buy against everything declared near you. Your declarations stay standing, and it keeps watching."}
+        </p>
+        <div className="outlook">
+          {outlook.map((o) => (
+            <div key={o.need_id} className="outlook-line">
+              <span className="outlook-product">{o.product_name}</span>
+              <span className="outlook-reason">{o.reason}</span>
+            </div>
+          ))}
+        </div>
+        <div className="btn-row">
+          <button className="btn btn-primary" onClick={onFind} disabled={running}>
+            {running ? <span className="spinner" /> : null}
+            {running ? "Coordinator running" : "Run Pool now"}
+          </button>
+        </div>
+        {running ? <CoordinatorWait live={liveDiscovery} region={region} /> : null}
+        {elsewhere.length > 0 ? (
+          <div className="banner">
+            <span>
+              Pool is also coordinating{" "}
+              {elsewhere.map((p, i) => (
+                <span key={p.pool_id}>
+                  {i > 0 ? ", " : ""}
+                  <button className="linkish" onClick={() => onOpenPool(p.pool_id)}>
+                    {p.product_name}
+                  </button>
+                </span>
+              ))}{" "}
+              for other members here. You are not in{" "}
+              {elsewhere.length === 1 ? "it" : "those"}.
+            </span>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 /* ---------------------------------------------------------------------- view */
 
 export function Home({
   state,
   identity,
+  member,
   running,
   busyDecision,
   onFind,
@@ -394,6 +485,10 @@ export function Home({
 }: {
   state: AppState;
   identity: { id: string; display_name: string };
+  /** The server's view of this identity, including which pool is genuinely theirs.
+   *  Fetched by the shell, because Needs needs the same answer and this is the most
+   *  expensive read the API serves. */
+  member: MemberView | null;
   running: boolean;
   busyDecision: string | null;
   onFind: () => void;
@@ -406,27 +501,51 @@ export function Home({
   region: string | null;
 }) {
   const [needs, setNeeds] = useState<NeedRow[]>([]);
-  const [me, setMe] = useState<MemberView | null>(null);
   const [hosting, setHosting] = useState<HostOpportunities | null>(null);
   /** The headline pool's full record. The list on `/api/state` carries no memberships,
    *  and this member's own allocation and price are the reason the card exists. */
   const [detail, setDetail] = useState<PoolView | null>(null);
 
-  const pool = state.pools[0] ?? null;
-  const poolId = pool?.pool_id ?? "";
-  const poolStatus = pool?.status ?? "";
+  /* Which pool Home leads with is the server's answer, not this component's.
+   *
+   * It used to be `state.pools[0]` — the oldest pool in the workspace, whoever it
+   * belonged to. A member who had declared coffee pressed Run Pool now, the coordinator
+   * correctly formed a whey protein order out of ten *other* students' declarations,
+   * and Home led with it. `/api/members/{id}` now answers "which pool is mine, and
+   * which declaration put me in it" from membership and need lineage, and answers
+   * `null` when the honest answer is none. */
+  const poolId = member?.opportunity?.pool_id ?? "";
+  const poolStatus = member?.opportunity?.status ?? "";
+  /* `detail` is only usable as a fallback while it is a record of *this* pool. Without
+     the id check, switching from one pool to another renders the previous product's
+     name and photograph for a frame — the stale-card version of the same bug. */
+  const pool = poolId
+    ? state.pools.find((p) => p.pool_id === poolId) ??
+      (detail && detail.pool_id === poolId ? detail : null)
+    : null;
 
   useEffect(() => {
     api.needs().then((view) => setNeeds(view.needs)).catch(() => setNeeds([]));
   }, [state.workspace]);
 
   useEffect(() => {
-    api.member(identity.id).then(setMe).catch(() => setMe(null));
+    // Cleared first: switching identity must never leave the previous member's pool
+    // record on screen while the next answer loads.
+    setDetail(null);
     // Pool is three-sided, and one of those sides is this same person on a different
     // day. If they are carrying an order, that is the most important thing on their
     // home screen.
     api.hostOpportunities(identity.id).then(setHosting).catch(() => setHosting(null));
-  }, [identity.id, state.workspace, state.pools.length, state.decisions.length]);
+    // `activity.length` is in here as the cheapest honest proxy for "the workspace
+    // changed": every coordination write logs one. Without it a run that added this
+    // member to an *existing* pool would leave the previous answer on screen.
+  }, [
+    identity.id,
+    state.workspace,
+    state.pools.length,
+    state.decisions.length,
+    state.activity.length,
+  ]);
 
   useEffect(() => {
     if (!poolId) {
@@ -436,8 +555,12 @@ export function Home({
     api.pool(poolId).then(setDetail).catch(() => setDetail(null));
   }, [poolId, poolStatus, state.workspace, state.decisions.length]);
 
+  /* Retired declarations are excluded: `/api/needs` serves the whole table so the
+     community view can show it, and a member who has stopped buying something should
+     not find it still listed under "what you buy anyway". The matcher stopped counting
+     them at the same time. */
   const mine = needs
-    .filter((n) => n.household_id === identity.id)
+    .filter((n) => n.household_id === identity.id && n.active)
     .sort((a, b) => a.expected_next_need_date.localeCompare(b.expected_next_need_date));
   const forMe = state.decisions.filter((d) => d.household_id === identity.id);
   const forOthers = state.decisions.length - forMe.length;
@@ -447,6 +570,15 @@ export function Home({
       : null;
   const m = state.metrics;
   const settled = state.pools.length > 0;
+  /* Pools the coordinator formed for other people. Real work, worth saying so — but on
+   * the community's terms, never as this member's result.
+   *
+   * Every pool the server says is theirs is excluded, not just the one being led with:
+   * a member in a settled order *and* a live one would otherwise have been told "you
+   * are not in it" about a pool they are in. */
+  const notMine = new Set([poolId, ...(member?.other_pool_ids ?? [])]);
+  const elsewhere = state.pools.filter((p) => !notMine.has(p.pool_id));
+  const outlook = member?.needs_outlook ?? [];
 
   return (
     <div className="stack">
@@ -457,8 +589,8 @@ export function Home({
           </h1>
           <p className="small muted" style={{ marginTop: 4 }}>
             {state.community?.name ?? "Demo University"}
-            {me?.community_membership
-              ? ` · verified by ${me.community_membership.verification_method.replace(/_/g, " ")}`
+            {member?.community_membership
+              ? ` · verified by ${member.community_membership.verification_method.replace(/_/g, " ")}`
               : ""}
           </p>
         </div>
@@ -533,8 +665,23 @@ export function Home({
         <OpportunityCard
           pool={pool}
           mine={myMembership}
+          substituteFor={
+            member?.opportunity && !member.opportunity.is_exact_product
+              ? member.opportunity.declared_product_name
+              : ""
+          }
           onOpen={() => onOpenPool(pool.pool_id)}
           onShowAgent={onShowAgent}
+        />
+      ) : outlook.length > 0 ? (
+        <StandingCard
+          outlook={outlook}
+          running={running}
+          onFind={onFind}
+          elsewhere={elsewhere}
+          onOpenPool={onOpenPool}
+          liveDiscovery={liveDiscovery}
+          region={region}
         />
       ) : (
         <WatchingCard
@@ -664,14 +811,14 @@ export function Home({
       {/* Collapsed, because the honest answer to "what may Pool decide for you" is a
           single sentence and the four limits behind it are only consulted when that
           sentence says yes. Opening it is how somebody checks the arithmetic. */}
-      {me ? (
+      {member ? (
         <details className="block">
           {/* The label stays a label — `.section-title` is uppercase, and a
               seventy-character sentence set in caps is not a sentence anyone reads. The
               answer sits beside it in ordinary case, because the answer is the point. */}
           <summary className="autonomy-summary">
             <span className="section-title">When Pool may act for you</span>
-            <strong>{autonomyModeCopy(me.autonomy_display.mode)}</strong>
+            <strong>{autonomyModeCopy(member.autonomy_display.mode)}</strong>
           </summary>
           <div className="grid grid-lede" style={{ marginTop: 14 }}>
             <p className="small muted prose">
@@ -679,16 +826,16 @@ export function Home({
               stops and asks you instead of deciding.
             </p>
             <div className="ledger">
-              <LedgerRow label="Minimum saving before it acts" value={me.autonomy_display.min_savings} />
-              <LedgerRow label="Most it may ever spend" value={me.autonomy_display.max_spend} />
-              <LedgerRow label="Furthest you will walk" value={me.autonomy_display.max_travel} />
+              <LedgerRow label="Minimum saving before it acts" value={member.autonomy_display.min_savings} />
+              <LedgerRow label="Most it may ever spend" value={member.autonomy_display.max_spend} />
+              <LedgerRow label="Furthest you will walk" value={member.autonomy_display.max_travel} />
               <LedgerRow
                 label="Substitutions"
-                value={me.autonomy_display.substitution.replace(/_/g, " ")}
+                value={member.autonomy_display.substitution.replace(/_/g, " ")}
               />
               <LedgerRow
                 label="Payment method saved"
-                value={me.has_payment_method ? "yes" : "no"}
+                value={member.has_payment_method ? "yes" : "no"}
               />
             </div>
           </div>

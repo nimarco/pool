@@ -50,6 +50,7 @@ from ..config import get_settings
 from ..data import catalog
 from ..data.seed import COMMUNITY_ID, seed
 from ..domain.models import (
+    LEFT_PARTICIPATION_STATES,
     AllocationState,
     AnnouncementKind,
     DecisionState,
@@ -68,7 +69,7 @@ from ..domain.models import (
 from ..domain.money import bps_to_pct_str, format_cents
 from ..domain.state import IllegalTransition
 from ..domain.viability import ViabilityStage
-from ..services import communication, fulfillment, hosting, onboarding
+from ..services import communication, fulfillment, hosting, onboarding, relevance
 from ..services import coordination as coord
 from ..services import needs as needs_service
 from ..services import payments as payment_service
@@ -454,9 +455,7 @@ def _pool_view(ws: str, pool, *, detail: bool = False) -> dict[str, Any]:
     supplier = r.get_supplier(ws, offer.supplier_id) if offer else None
     assignment = r.get_host_assignment(ws, pool.id)
     members = r.list_memberships(ws, pool.id)
-    live = [m for m in members if m.state not in {
-        ParticipationState.WITHDRAWN, ParticipationState.DECLINED
-    }]
+    live = [m for m in members if m.state not in LEFT_PARTICIPATION_STATES]
     econ = pool.final_economics or {}
 
     view: dict[str, Any] = {
@@ -704,7 +703,7 @@ def get_map(workspace: str = Query("demo")) -> dict[str, Any]:
     pooled: dict[str, str] = {}
     for p in r.list_pools(ws):
         for m in r.list_memberships(ws, p.id):
-            if m.state not in {ParticipationState.WITHDRAWN, ParticipationState.DECLINED}:
+            if m.state not in LEFT_PARTICIPATION_STATES:
                 pooled[m.household_id] = p.id
 
     need_counts: dict[str, int] = {}
@@ -993,18 +992,44 @@ def update_need(
 
 @app.get("/api/members/{household_id}")
 def get_member(household_id: str, workspace: str = Query("demo")) -> dict[str, Any]:
-    """One member's own view. Contact details and payment references never leave here."""
+    """One member's own view. Contact details and payment references never leave here.
+
+    Also the one endpoint that answers "what of this is *mine*". A consumer surface must
+    not decide that for itself: Home used to lead with the first pool in the workspace,
+    which is how somebody who had declared coffee was shown a whey protein order formed
+    out of ten other students' declarations. ``opportunity`` is the server's answer,
+    computed by ``services.relevance`` from membership and need lineage, and ``null``
+    when this member is genuinely in nothing — which is a first-class answer, not a gap
+    to fill with somebody else's pool.
+    """
     ws = check_workspace(workspace)
     r = repo()
     h = r.get_household(ws, household_id)
     if h is None:
         raise HTTPException(404, "member not found")
+    # Read-only for its whole length, so the repository reads are memoised: the outlook
+    # evaluates every sourceable product against every pickup site, and without this one
+    # member view costs four times what `/api/state` does.
+    ctx = relevance.read_only(ctx_for(ws))
     membership = r.get_community_membership(ws, COMMUNITY_ID, household_id)
     profile = r.get_host_profile(ws, COMMUNITY_ID, household_id)
+    personal = relevance.personal_pools(ctx, COMMUNITY_ID, household_id)
+    in_pool = {p.need.id: p.pool.id for p in personal}
+    mine = [n for n in r.list_needs(ws) if n.household_id == household_id and n.active]
     return {
         "id": h.id,
         "display_name": h.display_name,
         "zone": h.neighborhood,
+        # The pool this member is actually in, if any, with the declaration that put
+        # them there. Everything else about relevance is derived from this.
+        "opportunity": personal[0].to_dict() if personal else None,
+        "other_pool_ids": [p.pool.id for p in personal[1:]],
+        # Why each standing declaration has not produced a pool, in checkable facts.
+        # Read-only: the same deterministic evaluator the coordinator's own tool uses.
+        "needs_outlook": [
+            relevance.need_outlook(ctx, COMMUNITY_ID, need, in_pool=in_pool).to_dict()
+            for need in mine
+        ],
         "community_membership": (
             {
                 "community_id": membership.community_id,

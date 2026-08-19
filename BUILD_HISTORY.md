@@ -4303,3 +4303,171 @@ which is what the "as it stands" edit is for.
 **Relevant commits / files**
 `apps/web/src/views/onboarding.tsx` · `apps/web/src/api.ts` · `apps/web/src/brand.tsx` ·
 `services/agent/pool/api/{app.py,public_demo.py}` · `services/agent/tests/test_public_demo.py`
+
+---
+
+### #0040 — [2026-08-19] — "I declared coffee. Pool showed me whey."
+`[ARCHITECTURE]` `[FRONTEND]` `[AGENT]` `[DEMO]`
+
+**Goal / user intent**
+A reported bug: a member onboarded, declared coffee as their one standing need, pressed
+**Run Pool now**, and Home came back with a whey protein opportunity. Trace it, then audit
+the whole class it belongs to — every way the product a member declares, the state the
+coordinator evaluates, and the result shown back can come apart.
+
+**Starting state**
+`/api/agent/run` already ran the real `PoolCoordinator` against the caller's own workspace.
+No scripted helper was on that path, nothing reseeded, and no hidden need was injected.
+
+**Decision**
+The coordinator was right and the interface was wrong. Home selected `state.pools[0]` —
+the oldest pool in the workspace, whoever it belonged to. Fix the selection at the
+*server*, from stored lineage, and make "nothing for you" a first-class answer with a
+reason attached rather than an absence.
+
+**Why**
+The reproduction, end to end, from a cold workspace:
+
+1. `seed()` writes twelve whey declarations across twelve synthetic households and six
+   coffee ones across six. Neither is scripted for the visitor; both are the fixture.
+2. The member declares coffee. The stored need is correct — `product_id` is exactly what
+   the search returned, and it stays that way for the rest of the run.
+3. `Run Pool now` → `POST /api/agent/run` → `PoolCoordinator.run()`. `list_latent_demand`
+   ranks unserved demand by `(-member_count, -unserved_units, product_id)`, so whey (12
+   members) is first, energy drinks (8) second, coffee (6) third. The system prompt says
+   *form at most one pool per run*. The planner evaluates the first opportunity, finds it
+   viable, forms it, and stops. It never reaches coffee — correctly, by its own rules.
+4. `list_pools` sorts by `(created_at, id)`. Home read `[0]`.
+
+So the member was shown a real pool, formed from real declarations, by a run they
+triggered — and none of it was theirs. Nothing lied; nothing was traceable to them either.
+
+Rejected: making the interactive run prioritise the triggering member's products. It would
+have papered over the selection bug, given the community coordinator a favourite
+household, and required a payload change to the deployed AgentCore contract that could not
+be verified without spending on a deploy. The coordinator did not need changing.
+
+**Implementation** — implemented and tested.
+
+`services/agent/pool/services/relevance.py` (new) is the single place that decides what is
+whose. A pool is a member's when it is in their Community, a `Membership` row joins them
+to it, that membership is in a live state (`LIVE_PARTICIPATION_STATES` — declining or
+withdrawing ends it; a *failed authorisation* does not, because that member is exactly who
+needs telling), and the membership's `need_id` resolves to a declaration that household
+actually holds. Lineage was already in the model; it was simply never read.
+
+`need_outlook()` answers the other half. For each standing declaration with no pool, it
+runs the same `evaluate_opportunity` the agent's own tool calls, across every public
+pickup site and across substitute-group products Pool can actually source, and returns one
+of: `in_pool` · `ready` · `short` · `not_in_round` · `not_worth_it` · `not_matched` ·
+`no_supply` · `retired`. So Home says *"Not enough of it yet: 12 bags declared nearby, and
+the supplier will not sell fewer than 18"*, not *"nothing yet"*.
+
+`GET /api/members/{id}` now carries `opportunity` (or `null`) and `needs_outlook`. Home
+reads those instead of the pool list. No new routes, so the published endpoint counts hold.
+
+Four more defects the audit turned up, all in the same class:
+
+- **Retired declarations were still poolable.** `evaluate_opportunity` and `recover_pool`
+  passed the whole need table into `find_candidates`, which never checked `active`. A
+  member who retired a need could still be counted toward a supplier minimum and still
+  have their card authorised. Fixed in the matcher, where "who is even eligible" belongs,
+  as a rejection reason rather than a silent skip.
+- **A need already in a pool could be re-pointed at another product**, leaving the record
+  saying somebody joined a whey order because they buy coffee while the units, the price
+  and the authorisation stayed exactly as they were. `amend_need` now refuses that one
+  field; everything else stays amendable.
+- **An authorised substitute was undisclosed.** Declare Gold Standard chocolate with
+  "same brand, another flavour is fine" and the pool buys Optimum Nutrition vanilla — the
+  card led with that name and that photograph and said nothing. It now names what you
+  declared.
+- **Home listed retired declarations** under "what you buy anyway", and Needs counted them
+  in "N independent declarations across the community".
+
+`OpportunityAssessment` gained `matched_units`, `minimum_units` and `reason_code`. The
+shortfall was only ever inside a prose sentence, and anything that has to *branch* on why
+an opportunity failed should not be matching on wording that has been reworded twice.
+`LEFT_PARTICIPATION_STATES` replaces four inline copies of the same set.
+
+The outlook is not free: it runs `evaluate_opportunity` once per sourceable product per
+public pickup site, and each of those re-reads the need, household, product, offer and
+membership tables. One member view measured **86 repository reads** against 21 for
+`/api/state`. Two fixes, both kept: a read memo scoped to that one read-only pass (86 →
+**18**), and moving ownership of the member view up into the shell so Home and Needs share
+one request instead of making two. The memo is only sound because the pass writes nothing,
+which is now pinned by a test rather than assumed.
+
+**AWS / external services touched**
+None. Everything ran on the in-memory repository, the deterministic planner and the
+deterministic router.
+
+**Cost-relevant activity**
+None. No Bedrock, no AgentCore invocation, no deploy. The audit was deliberately run
+against the offline coordinator, which is what it exists for.
+
+**Agent behavior**
+Unchanged, and that is the finding. Offline planner, five iterations, tools
+`list_latent_demand → evaluate_pool_economics → create_candidate_pool →
+request_host_acceptance`. Same before and after the fix, for the coffee member and the
+whey member alike. What changed is which of its results is presented as whose.
+
+**Validation**
+Reproduced first, from a cold workspace through the real endpoints: coffee declared,
+whey pool formed, `opportunity` null, coffee need untouched. Then a product matrix, each
+from its own fresh workspace, run through onboarding → declare → Run Pool now:
+
+| Declared | Stored product | Coordinator | Shown to the member |
+| --- | --- | --- | --- |
+| `vanilla whey` → Optimum Nutrition, 2 tubs | `prod_whey_vanilla` | forms the whey pool | **their** pool, 2 tubs, $71.92 vs $93.98 |
+| same, 3 tubs | `prod_whey_vanilla` | forms it without them (case boundary) | `not_in_round`, honestly |
+| `coffee` → Death Wish Dark Roast | `prod_0810063343040` | forms the whey pool | `not_matched` — exact-only, different product |
+| same, category substitution allowed | `prod_0810063343040` | forms the whey pool | `short` — 12 bags of 18 |
+| Paper towels | `prod_paper_towels` | forms the whey pool | `short` — 5 of 48 |
+| Laundry pods | `prod_detergent_pods` | forms the whey pool | `not_worth_it` — clears the minimum, saves nothing |
+| Custom "Cardamom pods, 500g" | custom row | forms the whey pool | `no_supply` |
+| Gold Standard chocolate, substitution on | `prod_whey_chocolate` | forms the vanilla pool | their pool, **named as a substitute** |
+
+21 new API-level tests in `test_consumer_relevance.py`, plus 7 new Home tests. Full
+`make qa`: ruff clean, **815** Python, **79** web, **75** infrastructure, typecheck clean,
+production build, secret scan clean. Canonical showcase re-proved unchanged: 10 buyers,
+11 membership rows, 1 retained authorisation failure, 1 exact replacement, 24 funded /
+24 purchased / 24 pickup units, 2 cases, no surplus, $861.44 all-in against $1127.76
+retail, $266.32 saved, 23.6%.
+
+Visually walked on desktop and at 390 px: cold Home, post-run no-op, the community banner,
+the whey success, the substitute disclosure, a browser refresh, and stepping into a
+synthetic participant and back out.
+
+**Failures / dead ends**
+The first `need_outlook` reported "ready" for demand that a pool had already consumed — it
+evaluated without the `pooled_household_ids` exclusion the coordinator's own tools apply.
+It also attributed rejections by `household_id`, so a member holding two declarations saw
+their paper-towel need explained by their coffee one; keyed on `need_id` now. And the
+outlook list was first rendered with `.ledger`, whose values are tabular numerals set
+`nowrap` — one full sentence pushed the card off a 390 px screen.
+
+**What we learned**
+The bug was not in the agent, the tools, the economics or the store. Every one of those
+was right. It was one array index in a React component, and the reason it survived is that
+the interface was answering a question — *whose is this?* — that only the server could
+answer. Lineage existed in the data model the whole time (`Membership.need_id`); nothing
+read it. A "no result" state with a reason attached is also worth more than a successful
+one that belongs to somebody else, and it fell straight out of running the same
+deterministic evaluator at read time instead of inventing a second explanation.
+
+**Article fodder**
+Article 3 — the honesty boundary is not only *act vs. ask*; it is also *whose result is
+this*. A community-scoped agent and a personally-scoped interface disagree by default, and
+that disagreement is invisible in every test that only checks the agent.
+
+**Evidence worth preserving**
+Before: Home leading with "Pool found overlapping demand — 100% Whey Protein" for a member
+who declared coffee. After: "Nothing worth coordinating yet · POOL CHECKED", the coffee
+sentence, and "Pool is also coordinating 100% Whey Protein for other members here. You are
+not in it."
+
+**Relevant commits / files**
+`services/agent/pool/services/relevance.py` (new) · `services/agent/pool/services/{coordination,needs}.py` ·
+`services/agent/pool/domain/{models,matching}.py` · `services/agent/pool/api/app.py` ·
+`services/agent/tests/test_consumer_relevance.py` (new) · `apps/web/src/views/{home,needs,demo-panel}.tsx` ·
+`apps/web/src/{App.tsx,api.ts,styles.css}` · `apps/web/src/views/home.test.tsx`

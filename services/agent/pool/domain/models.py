@@ -159,6 +159,18 @@ PROVISIONAL_PARTICIPATION_STATES = {
     ParticipationState.AUTHORIZED,
     ParticipationState.LOCKED,
 }
+#: States in which the member is no longer part of the pool at all — they said no, or
+#: they left. Everything else, including a *failed* authorisation, is still a live
+#: relationship: the row stays on the record, the member still needs to know about it,
+#: and the recovery branch is built on being able to see it.
+#:
+#: Stated once because four different places were deciding "is this person still in
+#: this pool" with their own inline copy of this set, and a pool card, a map pin and a
+#: re-recruitment guard disagreeing about that is exactly how somebody ends up being
+#: shown an order they had already withdrawn from.
+LEFT_PARTICIPATION_STATES = {ParticipationState.DECLINED, ParticipationState.WITHDRAWN}
+#: The complement: the member is genuinely in this pool right now.
+LIVE_PARTICIPATION_STATES = frozenset(set(ParticipationState) - LEFT_PARTICIPATION_STATES)
 
 
 class AutonomyPath(str, Enum):

@@ -414,6 +414,9 @@ export function Needs({
   onConsumeInitialProduct: () => void;
   onFind: () => void;
   running: boolean;
+  /** Whether *this member* is in a pool — the server's answer, not "does any pool
+   *  exist in the workspace". A community order formed for ten other students is not a
+   *  reason to stop offering this member the one action they have. */
   hasPool: boolean;
   liveDiscovery: boolean;
   region: string | null;
@@ -461,7 +464,12 @@ export function Needs({
   const mine = needs
     .filter((n) => n.household_id === identity.id && n.active)
     .sort((a, b) => a.expected_next_need_date.localeCompare(b.expected_next_need_date));
-  const others = needs.filter((n) => n.household_id !== identity.id);
+  /* Active only, on both sides. A retired declaration is not a standing need, so
+     counting it under "standing needs across the community" would overstate the very
+     number this screen exists to make legible — and it is no longer demand the matcher
+     will act on either. */
+  const others = needs.filter((n) => n.household_id !== identity.id && n.active);
+  const standing = needs.filter((n) => n.active);
 
   const openAdd = () => {
     setError(null);
@@ -649,13 +657,13 @@ export function Needs({
         title={`Standing needs across ${communityName}`}
         aside={
           <button className="btn btn-sm" onClick={() => setShowAll((v) => !v)}>
-            {showAll ? "Hide" : `Show all ${needs.length}`}
+            {showAll ? "Hide" : `Show all ${standing.length}`}
           </button>
         }
       >
         <p className="small muted prose">
-          {needs.length} independent declarations. Pool finds the overlap; members do not
-          create or organise a group.
+          {standing.length} independent declarations. Pool finds the overlap; members do
+          not create or organise a group.
         </p>
         {!hasPool ? (
           <div className="stack-sm" style={{ marginTop: 14 }}>

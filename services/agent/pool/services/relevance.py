@@ -58,6 +58,7 @@ from ..domain.models import (
     PoolStatus,
 )
 from . import coordination as coord
+from . import discovery
 from .context import PoolContext
 
 #: Ordering for the pool a member is shown first when they are in more than one. Pools
@@ -308,8 +309,31 @@ def need_outlook(
 
     targets = coord.sourceable_targets(ctx, need.product_id)
     if not targets:
-        return outlook(
-            OUTLOOK_NO_SUPPLY, "No supplier Pool has verified sells this in bulk yet."
+        # Missing supply is not missing demand, and the sentence has to put them in that
+        # order. Pool holds no verified bulk offer for this product or any substitute,
+        # so there is genuinely nothing to evaluate — but the compatible demand standing
+        # behind the declaration is a fact Pool already knows, and reporting it as
+        # nothing was the more misleading of the two available errors.
+        #
+        # ``units_needed`` stays 0 on purpose. It means "the supplier will not sell
+        # fewer than this", and no supplier has said anything.
+        standing = discovery.unsourced_demand(ctx, community_id, need)
+        others = standing.other_members
+        unit = _unit_word(ctx, need.product_id, standing.other_units)
+        return NeedOutlook(
+            need_id=need.id,
+            product_id=need.product_id,
+            product_name=name,
+            state=OUTLOOK_NO_SUPPLY,
+            reason=(
+                f"{others} other {'member' if others == 1 else 'members'} near you "
+                f"already buy this — {standing.other_units} {unit} standing. No "
+                "supplier Pool has verified sells it in bulk yet, so there is nothing "
+                "to price a group order against."
+                if others
+                else "No supplier Pool has verified sells this in bulk yet."
+            ),
+            units_available=standing.units,
         )
 
     # A round that has already formed for this product, without this member in it. Said

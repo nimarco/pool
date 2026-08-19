@@ -38,6 +38,7 @@ still has to survive ``evaluate_opportunity`` on its own facts.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from ..domain.matching import haversine_km
@@ -168,6 +169,73 @@ def _opportunity(
     }
 
 
+@dataclass(frozen=True)
+class UnsourcedDemand:
+    """Compatible standing demand for a product Pool holds no bulk offer for.
+
+    "Pool cannot buy this" and "nobody wants this" are completely different product
+    states, and the second one is a much worse thing to say by accident. Discovery used
+    to collapse them: with no sourceable target there was nothing to evaluate, so the
+    member's screen reported zero compatible members and zero compatible units beside a
+    declaration that six of their neighbours had also made.
+
+    What this counts is exactly what the matcher would count, with the one input that
+    genuinely is not known left unknown:
+
+    * the target is the **declared product itself**, because that is the only thing a
+      supplier offer could later arrive *for*;
+    * no unit price is supplied, because none exists. A member's per-unit ceiling is a
+      rule about an offer, and there is no offer — inventing a price to test it against
+      would be inventing the very supply fact this exists to report as missing.
+
+    The consequence is worth stating plainly rather than hiding: a neighbour who
+    declared a *different* product in the same substitute group, allows substitution,
+    and set a price ceiling is counted here, and a future offer might still breach that
+    ceiling. Members who declared this exact product — which is what the count is mostly
+    made of — are exact matches, and no ceiling applies to them at all. Nothing here
+    asserts that a viable order exists; it asserts that demand does.
+    """
+
+    #: Distinct households, including the member this was computed for.
+    members: int
+    #: Units, including this member's own.
+    units: int
+    #: The same two counts with this member removed, for surfaces that show their own
+    #: quantity separately and would otherwise count it twice.
+    other_members: int
+    other_units: int
+
+
+def unsourced_demand(
+    ctx: PoolContext, community_id: str, need: NeedDeclaration
+) -> UnsourcedDemand:
+    """Compatible demand standing behind one declaration Pool cannot currently source.
+
+    Read-only. Creates nothing, prices nothing, and reports no verdict — a supplier
+    minimum it could be measured against does not exist yet, which is the whole point.
+    """
+    product = ctx.repo.get_product(ctx.ws, need.product_id)
+    if product is None:
+        return UnsourcedDemand(0, 0, 0, 0)
+    usable = compatible_needs(
+        target=product,
+        needs=ctx.repo.list_needs(ctx.ws),
+        products={p.id: p for p in ctx.repo.list_products(ctx.ws)},
+        community_id=community_id,
+        offer_unit_price_cents=None,
+        exclude_household_ids=frozenset(
+            coord.pooled_household_ids(ctx, community_id, need.product_id)
+        ),
+    )
+    others = [n for n in usable if n.household_id != need.household_id]
+    return UnsourcedDemand(
+        members=len({n.household_id for n in usable}),
+        units=sum(n.quantity for n in usable),
+        other_members=len({n.household_id for n in others}),
+        other_units=sum(n.quantity for n in others),
+    )
+
+
 def standing_demand_for(
     ctx: PoolContext, community_id: str, need: NeedDeclaration
 ) -> dict[str, Any]:
@@ -205,7 +273,20 @@ def standing_demand_for(
         "sourceable_product_name": "",
     }
     if not targets:
-        return base
+        # No verified bulk supplier — for this product, or for any substitute this
+        # member's own rules authorise. That is a fact about *supply*, and it used to
+        # take the demand numbers down with it: the screen said nothing was here when
+        # the truth was that people want this and Pool does not yet know how to buy it.
+        #
+        # `minimum_units` stays 0 and `has_supplier` stays false beside these counts.
+        # There is no supplier, so there is no minimum, and printing a threshold nobody
+        # has quoted would be the same fabrication in the opposite direction (§8).
+        standing = unsourced_demand(ctx, community_id, need)
+        return {
+            **base,
+            "compatible_members": standing.other_members,
+            "compatible_units": standing.other_units,
+        }
 
     needs = ctx.repo.list_needs(ctx.ws)
     products = {p.id: p for p in ctx.repo.list_products(ctx.ws)}

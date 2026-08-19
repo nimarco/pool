@@ -19,6 +19,7 @@ energy drinks           a third independent product, on its own members
 detergent               refused on **economics**, with enough demand to prove it
 paper towels            refused on the **supplier minimum**
 chocolate whey          refused for having **no bulk quote**, exact-only
+jasmine rice            refused for **no bulk quote**, with real demand still visible
 unsourceable catalogue  stays what was chosen, and truthfully no-ops
 authorised substitute   participates, and is disclosed as a substitute
 two declarations        one order, a verdict for each, lineage on the membership
@@ -37,7 +38,7 @@ from fastapi.testclient import TestClient
 
 from pool.api import app as api
 from pool.services import coordination as coord
-from pool.services import run_report
+from pool.services import relevance, run_report
 
 
 @pytest.fixture
@@ -211,6 +212,63 @@ def test_a_product_with_no_bulk_quote_says_there_is_no_supplier(client):
     assert result["reason_code"] == coord.REASON_NO_BULK_OFFER
     assert result["product_id"] == "prod_whey_chocolate"
     assert _pools(client) == []
+
+
+def test_latent_demand_is_visible_before_pool_has_any_supplier(client):
+    """The distinction the member screen exists to draw.
+
+    Rice reaches the same verdict chocolate whey does — no bulk quote, nothing formed —
+    and it is a completely different situation, because six other households already buy
+    it. Discovery used to report that as zero compatible members and zero compatible
+    units, so the screen said nothing was there when the truth was that Pool did not
+    know how to buy it.
+
+    Both halves are asserted here: the demand is reported, and no supplier terms are
+    invented to sit beside it.
+    """
+    household = _onboard(client)
+    chosen = next(r for r in _search(client, "jasmine rice") if r["product_id"] == "prod_rice_jasmine")
+    assert chosen["sourceable"] is False
+    _declare(client, household, chosen["product_id"], quantity=2)
+
+    me = client.get(f"/api/members/{household}").json()
+    standing = next(d for d in me["standing_demand"] if d["product_id"] == "prod_rice_jasmine")
+    # Demand that accumulated without anybody organising it, and without a supplier.
+    assert standing["compatible_members"] == 6
+    assert standing["compatible_units"] == 22
+    assert standing["my_units"] == 2
+    # And nothing about supply is asserted, because nothing about supply is known.
+    assert standing["has_supplier"] is False
+    assert standing["minimum_units"] == 0
+    assert standing["sourceable_product_id"] == ""
+
+    outlook = next(o for o in me["needs_outlook"] if o["product_id"] == "prod_rice_jasmine")
+    assert outlook["state"] == relevance.OUTLOOK_NO_SUPPLY
+    # Demand first, blocker second — the order the sentence has to be read in.
+    assert "6 other members" in outlook["reason"]
+    assert "22 bags" in outlook["reason"]
+    assert "no supplier" in outlook["reason"].lower()
+    assert outlook["units_needed"] == 0
+
+    # The run agrees, and forms nothing.
+    result = _one(client, household)
+    assert result["result"] == run_report.RESULT_DECLINED
+    assert result["reason_code"] == coord.REASON_NO_BULK_OFFER
+    assert _pools(client) == []
+
+
+def test_a_product_with_no_supplier_and_no_demand_says_so_differently(client):
+    """The control for the test above. Chocolate whey has the same reason code and
+    genuinely has no demand behind it, so the counts are zero because they *are* zero —
+    not because a missing supplier zeroed them."""
+    household = _onboard(client)
+    _declare(client, household, "prod_whey_chocolate", quantity=2)
+
+    me = client.get(f"/api/members/{household}").json()
+    standing = next(d for d in me["standing_demand"] if d["product_id"] == "prod_whey_chocolate")
+    assert standing["has_supplier"] is False
+    assert standing["compatible_members"] == 0
+    assert standing["compatible_units"] == 0
 
 
 def test_an_unsourceable_catalogue_product_stays_what_was_chosen(client):

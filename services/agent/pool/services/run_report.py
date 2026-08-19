@@ -194,8 +194,16 @@ def _result_for_need(
     product,
     evaluations: list[RunEvaluation],
     personal: dict[str, Any],
+    run_pool_ids: frozenset[str],
 ) -> dict[str, Any]:
-    """One declaration's outcome in this run."""
+    """One declaration's outcome in this run.
+
+    ``run_pool_ids`` is what keeps that "in this run" honest. A member can be in a pool
+    for this declaration because a *later* run formed one, and reporting that against an
+    earlier run would make the earlier run appear to have done something it did not — a
+    report that quietly rewrites itself as the world moves on is worth less than no
+    report at all.
+    """
     unit = product.unit if product else "unit"
     name = product.name if product else need.product_id
     base = {
@@ -213,6 +221,11 @@ def _result_for_need(
     }
 
     mine = personal.get(need.id)
+    # Only when *this* run is the one that put them there. Attribution is read from
+    # stored lineage — the pool's own ``created_by_run``, or an evaluation this run wrote
+    # naming the pool it acted on — never inferred from the fact that a pool now exists.
+    if mine is not None and mine[0].id not in run_pool_ids:
+        mine = None
     if mine is not None:
         pool, membership = mine
         evaluation = next((e for e in evaluations if e.product_id == pool.product_id), None)
@@ -346,6 +359,18 @@ def build(
         for p in relevance.personal_pools(ctx, community_id, household_id)
     }
 
+    # The pools this run is answerable for: the ones it created, and the ones its own
+    # evaluations recorded acting on. Everything else in the workspace belongs to some
+    # other run, however recently it appeared.
+    run_pool_ids = frozenset(
+        {e.pool_id for e in evaluations if e.pool_id}
+        | {
+            pool.id
+            for pool, _ in personal.values()
+            if pool.created_by_run and pool.created_by_run == run.id
+        }
+    )
+
     needs = {n.id: n for n in ctx.repo.list_needs(ctx.ws) if n.household_id == household_id}
     results: list[dict[str, Any]] = []
     for need_id in run.objective_need_ids:
@@ -359,6 +384,7 @@ def build(
                 product=ctx.repo.get_product(ctx.ws, need.product_id),
                 evaluations=evaluations,
                 personal=personal,
+                run_pool_ids=run_pool_ids,
             )
         )
 

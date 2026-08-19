@@ -494,6 +494,39 @@ export interface Checklist {
   }[];
 }
 
+/** The supplier quotes an operator can record, and what is already on file.
+ *
+ *  Every economic term here is the server's. The browser renders these numbers and
+ *  sends back a `key`; there is no request shape in which it could send a price, and
+ *  `/api/operator/offers` — the general offer-mutation route — is not on the public
+ *  allowlist at all. That asymmetry is deliberate: a control that let a presenter type
+ *  prices until Pool said yes would demonstrate nothing. */
+export interface SupplierUpdates {
+  product_id: string;
+  product_name: string;
+  unit: string;
+  /** Standing demand already declared for this product, before any of it is priced.
+   *  Inputs, not a verdict. */
+  declared_members: number;
+  declared_units: number;
+  has_bulk_offer: boolean;
+  quotes: {
+    key: string;
+    offer_id: string;
+    label: string;
+    summary: string;
+    product_id: string;
+    unit_price_cents: number;
+    case_units: number;
+    min_units: number;
+    supplier_reference: string;
+    /** Always true. These suppliers and terms are invented for the demo, and every
+     *  surface that renders one says so. */
+    synthetic: boolean;
+    recorded: boolean;
+  }[];
+}
+
 export interface OperatorView {
   offers: {
     offer_id: string;
@@ -911,6 +944,26 @@ export const api = {
   pool: (id: string) => request<PoolView>(`/api/pools/${id}`),
   checklist: (id: string) => request<Checklist>(`/api/pools/${id}/checklist`),
   operator: () => request<OperatorView>("/api/operator"),
+
+  /** What supplier quotes exist for the changing-world demonstration, and which of them
+   *  this session has recorded. */
+  supplierUpdates: () => request<SupplierUpdates>("/api/demo/supplier-updates"),
+
+  /** Record one predetermined supplier quote. A key from the server's own allowlist is
+   *  the entire client surface — the price, the case size, the minimum, the product and
+   *  the supplier are all server constants (see services/supplier_updates.py). */
+  recordSupplierQuote: (quote: string) =>
+    post<{
+      recorded: boolean;
+      quote: string;
+      offer_id: string;
+      unit_price_display: string;
+      case_units: number;
+      min_units: number;
+      verified_at: string;
+      source: string;
+      synthetic: boolean;
+    }>("/api/demo/supplier-updates", { quote }),
   member: (householdId: string) => request<MemberView>(`/api/members/${householdId}`),
   hostOpportunities: (householdId: string) =>
     request<HostOpportunities>(`/api/hosting/opportunities?household_id=${householdId}`),

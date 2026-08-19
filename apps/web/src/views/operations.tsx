@@ -7,8 +7,120 @@
  */
 
 import { useEffect, useState } from "react";
-import { Checklist, OperatorView, api, money, statusCopy } from "../api";
+import { Checklist, OperatorView, SupplierUpdates, api, money, statusCopy } from "../api";
 import { Chip, Empty, Figure, IconArrowLeft, IconCheck, IconDot, LedgerLine } from "../ui";
+
+/** Supplier quotes arriving from outside, and what they do to demand that is already
+ *  standing.
+ *
+ *  This is an **operator** surface, and it is on Operations rather than Home for a
+ *  reason that is part of the product rather than a layout preference: a member cannot
+ *  conjure a wholesale quote. What a member does is say what they buy. What changes
+ *  whether that can be acted on is the world.
+ *
+ *  Everything numeric below is rendered from the server and sent back as a key. There
+ *  is no input here, and there is no request shape in which this component could name a
+ *  price — which is the difference between demonstrating that Pool re-evaluates and
+ *  demonstrating that a presenter can type numbers until it agrees.
+ */
+function SupplierQuotes({ onRecorded }: { onRecorded: () => void }) {
+  const [data, setData] = useState<SupplierUpdates | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = () => {
+    api.supplierUpdates().then(setData).catch(() => setData(null));
+  };
+  useEffect(load, []);
+
+  if (!data) return null;
+
+  const record = async (key: string) => {
+    setBusy(key);
+    setError(null);
+    try {
+      await api.recordSupplierQuote(key);
+      load();
+      onRecorded();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const units = (n: number) => (n === 1 ? data.unit : `${data.unit}s`);
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <h2>Supplier updates</h2>
+        <span className="spacer" />
+        <span className="tiny faint">synthetic quotes, for demonstrating re-evaluation</span>
+      </div>
+      <div className="panel-pad stack-sm">
+        <div className="row-between" style={{ alignItems: "flex-start" }}>
+          <div>
+            <div className="row-title">{data.product_name}</div>
+            {/* Why recording a quote is an event rather than a button: the demand is
+                already there, and has been since before anybody opened this screen. */}
+            <p className="small muted" style={{ marginTop: 4 }}>
+              <strong>{data.declared_members}</strong>{" "}
+              {data.declared_members === 1 ? "member" : "members"} already declared this
+              independently — {data.declared_units} {units(data.declared_units)} standing.
+            </p>
+          </div>
+          <Chip tone={data.has_bulk_offer ? "ok" : "warn"}>
+            {data.has_bulk_offer ? "bulk quote on file" : "no bulk quote"}
+          </Chip>
+        </div>
+
+        <p className="tiny muted prose">
+          Recording a quote writes one supplier offer and nothing else. No declaration,
+          household, pool or past run record is touched — and no run happens. What moves
+          is the deterministic outlook, because the world moved.
+        </p>
+
+        {error ? <p className="small" style={{ color: "var(--clay)" }}>{error}</p> : null}
+
+        <div className="rows">
+          {data.quotes.map((q) => (
+            <div key={q.key} className="row">
+              <div className="row-body">
+                <div className="row-title">
+                  {q.label}
+                  {q.synthetic ? <Chip>synthetic</Chip> : null}
+                  {q.recorded ? <Chip tone="ok">recorded</Chip> : null}
+                </div>
+                <div className="tiny muted">{q.summary}</div>
+                <div className="tiny faint">
+                  {money(q.unit_price_cents)} per {data.unit} · {q.case_units} to a case ·{" "}
+                  minimum {q.min_units} {units(q.min_units)} ·{" "}
+                  <span className="mono">{q.supplier_reference}</span>
+                </div>
+              </div>
+              <div className="row-tail">
+                <button
+                  className="btn btn-sm"
+                  disabled={busy !== null || q.recorded}
+                  onClick={() => void record(q.key)}
+                >
+                  {busy === q.key ? "…" : q.recorded ? "On file" : "Record quote"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="tiny faint prose">
+          These suppliers and terms are invented for this demo and are stored as
+          synthetic, not as verified quotes — nobody negotiated them and no wholesaler
+          relationship exists. Whether an order works is still the evaluator&apos;s
+          answer, computed when somebody presses <strong>Run Pool now</strong>.
+        </p>
+      </div>
+    </section>
+  );
+}
 
 function HostConsole({ poolId }: { poolId: string | null }) {
   const [checklist, setChecklist] = useState<Checklist | null>(null);
@@ -146,9 +258,10 @@ export function OperationsView({
 }) {
   const [data, setData] = useState<OperatorView | null>(null);
 
-  useEffect(() => {
+  const loadLedger = () => {
     api.operator().then(setData).catch(() => setData(null));
-  }, []);
+  };
+  useEffect(loadLedger, []);
 
   return (
     <div className="stack">
@@ -165,6 +278,10 @@ export function OperationsView({
           intact.
         </p>
       </header>
+
+      {/* Before the ledger, because it is the thing an operator comes here to *do*
+          rather than to read — and the offer table below is where its effect lands. */}
+      <SupplierQuotes onRecorded={loadLedger} />
 
       <HostConsole poolId={hostPoolId} />
 

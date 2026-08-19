@@ -539,7 +539,43 @@ describe("before Pool has run", () => {
       }),
     });
 
-    expect(await screen.findByText(/No supplier Pool has verified sells this in bulk/)).toBeTruthy();
+    expect(
+      await screen.findByText(/Pool has no verified bulk supplier for this yet/),
+    ).toBeTruthy();
+    expect(screen.getByText(/Nobody else near you has declared anything compatible yet/))
+      .toBeTruthy();
+  });
+
+  /* The distinction the whole standing-demand section exists to draw. Both rows have
+     no supplier; only one of them has nobody behind it, and the screen used to say the
+     same thing about both. */
+  it("still shows the demand when what is missing is a supplier, not people", async () => {
+    renderHome([], {
+      member: memberView({
+        opportunity: null,
+        standing: [
+          {
+            ...STANDING,
+            product_name: "Jasmine rice, 5 lb",
+            unit: "bag",
+            my_units: 2,
+            has_supplier: false,
+            compatible_members: 6,
+            compatible_units: 22,
+            minimum_units: 0,
+          },
+        ],
+      }),
+    });
+
+    // The demand, first.
+    expect(await screen.findByText(/independently declared something this could be bought for/))
+      .toBeTruthy();
+    expect(screen.getByText(/22 bags. With yours, 24./)).toBeTruthy();
+    // Then the blocker, as a blocker.
+    expect(screen.getByText(/Pool has no verified bulk supplier for this yet/)).toBeTruthy();
+    // And no supplier minimum is invented to sit beside it.
+    expect(screen.queryByText(/best price starts at/)).toBeNull();
   });
 
   it("discloses a substitute before anything is bought, not after", async () => {

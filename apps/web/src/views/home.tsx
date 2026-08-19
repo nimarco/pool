@@ -389,37 +389,41 @@ function StandingLine({ demand, need }: { demand: StandingDemand; need: NeedRow 
               : ""}
         </span>
       </div>
+      {/* The demand, whether or not Pool can currently buy any of it. This used to be
+          inside the has_supplier branch, so a declaration with no supplier printed a
+          sentence about supply and said nothing at all about the six other households
+          who buy the same thing — which reads as "nobody wants this" and is a different
+          claim entirely. */}
+      <p className="small muted">
+        {demand.compatible_members > 0 ? (
+          <>
+            <strong>{demand.compatible_members}</strong> other{" "}
+            {demand.compatible_members === 1 ? "member has" : "members have"}{" "}
+            independently declared something this could be bought for —{" "}
+            {demand.compatible_units} {unit(demand.compatible_units)}. With yours,{" "}
+            {together}.
+          </>
+        ) : (
+          <>Nobody else near you has declared anything compatible yet.</>
+        )}
+        {/* Only when a supplier has actually said so. No offer, no minimum. */}
+        {demand.has_supplier && demand.minimum_units
+          ? ` The supplier's best price starts at ${demand.minimum_units}.`
+          : ""}
+      </p>
       {!demand.has_supplier ? (
-        <p className="small muted">
-          No supplier Pool has verified sells this in bulk yet, so there is nothing for it
-          to coordinate. Your declaration stays on file.
+        /* Second, and as the blocker it is: the demand above is real and the thing
+           that is missing is a supplier, not people. */
+        <p className="tiny faint">
+          Pool has no verified bulk supplier for this yet, so there is nothing to price a
+          group order against. Your declaration stays standing.
         </p>
-      ) : (
-        <>
-          <p className="small muted">
-            {demand.compatible_members > 0 ? (
-              <>
-                <strong>{demand.compatible_members}</strong> other{" "}
-                {demand.compatible_members === 1 ? "member has" : "members have"}{" "}
-                independently declared something this could be bought for —{" "}
-                {demand.compatible_units} {unit(demand.compatible_units)}. With yours,{" "}
-                {together}.
-              </>
-            ) : (
-              <>Nobody else near you has declared anything compatible yet.</>
-            )}
-            {demand.minimum_units
-              ? ` The supplier's best price starts at ${demand.minimum_units}.`
-              : ""}
-          </p>
-          {demand.sourceable_product_name ? (
-            <p className="tiny faint">
-              The order Pool could form would buy {demand.sourceable_product_name}, which
-              your substitution rule allows.
-            </p>
-          ) : null}
-        </>
-      )}
+      ) : demand.sourceable_product_name ? (
+        <p className="tiny faint">
+          The order Pool could form would buy {demand.sourceable_product_name}, which
+          your substitution rule allows.
+        </p>
+      ) : null}
     </div>
   );
 }

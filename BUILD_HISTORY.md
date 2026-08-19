@@ -5098,3 +5098,123 @@ declarations — because a system that always succeeds looks identical to one th
 **Article fodder**
 Article 1 — "the demo needs a magic word" is a product finding, not a presentation problem, and the
 fix was in search rather than in the script.
+
+---
+
+### #0047 — [2026-08-19] — Merge-readiness review of the member-trigger branch
+`[REVIEW]` `[FRONTEND]` `[DEMO]` `[MERGE]`
+
+**Goal / user intent**
+Verify the `fix/consumer-result-relevance` implementation report against the repository rather than
+trusting it, inspect the whole feature diff for correctness, security, privacy, cost, lifecycle and
+demo-truth regressions, fix only what could be proved, and merge into `main` if the branch earned
+it. No deployment, no paid model call.
+
+**Starting state**
+`fix/consumer-result-relevance` at `375e7eb`, pushed and tracking; `main` and `origin/main` both at
+`af6237d`; working tree clean. 50 files, +7503/−482 against `main`.
+
+**Decision**
+Merged with `--no-ff`, preserving the branch's eleven logical commits, after fixing three defects
+the review proved. None of the three was a blocker under the pass's own criteria; all three were
+small, provable and adjacent to claims the branch makes, so they were fixed rather than filed.
+
+**Why**
+The report's substantive claims held up under adversarial checking, which is the bar for merging. A
+brute-force cross-check over 36 injected declarations × 6 products × every public site × every tier
+price found **zero** disagreements between `services.discovery.compatible_needs` and
+`domain.matching.find_candidates` in either direction — the invariant the branch exists to enforce.
+The membership-verification gap that cross-check suggested turned out to be unreachable: `needs.py`
+refuses a declaration from an unverified household, so an active need cannot exist without one.
+
+**Implementation**
+Three fixes, each with a regression test that fails on the old behaviour. Status: tested.
+
+1. **`apps/web/src/App.tsx`** — the drawer's *Open Showcase mode* set the view directly instead of
+   going through `showcaseTo`, leaving `api`'s showcase flag on the visitor's session. The
+   showcase's front page then read the visitor's community and printed its counts as the
+   showcase's: observed live as "24 members and 34 standing needs" where the showcase holds 31. It
+   now goes through `showcaseTo`, the single entry point. Separately, `member` and `report` are
+   answers scoped to one partition and were cleared one render *after* the scope moved, so leaving
+   the showcase asked the visitor's partition for the showcase's pool id three times and took three
+   404s. Both are dropped in the same callback that moves the scope, next to `openPool`.
+2. **`services/agent/pool/services/run_report.py`** — `sourceable_targets` deliberately widens the
+   search to permitted substitutes, so a run can cost two products for one declaration and reach
+   two verdicts; the report took whichever was evaluated first. A member whose substitute formed an
+   order they did not fit inside was told "nobody near you has declared anything this order could
+   be shared with" — true of the *other* target, and no answer at all. `formed_excluded` existed for
+   exactly that outcome and was unreachable. Precedence now: an order Pool placed outranks one it
+   declined; `max` keeps the first of equals, so single-target declarations read as before.
+3. **`docs/DEMO_SCRIPT.md`, `README.md`, `apps/web/src/api.ts`** — the rehearsal's detergent pair
+   ($398.92 / $367.84) is the arithmetic of a four-unit declaration while step 6 says to keep the
+   default of two, where the screen reads $306.73 / $275.88 — a breach of the script's own rule
+   against quoting a number not on screen. The README's prose still said "twenty-four-endpoint API"
+   beside a table this branch corrected to 29 of 45. And `api.ts` had two orphaned doc comments:
+   `demoConfig`'s description sat above `runReport`, and `liveAgent` carried two.
+
+**AWS / external services touched**
+None. Local only: the offline deterministic planner, the in-memory repository, simulated payments
+and the simulated purchase executor. `AGENTCORE_RUNTIME_ARN` was unset throughout, so the live
+action was unavailable rather than declined.
+
+**Cost-relevant activity**
+Zero. No Bedrock or AgentCore invocation, no deployment, no CDK synth against an account, no live
+or test Stripe call, no schedule created. `/api/health` confirmed `model_provider: offline` on the
+server used for browser QA.
+
+**Agent behavior**
+A member run with three declarations completes in **7 model iterations and 6 tool calls** against
+bounds of 8 iterations / 25 tool calls / 2 duplicates — so the cap of three declarations sits one
+below the iteration bound rather than on it. A fourth declaration is reported as
+`not_investigated` rather than given an invented reason. Verified that no read path constructs a
+coordinator: `PoolCoordinator` is built only by `/api/agent/run`, so the report, product search and
+the current outlook cost no tokens.
+
+**Validation**
+`make qa` green on the merged `main`: **904 backend, 75 infra, 86 web**, Ruff, `tsc -b`, ESLint,
+production build, secret scan, and `git diff --check` clean. Canonical reconciliation re-measured
+from a fresh showcase run: 11 membership rows, 10 locked buyers, 1 retained `authorization_failed`,
+1 replacement restoring exactly 24 funded units, 2 cases, 0 surplus, merchandise $756.00, host
+$44.68, processing $28.06, fee $32.70, all-in $861.44 against $1,127.76 retail, saved $266.32 at
+23.61%, pickup North Hall lobby, 8 members/18 units due plus 2 members/6 units pulled forward at
+discovery. The seeded world still reaches four distinct verdicts across six products (whey 24/2
+cases, coffee 18/18 in 3 cases at 17.22%, energy 16/16 in 2 cases at 14.73%, detergent
+`not_cheaper` at −11.18% *with* 12 ≥ 12 units so the refusal is genuinely economic, towels
+`below_minimum` at 4 vs 48, chocolate whey `no_bulk_offer`). Tier attribution checked against a
+constructed disagreement — a price ceiling of $35 between the $31.50/24 and $39.80/12 whey tiers —
+in both directions: the winner's own `matched_units`/`minimum_units` are reported and the rejection
+list follows the winning offer, with no declaration both accepted and rejected. Persisted evidence
+and the report were scanned for every other household's name, id, email and payment reference:
+none. Browser QA at 1280×720/1000 and 390×844 through fresh onboarding, category search, two
+declarations, the pre-run screen, `Run Pool now`, *Why this worked*, the towels refusal, the Needs
+"as things stand" outlook, showcase entry, the full scripted lifecycle and showcase exit; no
+horizontal overflow, and the visitor's account, declarations and both pools were byte-for-byte
+unaffected by the replay (visitor 34 needs / 2 pools; showcase 32 needs / 1 completed pool).
+
+**Failures / dead ends**
+The first attempt at the App-level regression test asserted the drawer opener by accessible name;
+testing-library resolves it to the community name where the browser resolves the `title`, so it
+queries by title instead. The demo-script assertion also failed initially because a plain whitespace
+join leaves a blockquote `>` inside the quoted sentence — the flattener drops those tokens now.
+
+**What we learned**
+Showcase isolation has two halves and only one of them is on the server. The partition is
+server-derived and correct; *which* partition the browser asks for is one module-level flag, and a
+second copy of "enter showcase mode" was enough to desynchronise the screen from the world. The
+general lesson is that when a flag decides which world every request addresses, moving the screen
+and moving the flag have to be one function, not two call sites that agree today.
+
+**Article fodder**
+Article 3 — the run report's precedence bug is a clean example of the difference between a true
+sentence and an answer. Every word of "nobody near you has declared anything compatible" was true
+of the product it described; it was still the wrong thing to tell someone whose order had just
+formed without them.
+
+**Evidence worth preserving**
+The live before/after of the showcase counts (34 → 31 standing needs on the same screen), and the
+tier-disagreement output showing 32/24 from the winning tier versus 29/12 from the loser.
+
+**Relevant commits / files**
+`6ae2d82` showcase scope + `apps/web/src/App.test.tsx` · `7a9d534` script and README figures,
+`api.ts` comments, `test_presentation_truth.py` · `8e03505` `run_report._most_telling` +
+`test_run_report.py` · merge `ef5547b`.

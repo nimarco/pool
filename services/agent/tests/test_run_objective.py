@@ -1,0 +1,245 @@
+"""What **Run Pool now** means, and what the pool-day scan means.
+
+These were one thing for most of this build, and that is why a member could declare
+coffee, press their own button, and watch the coordinator form a whey order for ten
+other students. The run was honest — it answered a *community* question — but it was not
+the question the person pressing the button had asked.
+
+Two triggers now, one coordinator, one tool surface:
+
+* ``member_scan`` — anchored to the authoritative declarations of the one member whose
+  product this is. The server resolves who that is; there is no field in which a caller
+  could name somebody else, and no field in which they could supply a prompt.
+* ``manual_scan`` / ``scheduled_scan`` — the community-wide scan, unchanged, which is
+  what a background pool-day invocation means.
+
+The anchor sets the objective and never the answer: every entry it proposes still has to
+survive the same deterministic evaluation, and "nothing worth coordinating yet" is a
+successful outcome.
+"""
+
+from __future__ import annotations
+
+from datetime import date, timedelta
+
+import pytest
+from fastapi.testclient import TestClient
+
+from pool.agent import objective as obj
+from pool.api import app as api
+from pool.data.seed import CONSUMER_HOUSEHOLD
+
+
+@pytest.fixture
+def client() -> TestClient:
+    api._repo.reset("demo")
+    return TestClient(api.app)
+
+
+def _onboard(client: TestClient) -> str:
+    client.get("/api/state")
+    client.post("/api/onboarding", json={"display_name": "Marco", "autonomy_mode": "smart_join"})
+    client.post("/api/onboarding/payment-method")
+    return client.get("/api/state").json()["consumer"]["household_id"]
+
+
+def _declare(client, household_id, product_id, *, quantity=2, days=12, substitution="exact_only"):
+    due = date.today() + timedelta(days=days)
+    response = client.post(
+        "/api/needs",
+        json={
+            "household_id": household_id,
+            "product_id": product_id,
+            "quantity": quantity,
+            "cadence_days": 40,
+            "expected_next_need_date": due.isoformat(),
+            "flexibility_days": min(days, 11),
+            "routine_lead_days": min(days, 11),
+            "min_savings_pct": 20,
+            "max_spend_cents": 9000,
+            "substitution": substitution,
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _member_run(client):
+    r = client.post("/api/agent/run", json={"trigger": "member_scan"})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _community_run(client):
+    r = client.post("/api/agent/run", json={"trigger": "manual_scan"})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _pool_products(client) -> set[str]:
+    return {p["product_id"] for p in client.get("/api/state").json()["pools"]}
+
+
+# ------------------------------------------------------------- the reported bug
+
+
+def test_a_members_run_does_not_answer_somebody_elses_question(client):
+    """Declare coffee, press the button, and the whey order does not appear.
+
+    The whey opportunity is genuinely the community's largest — a community scan finds
+    it immediately, and the second half of this test proves that is still true. What
+    must not happen is a member's own button forming it.
+    """
+    household = _onboard(client)
+    _declare(client, household, "prod_coffee_beans", quantity=3)
+
+    _member_run(client)
+    assert _pool_products(client) == {"prod_coffee_beans"}
+
+    me = client.get(f"/api/members/{household}").json()
+    assert me["opportunity"]["product_id"] == "prod_coffee_beans"
+    assert me["opportunity"]["declared_product_id"] == "prod_coffee_beans"
+
+    # And the community-wide scan still does what it always did.
+    _community_run(client)
+    assert "prod_whey_vanilla" in _pool_products(client)
+
+
+def test_a_member_run_investigates_every_declaration_it_took_on(client):
+    """Two declarations, two verdicts. Acting on the first viable one and stopping would
+    leave the second indistinguishable from "not worth it"."""
+    household = _onboard(client)
+    _declare(client, household, "prod_whey_vanilla", quantity=2)
+    _declare(client, household, "prod_paper_towels", quantity=2, days=14)
+
+    run = _member_run(client)
+    evaluated = {
+        call["summary"] for call in run["tool_calls"] if call["name"] == "evaluate_pool_economics"
+    }
+    assert len(evaluated) == 2, run["tool_calls"]
+    names = [c["name"] for c in run["tool_calls"]]
+    assert names.count("evaluate_pool_economics") == 2
+    assert "create_candidate_pool" in names
+
+
+def test_a_member_with_nothing_declared_gets_a_truthful_no_op(client):
+    """No declarations, no question. A run that went looking for the community's best
+    opportunity here would be answering something nobody asked."""
+    _onboard(client)
+    run = _member_run(client)
+    assert run["outcome"] == "no_action"
+    assert client.get("/api/state").json()["pools"] == []
+
+
+def test_a_member_run_forms_nothing_for_a_product_their_rules_exclude(client):
+    """Exact-only on a product Pool cannot source. The community *can* form an order for
+    the neighbouring brand, and forming it off this member's button would be Pool doing
+    somebody else's shopping because two categories coincided."""
+    household = _onboard(client)
+    typed = next(
+        r["product_id"]
+        for r in client.get("/api/products/search", params={"q": "coffee"}).json()["results"]
+        if r["product_id"] != "prod_coffee_beans"
+    )
+    _declare(client, household, typed, quantity=3)
+
+    _member_run(client)
+    assert client.get("/api/state").json()["pools"] == []
+    assert client.get(f"/api/members/{household}").json()["opportunity"] is None
+
+
+def test_a_declaration_already_in_a_pool_is_not_investigated_again(client):
+    """Its answer is the pool. Re-investigating it would find its own units missing and
+    report a shortfall the member has already been served out of."""
+    household = _onboard(client)
+    need = _declare(client, household, "prod_whey_vanilla", quantity=2)
+    _member_run(client)
+
+    second = _member_run(client)
+    assert second["outcome"] == "no_action"
+    assert len(_pool_products(client)) == 1
+
+    ctx = api.ctx_for("demo")
+    built = obj.build_member_objective(ctx, api.COMMUNITY_ID, household)
+    assert built.needs == ()
+    assert need["need_id"] in built.served_need_ids
+
+
+# --------------------------------------------------------- the client's authority
+
+
+def test_the_browser_cannot_supply_a_prompt_or_name_another_household(client):
+    """The whole client-side surface of a run is a trigger name from a server allowlist.
+
+    ``RunRequest`` has no household field, so there is nothing to point at somebody
+    else; the objective is read out of the workspace inside the coordinator.
+    """
+    from pool.api.app import RunRequest
+
+    assert set(RunRequest.model_fields) == {"trigger", "instruction"}
+
+    other = _onboard(client)
+    _declare(client, other, "prod_whey_vanilla", quantity=2)
+    # A caller supplying somebody else's id anywhere in the body changes nothing: the
+    # field does not exist, and pydantic drops it.
+    response = client.post(
+        "/api/agent/run", json={"trigger": "member_scan", "household_id": "hh_okafor"}
+    )
+    assert response.status_code == 200
+    ctx = api.ctx_for("demo")
+    assert obj.for_trigger(ctx, api.COMMUNITY_ID, "member_scan").household_id == other
+
+
+def test_the_run_prompt_names_products_and_never_a_person(client):
+    """The model is told which product objectives to investigate. It is never told whose
+    they are, because it does not need to know in order to cost a bulk order (§4)."""
+    household = _onboard(client)
+    _declare(client, household, "prod_whey_vanilla", quantity=2)
+    ctx = api.ctx_for("demo")
+    objective = obj.for_trigger(ctx, api.COMMUNITY_ID, "member_scan")
+    prompt = obj.prompt_for(objective)
+
+    member = ctx.repo.get_household("demo", household)
+    assert household not in prompt
+    assert member.display_name not in prompt
+    assert member.contact_email not in prompt
+    assert "whey" in prompt.lower()
+
+
+def test_a_community_trigger_produces_no_member_objective(client):
+    """Nobody pressed anything. The scan has no subject, and must not acquire one."""
+    household = _onboard(client)
+    _declare(client, household, "prod_whey_vanilla", quantity=2)
+    ctx = api.ctx_for("demo")
+    for trigger in ("manual_scan", "scheduled_scan", "manual_advance"):
+        built = obj.for_trigger(ctx, api.COMMUNITY_ID, trigger)
+        assert built.kind == obj.COMMUNITY
+        assert built.household_id == ""
+        assert built.needs == ()
+
+
+def test_the_objective_is_capped_and_says_what_it_left_out(client):
+    """One button press must not become an unbounded procurement scan. What the cap
+    leaves out is recorded, so the report can say "not investigated" rather than
+    inventing a refusal for it."""
+    household = _onboard(client)
+    for i, product in enumerate(
+        ["prod_whey_vanilla", "prod_coffee_beans", "prod_energy_drink", "prod_paper_towels"]
+    ):
+        _declare(client, household, product, quantity=2, days=10 + i)
+
+    ctx = api.ctx_for("demo")
+    built = obj.for_trigger(ctx, api.COMMUNITY_ID, "member_scan")
+    assert len(built.needs) == obj.MAX_MEMBER_NEEDS
+    assert len(built.deferred_need_ids) == 1
+    # Soonest needed first, so what is deferred is the least pressing.
+    assert built.needs[0].product_id == "prod_whey_vanilla"
+
+
+def test_the_member_resolved_is_the_seeded_consumer_account(client):
+    """There is no authentication in this build, so "the member" is a server constant —
+    the one household a real person uses (``docs/PILOT_READINESS.md``)."""
+    household = _onboard(client)
+    assert household == CONSUMER_HOUSEHOLD
+    ctx = api.ctx_for("demo")
+    assert obj.for_trigger(ctx, api.COMMUNITY_ID, "member_scan").household_id == CONSUMER_HOUSEHOLD

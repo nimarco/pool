@@ -4471,3 +4471,157 @@ not in it."
 `services/agent/pool/domain/{models,matching}.py` · `services/agent/pool/api/app.py` ·
 `services/agent/tests/test_consumer_relevance.py` (new) · `apps/web/src/views/{home,needs,demo-panel}.tsx` ·
 `apps/web/src/{App.tsx,api.ts,styles.css}` · `apps/web/src/views/home.test.tsx`
+
+---
+
+### #0041 — [2026-08-19] — Whose question is the button asking?
+`[product]` `[agent]` `[domain]` `[demo]`
+
+**Goal / user intent**
+#0040 stopped a member being *shown* somebody else's pool. It left the coordinator itself
+community-scoped, so the causal chain was still wrong one step earlier: a member could declare
+coffee, press **Run Pool now**, and the run would go and form a whey order for ten other students.
+Home then said, correctly, that their coffee had not formed and that whey was being coordinated
+elsewhere — honest, and still not what the button means.
+
+**Starting state**
+One trigger. `PoolCoordinator.run()` took a free-text `instruction`, the public API substituted a
+server-owned prompt for it, and every prompt said the same thing: scan the community. Nothing in
+the system could express "answer *this* member's declarations".
+
+Two further defects turned up while measuring, and neither was cosmetic.
+
+**Decision — 1. Two triggers, one coordinator**
+`member_scan` versus `manual_scan`/`scheduled_scan`. The trigger is the only thing on the wire; the
+*objective* is derived server-side inside the coordinator from stored state
+(`agent/objective.py`), so the local API, the AgentCore runtime and the test suite all produce the
+same semantics from the same tiny payload.
+
+A member objective is that household's active declarations that no live pool is already serving,
+soonest first, capped at three — and capped at three for a measured reason, not taste: one listing,
+one evaluation each, one pool, one host offer and one closing turn is seven model calls against a
+bound of eight. A fourth would sit exactly on the safety net.
+
+There is no household field anywhere in the request. This build has no authentication, so "the
+member" resolves to the one household a real person uses — the same server-owned resolution
+`/api/onboarding/payment-method` already relies on. A caller cannot point a run at somebody else
+because there is nowhere to name them, and the prompt the model receives names products and
+quantities and never a person.
+
+The anchor sets the *objective*, never the *answer*. A member run investigates each declaration it
+took on and then acts on at most one; "nothing worth coordinating yet" remains a successful
+outcome.
+
+**Decision — 2. Discovery and the matcher had drifted apart**
+`list_latent_demand` bucketed declarations by substitute *group* and reported the whole bucket as
+the demand behind the group's largest product. The matcher then applied each member's own
+substitution policy and rejected some of them. A visitor who declared Death Wish coffee
+**exact-only** was therefore counted toward the actionable demand for Pike Place — an opportunity
+that shrank the moment it was costed.
+
+The listing now counts only declarations `domain.substitution` would let that product serve,
+evaluated at the most favourable bulk price any tier offers (so a declaration excluded here is
+excluded by every tier). Category interest survives under its own name — `group_interest_units` —
+because "people who buy some coffee" and "people whose standing authority this order can use" are
+two different numbers. One implementation, in `services/discovery.py`; the compatibility function
+is the matcher's own.
+
+The same rule decides what a member run may *act* on: `sourceable_targets_for_need` filters the
+substitute-group search through that member's authority, so an exact-only declaration for an
+unsourceable brand no longer forms a pool for six other people because two categories coincided.
+
+**Decision — 3. `FORMATION_RADIUS_KM` was a duplicate authority, and the wrong one**
+This was measured before it was touched. `Community.radius_km` — declared 2.5 km for Demo
+University — was read **nowhere in the codebase**. Meanwhile a module constant of 1.6 km decided
+who could form a pool, and the constants' own docstring claimed both radii were "bounded by the
+Community radius". Nothing bounded them; `RECOVERY_RADIUS_KM = 4.0` searched well outside a 2.5 km
+Community.
+
+The consequences were worse than a stale number. A verified member sitting in the 1.6–2.5 km
+annulus was inside their own Community and permanently undiscoverable — reachable only by a
+recovery. And the cut *overrode each member's own declared travel authority in the stricter
+direction, silently*: somebody who said they would walk 24 minutes was excluded by a rule they
+never agreed to and never saw, while the rule they did state was only ever a soft prompt.
+
+So the asymmetry survives and the authority moves. Formation searches the Community's own radius;
+recovery widens past it by a stated multiple (1.6 × 2.5 = 4.0 km, exactly today's value, now
+derived rather than declared twice). The 1.6 km figure is kept under the name it actually earns —
+`WALKABLE_PICKUP_KM` — and used *only* to rank candidate pickup sites, which excludes nobody. The
+per-member travel gate is `max_travel_minutes`, evaluated against real routed time by Smart Join,
+where it always belonged.
+
+**Why not simply raise the constant**
+Because "the audit said 2.5 makes the demo better" is not a domain reason, and a number chosen to
+make a demo work is exactly the kind of thing this project exists not to ship. The defensible
+statement is about authority, not distance: coarse geography is a search bound and a ranking
+preference; the boundary Pool coordinates inside is the Community, and the person who decides how
+far they will walk is the member.
+
+**Implementation**
+`agent/objective.py` (new), `services/discovery.py` (new), `agent/coordinator.py`,
+`agent/offline_model.py`, `agent/tools.py`, `agent/projection.py`, `services/coordination.py`,
+`services/relevance.py`, `api/public_demo.py`, `agentcore_app.py`. Status: **tested**.
+
+**AWS / external services touched**
+None. No deployment, no Bedrock or AgentCore invocation, no paid call of any kind.
+
+**Cost-relevant activity**
+None. Every run in this entry used the offline deterministic planner. A member-triggered run is
+*cheaper* than the scan it replaces on the consumer path: it evaluates at most three products
+instead of ranking the whole community, and the iteration and tool-call bounds are unchanged.
+
+**Agent behavior**
+Offline deterministic planner · same twelve tools · a member run calls
+`list_latent_demand` → `evaluate_pool_economics` per objective → `create_candidate_pool` →
+`request_host_acceptance`, five iterations · a member with no unserved declaration terminates on
+`record_no_action` with that as the recorded reason. The community scan is unchanged and still
+short-circuits on the first viable assessment, because the pool-day scan owes the best available
+action rather than a verdict per product.
+
+**Validation**
+844 backend tests pass (815 before; 29 new across `test_run_objective.py`, `test_discovery.py`,
+`test_seed_outcomes.py`). Measured, not assumed:
+
+- The canonical showcase is **bit-for-bit unchanged** by the radius correction. Same pickup site
+  (North Hall lobby), the same eleven membership rows, the same replacement household
+  (`hh_amadi`), 24 funded / 24 purchased / 2 cases / 0 surplus, $861.44 all-in against $1127.76
+  retail, $266.32 saved at 23.6%, host pay $44.68, Pool fee $32.70, processing $28.06, and the same
+  8-members/18-units due-now against 2-members/6-units pulled forward.
+- The seeded world's outcome taxonomy went from one reachable class to four. Before: whey viable,
+  everything else refused on geography. After: whey (23.5%), coffee (17.2%) and energy drinks
+  (14.7%) each viable on their own members; detergent refused on **economics** at −11.2% with 12
+  units against a 12-unit minimum; paper towels refused on the supplier minimum at 4 against 48;
+  chocolate whey refused for having no bulk quote at all.
+
+**Failures / dead ends**
+Three tests were passing for the wrong reason and are now fixed rather than deleted.
+`test_a_product_whose_bulk_price_does_not_beat_retail_forms_no_pool` asserted only that no pool
+formed — at 1.6 km the detergent demand never cleared its minimum, so the economics branch the test
+is *named after* had never once executed. Two AgentCore workspace tests asserted "exactly one pool
+exists" as a proxy for idempotency; with a richer world a second community scan legitimately finds
+the next opportunity, so they now assert what they meant — no duplicate for the same product, site
+and distribution day.
+
+An earlier draft let a member run form a pool for any product in their declaration's substitute
+group. It passed its tests and was wrong: it re-created the reported bug one level down, forming an
+order the member could never join because a category matched.
+
+**What we learned**
+A field nothing reads is not dead weight, it is a second opinion nobody is consulting — and the one
+the code *was* using turned out to be the one nobody could see. The give-away was the docstring:
+it described a constraint ("bounded by the Community radius") that had never been implemented, and
+had been quoted forward into the article notes.
+
+The other lesson is about test naming. A test called "bulk price does not beat retail" that asserts
+`viable is False` will pass for years on a fixture where the price is never reached. Assert the
+reason code, not the absence.
+
+**Article fodder**
+Article 1 — the difference between a system that is *honest* and a system that answers the question
+you asked. Article 3 — where a coarse safety constraint quietly outranks a preference the user
+actually stated, and why that is an autonomy bug rather than a tuning one.
+
+**Evidence worth preserving**
+The before/after outcome table for the seeded world. The canonical reconciliation being identical
+across the radius change is the load-bearing measurement: it is what makes "this was a correctness
+fix, not a demo tuning" checkable rather than asserted.

@@ -26,6 +26,7 @@ from ..config import Settings, get_settings
 from ..domain.models import ActivityEvent, AgentRun, RunOutcome, iso, new_id, utcnow
 from ..services.context import PoolContext
 from .bounds import BoundedRun, BoundExceeded, RunTelemetry
+from .objective import for_trigger, prompt_for
 from .tools import ToolContext, build_tools
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,11 @@ Members have told Pool what they routinely buy. Nobody has created a buying grou
 Your job is to notice when several of them want the same thing, decide whether a bulk \
 purchase is genuinely worth it, move a viable pool through its lifecycle, and stop \
 cleanly when nothing is worth doing.
+
+Every run is asked one of two questions, and the instruction says which. A community \
+scan may investigate anything in the community. A member-triggered run is about one \
+member's own standing declarations: investigate those, give each of them a verdict, and \
+do not go looking for a better opportunity somebody else would benefit from.
 
 The lifecycle, in order:
 latent demand -> candidate pool -> host recruiting -> host accepts -> supplier quote \
@@ -159,8 +165,14 @@ class PoolCoordinator:
     ) -> AgentRun:
         """Execute one bounded coordination run and return its record.
 
-        The same method serves the EventBridge schedule, the demo button, and the
-        tests. There is no separate demo code path (AGENTS.md §8).
+        The same method serves the EventBridge schedule, the member's own **Run Pool
+        now**, the AgentCore runtime, and the tests. There is no separate demo code path
+        (AGENTS.md §8).
+
+        ``trigger`` is the only discriminator, and the objective it implies is derived
+        *here* from stored state (``agent/objective.py``) rather than supplied by the
+        caller — so a browser, a Lambda and the deployed runtime all send the same tiny
+        payload and get the same semantics.
         """
         model, model_id, provider = self._build_model()
         run_id = new_id("run")
@@ -171,17 +183,20 @@ class PoolCoordinator:
             communities = self.repo.list_communities(ws)
             community_id = communities[0].id if communities else ""
 
+        pool_ctx = PoolContext(
+            repo=self.repo,
+            ws=ws,
+            routing=self.routing,
+            payments=self.payments,
+            purchaser=self.purchaser,
+            sourcing=self.sourcing,
+            run_id=run_id,
+        )
+        objective = for_trigger(pool_ctx, community_id, trigger)
         ctx = ToolContext(
-            pool=PoolContext(
-                repo=self.repo,
-                ws=ws,
-                routing=self.routing,
-                payments=self.payments,
-                purchaser=self.purchaser,
-                sourcing=self.sourcing,
-                run_id=run_id,
-            ),
+            pool=pool_ctx,
             community_id=community_id,
+            objective=objective,
         )
         # The model sees compact projections of the larger tool results; the complete
         # authoritative results stay on the context, reachable after the run for the
@@ -197,11 +212,7 @@ class PoolCoordinator:
             started_at=iso(utcnow()),
         )
 
-        prompt = instruction or (
-            "Run a background scan of this community. Find the most worthwhile bulk "
-            "buying opportunity among unserved recurring needs and form a candidate "
-            "pool if one is genuinely worth forming."
-        )
+        prompt = instruction or prompt_for(objective)
 
         try:
             agent = Agent(
@@ -251,6 +262,8 @@ class PoolCoordinator:
                 facts={
                     "outcome": record.outcome.value,
                     "trigger": trigger,
+                    "objective": objective.kind,
+                    "objective_products": list(objective.product_ids),
                     "iterations": record.iterations,
                     "tool_calls": len(record.tool_calls),
                     "tools_used": [t.name for t in record.tool_calls],

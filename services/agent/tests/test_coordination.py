@@ -111,11 +111,25 @@ def test_the_estimate_is_labelled_as_an_estimate_before_a_host_exists(seeded_ctx
 
 
 def test_a_product_whose_bulk_price_does_not_beat_retail_forms_no_pool(seeded_ctx):
+    """The *reason* is the assertion, not the absence of a pool.
+
+    This used to assert ``viable is False`` alone, and passed for years without the
+    economics ever being reached: at the old global 1.6 km formation radius the
+    detergent demand never cleared its supplier minimum, so the run refused on
+    ``below_minimum`` and the branch this test is named after was dead. A test that
+    cannot distinguish "too few people" from "pooling this saves nothing" is not
+    testing the invariant in its name (AGENTS.md §7).
+    """
     assessment = coord.evaluate_opportunity(
         ctx=seeded_ctx, community_id=COMMUNITY_ID,
         product_id="prod_detergent_pods", pickup_site_id="site_quad",
     )
     assert assessment.viable is False
+    assert assessment.reason_code == coord.REASON_NOT_CHEAPER
+    # Enough demand existed; the all-in price is what failed.
+    assert assessment.matched_units >= assessment.minimum_units
+    assert assessment.economics is not None
+    assert assessment.economics.net_savings_cents <= 0
 
 
 def test_an_unknown_product_or_site_is_an_error(seeded_ctx):

@@ -112,8 +112,15 @@ class Deployment:
         sep = "&" if "?" in path else "?"
         return f"{path}{sep}workspace={quote(ws, safe='')}"
 
-    def live(self, ws: str = WS):
-        return self.post("/api/demo/agentcore", ws=ws)
+    def live(self, ws: str = WS, action: str = "community"):
+        """Invoke the deployed runtime.
+
+        ``community`` by default because this file is about the runtime/store boundary
+        rather than about whose question a run answers: a community scan needs no
+        declaration to exist first, so every test here stays about the thing it names.
+        The member-anchored action has its own tests below.
+        """
+        return self.post(f"/api/demo/agentcore?action={action}", ws=ws)
 
     def state(self, ws: str = WS) -> dict:
         return self.get("/api/state", ws=ws).json()
@@ -426,7 +433,14 @@ def test_a_second_invocation_cannot_start_while_one_is_running(deployment):
 def test_a_repeated_invocation_does_not_produce_a_second_pool(deployment):
     """Sequential duplicates are allowed — a judge may press it again — and the domain's
     own idempotency key is what makes that safe. Agent systems retry; a coordinator that
-    formed a second identical pool on the second press would be one."""
+    formed a second *identical* pool on the second press would be one.
+
+    "Identical" is the claim, not "only one pool exists". A community scan that finds
+    the next unserved opportunity on its second pass is the coordinator working: the
+    Community really does hold more than one, and refusing to see the second would be a
+    worse bug than seeing it twice. So the invariant is per product, per site, per
+    distribution day — which is exactly the idempotency key the domain keeps.
+    """
     deployment.get("/api/state")
     first = deployment.live().json()
     second = deployment.live().json()
@@ -434,7 +448,8 @@ def test_a_repeated_invocation_does_not_produce_a_second_pool(deployment):
     assert (first["ok"], second["ok"]) == (True, True)
     assert first["run"]["run_id"] != second["run"]["run_id"], "two real runs happened"
     pools = deployment.pools()
-    assert len(pools) == 1, [p["product_name"] for p in pools]
+    keys = [(p["product_id"], p["pickup_site"]) for p in pools]
+    assert len(keys) == len(set(keys)), [p["product_name"] for p in pools]
     # Both runs are on the record. Idempotent does not mean invisible.
     assert len(deployment.state()["runs"]) == 2
 
@@ -639,7 +654,11 @@ def test_the_paid_cap_still_bounds_the_shared_path(deployment):
     assert deployment.live().json()["ok"] is True
     assert deployment.live().status_code == 429
     assert len(deployment.client.calls) == 2, "a refused run must not reach AWS"
-    assert len(deployment.pools()) == 1
+    pools = deployment.pools()
+    # Two permitted scans, two distinct opportunities, no duplicate of either. The cap
+    # bounds how many *runs* are paid for, not how much the community turns out to hold.
+    keys = [(p["product_id"], p["pickup_site"]) for p in pools]
+    assert len(keys) == len(set(keys)) and len(keys) <= 2
 
 
 def test_a_run_refused_by_the_cap_hands_the_workspace_straight_back(deployment):

@@ -114,6 +114,10 @@ def tool_call_view(record: ToolCallRecord) -> dict[str, Any]:
 
 ALLOWED_TRIGGERS = {
     "scheduled_scan",
+    # One member pressing **Run Pool now** in their own product. The runtime resolves
+    # *which* member from the workspace it was given (``pool.agent.objective``); the
+    # payload never names one, so this trigger cannot be pointed at somebody else.
+    "member_scan",
     "manual",
     "advance_pools",
     "dropout_recovery",

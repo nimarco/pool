@@ -49,6 +49,7 @@ from ..domain.models import (
     DecisionRequest,
     DecisionState,
     Membership,
+    NeedDeclaration,
     Offer,
     OfferKind,
     ParticipationState,
@@ -64,6 +65,7 @@ from ..domain.models import (
 from ..domain.money import bps_to_pct_str, format_cents
 from ..domain.policy import JoinVerdictKind, PolicyVerdict, evaluate_smart_join
 from ..domain.state import assert_transition, is_open_to_joining
+from ..domain.substitution import evaluate_compatibility
 from ..domain.timing import build_timing, next_pool_day
 from ..domain.viability import (
     ViabilityInputs,
@@ -73,11 +75,50 @@ from ..domain.viability import (
 )
 from .context import CoordinationError, PoolContext
 
-#: Pools form tight and repair wide: the initial search stays close to the pickup site
-#: so travel burden is low, and only a recovery widens the net. Both remain bounded by
-#: each member's own max-travel policy and by the Community radius.
-FORMATION_RADIUS_KM = 1.6
-RECOVERY_RADIUS_KM = 4.0
+#: Pools form inside the Community and repair beyond it.
+#:
+#: The Community is the boundary Pool coordinates inside (AGENTS.md §1, §2), and its
+#: ``radius_km`` is the authoritative statement of how far apart its members are. A
+#: verified member of a Community is therefore eligible to be *discovered* anywhere
+#: inside it, and how far any one of them is willing to travel is decided by their own
+#: ``max_travel_minutes`` — a real declared preference the Smart Join engine already
+#: evaluates against real routed travel time (``domain.policy``).
+#:
+#: Formation used to stop at a global ``FORMATION_RADIUS_KM = 1.6``. Two things were
+#: wrong with that, and neither was the number:
+#:
+#: * ``Community.radius_km`` was read nowhere at all, so the model carried a field
+#:   declaring the community's extent while the engine silently used a different,
+#:   tighter one. The constants' own docstring claimed both radii were "bounded by the
+#:   Community radius"; nothing bounded them, and ``RECOVERY_RADIUS_KM = 4.0`` in fact
+#:   searched well outside a 2.5 km Community.
+#: * A hard geographic cut *overrides* each member's stated travel authority in the
+#:   stricter direction and never tells them. Somebody who said they would walk 24
+#:   minutes was excluded from their own community's order by a rule they never agreed
+#:   to and never saw — while the rule they did state was only ever a soft prompt.
+#:
+#: The asymmetry itself is still right, and it survives: formation searches the
+#: Community; recovery widens *past* it, because repairing a funded pool is worth
+#: reaching further than forming a speculative one. Coarse geography is a search bound
+#: and a site-ranking preference here — never an authority over a member.
+RECOVERY_WIDENING = 1.6
+
+#: How far a member is assumed to be willing to walk to a pickup point, used **only**
+#: to rank candidate pickup sites (``agent/tools.py``): the best site is the one most of
+#: the interested members can reach on foot. It excludes nobody. Ranking by the demand
+#: centroid instead drifts toward outliers and picks a site convenient for nobody, which
+#: is the failure this replaced.
+WALKABLE_PICKUP_KM = 1.6
+
+
+def formation_radius_km(community: Community) -> float:
+    """How far from a pickup site formation may look. The Community's own extent."""
+    return community.radius_km
+
+
+def recovery_radius_km(community: Community) -> float:
+    """How far a *repair* may look — deliberately wider than the Community (§27)."""
+    return community.radius_km * RECOVERY_WIDENING
 
 #: Distance assumed for the supplier round trip when no host has been selected yet, so
 #: a candidate pool can show an honest *estimate* rather than a precise-looking lie.
@@ -269,6 +310,79 @@ def _memberships_map(ctx: PoolContext, community_id: str) -> dict[str, Any]:
     }
 
 
+def sourceable_targets(ctx: PoolContext, product_id: str) -> list[str]:
+    """Products a pool could actually buy that might serve a need for ``product_id``.
+
+    The declared product first, then anything else in its substitute group Pool holds a
+    bulk offer for. The member's own substitution policy still decides whether any of
+    them may serve *them* — that verdict belongs to ``domain.substitution`` and is
+    reached inside the matcher, not here. Widening the *search* is not widening the
+    *authority*: without this, somebody who said "any equivalent product is fine" was
+    told no supplier existed while Pool held a bulk quote for the neighbouring brand.
+
+    One implementation, because three callers need the same answer: the member outlook,
+    the run objective a member-triggered run is built from, and discovery.
+    """
+    declared = ctx.repo.get_product(ctx.ws, product_id)
+    group = declared.substitute_group if declared else ""
+    out: list[str] = []
+    for candidate in [declared, *ctx.repo.list_products(ctx.ws)]:
+        if candidate is None or candidate.id in out:
+            continue
+        if candidate.id != product_id and (
+            not group or candidate.substitute_group != group
+        ):
+            continue
+        if offers_for(ctx, candidate.id)[1]:
+            out.append(candidate.id)
+    return out
+
+
+def sourceable_targets_for_need(ctx: PoolContext, need: NeedDeclaration) -> list[str]:
+    """The subset of :func:`sourceable_targets` this member's own rules authorise.
+
+    Widening the *search* to a substitute group is right when the question is "what
+    might serve this declaration"; it is wrong when the question is "what may this run
+    act on". A member who declared one coffee **exact-only** cannot join an order for a
+    different one, so proposing that order as an answer to *their* button would form a
+    pool for six other people because their categories happened to coincide.
+
+    The authority is ``domain.substitution`` — the same pure function the matcher
+    applies — evaluated at the most favourable bulk price any tier offers, so a target
+    kept here is one some tier can genuinely use.
+    """
+    declared = ctx.repo.get_product(ctx.ws, need.product_id)
+    if declared is None:
+        return []
+    out: list[str] = []
+    for target_id in sourceable_targets(ctx, need.product_id):
+        target = ctx.repo.get_product(ctx.ws, target_id)
+        if target is None:
+            continue
+        verdict = evaluate_compatibility(
+            target=target,
+            candidate=declared,
+            need=need,
+            offer_unit_price_cents=best_bulk_unit_price_cents(ctx, target_id),
+        )
+        if verdict.compatible:
+            out.append(target_id)
+    return out
+
+
+def best_bulk_unit_price_cents(ctx: PoolContext, product_id: str) -> int | None:
+    """The cheapest per-unit price any usable bulk tier for this product will sell at.
+
+    Discovery needs this to ask the compatibility question the matcher will later ask
+    per tier: a member's per-unit price ceiling applies to every non-exact substitution,
+    so a declaration rejected even at the *cheapest* tier is rejected at all of them.
+    ``None`` when there is no bulk tier, which is also what the matcher is passed when
+    no price is known.
+    """
+    _, bulk = offers_for(ctx, product_id)
+    return min((o.unit_price_cents for o in bulk), default=None)
+
+
 def pooled_household_ids(ctx: PoolContext, community_id: str, product_id: str) -> set[str]:
     """Members already inside a live pool for this product — do not re-recruit them."""
     out: set[str] = set()
@@ -369,7 +483,7 @@ def evaluate_opportunity(
     product_id: str,
     pickup_site_id: str,
     distribution_day: date | None = None,
-    radius_km: float = FORMATION_RADIUS_KM,
+    radius_km: float | None = None,
     exclude_household_ids: frozenset[str] = frozenset(),
     include_future_demand: bool = True,
 ) -> OpportunityAssessment:
@@ -387,6 +501,8 @@ def evaluate_opportunity(
         raise CoordinationError(f"unknown pickup site: {pickup_site_id}")
     if site.community_id != community_id:
         raise CoordinationError("pickup site belongs to a different community")
+    if radius_km is None:
+        radius_km = formation_radius_km(community)
 
     today = ctx.now.date()
     dist_day = distribution_day or next_pool_day(today, community.schedule)
@@ -1464,7 +1580,7 @@ class RecoveryResult:
 
 
 def recover_pool(
-    *, ctx: PoolContext, pool_id: str, radius_km: float = RECOVERY_RADIUS_KM
+    *, ctx: PoolContext, pool_id: str, radius_km: float | None = None
 ) -> RecoveryResult:
     """Attempt to restore a pool that lost funded demand.
 
@@ -1482,6 +1598,8 @@ def recover_pool(
     assignment = ctx.repo.get_host_assignment(ctx.ws, pool_id)
     if product is None or site is None or offer is None:
         raise CoordinationError("pool references a missing product, site, or offer")
+    if radius_km is None:
+        radius_km = recovery_radius_km(community)
 
     # Replace only what is genuinely gone. Buyers who have not yet answered their final
     # offer are still in play, and recruiting over the top of them would leave Pool

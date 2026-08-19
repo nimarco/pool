@@ -84,6 +84,14 @@ def _search_first(client: TestClient, query: str) -> str:
 
 
 def _run(client: TestClient) -> dict:
+    """The consumer's own **Run Pool now**, anchored to their own declarations."""
+    response = client.post("/api/agent/run", json={"trigger": "member_scan"})
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _community_run(client: TestClient) -> dict:
+    """The scan the scheduled pool-day invocation performs. Nobody's button."""
     response = client.post("/api/agent/run", json={"trigger": "manual_scan"})
     assert response.status_code == 200, response.text
     return response.json()
@@ -338,7 +346,9 @@ def test_leaving_a_pool_stops_it_being_this_members_opportunity(client):
 def test_another_members_pool_is_never_the_consumers_opportunity(client):
     """The general form of the reported bug: a pool exists, the consumer is not in it."""
     household = _onboard(client)
-    _run(client)  # forms the whey pool out of synthetic members' declarations only
+    # The pool-day scan, not this member's button: it forms the whey pool out of the
+    # synthetic members' declarations, and this member is in none of it.
+    _community_run(client)
 
     state = client.get("/api/state").json()
     assert state["pools"], "the coordinator should still have formed the community's pool"
@@ -481,13 +491,19 @@ def test_a_retired_declaration_cannot_be_pooled(client):
         },
     )
 
-    _run(client)
+    # Their own button first: a retired declaration is not a question, so there is
+    # nothing for a member-anchored run to investigate.
+    assert _run(client)["outcome"] == "no_action"
+    # And the community's own scan, which does form the whey pool, must not count them.
+    _community_run(client)
 
     member = _me(client, household)
     assert member["opportunity"] is None
-    pool = client.get("/api/state").json()["pools"][0]
-    detail = client.get(f"/api/pools/{pool['pool_id']}").json()
-    assert household not in {m["household_id"] for m in detail["members"]}
+    pools = client.get("/api/state").json()["pools"]
+    assert pools, "the community scan should still have formed the whey pool"
+    for pool in pools:
+        detail = client.get(f"/api/pools/{pool['pool_id']}").json()
+        assert household not in {m["household_id"] for m in detail["members"]}
 
 
 def test_a_declaration_already_in_a_pool_cannot_be_repointed_at_another_product(client):

@@ -279,6 +279,11 @@ ALLOWED_POST_PATTERNS = tuple(
 #: on an environment variable, which is exactly the kind of difference that survives until
 #: someone demonstrates it live.
 TRIGGER_PROMPTS: dict[str, str | None] = {
+    # The consumer's own **Run Pool now**. ``None`` because the server does not have a
+    # fixed sentence for it: the coordinator derives the instruction from the member's
+    # authoritative standing declarations (``agent/objective.py``), which is the whole
+    # point of the trigger. A client selects the key and never the objective.
+    "member_scan": None,
     "manual_scan": None,
     "manual_advance": (
         "Advance every pool that is blocked: recruit a host, refresh the supplier "
@@ -287,9 +292,19 @@ TRIGGER_PROMPTS: dict[str, str | None] = {
     ),
 }
 
-#: Trigger the live AgentCore action sends. Must be in the runtime entrypoint's own
+#: Triggers the live AgentCore action may send, keyed by the action the *server*
+#: classifies the request as. Both must be in the runtime entrypoint's own
 #: ``ALLOWED_TRIGGERS`` (``services/agent/agentcore_app.py``).
-LIVE_TRIGGER = "manual"
+#:
+#: The default is the member's own question, because the live button on the product is
+#: the consumer's. The community scan stays reachable — it is what the scheduled
+#: pool-day invocation means, and the technical surface exists to demonstrate it — but a
+#: caller selects a key from this map and never an objective.
+LIVE_TRIGGERS: dict[str, str] = {
+    "member": "member_scan",
+    "community": "scheduled_scan",
+}
+LIVE_TRIGGER = LIVE_TRIGGERS["member"]
 
 #: Server-owned classification of the live action. The browser may use
 #: ``allow_local_fallback`` to choose a safe path, but it must never infer safety from
@@ -948,7 +963,7 @@ class AgentCoreBridge:
             )
         return self._client
 
-    def invoke(self, workspace: str) -> dict[str, Any]:
+    def invoke(self, workspace: str, trigger: str = LIVE_TRIGGER) -> dict[str, Any]:
         """Run one live coordination cycle on AWS, in ``workspace``, and project it.
 
         ``workspace`` is the caller's own session, already checked against
@@ -957,12 +972,20 @@ class AgentCoreBridge:
         purpose: the runtime coordinates inside that partition, so the pool a visitor
         sees afterwards is the one this run created rather than a copy of its answer.
 
+        ``trigger`` names which of two questions the run answers — the member's own
+        declarations, or a community-wide scan — and is a key from :data:`LIVE_TRIGGERS`
+        chosen by the server, never a value from the browser. Nothing about *whose*
+        declarations travels: the runtime resolves the member from the workspace itself,
+        so the payload carries no household id, no name and no contact detail.
+
         Everything else is still built here from constants — no prompt, no community id,
         no instruction. The runtime rejects a trigger outside its own allowlist, so even
         this value cannot be steered into a different behaviour.
         """
         session_id = new_session_id()
-        payload = json.dumps({"workspace": workspace, "trigger": LIVE_TRIGGER}).encode()
+        if trigger not in set(LIVE_TRIGGERS.values()):
+            raise ValueError(f"trigger not permitted on the live action: {trigger!r}")
+        payload = json.dumps({"workspace": workspace, "trigger": trigger}).encode()
 
         started = time.perf_counter()
         response = self.client.invoke_agent_runtime(
@@ -1125,7 +1148,7 @@ def install(app: FastAPI, guard: PublicDemoGuard, observe: Any = None) -> None:
         return response
 
     @app.post("/api/demo/agentcore")
-    def demo_agentcore(workspace: str = "") -> dict[str, Any]:
+    def demo_agentcore(workspace: str = "", action: str = "member") -> dict[str, Any]:
         """Invoke the deployed AgentCore Runtime, for real, once, on this session.
 
         Returns ``ok: false`` with a reason rather than raising for the situations a
@@ -1143,6 +1166,14 @@ def install(app: FastAPI, guard: PublicDemoGuard, observe: Any = None) -> None:
         # without a rebuild, and a handler holding a stale snapshot would ignore them.
         settings = guard.settings
         ws = guard.check_workspace(workspace)
+        # A key, never a value. ``member`` is the consumer's own button; ``community``
+        # is the scan the scheduled pool-day invocation performs. Anything else is a
+        # caller inventing an objective, which is exactly what this refuses.
+        trigger = LIVE_TRIGGERS.get(action, "")
+        if not trigger:
+            raise HTTPException(
+                400, f"unknown action: {action}. Allowed: {sorted(LIVE_TRIGGERS)}"
+            )
         if not settings.live_available:
             return {
                 "ok": False,
@@ -1179,7 +1210,7 @@ def install(app: FastAPI, guard: PublicDemoGuard, observe: Any = None) -> None:
             raise
 
         try:
-            result = guard.bridge.invoke(ws)
+            result = guard.bridge.invoke(ws, trigger)
         except RuntimeRefusal as refusal:
             # A refusal is an answer. The runtime validated the payload and declined
             # before running anything, so the workspace goes straight back and the client

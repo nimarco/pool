@@ -29,6 +29,10 @@ from strands.models import Model
 
 MAX_PRODUCTS_TO_INVESTIGATE = 4
 
+#: How many of a member's own objectives one member-triggered run evaluates. Matches
+#: ``agent.objective.MAX_MEMBER_NEEDS`` and is bounded by the same iteration cap.
+MAX_MEMBER_OBJECTIVES = 3
+
 #: How many times one run may re-read the work queue. Two is enough to act, observe the
 #: consequence, and act once more; more than that is polling.
 MAX_LISTINGS = 2
@@ -166,7 +170,17 @@ class DeterministicPlannerModel(Model):
     # -- discovery ---------------------------------------------------------
 
     def _plan_scan(self, view: TranscriptView) -> list[dict]:
-        """Find latent overlap and form one candidate pool. One pool per run."""
+        """Find the overlap worth acting on, and form at most one candidate pool.
+
+        Two shapes, chosen by what the listing says this run was asked (``objective``):
+
+        * **member** — every one of that member's own objectives is evaluated before
+          anything is formed, because the run owes each of their declarations a real
+          verdict. Acting on the first viable one and stopping would leave the rest
+          indistinguishable from "not worth it".
+        * **community** — the scheduled scan owes only the best available action, so it
+          acts as soon as it finds something viable rather than costing the whole queue.
+        """
         # record_no_action is terminal. Without this the planner re-issues it forever;
         # the run-level bound caught exactly that during development, which is what the
         # bound is for — but a planner that needs the safety net every run is a bug.
@@ -178,11 +192,17 @@ class DeterministicPlannerModel(Model):
 
         demand = view.last_result_of("list_latent_demand") or {}
         opportunities = demand.get("opportunities", [])
+        member_run = (demand.get("objective") or {}).get("kind") == "member"
+        if member_run:
+            queue = [o for o in opportunities if o.get("for_member")][:MAX_MEMBER_OBJECTIVES]
+        else:
+            queue = opportunities[:MAX_PRODUCTS_TO_INVESTIGATE]
+
         evaluated_products = {a.get("product_id") for a in view.args_of("evaluate_pool_economics")}
         assessments = view.results_of("evaluate_pool_economics")
 
-        # A viable assessment is worth acting on immediately.
-        if assessments:
+        # A community scan acts on the first viable assessment it sees.
+        if not member_run and assessments:
             latest = assessments[-1]
             if latest.get("viable") and not view.called("create_candidate_pool"):
                 return _tool_event(
@@ -208,8 +228,8 @@ class DeterministicPlannerModel(Model):
                 "fulfilment job to the best-ranked host."
             )
 
-        # Otherwise investigate the next unexplored product.
-        for opp in opportunities[:MAX_PRODUCTS_TO_INVESTIGATE]:
+        # Otherwise investigate the next unexplored product in the queue.
+        for opp in queue:
             if opp.get("product_id") in evaluated_products:
                 continue
             if not opp.get("suggested_pickup_site_id"):
@@ -223,7 +243,29 @@ class DeterministicPlannerModel(Model):
                 },
             )
 
+        # Everything asked about has been costed. A member run acts now, on the first
+        # viable objective in the member's own priority order — soonest needed first.
+        # The order is the listing's; no arithmetic happens here, because a planner that
+        # compares prices is a planner deciding money (AGENTS.md §5).
+        if member_run:
+            by_product = {a.get("product_id"): a for a in assessments}
+            for opp in queue:
+                found = by_product.get(opp.get("product_id"))
+                if found and found.get("viable"):
+                    return _tool_event(
+                        "create_candidate_pool",
+                        {
+                            "product_id": found["product_id"],
+                            "pickup_site_id": found["pickup_site_id"],
+                        },
+                    )
+
         reasons = [a.get("reason", "") for a in assessments if not a.get("viable")]
+        if not queue and member_run:
+            return _tool_event(
+                "record_no_action",
+                {"reason": "this member holds no standing declaration to investigate"},
+            )
         return _tool_event(
             "record_no_action",
             {

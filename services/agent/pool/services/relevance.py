@@ -306,7 +306,7 @@ def need_outlook(
     if not need.active:
         return outlook(OUTLOOK_RETIRED, "You retired this declaration, so Pool leaves it alone.")
 
-    targets = _sourceable_targets(ctx, need.product_id)
+    targets = coord.sourceable_targets(ctx, need.product_id)
     if not targets:
         return outlook(
             OUTLOOK_NO_SUPPLY, "No supplier Pool has verified sells this in bulk yet."
@@ -421,31 +421,6 @@ def _round_already_formed(
         if membership is None or membership.state not in LIVE_PARTICIPATION_STATES:
             return pool.id
     return ""
-
-
-def _sourceable_targets(ctx: PoolContext, product_id: str) -> list[str]:
-    """Products a pool could actually buy that might serve a need for ``product_id``.
-
-    The declared product first, then anything else in its substitute group that Pool
-    holds a bulk offer for. The member's own substitution policy still decides whether
-    any of them may serve them — that verdict belongs to ``domain.substitution`` and is
-    reached inside the matcher, not here. Widening the *search* is not widening the
-    *authority*: without this, somebody who said "any equivalent product is fine" was
-    told no supplier existed while Pool held a bulk quote for the neighbouring brand.
-    """
-    declared = ctx.repo.get_product(ctx.ws, product_id)
-    group = declared.substitute_group if declared else ""
-    out: list[str] = []
-    for candidate in [declared, *ctx.repo.list_products(ctx.ws)]:
-        if candidate is None or candidate.id in out:
-            continue
-        if candidate.id != product_id and (
-            not group or candidate.substitute_group != group
-        ):
-            continue
-        if coord.offers_for(ctx, candidate.id)[1]:
-            out.append(candidate.id)
-    return out
 
 
 def _unit_word(ctx: PoolContext, product_id: str, count: int) -> str:

@@ -252,9 +252,15 @@ function HostConsole({ poolId }: { poolId: string | null }) {
 export function OperationsView({
   hostPoolId,
   onBack,
+  onWorldChanged,
 }: {
   hostPoolId: string | null;
   onBack: () => void;
+  /** Told when a supplier quote lands, so the shell re-reads the member view it owns.
+   *  Recording a quote writes one offer row and nothing the app's own change detection
+   *  counts, which is exactly the property that makes the mutation provable — and
+   *  exactly why the browser has to be told rather than inferring it. */
+  onWorldChanged?: () => void;
 }) {
   const [data, setData] = useState<OperatorView | null>(null);
 
@@ -281,7 +287,12 @@ export function OperationsView({
 
       {/* Before the ledger, because it is the thing an operator comes here to *do*
           rather than to read — and the offer table below is where its effect lands. */}
-      <SupplierQuotes onRecorded={loadLedger} />
+      <SupplierQuotes
+        onRecorded={() => {
+          loadLedger();
+          onWorldChanged?.();
+        }}
+      />
 
       <HostConsole poolId={hostPoolId} />
 

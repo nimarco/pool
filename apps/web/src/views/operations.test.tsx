@@ -52,11 +52,16 @@ const updates: SupplierUpdates = {
   ],
 };
 
-function renderOperations(overrides: Partial<SupplierUpdates> = {}) {
+function renderOperations(
+  overrides: Partial<SupplierUpdates> = {},
+  onWorldChanged: () => void = () => {},
+) {
   vi.spyOn(api, "operator").mockImplementation(() => new Promise(() => undefined));
   vi.spyOn(api, "checklist").mockImplementation(() => new Promise(() => undefined));
   vi.spyOn(api, "supplierUpdates").mockResolvedValue({ ...updates, ...overrides });
-  render(<OperationsView hostPoolId={null} onBack={() => {}} />);
+  render(
+    <OperationsView hostPoolId={null} onBack={() => {}} onWorldChanged={onWorldChanged} />,
+  );
 }
 
 afterEach(() => {
@@ -130,5 +135,29 @@ describe("recording a supplier quote", () => {
     const onFile = screen.getByRole("button", { name: "On file" }) as HTMLButtonElement;
     expect(onFile.disabled).toBe(true);
     expect(screen.getByRole("button", { name: "Record quote" })).toBeTruthy();
+  });
+
+  /* Recording a quote writes one offer row and nothing the shell's own change detection
+     counts — no pool, no decision, no activity event. That is what makes the mutation
+     provable, and it is why the shell has to be told outright, or Home would go on
+     showing the outlook from before the quote arrived. */
+  it("tells the shell the world changed, so the outlook is re-read", async () => {
+    const changed = vi.fn();
+    vi.spyOn(api, "recordSupplierQuote").mockResolvedValue({
+      recorded: true,
+      quote: "rice_case_program",
+      offer_id: "off_rice_bulk_case",
+      unit_price_display: "$6.25",
+      case_units: 8,
+      min_units: 16,
+      verified_at: "2026-08-19T00:00:00Z",
+      source: "synthetic",
+      synthetic: true,
+    });
+    renderOperations({}, changed);
+    const user = userEvent.setup();
+
+    await user.click((await screen.findAllByRole("button", { name: "Record quote" }))[1]);
+    await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
   });
 });

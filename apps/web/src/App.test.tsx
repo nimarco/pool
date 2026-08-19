@@ -218,6 +218,64 @@ function stubFetch() {
       }
       return body(poolView(workspace));
     }
+    if (path === "/api/agent/run") return body({ run_id: "run_first", outcome: "no_action" });
+    if (path.startsWith("/api/runs/") && path.endsWith("/report")) {
+      return body({
+        run_id: "run_first",
+        trigger: "member_scan",
+        objective_kind: "member",
+        outcome: "no_action",
+        at: "2026-08-19T00:00:00Z",
+        model_provider: "offline",
+        is_mine: true,
+        evaluated_product_ids: ["prod_coffee_beans"],
+        results: [
+          {
+            need_id: "need_coffee",
+            product_id: "prod_coffee_beans",
+            product_name: "Whole bean coffee, 2 lb",
+            quantity: 3,
+            unit: "bag",
+            result: "declined",
+            pool_id: "",
+            units: 0,
+            reason_code: "no_bulk_offer",
+            is_exact_product: true,
+            declared_product_name: "",
+            headline: "No supplier Pool has verified sells this in bulk yet.",
+            facts: ["Your declaration stays standing, and Pool keeps watching."],
+          },
+        ],
+      });
+    }
+    if (path === "/api/demo/supplier-updates") {
+      return body({
+        product_id: "prod_coffee_beans",
+        product_name: "Whole bean coffee, 2 lb",
+        unit: "bag",
+        declared_members: 6,
+        declared_units: 22,
+        has_bulk_offer: false,
+        quotes: [
+          {
+            key: "rice_split_case",
+            offer_id: "off_split",
+            label: "Split-case quote",
+            summary: "A quote.",
+            product_id: "prod_coffee_beans",
+            unit_price_cents: 975,
+            case_units: 4,
+            min_units: 12,
+            supplier_reference: "QUOTE",
+            synthetic: true,
+            recorded: false,
+          },
+        ],
+      });
+    }
+    if (path === "/api/operator") {
+      return body({ offers: [], pools: [], issues: [], failed_runs: [], metrics: {} });
+    }
     if (path === "/api/demo/scenario") {
       return body({ ok: true, failure: "", pool_id: SHOWCASE_POOL, workspace, steps: [] });
     }
@@ -379,5 +437,39 @@ describe("moving between screens keeps the member's own state", () => {
           .some((r) => r.workspace === visitor && r.path.startsWith("/api/members/")),
       ).toBe(true),
     );
+  });
+});
+
+/* What a run found stays what that run found, while the world moves on.
+ *
+ * Recording a supplier quote deliberately writes one offer row and nothing the shell's
+ * change detection counts, so the shell is told outright to re-read the member view.
+ * That signal shares an effect with the one that drops state belonging to a *different*
+ * subject — and when it shared it too closely, re-reading after the quote wiped the
+ * previous run's report off the screen. Which is the one thing here that is supposed to
+ * survive the world changing.
+ */
+describe("a run's answer outlives the world it was given in", () => {
+  it("keeps the run report on screen after a supplier quote is recorded", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
+
+    await user.click(await screen.findByRole("button", { name: /Run Pool now/ }));
+    const answer = await screen.findByText(
+      /No supplier Pool has verified sells this in bulk yet/,
+    );
+    expect(answer).toBeTruthy();
+
+    // Record a quote from the operator console, then come back.
+    await user.click(screen.getByTitle("Demo environment, controls, and what is real here"));
+    await user.click(screen.getByRole("button", { name: "Operations console" }));
+    await user.click(await screen.findByRole("button", { name: "Record quote" }));
+    await user.click(screen.getByRole("button", { name: "Home" }));
+
+    await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
+    expect(
+      screen.getByText(/No supplier Pool has verified sells this in bulk yet/),
+    ).toBeTruthy();
   });
 });

@@ -97,6 +97,19 @@ export default function App() {
    *  workspace changes. The server refuses to build one for a run that was not this
    *  member's, so a community scan and a previous visitor's run can never land here. */
   const [report, setReport] = useState<RunReport | null>(null);
+  /** Bumped when something changed the world that `/api/state` cannot see.
+   *
+   *  The member read below is re-triggered by the identity, the workspace, and three
+   *  counts off `/api/state` — pools, decisions, activity — which between them catch
+   *  everything a *coordination* write does. Recording a supplier quote does none of
+   *  those things: it writes one offer row deliberately and nothing else, so that the
+   *  mutation stays provable. The consequence is that the one screen whose whole job is
+   *  to show the outlook moving would have gone on showing the old one.
+   *
+   *  An explicit epoch rather than a wider heuristic: the caller knows it changed the
+   *  world, and making the server write a row it does not need in order to signal the
+   *  browser would trade a real invariant for a refresh. */
+  const [worldEpoch, setWorldEpoch] = useState(0);
 
   const refresh = useCallback(async () => {
     try {
@@ -135,17 +148,27 @@ export default function App() {
       : NOBODY);
   const needsOnboarding = Boolean(consumer && !consumer.onboarded);
 
-  /* Whose pool is whose is a server question, and it is re-asked whenever the identity
-     or the workspace changes. Cleared first so an operator stepping out of a synthetic
-     participant can never carry that participant's pool back to their own screens. */
+  /* Dropping what was read for a *different subject* — and only for that.
+   *
+   * An operator stepping out of a synthetic participant must not carry that
+   * participant's opportunity back onto their own screens, and a report describes one
+   * run for one member, so neither may outlive a change of identity or of partition.
+   *
+   * Deliberately separate from the read below. The two used to be one effect, which
+   * meant every reason to re-read was also a reason to wipe — so re-reading after the
+   * world changed silently threw away the previous run's report, which is the one thing
+   * in this app that is *supposed* to stay put while the world moves on. */
+  useEffect(() => {
+    setMember(null);
+    setReport(null);
+  }, [identity.id, state?.workspace]);
+
+  /* Whose pool is whose is a server question, and it is re-asked whenever anything
+     could have changed the answer: the identity, the partition, the three `/api/state`
+     counts every coordination write moves, and an explicit signal for the writes that
+     move none of them. */
   useEffect(() => {
     let live = true;
-    // Cleared first, so an operator stepping out of a synthetic participant can never
-    // carry that participant's opportunity back onto their own screens.
-    setMember(null);
-    // A report describes one run, for one member. Stepping into another identity must
-    // never leave the previous one's answer on screen.
-    setReport(null);
     if (!identity.id) return;
     api
       .member(identity.id)
@@ -162,7 +185,16 @@ export default function App() {
     state?.pools.length,
     state?.decisions.length,
     state?.activity.length,
+    worldEpoch,
   ]);
+
+  /** Something changed the deterministic picture without changing anything
+   *  `/api/state` counts. Re-read the server rather than adjusting anything here: what
+   *  the outlook now says is the server's answer, and this only asks for it again. */
+  const worldChanged = useCallback(() => {
+    setWorldEpoch((n) => n + 1);
+    void refresh();
+  }, [refresh]);
 
   /** Everything held about *a* workspace, dropped because we are about to address a
    *  different one.
@@ -619,6 +651,7 @@ export default function App() {
                 )?.pool_id ?? null
               }
               onBack={() => showcaseTo("community")}
+              onWorldChanged={worldChanged}
             />
           ) : null}
 
@@ -741,6 +774,7 @@ export default function App() {
                 )?.pool_id ?? null
               }
               onBack={() => navigate("community")}
+              onWorldChanged={worldChanged}
             />
           ) : null}
 

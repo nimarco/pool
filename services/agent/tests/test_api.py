@@ -169,6 +169,13 @@ def test_no_endpoint_leaks_contact_details_or_payment_references(client):
     pool_id = client.get("/api/state").json()["pools"][0]["pool_id"]
     payloads.append(client.get(f"/api/pools/{pool_id}").text)
     payloads.append(client.get(f"/api/pools/{pool_id}/checklist").text)
+    # And the member's own answer to their button, which is assembled from records
+    # written while a run was reading every declaration in the Community.
+    run_id = client.get("/api/state").json()["runs"][0]["run_id"]
+    payloads.append(
+        client.get(f"/api/runs/{run_id}/report?household_id=hh_navarro").text
+    )
+    payloads.append(client.get("/api/members/hh_navarro").text)
     combined = "".join(payloads)
     assert "@demo.invalid" not in combined
     assert "pm_sim_" not in combined

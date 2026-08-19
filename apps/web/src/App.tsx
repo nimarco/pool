@@ -405,6 +405,10 @@ export default function App() {
       setScenarioMs(null);
       setOpenPool(null);
       setLive(null);
+      // The run it described no longer exists. A report is about one run in one
+      // workspace, and leaving it up after a reset would be the clearest possible
+      // version of a stale answer.
+      setReport(null);
       await refresh();
       setView("home");
       setPanelOpen(false);

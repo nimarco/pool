@@ -181,6 +181,96 @@ def deployment(public_api, monkeypatch, request) -> Deployment:
     return Deployment(public_api, table, client)
 
 
+# ------------------------------------------------------ the same run, both sides
+
+
+def test_the_member_action_reaches_the_runtime_as_a_member_trigger(deployment):
+    """The consumer's own button, over the wire.
+
+    The payload is a workspace and a trigger name and nothing else — no household, no
+    prompt, no community id. Whose declarations the run is about is resolved *inside*
+    the runtime, from the workspace it was given, so there is no field in which a
+    caller could point it at somebody else.
+    """
+    deployment.get("/api/state")
+    _declare_for_the_visitor(deployment)
+
+    body = deployment.live(action="member").json()
+    assert body["ok"] is True
+
+    payload = json.loads(deployment.client.calls[-1]["payload"])
+    assert payload == {"workspace": WS, "trigger": "member_scan"}
+    assert set(payload) == {"workspace", "trigger"}
+
+
+def test_an_unknown_live_action_never_reaches_aws(deployment):
+    """A key from the server's own map, never an objective."""
+    deployment.get("/api/state")
+    response = deployment.post("/api/demo/agentcore?action=whatever", ws=WS)
+    assert response.status_code == 400
+    assert deployment.client.calls == []
+
+
+def test_what_the_deployed_run_established_is_readable_from_the_other_side(deployment):
+    """The reason evaluation evidence is a stored row rather than an in-process object.
+
+    The runtime computed these facts inside a process the API cannot reach — in the
+    deployment that process is a microVM that no longer exists by the time anybody asks.
+    The Lambda's own repository reads them back, and builds the member's report from
+    them, which is the only path the two halves share.
+    """
+    deployment.get("/api/state")
+    household = _declare_for_the_visitor(deployment)
+
+    body = deployment.live(action="member").json()
+    run_id = body["run"]["run_id"]
+
+    # Read through the *API's* repository object, not the runtime's.
+    stored = deployment.api._repo.list_run_evaluations(WS, run_id)
+    assert stored, "the deployed run recorded nothing the browser could be shown"
+    assert {e.run_id for e in stored} == {run_id}
+
+    report = deployment.get(
+        f"/api/runs/{run_id}/report?household_id={household}", ws=WS
+    ).json()
+    assert report["is_mine"] is True
+    assert report["results"], "the member has no answer to the button they pressed"
+    assert report["evaluated_product_ids"]
+    # Every product named is one this run actually evaluated.
+    named = {r["product_id"] for r in report["results"] if r["result"] != "not_investigated"}
+    assert named <= set(report["evaluated_product_ids"])
+
+
+def _declare_for_the_visitor(deployment) -> str:
+    """Onboard and declare through the public endpoints, as a visitor would."""
+    from datetime import date, timedelta
+
+    deployment.post(
+        "/api/onboarding", ws=WS,
+        json={"display_name": "Marco", "autonomy_mode": "smart_join"},
+    )
+    deployment.post("/api/onboarding/payment-method", ws=WS)
+    household = deployment.state()["consumer"]["household_id"]
+    due = date.today() + timedelta(days=12)
+    response = deployment.post(
+        "/api/needs", ws=WS,
+        json={
+            "household_id": household,
+            "product_id": "prod_whey_vanilla",
+            "quantity": 2,
+            "cadence_days": 40,
+            "expected_next_need_date": due.isoformat(),
+            "flexibility_days": 11,
+            "routine_lead_days": 11,
+            "min_savings_pct": 20,
+            "max_spend_cents": 9000,
+            "substitution": "exact_only",
+        },
+    )
+    assert response.status_code == 200, response.text
+    return household
+
+
 # --------------------------------------------------------------- the central claim
 
 

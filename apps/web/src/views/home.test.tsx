@@ -815,3 +815,129 @@ describe("a pool that did not go ahead", () => {
     ).toBeTruthy();
   });
 });
+
+describe("an order that filled without this member", () => {
+  /* "Formed but not for you" is not "nothing happened", and it was rendering as both at
+     once: the row vanished from Home entirely — because a `formed_excluded` result
+     carries the pool id of the order that filled *without* it, which the standing filter
+     treated as served — while an unrelated card announced that an order existed
+     elsewhere. The declaration a member asked Pool to watch was nowhere on the screen. */
+  const STANDING: apiModule.StandingDemand = {
+    need_id: "need_rosa_coffee",
+    product_id: "prod_coffee_beans",
+    product_name: "Pike Place Medium Roast",
+    unit: "bag",
+    my_units: 2,
+    compatible_members: 0,
+    compatible_units: 0,
+    minimum_units: 18,
+    has_supplier: true,
+    sourceable_product_id: "",
+    sourceable_product_name: "",
+  };
+
+  function excludedRun(): apiModule.RunReport {
+    return {
+      run_id: "run_x",
+      trigger: "member_scan",
+      objective_kind: "member",
+      outcome: "pool_created",
+      at: "2026-08-19T10:00:00Z",
+      model_provider: "offline",
+      is_mine: true,
+      evaluated_product_ids: ["prod_coffee_beans"],
+      results: [
+        {
+          need_id: "need_rosa_coffee",
+          product_id: "prod_coffee_beans",
+          product_name: "Pike Place Medium Roast",
+          quantity: 2,
+          unit: "bag",
+          result: "formed_excluded",
+          pool_id: "pool_shown",
+          units: 0,
+          reason_code: "",
+          is_exact_product: true,
+          declared_product_name: "",
+          headline:
+            "Pool formed an order for Pike Place Medium Roast, and your units were not in this one.",
+          facts: [],
+        },
+      ],
+    };
+  }
+
+  it("keeps the declaration on the screen, standing", async () => {
+    renderHome([poolView()], {
+      member: memberView({
+        opportunity: null,
+        standing: [STANDING],
+        outlook: [
+          {
+            need_id: "need_rosa_coffee",
+            product_id: "prod_coffee_beans",
+            product_name: "Pike Place Medium Roast",
+            state: "case_boundary",
+            reason:
+              "There is a group order for this, but it filled to a whole case without your units this time.",
+            blocker: "",
+            pool_id: "pool_shown",
+            units_needed: 18,
+            units_available: 18,
+            status: "watching",
+            headline: "An order filled without your units",
+            detail: { case_units: 6, cases: 3, units_purchased: 18, surplus_units: 0, your_units: 2 },
+          },
+        ],
+      }),
+      report: excludedRun(),
+    });
+
+    await screen.findByText(/What Pool is watching/);
+    const row = document.querySelector(".watch-row") as HTMLElement;
+    expect(row).toBeTruthy();
+    expect(row.textContent).toMatch(/Pike Place Medium Roast/);
+    expect(row.textContent).toMatch(/An order filled without your units/);
+
+    /* And the boundary is drawn rather than described, because "it filled 3 complete
+       cases exactly and your units did not fit inside the boundary" is the hardest thing
+       this product asks anybody to picture. */
+    const fit = row.querySelector(".casefit") as HTMLElement;
+    expect(fit).toBeTruthy();
+    expect(fit.querySelectorAll(".casefit-case:not(.is-left)")).toHaveLength(3);
+    expect(fit.querySelectorAll(".casefit-unit.is-standing")).toHaveLength(2);
+    expect(fit.getAttribute("aria-label")).toMatch(/3 full cases, 18 bags, nothing left over/);
+  });
+
+  it("does not tell them nobody buys it, when everybody who does is in the order", async () => {
+    /* `compatible_members` counts households *not* already in a live pool for the
+       product, which is the right number for "how much demand is available" and the
+       wrong sentence here — it renders as "nobody else near you buys this yet" to the
+       one person whose neighbours just bought it. */
+    renderHome([poolView()], {
+      member: memberView({
+        opportunity: null,
+        standing: [STANDING],
+        outlook: [
+          {
+            need_id: "need_rosa_coffee",
+            product_id: "prod_coffee_beans",
+            product_name: "Pike Place Medium Roast",
+            state: "not_in_round",
+            reason: "A group order for this has already formed.",
+            blocker: "",
+            pool_id: "pool_shown",
+            units_needed: 18,
+            units_available: 18,
+            status: "watching",
+            headline: "An order filled without your units",
+          },
+        ],
+      }),
+      report: excludedRun(),
+    });
+
+    await screen.findByText(/What Pool is watching/);
+    expect(screen.queryByText(/Nobody else near you buys this yet/)).toBeNull();
+  });
+});

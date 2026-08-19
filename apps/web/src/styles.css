@@ -2749,3 +2749,71 @@ select.control {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* The case boundary, drawn. Three sentences of arithmetic became a picture: full cases,
+ * the reader's own units inside them, and whatever did not fit sitting outside — which is
+ * how "no speculative surplus" stops being a claim and starts being visible. */
+.casefit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 2px;
+}
+.casefit-cases,
+.casefit-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.casefit-case {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  background: var(--paper-sunken);
+}
+/* Dashed, because it is not a case. It is the remainder, and a solid box around it would
+ * imply Pool bought a partial one. */
+.casefit-case.is-left {
+  border-style: dashed;
+  background: transparent;
+}
+.casefit-unit {
+  width: 9px;
+  height: 15px;
+  border-radius: 2px;
+  background: var(--rule-strong);
+}
+.casefit-unit.is-mine {
+  background: var(--moss);
+}
+.casefit-unit.is-standing {
+  background: transparent;
+  border: 1px dashed var(--rule-strong);
+}
+.casefit-total,
+.casefit-note {
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Whose order this is. Said on every row either way — a marker that appears only on
+ * some rows makes its absence ambiguous, and the ambiguous reading is the flattering
+ * one. Quiet by design: this is a fact about scope, not a status. */
+.scope-mine,
+.scope-theirs {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.scope-mine {
+  color: var(--moss);
+}
+.scope-theirs {
+  color: var(--ink-faint);
+}

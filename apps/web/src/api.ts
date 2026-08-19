@@ -631,6 +631,15 @@ export interface NeedOutlook {
    *  how many people buy the thing. Equal to `reason` everywhere that distinction does
    *  not arise. */
   blocker: string;
+  /** Present on `case_boundary`: the arithmetic behind "your units did not fit", so the
+   *  interface can draw the boundary instead of describing it. */
+  detail?: {
+    case_units?: number;
+    cases?: number;
+    units_purchased?: number;
+    surplus_units?: number;
+    your_units?: number;
+  };
 }
 
 export type ConsumerStatus =

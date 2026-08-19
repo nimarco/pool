@@ -373,7 +373,13 @@ def need_outlook(
     # What the member called it, which for a family declaration is the family.
     name = needs_service.declared_as(ctx, need) or need.product_id
 
-    def outlook(state: str, reason: str, best=None, pool_id: str = "") -> NeedOutlook:
+    def outlook(
+        state: str,
+        reason: str,
+        best=None,
+        pool_id: str = "",
+        detail: dict[str, Any] | None = None,
+    ) -> NeedOutlook:
         return NeedOutlook(
             need_id=need.id,
             product_id=need.product_id,
@@ -383,6 +389,7 @@ def need_outlook(
             pool_id=pool_id,
             units_needed=best.minimum_units if best else 0,
             units_available=best.matched_units if best else 0,
+            detail=detail or {},
         )
 
     pooled = (in_pool or {}).get(need.id, "")
@@ -436,6 +443,10 @@ def need_outlook(
             "A group order for this has already formed, and it filled to a whole case "
             "without your units. Your declaration stays standing for the next one.",
             pool_id=formed,
+            # Same arithmetic as the case-boundary branch, read off the pool that formed
+            # rather than off an evaluation, so the interface can draw the same picture
+            # for what is really the same news.
+            detail=_case_detail(ctx, formed, need),
         )
 
     sites = [
@@ -501,11 +512,28 @@ def need_outlook(
         # Compatible and in range, but the order filled to a whole case without these
         # units. Pool does not buy stock nobody ordered, so the boundary decides who is
         # in this round (§48).
+        #
+        # The case arithmetic travels with the sentence so the interface can draw the
+        # boundary rather than describe it. Three clauses of "it filled 3 complete cases
+        # exactly, and your units did not fit inside the boundary" is the hardest thing
+        # this product asks anybody to picture, and it is a picture.
+        packages = best.economics.packages if best.economics else None
         return outlook(
             OUTLOOK_CASE_BOUNDARY,
             "There is a group order for this, but it filled to a whole case without "
             "your units this time.",
             best,
+            detail=(
+                {
+                    "case_units": packages.case_units,
+                    "cases": packages.cases,
+                    "units_purchased": packages.units_purchased,
+                    "surplus_units": packages.surplus_units,
+                    "your_units": need.quantity,
+                }
+                if packages
+                else {}
+            ),
         )
 
     unit = _unit_word(ctx, need.product_id, best.minimum_units)
@@ -519,6 +547,44 @@ def need_outlook(
         ),
         best,
     )
+
+
+def _case_detail(ctx: PoolContext, pool_id: str, need: NeedDeclaration) -> dict[str, Any]:
+    """The case boundary of a pool that formed, for drawing rather than describing.
+
+    Prefers the pool's own final economics, which exist once it has been priced. Before
+    that — and a member is told they were left out *before* that, because the boundary is
+    what decided it — the same arithmetic is available from the units the pool actually
+    holds and the case size of the offer it was formed against. Both are stored facts, and
+    neither is a projection.
+
+    Returns ``{}`` rather than a guess when the case size is unknown, so the interface
+    draws nothing instead of drawing something wrong.
+    """
+    pool = ctx.repo.get_pool(ctx.ws, pool_id) if pool_id else None
+    if pool is None:
+        return {}
+    packages = getattr(getattr(pool, "final_economics", None), "packages", None)
+    if packages is not None:
+        return {
+            "case_units": packages.case_units,
+            "cases": packages.cases,
+            "units_purchased": packages.units_purchased,
+            "surplus_units": packages.surplus_units,
+            "your_units": need.quantity,
+        }
+    _, bulk = coord.offers_for(ctx, pool.product_id)
+    case_units = min((o.case_units for o in bulk if o.case_units > 0), default=0)
+    units = coord.provisional_units(ctx, pool.id)
+    if case_units <= 0 or units <= 0 or units % case_units:
+        return {}
+    return {
+        "case_units": case_units,
+        "cases": units // case_units,
+        "units_purchased": units,
+        "surplus_units": 0,
+        "your_units": need.quantity,
+    }
 
 
 def _round_already_formed(

@@ -660,6 +660,13 @@ export default function App() {
           {showcase === "pool" && openPool ? (
             <PoolRecord
               pool={openPool}
+              mine={
+                member
+                  ? [member.opportunity?.pool_id, ...member.other_pool_ids].includes(
+                      openPool.pool_id,
+                    )
+                  : null
+              }
               runs={state?.runs ?? []}
               activity={(state?.activity ?? []).filter(
                 (e) => e.pool_id === null || e.pool_id === openPool.pool_id,
@@ -725,6 +732,7 @@ export default function App() {
           {!showcase && !needsOnboarding && view === "pools" && state ? (
             <Pools
               state={state}
+              member={member}
               onOpen={openPoolDetail}
               onFind={findOpportunities}
               running={running}
@@ -809,6 +817,13 @@ export default function App() {
           {!showcase && !needsOnboarding && view === "pool" && openPool ? (
             <PoolRecord
               pool={openPool}
+              mine={
+                member
+                  ? [member.opportunity?.pool_id, ...member.other_pool_ids].includes(
+                      openPool.pool_id,
+                    )
+                  : null
+              }
               runs={state?.runs ?? []}
               activity={(state?.activity ?? []).filter(
                 (e) => e.pool_id === null || e.pool_id === openPool.pool_id,

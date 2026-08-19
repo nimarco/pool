@@ -56,6 +56,7 @@ import { productImage, productInitials } from "../products";
 import {
   ActorTag,
   Chip,
+  CaseFit,
   CoordinatorWait,
   IconArrowRight,
   Meter,
@@ -470,19 +471,27 @@ function WatchingRow({
         <StatusChip status={status} label={outlook?.headline ?? "Pool is watching this"} />
       </div>
 
-      <p className="watch-demand">
-        {demand.compatible_members > 0 ? (
-          <>
-            <strong>{demand.compatible_members + 1} people near you</strong> buy this —{" "}
-            {together} {unit(together)} standing, {demand.my_units} of them yours
-          </>
-        ) : (
-          <>
-            Nobody else near you buys this yet — your {demand.my_units}{" "}
-            {unit(demand.my_units)}
-          </>
-        )}
-      </p>
+      {/* Skipped entirely when an order has already taken the demand. `compatible_members`
+          counts households not already inside a live pool for this product, which is the
+          right number for "how much is available" and the wrong sentence here: everybody
+          who buys this is in the order that just formed, so it renders as "nobody else
+          near you buys this yet" — the exact misreading the demand line exists to
+          prevent. The blocker below already says an order formed. */}
+      {filledElsewhere ? null : (
+        <p className="watch-demand">
+          {demand.compatible_members > 0 ? (
+            <>
+              <strong>{demand.compatible_members + 1} people near you</strong> buy this —{" "}
+              {together} {unit(together)} standing, {demand.my_units} of them yours
+            </>
+          ) : (
+            <>
+              Nobody else near you buys this yet — your {demand.my_units}{" "}
+              {unit(demand.my_units)}
+            </>
+          )}
+        </p>
+      )}
 
       {/* The blocker as its own line, not the tail of a sentence. The whole of the
           changing-world beat is this line moving, and it used to be carried by a
@@ -507,6 +516,19 @@ function WatchingRow({
             </>
           ) : null}
         </p>
+      ) : null}
+
+      {/* An order happened and was full. The picture is the point: the cases are whole,
+          nothing is left over, and this member's units are intact rather than lost —
+          which is the difference between "you missed out" and "you are still in the
+          queue", and it is the whole of what the copy was trying to say. */}
+      {filledElsewhere && outlook?.detail?.cases ? (
+        <CaseFit
+          caseUnits={outlook.detail.case_units ?? 0}
+          cases={outlook.detail.cases}
+          standing={outlook.detail.your_units ?? 0}
+          unit={demand.unit}
+        />
       ) : null}
 
       {/* Which exact product an order would buy, when it is not the one on the row.
@@ -758,12 +780,20 @@ export function Home({
   const included = mineFromRun.filter((r: RunReportResult) => r.result === "formed_included");
   const whyItWorked = included.find((r: RunReportResult) => r.pool_id === poolId)?.facts ?? [];
 
-  /* Declarations still waiting on Pool. A need already inside an order has its answer
-     on the order card, so listing it here again would ask the same question twice. */
+  /* Declarations still waiting on Pool. A need already inside an order has its answer on
+     the order card, so listing it here again would ask the same question twice.
+
+     `formed_included` and not merely "has a pool_id". A `formed_excluded` result also
+     carries the pool id — of the order that filled *without* these units — and treating
+     that as served made the declaration vanish from the screen entirely: an order the
+     member is not in appeared under "elsewhere", and the thing they actually asked Pool
+     to watch was nowhere. It is the most standing a declaration ever is. */
   const pooledNeedIds = new Set(
     [
       member?.opportunity?.need_id,
-      ...mineFromRun.filter((r: RunReportResult) => r.pool_id).map((r: RunReportResult) => r.need_id),
+      ...mineFromRun
+        .filter((r: RunReportResult) => r.result === "formed_included" && r.pool_id)
+        .map((r: RunReportResult) => r.need_id),
     ].filter(Boolean) as string[],
   );
   const standing = (member?.standing_demand ?? []).filter(

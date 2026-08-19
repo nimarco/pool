@@ -289,6 +289,80 @@ export function Meter({ value, max }: { value: number; max: number }) {
   );
 }
 
+/** The case boundary, drawn.
+ *
+ *  Suppliers sell whole cases and Pool does not buy stock nobody ordered (invariant 6),
+ *  so an order is a whole number of full cases and the units that do not fit stay
+ *  standing. That is the single hardest thing this product has to explain, and it was
+ *  three sentences of arithmetic: "It filled 3 complete cases exactly, and your units did
+ *  not fit inside the boundary. Nothing was charged, and your declaration stays
+ *  standing." Every word true, and a reader has to build the picture themselves.
+ *
+ *  So here is the picture. The full cases, the member's own units beside them, and the
+ *  fact that nothing is left over — which is the invariant, visible rather than asserted.
+ *
+ *  `mine` is how many of the purchased units belong to the person reading. `standing` is
+ *  how many of theirs did not fit. One of the two is zero in every real case, and which
+ *  one it is *is* the news. */
+export function CaseFit({
+  caseUnits,
+  cases,
+  mine = 0,
+  standing = 0,
+  unit = "unit",
+}: {
+  caseUnits: number;
+  cases: number;
+  mine?: number;
+  standing?: number;
+  unit?: string;
+}) {
+  if (caseUnits <= 0 || cases <= 0) return null;
+  const purchased = caseUnits * cases;
+  const label = [
+    `${cases} full ${cases === 1 ? "case" : "cases"}, ${purchased} ${unit}${purchased === 1 ? "" : "s"}, nothing left over`,
+    mine > 0 ? `${mine} of them yours` : "",
+    standing > 0 ? `${standing} of yours did not fit and stay on your list` : "",
+  ]
+    .filter(Boolean)
+    .join(". ");
+
+  return (
+    <div className="casefit" role="img" aria-label={label}>
+      <div className="casefit-cases">
+        {Array.from({ length: cases }, (_, c) => (
+          <span key={c} className="casefit-case">
+            {Array.from({ length: caseUnits }, (_, u) => (
+              /* The member's own units are the last ones drawn, so "mine" reads as a
+                 slice of the whole rather than as a separate quantity beside it. */
+              <span
+                key={u}
+                className={`casefit-unit${c * caseUnits + u >= purchased - mine ? " is-mine" : ""}`}
+              />
+            ))}
+          </span>
+        ))}
+        <span className="casefit-total">
+          {purchased} / {purchased}
+        </span>
+      </div>
+      {standing > 0 ? (
+        <div className="casefit-left">
+          <span className="casefit-case is-left">
+            {Array.from({ length: standing }, (_, u) => (
+              <span key={u} className="casefit-unit is-standing" />
+            ))}
+          </span>
+          <span className="casefit-note">
+            your {standing} {standing === 1 ? unit : `${unit}s`} did not fit — still on
+            your list
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function Empty({ children, center }: { children: React.ReactNode; center?: boolean }) {
   return <p className={`empty${center ? " empty-center" : ""}`}>{children}</p>;
 }

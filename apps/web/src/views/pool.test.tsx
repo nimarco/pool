@@ -143,6 +143,7 @@ function renderPool(entry?: { tab?: string; deep?: string }, overrides: Partial<
       runs={[proof.run]}
       activity={[]}
       identity={{ id: "hh_member", display_name: "Rosa N." }}
+      mine={true}
       entry={entry}
       scenario={null}
       scenarioMs={null}
@@ -280,5 +281,42 @@ describe("pickup credentials belong to the person asking for one", () => {
 
     expect(await screen.findByRole("button", { name: /Issue Ada O\.'s code/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /show my code/i })).toBeNull();
+  });
+});
+
+describe("whose order this is", () => {
+  /* Home was already careful about this — "Pool formed an order for coffee, and your
+     units were not in this one" — and then one click later this page said
+     `Buyers 6 — everyone still in` with no marker at all, which reads as a roster
+     somebody is on. The prose fixed the contradiction and the next screen reintroduced
+     it. The answer is the server's (`services/relevance.py`), never inferred here. */
+  it("says so on the record when the member is not in the order", () => {
+    render(
+      <PoolRecord
+        pool={pool}
+        mine={false}
+        runs={[]}
+        activity={[]}
+        identity={{ id: "hh_stranger", display_name: "Someone Else" }}
+        scenario={null}
+        scenarioMs={null}
+        running={false}
+        health={health}
+        demoConfig={config}
+        live={null}
+        liveBusy={false}
+        onBack={() => {}}
+        onRefresh={() => {}}
+        onRunLive={() => {}}
+        onRunScenario={() => {}}
+      />,
+    );
+    expect(screen.getByText(/You are not in this order/i)).toBeTruthy();
+    expect(screen.queryByText(/You are in this order/i)).toBeNull();
+  });
+
+  it("says so either way, so an absent marker is never the flattering reading", () => {
+    renderPool();
+    expect(screen.getByText(/You are in this order/i)).toBeTruthy();
   });
 });

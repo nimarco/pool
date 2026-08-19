@@ -42,6 +42,7 @@ import {
   IconCross,
   IconDot,
   LedgerLine,
+  CaseFit,
   Meter,
   ProofIdentity,
   TracePills,
@@ -66,6 +67,7 @@ export function PoolRecord({
   runs,
   activity,
   identity,
+  mine,
   entry,
   scenario,
   scenarioMs,
@@ -83,6 +85,9 @@ export function PoolRecord({
   runs: RunSummary[];
   activity: ActivityEvent[];
   identity: { id: string; display_name: string };
+  /** Whether this order is this member's, as the server answered it. Null when nothing
+   *  has answered yet — a state where saying nothing is correct and guessing is not. */
+  mine: boolean | null;
   /** Where to land. Lets "see it run on AWS" open the evidence directly instead of the
    *  record's front page. */
   entry?: { tab?: string; deep?: string };
@@ -151,7 +156,18 @@ export function PoolRecord({
                 : ""}
             </p>
           </div>
-          <Chip tone={s.tone}>{s.label}</Chip>
+          <div className="stack-xs" style={{ alignItems: "flex-end" }}>
+            <Chip tone={s.tone}>{s.label}</Chip>
+            {/* Whose order this is, said on the record itself. Home was already careful
+                about it and this page was not, so one click undid the care: `Buyers 6 —
+                everyone still in` reads as a roster somebody is on. The answer is the
+                server's (`services/relevance.py`), never inferred from the member list. */}
+            {mine === null ? null : (
+              <span className={mine ? "scope-mine" : "scope-theirs"}>
+                {mine ? "You are in this order" : "You are not in this order"}
+              </span>
+            )}
+          </div>
         </div>
       </header>
 
@@ -218,7 +234,16 @@ export function PoolRecord({
       {tab === "people" ? (
         <PeopleTab pool={pool} identity={identity} onRefresh={onRefresh} />
       ) : null}
-      {tab === "economics" ? <EconomicsTab pool={pool} /> : null}
+      {tab === "economics" ? (
+        <EconomicsTab
+          pool={pool}
+          myUnits={
+            mine
+              ? (pool.members ?? []).find((m) => m.household_id === identity.id)?.units ?? 0
+              : 0
+          }
+        />
+      ) : null}
       {tab === "fulfilment" ? (
         <FulfilmentTab pool={pool} identity={identity} onRefresh={onRefresh} />
       ) : null}
@@ -545,7 +570,15 @@ function PeopleTab({
 
 /* ----------------------------------------------------------------- economics */
 
-function EconomicsTab({ pool }: { pool: PoolView }) {
+function EconomicsTab({
+  pool,
+  myUnits,
+}: {
+  pool: PoolView;
+  /** How many of the purchased units belong to the person reading, so the drawing can
+   *  show them their own slice. Zero when they are not in this order. */
+  myUnits: number;
+}) {
   const e = pool.economics;
   if (!e) {
     return (
@@ -606,6 +639,15 @@ function EconomicsTab({ pool }: { pool: PoolView }) {
           <h2 className="section-title" style={{ marginBottom: 12 }}>
             Nothing left over
           </h2>
+          {/* Drawn before it is described. The invariant is that every purchased unit has
+              a buyer, and a picture of full cases is the only version of that sentence a
+              reader does not have to reconstruct. */}
+          <CaseFit
+            caseUnits={e.packages.case_units}
+            cases={e.packages.cases}
+            mine={myUnits}
+            unit={pool.unit || "unit"}
+          />
           <p className="small muted">
             {e.packages.cases} case{e.packages.cases === 1 ? "" : "s"} of{" "}
             {e.packages.case_units} = {e.packages.units_purchased} units for{" "}

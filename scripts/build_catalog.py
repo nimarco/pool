@@ -68,6 +68,19 @@ class CategorySpec:
     ``group`` is the Pool substitute group. Two products may only ever be combined into
     one purchase if they share it, so it is set here by a human and never inferred.
     ``unit`` is the sealed consumer unit an offer would be priced against.
+
+    ``label`` is what a member reads when they declare the *family* rather than a row in
+    it — "Coffee", not ``coffee``. It is written here rather than derived from the slug
+    because it is user-visible text, and because the plural that reads correctly is not
+    a function of the identifier ("Coffee", but "Energy drinks").
+
+    ``exemplar`` pins which product id carries the group on a group-level declaration.
+    A declaration always stores one real ``product_id`` — that is what keeps
+    ``Membership.need_id`` lineage readable — so a group need needs a row to point at.
+    It is *not* a promise about what gets bought: the run picks the target inside the
+    group that a supplier will actually sell (``services/discovery.py``). Pinning it to
+    the curated seed product where one exists simply means the obvious answer is also
+    the first one.
     """
 
     host: str
@@ -77,6 +90,8 @@ class CategorySpec:
     unit: str
     cap: int = 22
     synonyms: tuple[str, ...] = ()
+    label: str = ""        # user-visible family name; falls back to the slug
+    exemplar: str = ""     # product id carrying a group-level declaration
 
 
 FOOD = "world.openfoodfacts.org"
@@ -85,40 +100,60 @@ PRODUCTS = "world.openproductsfacts.org"
 
 CATEGORIES: list[CategorySpec] = [
     CategorySpec(FOOD, "en:protein-powders", "nutrition", "whey_protein", "tub", 28,
-                 ("protein", "whey", "protein powder", "shake")),
+                 ("protein", "whey", "protein powder", "shake"),
+                 label="Whey protein", exemplar="prod_whey_vanilla"),
     CategorySpec(FOOD, "en:protein-bars", "nutrition", "protein_bar", "box", 16,
-                 ("protein bar", "bar")),
+                 ("protein bar", "bar"),
+                 label="Protein bars"),
     CategorySpec(FOOD, "en:energy-drinks", "beverage", "energy_drink", "pack", 24,
-                 ("energy drink", "energy")),
+                 ("energy drink", "energy"),
+                 label="Energy drinks", exemplar="prod_energy_drink"),
     CategorySpec(FOOD, "en:coffees", "beverage", "coffee", "bag", 26,
-                 ("coffee", "beans", "ground coffee")),
-    CategorySpec(FOOD, "en:teas", "beverage", "tea", "box", 14, ("tea", "teabags")),
+                 ("coffee", "beans", "ground coffee"),
+                 label="Coffee", exemplar="prod_coffee_beans"),
+    CategorySpec(FOOD, "en:teas", "beverage", "tea", "box", 14, ("tea", "teabags"),
+                 label="Tea"),
     CategorySpec(FOOD, "en:sparkling-waters", "beverage", "sparkling_water", "pack", 16,
-                 ("sparkling water", "seltzer", "soda water")),
-    CategorySpec(FOOD, "en:sodas", "beverage", "soda", "pack", 16, ("soda", "pop", "cola")),
+                 ("sparkling water", "seltzer", "soda water"),
+                 label="Sparkling water"),
+    CategorySpec(FOOD, "en:sodas", "beverage", "soda", "pack", 16, ("soda", "pop", "cola"),
+                 label="Soda"),
     CategorySpec(FOOD, "en:breakfast-cereals", "pantry", "cereal", "box", 18,
-                 ("cereal", "breakfast")),
+                 ("cereal", "breakfast"),
+                 label="Cereal"),
     CategorySpec(FOOD, "en:granola-bars", "pantry", "granola_bar", "box", 16,
-                 ("granola bar", "snack bar")),
+                 ("granola bar", "snack bar"),
+                 label="Granola bars"),
     CategorySpec(FOOD, "en:peanut-butters", "pantry", "nut_butter", "jar", 16,
-                 ("peanut butter", "nut butter")),
-    CategorySpec(FOOD, "en:chips", "pantry", "chips", "bag", 16, ("chips", "crisps")),
-    CategorySpec(FOOD, "en:pastas", "pantry", "pasta", "box", 14, ("pasta", "noodles")),
-    CategorySpec(FOOD, "en:rices", "pantry", "rice", "bag", 12, ("rice",)),
+                 ("peanut butter", "nut butter"),
+                 label="Nut butter"),
+    CategorySpec(FOOD, "en:chips", "pantry", "chips", "bag", 16, ("chips", "crisps"),
+                 label="Chips"),
+    CategorySpec(FOOD, "en:pastas", "pantry", "pasta", "box", 14, ("pasta", "noodles"),
+                 label="Pasta"),
+    CategorySpec(FOOD, "en:rices", "pantry", "rice", "bag", 12, ("rice",),
+                 label="Rice", exemplar="prod_rice_jasmine"),
     CategorySpec(BEAUTY, "en:shampoos", "toiletries", "shampoo", "bottle", 16,
-                 ("shampoo", "hair")),
+                 ("shampoo", "hair"),
+                 label="Shampoo"),
     CategorySpec(BEAUTY, "en:toothpastes", "toiletries", "toothpaste", "tube", 14,
-                 ("toothpaste", "tooth paste")),
+                 ("toothpaste", "tooth paste"),
+                 label="Toothpaste"),
     CategorySpec(BEAUTY, "en:deodorants", "toiletries", "deodorant", "stick", 14,
-                 ("deodorant", "antiperspirant")),
+                 ("deodorant", "antiperspirant"),
+                 label="Deodorant"),
     CategorySpec(BEAUTY, "en:soaps", "toiletries", "soap", "bar", 12,
-                 ("soap", "body wash", "hand soap")),
+                 ("soap", "body wash", "hand soap"),
+                 label="Soap"),
     CategorySpec(PRODUCTS, "en:laundry-detergents", "household", "detergent", "tub", 14,
-                 ("detergent", "laundry", "washing")),
+                 ("detergent", "laundry", "washing"),
+                 label="Laundry detergent", exemplar="prod_detergent_pods"),
     CategorySpec(PRODUCTS, "en:toilet-papers", "household", "toilet_paper", "pack", 10,
-                 ("toilet paper", "loo roll", "tp", "bathroom tissue")),
+                 ("toilet paper", "loo roll", "tp", "bathroom tissue"),
+                 label="Toilet paper"),
     CategorySpec(PRODUCTS, "en:paper-towels", "household", "paper_towels", "pack", 10,
-                 ("paper towel", "kitchen roll", "kitchen towel")),
+                 ("paper towel", "kitchen roll", "kitchen towel"),
+                 label="Paper towels", exemplar="prod_paper_towels"),
 ]
 
 
@@ -523,6 +558,36 @@ def main() -> int:
         ]
 
     entries.sort(key=lambda e: (e.category, e.substitute_group, e.brand, e.name))
+
+    # The families a member may declare directly. The taxonomy above has always decided
+    # which products combine; emitting it makes the family a thing a person can *choose*
+    # rather than something they can only arrive at by naming one row and widening their
+    # substitution rule afterwards.
+    #
+    # A group with no products is not emitted, because a family Pool knows nothing in is
+    # not a family a member can be offered.
+    by_group: dict[str, list[Entry]] = {}
+    for e in entries:
+        by_group.setdefault(e.substitute_group, []).append(e)
+    group_rows = []
+    for spec in CATEGORIES:
+        members = by_group.get(spec.group, [])
+        if not members:
+            continue
+        # `entries` is already in a deterministic order, so the fallback exemplar is
+        # stable across rebuilds without needing a second sort key.
+        exemplar = spec.exemplar or members[0].product_id
+        group_rows.append({
+            "group": spec.group,
+            "label": spec.label or spec.group.replace("_", " ").capitalize(),
+            "category": spec.category,
+            "unit": spec.unit,
+            "exemplar_product_id": exemplar,
+            "product_count": len(members),
+            "synonyms": list(spec.synonyms),
+        })
+    group_rows.sort(key=lambda g: g["group"])
+
     payload = {
         "snapshot": SNAPSHOT,
         "source": "Open Food Facts, Open Beauty Facts, Open Products Facts",
@@ -534,6 +599,7 @@ def main() -> int:
         "note": "Consumer identity only. Package sizes are display text and are never "
                 "used in Pool's economics; supplier offers, cases and MOQ are separate "
                 "and are not sourced from here.",
+        "groups": group_rows,
         "products": [
             {k: v for k, v in vars(e).items() if k != "image_url"} for e in entries
         ],

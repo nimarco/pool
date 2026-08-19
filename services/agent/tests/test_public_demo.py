@@ -366,6 +366,40 @@ def test_the_showcase_runs_in_its_own_partition_and_leaves_the_visitor_alone(cli
     assert get(client, f"/api/members/{me['household_id']}", ws=WS).json()["opportunity"] is None
 
 
+def test_the_world_cannot_be_changed_underneath_the_showcase(client):
+    """A supplier fact recorded against the showcase partition is refused.
+
+    The showcase is a recording, and every number quoted about it — 24 units, 2 cases,
+    $861.44 all-in — is a claim about *that* world. Recording a rice quote into it
+    changes the product universe the recording is of, and it did so silently: the
+    Operations console was reachable from inside showcase mode, so two takes of the same
+    demo could disagree and the only symptom would be a figure that stopped matching.
+
+    Refusing is the fix rather than hiding the console, because the console being
+    unreachable is a property of one client and this is a property of the partition.
+    """
+    showcase_ws = public_demo.showcase_workspace(WS)
+    post(client, "/api/demo/scenario", ws=WS)
+    before = get(client, "/api/demo/supplier-updates", ws=showcase_ws).json()
+
+    refused = post(
+        client, "/api/demo/supplier-updates", ws=showcase_ws,
+        json={"quote": "rice_split_case"},
+    )
+    assert refused.status_code == 400
+    assert "showcase" in refused.json()["detail"].lower()
+
+    # Nothing was written, and the same quote still works where it belongs.
+    assert get(client, "/api/demo/supplier-updates", ws=showcase_ws).json() == before
+    allowed = post(
+        client, "/api/demo/supplier-updates", ws=WS, json={"quote": "rice_split_case"}
+    )
+    assert allowed.status_code == 200, allowed.text
+    assert allowed.json()["recorded"] is True
+    # And recording it in the visitor's world left the showcase's world alone.
+    assert get(client, "/api/demo/supplier-updates", ws=showcase_ws).json() == before
+
+
 def test_the_showcase_always_starts_from_a_clean_fixture(client):
     """"This starts the community over" has to be literally true.
 

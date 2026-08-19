@@ -392,6 +392,7 @@ def latent_demand(ctx: PoolContext, community_id: str, objective: Any = None) ->
         best: dict[str, Any] | None = None
         members = {n.household_id for n in group_needs}
         units = sum(n.quantity for n in group_needs)
+        best_rank: tuple[int, int, int, str] | None = None
         for product_id in candidates:
             target = products.get(product_id)
             if target is None or target.id in seen_targets:
@@ -405,11 +406,22 @@ def latent_demand(ctx: PoolContext, community_id: str, objective: Any = None) ->
                 group_members=members,
                 group_units=units,
             )
-            rank = (row["member_count"], row["unserved_units"], row["product_id"])
-            if best is None or rank > (
-                best["member_count"], best["unserved_units"], best["product_id"]
-            ):
-                best = row
+            # Sourceability outranks demand, because it is the difference between an
+            # opportunity and a dead end. Demand alone would name whichever product the
+            # group's declarations happened to favour, and `evaluate_opportunity` would
+            # then refuse it for `no_retail_baseline` — proposing an order for something
+            # no supplier sells. It was latent while exact-only declarations were rare
+            # enough to be outvoted; a group-level declaration makes every member of the
+            # family compatible, so target choice decides the whole outcome.
+            retail, bulk = coord.offers_for(ctx, target.id)
+            rank = (
+                1 if (bulk and retail is not None) else 0,
+                row["member_count"],
+                row["unserved_units"],
+                row["product_id"],
+            )
+            if best_rank is None or rank > best_rank:
+                best, best_rank = row, rank
         if best is None or best["member_count"] == 0:
             # Everybody in this group is already being served, or nobody's rules can be
             # served by anything in it. Either way there is nothing to propose.

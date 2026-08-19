@@ -89,6 +89,12 @@ class SubstitutionPolicy(str, Enum):
 
     Deterministic by construction. The model never decides that two products are
     "close enough" — it reads the verdict of ``domain.substitution`` (§21).
+
+    ``GROUP_DECLARED`` is the one member that is not a *substitution* rule at all. The
+    others answer "I named this product — what else may serve it?". That one answers "I
+    named a family, and any member of it is what I asked for." The distinction is not
+    cosmetic: it decides whether the interface owes the member a disclosure, because
+    being handed Pike Place is a substitution only if you asked for something else.
     """
 
     EXACT_ONLY = "exact_only"
@@ -96,6 +102,7 @@ class SubstitutionPolicy(str, Enum):
     APPROVED_PRODUCTS = "approved_products"
     APPROVED_BRANDS = "approved_brands"
     STRUCTURED_CATEGORY_MATCH = "structured_category_match"
+    GROUP_DECLARED = "group_declared"
 
 
 class PoolStatus(str, Enum):

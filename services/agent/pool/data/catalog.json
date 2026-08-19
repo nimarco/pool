@@ -1,6 +1,257 @@
 {
  "attribution": "Product names, brands, barcodes and images from Open Food Facts contributors, used under ODbL (data) and CC-BY-SA (images).",
  "data_license": "ODbL-1.0",
+ "groups": [
+  {
+   "category": "pantry",
+   "exemplar_product_id": "prod_0850017468993",
+   "group": "cereal",
+   "label": "Cereal",
+   "product_count": 18,
+   "synonyms": [
+    "cereal",
+    "breakfast"
+   ],
+   "unit": "box"
+  },
+  {
+   "category": "pantry",
+   "exemplar_product_id": "prod_0028293013453",
+   "group": "chips",
+   "label": "Chips",
+   "product_count": 16,
+   "synonyms": [
+    "chips",
+    "crisps"
+   ],
+   "unit": "bag"
+  },
+  {
+   "category": "beverage",
+   "exemplar_product_id": "prod_coffee_beans",
+   "group": "coffee",
+   "label": "Coffee",
+   "product_count": 26,
+   "synonyms": [
+    "coffee",
+    "beans",
+    "ground coffee"
+   ],
+   "unit": "bag"
+  },
+  {
+   "category": "toiletries",
+   "exemplar_product_id": "prod_7791274009532",
+   "group": "deodorant",
+   "label": "Deodorant",
+   "product_count": 14,
+   "synonyms": [
+    "deodorant",
+    "antiperspirant"
+   ],
+   "unit": "stick"
+  },
+  {
+   "category": "household",
+   "exemplar_product_id": "prod_detergent_pods",
+   "group": "detergent",
+   "label": "Laundry detergent",
+   "product_count": 1,
+   "synonyms": [
+    "detergent",
+    "laundry",
+    "washing"
+   ],
+   "unit": "tub"
+  },
+  {
+   "category": "beverage",
+   "exemplar_product_id": "prod_energy_drink",
+   "group": "energy_drink",
+   "label": "Energy drinks",
+   "product_count": 24,
+   "synonyms": [
+    "energy drink",
+    "energy"
+   ],
+   "unit": "pack"
+  },
+  {
+   "category": "pantry",
+   "exemplar_product_id": "prod_0602652419317",
+   "group": "granola_bar",
+   "label": "Granola bars",
+   "product_count": 16,
+   "synonyms": [
+    "granola bar",
+    "snack bar"
+   ],
+   "unit": "box"
+  },
+  {
+   "category": "pantry",
+   "exemplar_product_id": "prod_0074822610631",
+   "group": "nut_butter",
+   "label": "Nut butter",
+   "product_count": 16,
+   "synonyms": [
+    "peanut butter",
+    "nut butter"
+   ],
+   "unit": "jar"
+  },
+  {
+   "category": "household",
+   "exemplar_product_id": "prod_paper_towels",
+   "group": "paper_towels",
+   "label": "Paper towels",
+   "product_count": 2,
+   "synonyms": [
+    "paper towel",
+    "kitchen roll",
+    "kitchen towel"
+   ],
+   "unit": "pack"
+  },
+  {
+   "category": "pantry",
+   "exemplar_product_id": "prod_0857183005014",
+   "group": "pasta",
+   "label": "Pasta",
+   "product_count": 14,
+   "synonyms": [
+    "pasta",
+    "noodles"
+   ],
+   "unit": "box"
+  },
+  {
+   "category": "nutrition",
+   "exemplar_product_id": "prod_0850000429116",
+   "group": "protein_bar",
+   "label": "Protein bars",
+   "product_count": 16,
+   "synonyms": [
+    "protein bar",
+    "bar"
+   ],
+   "unit": "box"
+  },
+  {
+   "category": "pantry",
+   "exemplar_product_id": "prod_rice_jasmine",
+   "group": "rice",
+   "label": "Rice",
+   "product_count": 13,
+   "synonyms": [
+    "rice"
+   ],
+   "unit": "bag"
+  },
+  {
+   "category": "toiletries",
+   "exemplar_product_id": "prod_0072140021092",
+   "group": "shampoo",
+   "label": "Shampoo",
+   "product_count": 16,
+   "synonyms": [
+    "shampoo",
+    "hair"
+   ],
+   "unit": "bottle"
+  },
+  {
+   "category": "toiletries",
+   "exemplar_product_id": "prod_8059016854406",
+   "group": "soap",
+   "label": "Soap",
+   "product_count": 12,
+   "synonyms": [
+    "soap",
+    "body wash",
+    "hand soap"
+   ],
+   "unit": "bar"
+  },
+  {
+   "category": "beverage",
+   "exemplar_product_id": "prod_0813694026672",
+   "group": "soda",
+   "label": "Soda",
+   "product_count": 16,
+   "synonyms": [
+    "soda",
+    "pop",
+    "cola"
+   ],
+   "unit": "pack"
+  },
+  {
+   "category": "beverage",
+   "exemplar_product_id": "prod_0012000171253",
+   "group": "sparkling_water",
+   "label": "Sparkling water",
+   "product_count": 16,
+   "synonyms": [
+    "sparkling water",
+    "seltzer",
+    "soda water"
+   ],
+   "unit": "pack"
+  },
+  {
+   "category": "beverage",
+   "exemplar_product_id": "prod_0613008714253",
+   "group": "tea",
+   "label": "Tea",
+   "product_count": 14,
+   "synonyms": [
+    "tea",
+    "teabags"
+   ],
+   "unit": "box"
+  },
+  {
+   "category": "household",
+   "exemplar_product_id": "prod_toilet_paper",
+   "group": "toilet_paper",
+   "label": "Toilet paper",
+   "product_count": 1,
+   "synonyms": [
+    "toilet paper",
+    "loo roll",
+    "tp",
+    "bathroom tissue"
+   ],
+   "unit": "pack"
+  },
+  {
+   "category": "toiletries",
+   "exemplar_product_id": "prod_0099482529772",
+   "group": "toothpaste",
+   "label": "Toothpaste",
+   "product_count": 14,
+   "synonyms": [
+    "toothpaste",
+    "tooth paste"
+   ],
+   "unit": "tube"
+  },
+  {
+   "category": "nutrition",
+   "exemplar_product_id": "prod_whey_vanilla",
+   "group": "whey_protein",
+   "label": "Whey protein",
+   "product_count": 28,
+   "synonyms": [
+    "protein",
+    "whey",
+    "protein powder",
+    "shake"
+   ],
+   "unit": "tub"
+  }
+ ],
  "image_license": "CC-BY-SA-4.0",
  "note": "Consumer identity only. Package sizes are display text and are never used in Pool's economics; supplier offers, cases and MOQ are separate and are not sourced from here.",
  "products": [

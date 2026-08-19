@@ -16,7 +16,13 @@ Policies, from strictest to loosest:
 ``APPROVED_BRANDS``
     Same substitute group, and the brand is on the member's allowlist.
 ``STRUCTURED_CATEGORY_MATCH``
-    Same substitute group and same category — the loosest rule, and still structural.
+    Same substitute group and same category — the loosest substitution rule, and still
+    structural.
+``GROUP_DECLARED``
+    Not a substitution rule. The member declared the *family*, and the stored
+    ``product_id`` is only the exemplar that carries the group. Any structural member of
+    that group is the thing they asked for, so the match is authoritative and owes no
+    disclosure — see ``requires_disclosure``.
 
 Every policy above ``EXACT_ONLY`` additionally honours a per-unit price ceiling when
 the member set one.
@@ -31,12 +37,36 @@ from .models import NeedDeclaration, Product, SubstitutionPolicy
 
 @dataclass(frozen=True)
 class CompatibilityVerdict:
+    """Whether a target product may serve a declaration, and what the member is owed.
+
+    ``is_exact`` is a fact about the two product ids and nothing else. It is stored on
+    ``Membership.is_exact_product``, so it has to keep meaning literally what it says.
+
+    ``requires_disclosure`` is a fact about the *member's expectation*. It used to be
+    read off ``is_exact``, which worked only while every non-identical match was a
+    substitution. A group-level declaration breaks that: the product differs from the
+    stored exemplar and yet nothing was substituted, because the member never named the
+    exemplar. Telling them "a substitute for the Pike Place you declared" would be an
+    apology for doing exactly what they asked.
+    """
+
     compatible: bool
     is_exact: bool
     reason: str
+    requires_disclosure: bool = False
 
     def to_dict(self) -> dict:
-        return {"compatible": self.compatible, "is_exact": self.is_exact, "reason": self.reason}
+        return {
+            "compatible": self.compatible,
+            "is_exact": self.is_exact,
+            "reason": self.reason,
+            "requires_disclosure": self.requires_disclosure,
+        }
+
+
+def _substitute(compatible: bool, reason: str) -> CompatibilityVerdict:
+    """A verdict about a product the member did not name. Disclosed when it is used."""
+    return CompatibilityVerdict(compatible, False, reason, requires_disclosure=compatible)
 
 
 _EXACT = CompatibilityVerdict(True, True, "exact product requested")
@@ -73,8 +103,8 @@ def evaluate_compatibility(
 
     if policy == SubstitutionPolicy.APPROVED_PRODUCTS:
         ok = target.id in need.approved_product_ids
-        return CompatibilityVerdict(
-            ok, False, "product is on the member's allowlist" if ok else "product not approved"
+        return _substitute(
+            ok, "product is on the member's allowlist" if ok else "product not approved"
         )
 
     same_group = bool(target.substitute_group) and target.substitute_group == candidate.substitute_group
@@ -83,22 +113,29 @@ def evaluate_compatibility(
 
     if policy == SubstitutionPolicy.SAME_PRODUCT_OTHER_VARIANT:
         ok = bool(target.brand) and target.brand == candidate.brand
-        return CompatibilityVerdict(
+        return _substitute(
             ok,
-            False,
             "same product, different variant" if ok else "different brand requires broader authority",
         )
 
     if policy == SubstitutionPolicy.APPROVED_BRANDS:
         ok = bool(target.brand) and target.brand in need.approved_brands
-        return CompatibilityVerdict(
-            ok, False, "brand is on the member's allowlist" if ok else "brand not approved"
+        return _substitute(
+            ok, "brand is on the member's allowlist" if ok else "brand not approved"
         )
 
     if policy == SubstitutionPolicy.STRUCTURED_CATEGORY_MATCH:
         ok = target.category == candidate.category
+        return _substitute(
+            ok, "same category and product family" if ok else "different category"
+        )
+
+    if policy == SubstitutionPolicy.GROUP_DECLARED:
+        # The group gate above is the whole test: the member declared this family, so a
+        # structural member of it is what they asked for rather than a stand-in for it.
+        # No disclosure is owed, and `is_exact` still reports the product ids honestly.
         return CompatibilityVerdict(
-            ok, False, "same category and product family" if ok else "different category"
+            True, False, "member declared this product family", requires_disclosure=False
         )
 
     # Unknown policies fail closed: an unclassified rule is not evidence of consent.

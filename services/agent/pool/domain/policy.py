@@ -168,6 +168,14 @@ def evaluate_smart_join(
                 hard=True,
             )
         )
+    elif need.substitution == SubstitutionPolicy.GROUP_DECLARED:
+        # Nothing was substituted. The member declared the family, so the standing
+        # substitution rule — which governs stand-ins for a product they *named* — has
+        # no subject here, and asking them to approve their own declaration would be a
+        # question with only one answer.
+        checks.append(
+            PolicyCheck("substitution", True, "member declared this product family")
+        )
     else:
         standing_allows = policy.substitution != SubstitutionPolicy.EXACT_ONLY
         checks.append(

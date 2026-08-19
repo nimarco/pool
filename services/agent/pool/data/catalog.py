@@ -223,6 +223,85 @@ def get(product_id: str) -> CatalogEntry | None:
     return _by_id().get(product_id)
 
 
+# --------------------------------------------------------------------------- groups
+
+
+@dataclass(frozen=True)
+class CatalogGroup:
+    """A product family a member may declare directly.
+
+    This is the same ``substitute_group`` the matcher has always used, given a name and
+    a front door. Declaring the family says "I buy coffee"; the run still buys exactly
+    one product, chosen because a supplier will actually sell it.
+
+    ``exemplar_product_id`` is the row a group-level declaration stores, so
+    ``Membership.need_id`` keeps resolving to a real product. It is bookkeeping, not a
+    prediction — nothing promises the order lands on it.
+    """
+
+    group: str
+    label: str
+    category: str
+    unit: str
+    exemplar_product_id: str
+    product_count: int
+    synonyms: tuple[str, ...]
+
+    def view(self, *, sourceable: bool = False) -> dict:
+        """The shape the client renders a family card from.
+
+        ``sourceable`` means the same thing it does for a product and is supplied the
+        same way: this deployment holds a verified bulk quote for *something* in the
+        family. The catalogue does not know it and must not guess.
+        """
+        return {
+            "group": self.group,
+            "label": self.label,
+            "category": self.category,
+            "unit": self.unit,
+            "product_count": self.product_count,
+            "exemplar_product_id": self.exemplar_product_id,
+            "sourceable": sourceable,
+        }
+
+
+@functools.lru_cache(maxsize=1)
+def groups() -> tuple[CatalogGroup, ...]:
+    """Every declarable family, in a stable order.
+
+    A snapshot built before families existed simply has none, and every caller then
+    behaves exactly as it did before — which is what keeps an older ``catalog.json``
+    readable rather than fatal.
+    """
+    out: list[CatalogGroup] = []
+    for row in _payload().get("groups", []):
+        try:
+            out.append(
+                CatalogGroup(
+                    group=row["group"],
+                    label=row["label"],
+                    category=row.get("category", ""),
+                    unit=row.get("unit", "unit"),
+                    exemplar_product_id=row["exemplar_product_id"],
+                    product_count=int(row.get("product_count", 0)),
+                    synonyms=tuple(row.get("synonyms", ())),
+                )
+            )
+        except (KeyError, TypeError, ValueError):
+            # One malformed row costs one family, not the catalogue.
+            continue
+    return tuple(sorted(out, key=lambda g: g.group))
+
+
+@functools.lru_cache(maxsize=1)
+def _by_group() -> dict[str, CatalogGroup]:
+    return {g.group: g for g in groups()}
+
+
+def group(slug: str) -> CatalogGroup | None:
+    return _by_group().get(slug)
+
+
 # --------------------------------------------------------------------------- search
 
 
@@ -328,12 +407,50 @@ def search(
     return [e for _, e in scored[:limit]]
 
 
+#: A family has to be *asked for*, not stumbled into. Matching the label or a curated
+#: synonym is asking; a prefix of one is still typing, and would put "Coffee" above the
+#: Colgate a member is three letters into. So group matching is deliberately stricter
+#: than product matching, which does prefix-match — the cost of being wrong is different.
+#: A product suggestion the member ignores is noise; a family suggestion they accept by
+#: mistake changes what Pool is authorised to buy.
+def search_groups(query: str, limit: int = 2) -> list[CatalogGroup]:
+    """Families the member plausibly just named. Pure, offline, and stable.
+
+    Whole-word only, against the label, the slug and the curated synonyms. Ranked by how
+    much of the query the family accounts for, then by size, then by slug so the order is
+    reproducible.
+    """
+    q_tokens = _tokens(query)
+    if not q_tokens or len(query.strip()) < MIN_QUERY_CHARS:
+        return []
+    q = set(q_tokens)
+    phrase = " ".join(q_tokens)
+
+    scored: list[tuple[int, CatalogGroup]] = []
+    for g in groups():
+        words = set(_tokens(g.label)) | set(_tokens(g.group))
+        for s in g.synonyms:
+            words |= set(_tokens(s))
+        hit = q & words
+        if not hit:
+            continue
+        score = 40 * len(hit)
+        if hit == q:
+            score += 60             # they named the family and nothing else
+        if phrase == g.label.casefold() or phrase in {s.casefold() for s in g.synonyms}:
+            score += 90             # an exact name, so stop ranking and answer
+        scored.append((score, g))
+
+    scored.sort(key=lambda pair: (-pair[0], -pair[1].product_count, pair[1].group))
+    return [g for _, g in scored[: max(1, limit)]]
+
+
 def reset_cache() -> None:
     """Drop every memoised view of the snapshot.
 
     Only tests need this, but they need *all* of it: the parsed entries, the id map, the
-    attribution, and the search index are four separate caches over one file, and
-    clearing three of them leaves the fourth quietly serving the old snapshot.
+    attribution, the families, and the search index are separate caches over one file,
+    and clearing all but one leaves that one quietly serving the old snapshot.
     """
-    for cached in (_payload, entries, attribution, _by_id, _index):
+    for cached in (_payload, entries, attribution, _by_id, _index, groups, _by_group):
         cached.cache_clear()

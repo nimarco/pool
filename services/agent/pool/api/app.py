@@ -306,7 +306,10 @@ class NeedRequest(BaseModel):
     """
 
     household_id: str = Field(max_length=60)
-    product_id: str = Field(max_length=60)
+    #: Exactly one of ``product_id`` or ``group`` — a member either names the product or
+    #: names the family, and those are different statements.
+    product_id: str = Field(default="", max_length=60)
+    group: str = Field(default="", max_length=40)
     quantity: int = Field(ge=1, le=100)
     cadence_days: int = Field(ge=1, le=365)
     expected_next_need_date: str = Field(max_length=10)
@@ -326,9 +329,34 @@ class NeedRequest(BaseModel):
             substitution = SubstitutionPolicy(self.substitution)
         except ValueError as exc:
             raise HTTPException(400, "unknown substitution preference") from exc
+
+        product_id = self.product_id
+        if self.group:
+            if product_id:
+                raise HTTPException(
+                    400, "name a product or a product family, not both"
+                )
+            family = catalog.group(self.group)
+            if family is None:
+                raise HTTPException(400, "unknown product family")
+            # The family decides both fields. Naming the family is the whole of the
+            # request, and the exemplar is looked up here rather than accepted, so the
+            # authority a group declaration carries can only ever come from a family a
+            # human put in the catalogue.
+            product_id = family.exemplar_product_id
+            substitution = SubstitutionPolicy.GROUP_DECLARED
+        elif substitution == SubstitutionPolicy.GROUP_DECLARED:
+            # Otherwise a caller could claim family-wide authority while naming one
+            # product, which is a wider permission than any screen asked for.
+            raise HTTPException(
+                400, "declaring a product family means naming the family"
+            )
+        if not product_id:
+            raise HTTPException(400, "name a product or a product family")
+
         return needs_service.NeedInput(
             household_id=self.household_id,
-            product_id=self.product_id,
+            product_id=product_id,
             quantity=self.quantity,
             cadence_days=self.cadence_days,
             expected_next_need_date=due,
@@ -783,8 +811,23 @@ def search_products(
     # coffee Pool holds a quote for instead of burying it under eight it does not.
     sourceable = _sourceable_product_ids(ws)
     found = catalog.search(q, limit, sourceable_ids=sourceable)
+    # Families first, because "coffee" is usually a statement about coffee rather than a
+    # half-remembered brand. A family is sourceable when Pool holds a bulk quote for
+    # anything inside it — which is the honest reading: the member is declaring the
+    # family, so what matters is whether the family can be bought, not whether the
+    # exemplar row happens to be the one quoted.
+    families = catalog.search_groups(q)
+    in_group: dict[str, bool] = {}
+    if families:
+        wanted = {g.group for g in families}
+        by_group: dict[str, bool] = {g: False for g in wanted}
+        for p in repo().list_products(ws):
+            if p.substitute_group in wanted and p.id in sourceable:
+                by_group[p.substitute_group] = True
+        in_group = by_group
     return {
         "query": q.strip(),
+        "groups": [g.view(sourceable=in_group.get(g.group, False)) for g in families],
         "results": [e.view(sourceable=e.product_id in sourceable) for e in found],
         # So the client can render the licence obligation next to what it obliges.
         "attribution": catalog.attribution().to_dict(),
@@ -1747,6 +1790,19 @@ def record_supplier_update(
     evidence would describe a world that never existed.
     """
     ws = check_workspace(workspace)
+    # Never against the showcase partition. The showcase is a fixed recording of one
+    # lifecycle, and every figure quoted about it — 24 units, 2 cases, $861.44 — is a
+    # claim about *that* world. Writing a rice quote into it changes the product universe
+    # the recording is a recording of, and it would do so invisibly: the Operations
+    # console was reachable from inside showcase mode, so a presenter could contaminate
+    # the canonical copy between two takes and find out from a number that no longer
+    # matched.
+    if public_demo.is_showcase_workspace(ws):
+        raise HTTPException(
+            400,
+            "The showcase replays one recorded lifecycle. Supplier facts are recorded "
+            "against a live community — leave showcase mode to change the world.",
+        )
     with _public.workspace_mutation(ws, public_demo.WORKSPACE_BUSY):
         _public.spend_action(ws)
         ensure_seeded(ws)

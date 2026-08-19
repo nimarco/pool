@@ -68,6 +68,7 @@ describe("setting up an account", () => {
     vi.restoreAllMocks();
     vi.spyOn(apiModule.api, "searchProducts").mockResolvedValue({
       query: "vanilla whey",
+      groups: [],
       results: [WHEY],
       attribution: ATTRIBUTION,
     });
@@ -305,6 +306,7 @@ describe("setting up an account", () => {
           household_name: "You",
           product_id: WHEY.product_id,
           product_name: WHEY.name,
+          declared_family: "",
           unit: WHEY.unit,
           brand: WHEY.brand,
           variant: WHEY.variant,

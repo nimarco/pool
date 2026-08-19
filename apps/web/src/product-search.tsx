@@ -19,10 +19,23 @@
  *
  * **Search is not a shop.** No prices, no availability, no "add to cart". Choosing a
  * product states what you buy anyway; it commits nothing and joins nothing.
+ *
+ * **The family comes first, because that is usually the sentence.** Typing `coffee`
+ * used to return four bags of coffee and a Chobani coffee creamer, and the member's
+ * only way of saying "I buy coffee" was to pick one brand and hope their neighbours had
+ * picked the same one. They had not: twelve people buying coffee across three brands
+ * produced no order at all, against a supplier minimum they cleared twice over. So a
+ * matched family is offered as the primary answer and the exact products sit behind a
+ * disclosure — available, unchanged, and one click away for somebody who means one bag.
+ *
+ * Naming a brand offers no family. Somebody typing `pike place` has already told Pool
+ * which product they want, and putting "Coffee" above it would be the search widening
+ * their authority on their behalf.
  */
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { CatalogAttribution, ProductCandidate, api } from "./api";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { CatalogAttribution, FamilyCandidate, ProductCandidate, api } from "./api";
+import { ChosenItem, Picked } from "./chosen";
 import { categoryTone, productImage, productInitials } from "./products";
 
 /** Long enough that a fast typist makes one request per word rather than per letter,
@@ -97,14 +110,90 @@ export function ProductCard({
   );
 }
 
+/* ------------------------------------------------------------------ one family */
+
+/** A product family, offered as the thing the member probably means.
+ *
+ *  Deliberately says how many products it covers rather than naming one of them. The
+ *  count is the reassurance — it is what makes "Coffee" read as a real choice with a
+ *  known scope rather than a vague one. */
+export function FamilyCard({
+  family,
+  selected,
+  onSelect,
+  id,
+}: {
+  family: FamilyCandidate;
+  selected?: boolean;
+  onSelect: () => void;
+  id?: string;
+}) {
+  return (
+    <li
+      id={id}
+      role="option"
+      aria-selected={!!selected}
+      className={`family-card${selected ? " is-active" : ""}`}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onSelect}
+    >
+      <span
+        className="family-thumb"
+        aria-hidden="true"
+        style={{ background: categoryTone(family.category) }}
+      />
+      <span className="product-text">
+        <span className="family-name">{family.label}</span>
+        <span className="product-meta">
+          Any of {family.product_count} — Pool buys whichever works out cheapest
+        </span>
+        {family.sourceable ? (
+          <span className="product-sourceable">Pool can source this</span>
+        ) : null}
+      </span>
+    </li>
+  );
+}
+
 /* ------------------------------------------------------------------ the search */
+
+/** The thing the member picked, shown back to them. One component, so a family and a
+ *  product cannot drift into looking like different classes of choice. */
+export function ChosenCard({ item }: { item: ChosenItem }) {
+  const src = productImage(item.image_ref);
+  return (
+    <div className="product-card is-static">
+      <span className="product-thumb" aria-hidden="true">
+        {src ? (
+          <img src={src} alt="" loading="lazy" decoding="async" />
+        ) : (
+          <span
+            className="product-thumb-fallback"
+            style={{ background: categoryTone(item.category) }}
+          >
+            {item.familyCount
+              ? item.label.slice(0, 2).toUpperCase()
+              : productInitials(item.brand, item.label)}
+          </span>
+        )}
+      </span>
+      <span className="product-text">
+        {item.brand ? <span className="product-brand">{item.brand}</span> : null}
+        <span className="product-name">{item.label}</span>
+        {item.familyCount ? (
+          <span className="product-meta">any of {item.familyCount}</span>
+        ) : null}
+      </span>
+    </div>
+  );
+}
 
 export function ProductSearch({
   onSelect,
   onUnresolved,
   autoFocus,
 }: {
-  onSelect: (product: ProductCandidate) => void;
+  onSelect: (picked: Picked) => void;
   /** Called when somebody looked and Pool had nothing. A real product does not tell a
    *  person they cannot want something. */
   onUnresolved?: (query: string) => void;
@@ -112,10 +201,16 @@ export function ProductSearch({
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ProductCandidate[]>([]);
+  const [families, setFamilies] = useState<FamilyCandidate[]>([]);
   const [attribution, setAttribution] = useState<CatalogAttribution | null>(null);
   const [active, setActive] = useState(0);
   const [busy, setBusy] = useState(false);
   const [searched, setSearched] = useState(false);
+  /* Whether the exact products are showing. Collapsed while a family matched, because
+     the family is the answer and six brand cards below it is the browse experience this
+     screen is trying not to be. Expanded automatically when no family matched — somebody
+     who typed a brand is not being offered a shortcut, they already took one. */
+  const [showProducts, setShowProducts] = useState(false);
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   /* Responses can land out of order. Only the newest query is allowed to paint, or a
@@ -130,6 +225,7 @@ export function ProductSearch({
     const text = query.trim();
     if (text.length < MIN_CHARS) {
       setResults([]);
+      setFamilies([]);
       setSearched(false);
       setBusy(false);
       return;
@@ -142,13 +238,16 @@ export function ProductSearch({
         .then((view) => {
           if (token !== latest.current) return;
           setResults(view.results);
+          setFamilies(view.groups ?? []);
           setAttribution(view.attribution);
           setActive(0);
+          setShowProducts((view.groups ?? []).length === 0);
           setSearched(true);
         })
         .catch(() => {
           if (token !== latest.current) return;
           setResults([]);
+          setFamilies([]);
           setSearched(true);
         })
         .finally(() => {
@@ -158,35 +257,55 @@ export function ProductSearch({
     return () => clearTimeout(timer);
   }, [query]);
 
+  /* One flat option list, so the combobox keeps working: families first, then the exact
+     products when they are showing. Expanding changes what the listbox contains rather
+     than nesting a second widget inside it, which `role="listbox"` does not allow. */
+  const options = useMemo<Picked[]>(
+    () => [
+      ...families.map((family) => ({ kind: "family" as const, family })),
+      ...(showProducts
+        ? results.map((product) => ({ kind: "product" as const, product }))
+        : []),
+    ],
+    [families, results, showProducts],
+  );
+
   const choose = useCallback(
-    (product: ProductCandidate) => {
+    (picked: Picked) => {
       setQuery("");
       setResults([]);
+      setFamilies([]);
       setSearched(false);
-      onSelect(product);
+      onSelect(picked);
     },
     [onSelect],
   );
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!results.length) return;
+    if (!options.length) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActive((i) => (i + 1) % results.length);
+      setActive((i) => (i + 1) % options.length);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setActive((i) => (i - 1 + results.length) % results.length);
+      setActive((i) => (i - 1 + options.length) % options.length);
     } else if (event.key === "Enter") {
       event.preventDefault();
-      const picked = results[active];
+      const picked = options[active];
       if (picked) choose(picked);
     } else if (event.key === "Escape") {
       setQuery("");
       setResults([]);
+      setFamilies([]);
     }
   };
 
-  const empty = searched && !busy && results.length === 0 && query.trim().length >= MIN_CHARS;
+  const empty =
+    searched &&
+    !busy &&
+    results.length === 0 &&
+    families.length === 0 &&
+    query.trim().length >= MIN_CHARS;
 
   return (
     <div className="product-search">
@@ -199,31 +318,51 @@ export function ProductSearch({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="vanilla whey, paper towels, coffee…"
+          placeholder="coffee, paper towels, rice…"
           autoComplete="off"
           spellCheck={false}
           role="combobox"
-          aria-expanded={results.length > 0}
+          aria-expanded={options.length > 0}
           aria-controls={listId}
           aria-autocomplete="list"
           aria-activedescendant={
-            results.length > 0 ? `${listId}-${active}` : undefined
+            options.length > 0 ? `${listId}-${active}` : undefined
           }
         />
       </label>
 
-      {results.length > 0 ? (
-        <ul className="product-results" id={listId} role="listbox" aria-label="Matching products">
-          {results.map((p, i) => (
-            <ProductCard
-              key={p.product_id}
-              id={`${listId}-${i}`}
-              product={p}
-              selected={i === active}
-              onSelect={() => choose(p)}
-            />
-          ))}
+      {options.length > 0 ? (
+        <ul className="product-results" id={listId} role="listbox" aria-label="What you buy">
+          {options.map((option, i) =>
+            option.kind === "family" ? (
+              <FamilyCard
+                key={`family-${option.family.group}`}
+                id={`${listId}-${i}`}
+                family={option.family}
+                selected={i === active}
+                onSelect={() => choose(option)}
+              />
+            ) : (
+              <ProductCard
+                key={option.product.product_id}
+                id={`${listId}-${i}`}
+                product={option.product}
+                selected={i === active}
+                onSelect={() => choose(option)}
+              />
+            ),
+          )}
         </ul>
+      ) : null}
+
+      {families.length > 0 && !showProducts && results.length > 0 ? (
+        <button
+          className="btn btn-ghost btn-sm search-widen"
+          type="button"
+          onClick={() => setShowProducts(true)}
+        >
+          Or pick one exact product ({results.length})
+        </button>
       ) : null}
 
       {/* Politeness matters here: the result count changes under a screen reader
@@ -231,10 +370,23 @@ export function ProductSearch({
       <p className="sr-only" role="status" aria-live="polite">
         {busy
           ? "Searching"
-          : results.length > 0
-            ? `${results.length} products found`
+          : options.length > 0
+            ? [
+                families.length === 1
+                  ? "1 product family"
+                  : families.length
+                    ? `${families.length} product families`
+                    : "",
+                showProducts && results.length
+                  ? results.length === 1
+                    ? "1 product"
+                    : `${results.length} products`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(", ")
             : empty
-              ? "No products found"
+              ? "Nothing found"
               : ""}
       </p>
 
@@ -263,7 +415,10 @@ export function ProductSearch({
         </div>
       ) : null}
 
-      {attribution && results.length > 0 ? (
+      {/* Only when a photograph or a real product name is actually on screen. The
+          licence obligation travels with the catalogue rows, and a family card carries
+          neither. */}
+      {attribution && showProducts && results.length > 0 ? (
         <p className="tiny faint product-attribution">
           Product names and photographs from{" "}
           <a href={attribution.source_url} target="_blank" rel="noreferrer noopener">

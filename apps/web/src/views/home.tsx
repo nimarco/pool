@@ -25,7 +25,6 @@ import {
   PoolMember,
   PoolStatus,
   PoolView,
-  ProductCandidate,
   RunReport,
   RunReportResult,
   StandingDemand,
@@ -38,6 +37,7 @@ import {
 } from "../api";
 import { autonomyModeCopy, blockingRuleExplanation } from "../labels";
 import { ProductSearch } from "../product-search";
+import { Picked } from "../chosen";
 import { productImage, productInitials } from "../products";
 import {
   ActorTag,
@@ -325,7 +325,7 @@ function OpportunityCard({
  *
  *  The search is live here rather than a link, because the shortest path from "what is
  *  this" to "oh, I see" is typing something you actually buy and recognising it. */
-function FirstUseCard({ onStartNeed }: { onStartNeed: (p: ProductCandidate) => void }) {
+function FirstUseCard({ onStartNeed }: { onStartNeed: (picked: Picked) => void }) {
   /* One version of this, not two. An earlier draft softened the headline to "anything
      *else* you buy?" once the account had a declaration — which is the copy almost
      everybody actually sees, since a seeded member starts with one. That buried the
@@ -348,7 +348,10 @@ function FirstUseCard({ onStartNeed }: { onStartNeed: (p: ProductCandidate) => v
              cannot source yet. The server stores it with no substitute group and no
              supplier, so the need is real and no pool can form for it. */
           onUnresolved={(query) => {
-            void api.customProduct(query).then(onStartNeed).catch(() => {});
+            void api
+              .customProduct(query)
+              .then((product) => onStartNeed({ kind: "product", product }))
+              .catch(() => {});
           }}
         />
         <p className="small muted">
@@ -621,7 +624,7 @@ export function Home({
   onOpenPool: (id: string) => void;
   onRespond: (id: string, approve: boolean) => void;
   onShowAgent: (poolId: string) => void;
-  onStartNeed: (product: ProductCandidate | null) => void;
+  onStartNeed: (picked: Picked | null) => void;
   onGoCommunity: () => void;
   liveDiscovery: boolean;
   region: string | null;

@@ -8,12 +8,12 @@ import {
   MemberView,
   RunReport,
   PoolView,
-  ProductCandidate,
   ScenarioResult,
   api,
   resetWorkspaceId,
 } from "./api";
 import { BrandMark } from "./brand";
+import { Picked } from "./chosen";
 import { IconArrowLeft, IconCross } from "./ui";
 import { About } from "./views/about";
 import { Onboarding } from "./views/onboarding";
@@ -63,7 +63,7 @@ const NOBODY: Identity = { id: "", display_name: "" };
 export default function App() {
   const [view, setView] = useState<View>("home");
   /** Set when Home hands a chosen product to the Needs form. */
-  const [pendingProduct, setPendingProduct] = useState<ProductCandidate | null>(null);
+  const [pendingProduct, setPendingProduct] = useState<Picked | null>(null);
   const [state, setState] = useState<AppState | null>(null);
   const [map, setMap] = useState<MapData | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
@@ -238,11 +238,11 @@ export default function App() {
     [refresh, forgetWorkspaceState],
   );
 
-  /** A product picked on Home, handed to the Needs form so the member does not have to
-   *  search for the same thing twice. Cleared as soon as the form has taken it. */
+  /** What was picked on Home, handed to the form so the member does not have to search
+   *  for the same thing twice. A family or a product; cleared once the form has it. */
   const startNeed = useCallback(
-    (product: ProductCandidate | null) => {
-      setPendingProduct(product);
+    (picked: Picked | null) => {
+      setPendingProduct(picked);
       navigate("needs");
     },
     [navigate],

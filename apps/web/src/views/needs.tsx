@@ -23,11 +23,11 @@ import {
   NeedLimits,
   NeedOutlook,
   NeedRow,
-  ProductCandidate,
   api,
   shortDateOnly,
 } from "../api";
-import { ProductCard, ProductSearch } from "../product-search";
+import { ChosenCard, ProductSearch } from "../product-search";
+import { ChosenItem, Picked, asChosen } from "../chosen";
 import { categoryTone, productImage, productInitials } from "../products";
 import { Block, Chip, CoordinatorWait, Empty, IconArrowRight } from "../ui";
 
@@ -124,14 +124,15 @@ function NeedForm({
   onRetire,
 }: {
   draft: NeedDraft;
-  /** The product as a card renders it. Null while adding, before anything is chosen. */
-  chosen: ProductCandidate | null;
+  /** What the member picked, as a card renders it. Null while adding, before anything
+   *  has been chosen. A family and a product are both this shape by design. */
+  chosen: ChosenItem | null;
   limits: NeedLimits | null;
   busy: boolean;
   error: string | null;
   editing: boolean;
   onChange: (next: NeedDraft) => void;
-  onChooseProduct: (product: ProductCandidate) => void;
+  onChooseProduct: (picked: Picked) => void;
   onClearProduct: () => void;
   onUnresolved: (query: string) => void;
   onSubmit: () => void;
@@ -164,7 +165,7 @@ function NeedForm({
   const unit = chosen?.unit || "units";
 
   /* Step one. Nothing else is worth asking until Pool knows what the thing is. */
-  if (!draft.product_id || !chosen) {
+  if (!chosen) {
     return (
       <div className="need-form stack-sm">
         <ProductSearch
@@ -190,7 +191,7 @@ function NeedForm({
       }}
     >
       <div className="chosen-product">
-        <ProductCard product={chosen} />
+        <ChosenCard item={chosen} />
         {editing ? null : (
           <button className="btn btn-sm btn-ghost" type="button" onClick={onClearProduct}>
             Change
@@ -433,7 +434,7 @@ export function Needs({
   identity: { id: string; display_name: string };
   communityName: string;
   /** A product already chosen on Home, so the member does not search twice. */
-  initialProduct: ProductCandidate | null;
+  initialProduct: Picked | null;
   onConsumeInitialProduct: () => void;
   onFind: () => void;
   running: boolean;
@@ -460,7 +461,7 @@ export function Needs({
   const [draft, setDraft] = useState<NeedDraft | null>(null);
   /** The chosen product, as a card renders it. Held beside the draft because the draft
    *  carries only the id the server needs, and the id is the one thing never shown. */
-  const [chosen, setChosen] = useState<ProductCandidate | null>(null);
+  const [chosen, setChosen] = useState<ChosenItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -485,8 +486,9 @@ export function Needs({
     if (!initialProduct) return;
     setError(null);
     setEditingId("");
-    setChosen(initialProduct);
-    setDraft({ ...blankDraft(identity.id), product_id: initialProduct.product_id });
+    const item = asChosen(initialProduct);
+    setChosen(item);
+    setDraft({ ...blankDraft(identity.id), ...item.draft });
     onConsumeInitialProduct();
   }, [initialProduct, identity.id, onConsumeInitialProduct]);
 
@@ -515,16 +517,33 @@ export function Needs({
     setEditingId(need.need_id);
     // Editing keeps the product fixed, so the card is rebuilt from what the server
     // already told us about this declaration rather than searched for again.
-    setChosen({
-      product_id: need.product_id,
-      name: need.product_name,
-      brand: need.brand ?? "",
-      variant: need.variant ?? "",
-      display_size: "",
-      unit: need.unit,
-      category: need.category ?? "",
-      image_ref: need.image_ref ?? "",
-    });
+    // Editing keeps the choice fixed, so the card is rebuilt from what the server
+    // already said about this declaration rather than searched for again — including
+    // whether it was a family, which is the difference between reopening "Coffee" and
+    // reopening the exemplar bag behind it.
+    setChosen(
+      need.declared_family
+        ? {
+            key: `family:${need.declared_family}`,
+            label: need.product_name,
+            unit: need.unit,
+            category: need.category ?? "",
+            brand: "",
+            image_ref: "",
+            familyCount: 0,
+            draft: { group: need.declared_family, substitution: need.substitution },
+          }
+        : {
+            key: `product:${need.product_id}`,
+            label: need.product_name,
+            unit: need.unit,
+            category: need.category ?? "",
+            brand: need.brand ?? "",
+            image_ref: need.image_ref ?? "",
+            familyCount: 0,
+            draft: { product_id: need.product_id, substitution: need.substitution },
+          },
+    );
     setDraft(draftFrom(need));
   };
 
@@ -535,14 +554,20 @@ export function Needs({
     setError(null);
   };
 
-  const chooseProduct = (product: ProductCandidate) => {
-    setChosen(product);
-    setDraft((d) => (d ? { ...d, product_id: product.product_id } : d));
+  const chooseProduct = (picked: Picked) => {
+    const item = asChosen(picked);
+    setChosen(item);
+    // Exactly one of the two travels, because the server refuses both.
+    setDraft((d) =>
+      d
+        ? { ...d, product_id: undefined, group: undefined, ...item.draft }
+        : d,
+    );
   };
 
   const clearProduct = () => {
     setChosen(null);
-    setDraft((d) => (d ? { ...d, product_id: "" } : d));
+    setDraft((d) => (d ? { ...d, product_id: undefined, group: undefined } : d));
   };
 
   /** Something the catalogue does not have. The server stores it with no substitute
@@ -551,7 +576,7 @@ export function Needs({
     setBusy(true);
     setError(null);
     try {
-      chooseProduct(await api.customProduct(query));
+      chooseProduct({ kind: "product", product: await api.customProduct(query) });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

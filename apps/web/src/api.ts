@@ -323,7 +323,13 @@ export interface NeedRow {
   household_id: string;
   household_name: string;
   product_id: string;
+  /** What the member called it. For a family declaration this is the family's label —
+   *  the stored `product_id` is an exemplar they never chose, and showing it would be
+   *  Pool telling them what they declared. */
   product_name: string;
+  /** The family slug when the member declared a family; empty when they named a product.
+   *  What lets a form reopen a family declaration as a family. */
+  declared_family: string;
   unit: string;
   /** Enough identity to render the same card the search showed. */
   brand: string;
@@ -383,8 +389,31 @@ export interface CatalogAttribution {
   snapshot: string;
 }
 
+/** A product family a member may declare directly — "coffee", not one bag of it.
+ *
+ *  The same curated `substitute_group` the matcher has always used to decide whose demand
+ *  may combine with whose. Declaring the family says "I buy coffee"; the order Pool
+ *  eventually places still buys one exact product, picked because a supplier will sell it.
+ *
+ *  `exemplar_product_id` is the row the declaration stores so its lineage resolves to a
+ *  real product. It is bookkeeping and is never displayed. */
+export interface FamilyCandidate {
+  group: string;
+  label: string;
+  category: string;
+  unit: string;
+  product_count: number;
+  exemplar_product_id: string;
+  /** Pool holds a verified bulk quote for *something* in this family. */
+  sourceable: boolean;
+}
+
 export interface ProductSearchResult {
   query: string;
+  /** Families the member plausibly just named. Empty when they named a brand — somebody
+   *  typing "pike place" has told Pool which product they want, and offering them the
+   *  family there would be the search widening their authority for them. */
+  groups: FamilyCandidate[];
   results: ProductCandidate[];
   attribution: CatalogAttribution;
 }
@@ -411,7 +440,13 @@ export interface NeedsView {
  *  need is a statement about one household, never about a group. */
 export interface NeedDraft {
   household_id: string;
-  product_id: string;
+  /** Exactly one of these. Naming the product means exact-only; naming the family means
+   *  the member declared the family and the server looks the exemplar up itself, so
+   *  family-wide authority can only ever come from a family a human put in the
+   *  catalogue. Sending both, or `substitution: "group_declared"` beside a product, is
+   *  refused rather than reconciled. */
+  product_id?: string;
+  group?: string;
   quantity: number;
   cadence_days: number;
   expected_next_need_date: string;

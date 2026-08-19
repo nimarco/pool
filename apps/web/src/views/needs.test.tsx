@@ -15,6 +15,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { Picked } from "../chosen";
 import { Needs } from "./needs";
 import * as apiModule from "../api";
 
@@ -58,6 +59,7 @@ function needRow(overrides: Partial<apiModule.NeedRow> = {}): apiModule.NeedRow 
     need_id: "need_1",
     household_id: ROSA.id,
     household_name: "Rosa N.",
+    declared_family: "",
     product_id: "prod_paper_towels",
     product_name: "Paper towels, 6 rolls",
     unit: "pack",
@@ -82,7 +84,7 @@ function needRow(overrides: Partial<apiModule.NeedRow> = {}): apiModule.NeedRow 
 }
 
 function renderNeeds(
-  initialProduct: apiModule.ProductCandidate | null = null,
+  initialProduct: Picked | null = null,
   outlook: apiModule.NeedOutlook[] = [],
 ) {
   return render(
@@ -121,6 +123,7 @@ describe("declaring a standing need", () => {
     });
     vi.spyOn(apiModule.api, "searchProducts").mockResolvedValue({
       query: "vanilla whey",
+      groups: [],
       results: [WHEY],
       attribution: ATTRIBUTION,
     });
@@ -210,7 +213,7 @@ describe("declaring a standing need", () => {
   });
 
   it("takes a product already chosen on Home rather than searching twice", async () => {
-    renderNeeds(WHEY);
+    renderNeeds({ kind: "product", product: WHEY });
     // Straight to the second half: the card is shown and the fields are live.
     expect(await screen.findByLabelText(/how many/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /add this need/i })).toBeTruthy();
@@ -233,6 +236,7 @@ describe("declaring a standing need", () => {
   it("offers to record an item the catalogue does not have", async () => {
     vi.spyOn(apiModule.api, "searchProducts").mockResolvedValue({
       query: "obscure thing",
+      groups: [],
       results: [],
       attribution: ATTRIBUTION,
     });
@@ -283,7 +287,7 @@ describe("declaring a standing need", () => {
   });
 
   it("says plainly what a zero flexibility window means", async () => {
-    renderNeeds(WHEY);
+    renderNeeds({ kind: "product", product: WHEY });
     await screen.findByLabelText(/how many/i);
 
     const early = screen.getByLabelText(/may buy this many days early/i);
@@ -294,7 +298,7 @@ describe("declaring a standing need", () => {
   });
 
   it("states the buy-early window in words, because it is the field that authorises", async () => {
-    renderNeeds(WHEY);
+    renderNeeds({ kind: "product", product: WHEY });
     await screen.findByLabelText(/how many/i);
 
     // §24: this window is permission, not a preference. It is derived from the date the
@@ -313,6 +317,7 @@ describe("declaring a standing need", () => {
     };
     vi.spyOn(apiModule.api, "searchProducts").mockResolvedValue({
       query: "whey",
+      groups: [],
       results: [sourceable, other],
       attribution: ATTRIBUTION,
     });
@@ -331,7 +336,7 @@ describe("declaring a standing need", () => {
   });
 
   it("tells a member what an unsourceable choice means, where they choose it", async () => {
-    renderNeeds({ ...WHEY, sourceable: false });
+    renderNeeds({ kind: "product", product: { ...WHEY, sourceable: false } });
     await screen.findByLabelText(/how many/i);
 
     const substitutes = screen.getByLabelText(/would another product do/i);
@@ -343,7 +348,7 @@ describe("declaring a standing need", () => {
   });
 
   it("offers only substitution policies the domain can act on", async () => {
-    renderNeeds(WHEY);
+    renderNeeds({ kind: "product", product: WHEY });
     await screen.findByLabelText(/how many/i);
 
     const options = Array.from(
@@ -359,7 +364,7 @@ describe("declaring a standing need", () => {
 
   it("keeps the authorisation constraints available, and unchanged, behind a disclosure", async () => {
     const declare = vi.spyOn(apiModule.api, "declareNeed").mockResolvedValue(needRow());
-    renderNeeds(WHEY);
+    renderNeeds({ kind: "product", product: WHEY });
     await screen.findByLabelText(/how many/i);
 
     // Collapsed by default: setting up a restock reminder should not start with a
@@ -385,5 +390,115 @@ describe("declaring a standing need", () => {
     expect(sent.min_savings_pct).toBe(15);
     expect(sent.max_spend_cents).toBe(12000);
     expect(sent.substitution).toBe("exact_only");
+  });
+});
+
+/* --------------------------------------------------------------- declaring a family */
+
+const COFFEE_FAMILY: apiModule.FamilyCandidate = {
+  group: "coffee",
+  label: "Coffee",
+  category: "beverage",
+  unit: "bag",
+  product_count: 26,
+  exemplar_product_id: "prod_coffee_beans",
+  sourceable: true,
+};
+
+describe("saying what you buy, rather than which bag of it", () => {
+  beforeEach(() => {
+    vi.spyOn(apiModule.api, "needs").mockResolvedValue({
+      needs: [],
+      products: PRODUCTS,
+      limits: LIMITS,
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  async function search(term: string) {
+    renderNeeds();
+    await userEvent.click(await screen.findByRole("button", { name: /add a need/i }));
+    await userEvent.type(screen.getByLabelText(/what do you buy/i), term);
+  }
+
+  it("offers the family first, and keeps the exact products one click away", async () => {
+    vi.spyOn(apiModule.api, "searchProducts").mockResolvedValue({
+      query: "coffee",
+      groups: [COFFEE_FAMILY],
+      results: [{ ...WHEY, product_id: "prod_coffee_beans", name: "Pike Place" }],
+      attribution: ATTRIBUTION,
+    });
+    await search("coffee");
+
+    // One option, and it is the family. Six brand cards under it is the browse
+    // experience this screen exists not to be.
+    const options = await screen.findAllByRole("option");
+    expect(options).toHaveLength(1);
+    expect(options[0].textContent).toMatch(/Coffee/);
+    expect(options[0].textContent).toMatch(/Any of 26/);
+
+    // Available, not hidden.
+    const widen = screen.getByRole("button", { name: /or pick one exact product/i });
+    await userEvent.click(widen);
+    expect((await screen.findAllByRole("option")).length).toBe(2);
+  });
+
+  it("sends the family, and never a product id beside it", async () => {
+    const declare = vi.spyOn(apiModule.api, "declareNeed").mockResolvedValue(needRow());
+    vi.spyOn(apiModule.api, "searchProducts").mockResolvedValue({
+      query: "coffee",
+      groups: [COFFEE_FAMILY],
+      results: [],
+      attribution: ATTRIBUTION,
+    });
+    await search("coffee");
+    await userEvent.click(await screen.findByRole("option", { name: /Coffee/i }));
+    await screen.findByLabelText(/how many/i);
+    await userEvent.click(screen.getByRole("button", { name: /add this need/i }));
+
+    await waitFor(() => expect(declare).toHaveBeenCalled());
+    const sent = declare.mock.calls[0][0];
+    // The server owns the exemplar lookup, so family authority can only come from a
+    // family a human put in the catalogue. Sending both is refused, not reconciled.
+    expect(sent.group).toBe("coffee");
+    expect(sent.product_id).toBeUndefined();
+  });
+
+  it("names the family on the form, not the exemplar behind it", async () => {
+    vi.spyOn(apiModule.api, "searchProducts").mockResolvedValue({
+      query: "coffee",
+      groups: [COFFEE_FAMILY],
+      results: [],
+      attribution: ATTRIBUTION,
+    });
+    await search("coffee");
+    await userEvent.click(await screen.findByRole("option", { name: /Coffee/i }));
+
+    // Showing "Pike Place Medium Roast" here would be Pool telling somebody who typed
+    // "coffee" what they declared.
+    const card = document.querySelector(".chosen-product") as HTMLElement;
+    expect(card.textContent).toMatch(/Coffee/);
+    expect(card.textContent).not.toMatch(/Pike Place/);
+  });
+
+  it("offers no family when the member named a brand", async () => {
+    vi.spyOn(apiModule.api, "searchProducts").mockResolvedValue({
+      query: "pike place",
+      groups: [],
+      results: [{ ...WHEY, product_id: "prod_coffee_beans", name: "Pike Place" }],
+      attribution: ATTRIBUTION,
+    });
+    await search("pike place");
+
+    // Somebody who typed a brand has already said which product they want. The exact
+    // products show straight away, and there is nothing to expand.
+    const options = await screen.findAllByRole("option");
+    expect(options).toHaveLength(1);
+    expect(options[0].textContent).toMatch(/Pike Place/);
+    expect(screen.queryByRole("button", { name: /or pick one exact product/i })).toBeNull();
   });
 });

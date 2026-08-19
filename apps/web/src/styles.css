@@ -541,6 +541,13 @@ a {
 .panel-pad {
   padding: 22px;
 }
+/* The one card on an empty Home, where the whole product is a single sentence and a
+ * search box. It was written as `panel panel-lead` and the second class never existed,
+ * so the most important screen a new member sees rendered as an ordinary panel. */
+.panel-lead {
+  border-color: var(--rule-strong);
+  box-shadow: var(--shadow-md, var(--shadow-sm));
+}
 .panel-head {
   display: flex;
   align-items: center;
@@ -2229,6 +2236,56 @@ select.control {
   flex-direction: column;
   gap: 1px;
   min-width: 0;
+}
+
+/* A product family — "Coffee" — offered above the individual bags of it.
+ *
+ * Weightier than a product row on purpose. For most people the family *is* the answer,
+ * and it has to look like the primary choice rather than a nineteenth option; the exact
+ * products stay one click away behind `.search-widen`. */
+.family-card {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--rule-strong);
+  background: var(--paper-raised);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.family-card:hover,
+.family-card.is-active {
+  border-color: var(--ink);
+  background: var(--paper);
+}
+.family-card.is-active {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+/* No photograph, and deliberately not a letter tile either: a family is not one of the
+ * products in it, and picking one packshot to stand for twenty-six would be the search
+ * quietly suggesting a brand. A flat category tone says "a kind of thing". */
+.family-thumb {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius);
+  border: 1px solid var(--rule);
+  opacity: 0.9;
+}
+.family-name {
+  font-family: var(--display);
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.search-widen {
+  align-self: flex-start;
 }
 .product-brand {
   font-size: 11.5px;

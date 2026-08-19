@@ -20,8 +20,9 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Consumer, NeedDraft, Place, ProductCandidate, api } from "../api";
-import { ProductCard, ProductSearch } from "../product-search";
+import { Consumer, NeedDraft, Place, api } from "../api";
+import { ChosenCard, ProductSearch } from "../product-search";
+import { ChosenItem, asChosen } from "../chosen";
 import { IconArrowRight, IconCheck } from "../ui";
 
 type Step = "you" | "where" | "buy" | "authority";
@@ -215,14 +216,14 @@ function BuyStep({
   busy,
   error,
 }: {
-  added: { product: ProductCandidate; quantity: number }[];
-  onAdd: (product: ProductCandidate, draft: NeedDraft) => Promise<void>;
+  added: { item: ChosenItem; quantity: number }[];
+  onAdd: (item: ChosenItem, draft: NeedDraft) => Promise<void>;
   onNext: () => void;
   onBack: () => void;
   busy: boolean;
   error: string | null;
 }) {
-  const [chosen, setChosen] = useState<ProductCandidate | null>(null);
+  const [chosen, setChosen] = useState<ChosenItem | null>(null);
   const [quantity, setQuantity] = useState(2);
   const [cadence, setCadence] = useState(DEFAULT_CADENCE);
   const [nextNeeded, setNextNeeded] = useState(isoInDays(DEFAULT_NEXT_NEEDED_DAYS));
@@ -240,7 +241,7 @@ function BuyStep({
     if (!chosen) return;
     await onAdd(chosen, {
       household_id: "",
-      product_id: chosen.product_id,
+      ...chosen.draft,
       quantity,
       cadence_days: cadence,
       expected_next_need_date: nextNeeded,
@@ -248,7 +249,6 @@ function BuyStep({
       routine_lead_days: 7,
       min_savings_pct: 15,
       max_spend_cents: 12000,
-      substitution: "exact_only",
       active: true,
     });
     reset();
@@ -265,13 +265,13 @@ function BuyStep({
       {added.length > 0 ? (
         <ul className="onboard-added" aria-label="Added so far">
           {added.map((a) => (
-            <li key={a.product.product_id}>
+            <li key={a.item.key}>
               <span className="onboard-added-tick" aria-hidden="true">
                 <IconCheck size={12} />
               </span>
-              <ProductCard product={a.product} />
+              <ChosenCard item={a.item} />
               <span className="small muted onboard-added-qty">
-                {a.quantity} {a.product.unit}
+                {a.quantity} {a.item.unit}
                 {a.quantity === 1 ? "" : "s"}
               </span>
             </li>
@@ -282,7 +282,7 @@ function BuyStep({
       {chosen ? (
         <div className="inset stack-sm">
           <div className="chosen-product">
-            <ProductCard product={chosen} />
+            <ChosenCard item={chosen} />
             <button className="btn btn-sm btn-ghost" type="button" onClick={reset}>
               Change
             </button>
@@ -341,11 +341,11 @@ function BuyStep({
         </div>
       ) : (
         <ProductSearch
-          onSelect={setChosen}
+          onSelect={(picked) => setChosen(asChosen(picked))}
           onUnresolved={(query) => {
             void api
               .customProduct(query)
-              .then(setChosen)
+              .then((product) => setChosen(asChosen({ kind: "product", product })))
               .catch(() => {});
           }}
         />
@@ -500,7 +500,7 @@ export function Onboarding({
   const [step, setStep] = useState<Step>("you");
   const [name, setName] = useState("");
   const [mode, setMode] = useState("ask_me");
-  const [added, setAdded] = useState<{ product: ProductCandidate; quantity: number }[]>([]);
+  const [added, setAdded] = useState<{ item: ChosenItem; quantity: number }[]>([]);
   /* Setup can be interrupted. Somebody who added a declaration and then refreshed before
      finishing comes back to step one, and the server — correctly — refuses a second
      active declaration for the same product. Without this, re-adding the thing they
@@ -520,15 +520,21 @@ export function Onboarding({
         setAdded(
           mine.map((n) => ({
             quantity: n.quantity,
-            product: {
-              product_id: n.product_id,
-              name: n.product_name,
-              brand: n.brand ?? "",
-              variant: n.variant ?? "",
-              display_size: "",
+            item: {
+              key: n.declared_family
+                ? `family:${n.declared_family}`
+                : `product:${n.product_id}`,
+              // `product_name` is already what the member called it — the family's own
+              // label when they declared a family — so resuming shows their words back.
+              label: n.product_name,
               unit: n.unit,
               category: n.category ?? "",
-              image_ref: n.image_ref ?? "",
+              brand: n.declared_family ? "" : (n.brand ?? ""),
+              image_ref: n.declared_family ? "" : (n.image_ref ?? ""),
+              familyCount: 0,
+              draft: n.declared_family
+                ? { group: n.declared_family, substitution: n.substitution }
+                : { product_id: n.product_id, substitution: n.substitution },
             },
           })),
         );
@@ -553,12 +559,12 @@ export function Onboarding({
     window.scrollTo({ top: 0 });
   }, [step]);
 
-  const addNeed = async (product: ProductCandidate, draft: NeedDraft) => {
+  const addNeed = async (item: ChosenItem, draft: NeedDraft) => {
     setBusy(true);
     setError(null);
     try {
       await api.declareNeed({ ...draft, household_id: consumer.household_id });
-      setAdded((prev) => [...prev, { product, quantity: draft.quantity }]);
+      setAdded((prev) => [...prev, { item, quantity: draft.quantity }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       throw err;

@@ -580,6 +580,20 @@ class DynamoDBRepository:
         self.table.put_item(Item=item)
 
     def _get(self, ws: str, type_name: str, sk: str, cls) -> Any | None:
+        # An empty id is a row that cannot exist, and the two backends disagreed about
+        # how to say so. `InMemoryRepository` returns None, so a service that looks up a
+        # caller-supplied id gets a clean "unknown member" 400. DynamoDB rejects an empty
+        # key attribute at the API — `ValidationException: The AttributeValue for a key
+        # attribute cannot contain an empty string value` — which nothing catches, so the
+        # same request became a 500 on the deployed function while every local test stayed
+        # green. Observed in production on `POST /api/needs` with `household_id: ""`.
+        #
+        # Answering None here rather than validating at each call site fixes the whole
+        # class in the one place both backends have to agree, and it cannot hide a real
+        # row: `_put` would have been rejected by the same rule, so no row with an empty
+        # key was ever written.
+        if not sk:
+            return None
         kwargs: dict[str, Any] = {"Key": {"pk": self._pk(ws, type_name), "sk": sk}}
         if self.consistent_reads:
             kwargs["ConsistentRead"] = True

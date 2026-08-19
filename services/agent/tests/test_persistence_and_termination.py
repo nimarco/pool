@@ -69,10 +69,12 @@ class FakeTable:
 
     def put_item(self, Item):  # noqa: N803 - boto3's parameter name
         assert isinstance(Item["pk"], str) and isinstance(Item["sk"], str)
+        self._assert_reachable_key(Item)
         self._assert_storable(Item["data"])
         self.items[(Item["pk"], Item["sk"])] = Item
 
     def get_item(self, Key):  # noqa: N803
+        self._assert_reachable_key(Key)
         item = self.items.get((Key["pk"], Key["sk"]))
         return {"Item": item} if item else {}
 
@@ -91,6 +93,23 @@ class FakeTable:
         else:
             items = [v for (k_pk, _), v in self.items.items() if k_pk == pk]
         return {"Items": items}
+
+    @staticmethod
+    def _assert_reachable_key(key: dict[str, Any]) -> None:
+        """DynamoDB refuses an empty key attribute, and this fake used to accept one.
+
+        Real `GetItem` raises `ValidationException: The AttributeValue for a key
+        attribute cannot contain an empty string value`. Because the fake answered `{}`
+        instead, a lookup of a caller-supplied empty id read as "no such row" locally and
+        raised an uncaught 500 on the deployed function. The fake now shares the real
+        rule, so the divergence is a test failure rather than a production incident.
+        """
+        for name in ("pk", "sk"):
+            if key.get(name) == "":
+                raise ValueError(
+                    "ValidationException: The AttributeValue for a key attribute "
+                    f"cannot contain an empty string value. Key: {name}"
+                )
 
     @staticmethod
     def _assert_storable(value: Any) -> None:
@@ -118,6 +137,19 @@ def test_every_persisted_type_is_in_the_reset_map():
     store_fields = set(InMemoryRepository().store(WS).__dict__)
     # ACTIVITY is a list in memory; everything else is a dict keyed by id.
     assert len(_TYPES) >= len(store_fields) - 1
+
+
+def test_an_empty_id_reads_as_absent_on_both_backends(dynamo):
+    """The two repositories have to agree that a row which cannot exist is simply absent.
+
+    They did not. `InMemoryRepository` answered None, so a service validating a
+    caller-supplied id raised its own "unknown member". `DynamoDBRepository` handed the
+    empty string to `GetItem`, which rejects an empty key attribute outright — so the
+    identical request was a 400 locally and an uncaught 500 on the deployed function.
+    Nothing in the suite could see it, because every other test runs in memory.
+    """
+    assert InMemoryRepository().get_household(WS, "") is None
+    assert dynamo.get_household(WS, "") is None
 
 
 def test_community_and_membership_round_trip(dynamo):

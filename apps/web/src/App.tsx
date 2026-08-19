@@ -40,18 +40,34 @@ const SHOWCASE_NAV: { id: ShowcaseView; label: string }[] = [
   { id: "run", label: "The run" },
   { id: "live", label: "Live on AWS" },
   { id: "community", label: "Community" },
-  { id: "operations", label: "Operations" },
 ];
+/* Operations is deliberately absent. The console records supplier facts against the
+   workspace the client is addressing, and inside showcase mode that is the showcase's
+   own partition — so a presenter could write a rice quote into the recording between two
+   takes and find out from a figure that stopped matching. The server refuses it now
+   (`api/app.record_supplier_update`); this stops the door existing at all. */
 
-/** Four destinations, all of them things a member of the community actually has: their
- *  own front page, the orders they are part of, what they buy, and the place they live.
- *  Everything a judge needs in order to audit the agent hangs off a pool record, and
- *  everything needed to drive a multi-person demo alone lives in the drawer. */
+/** Three destinations, and each one finishes the sentence "this page exists so a member
+ *  can ___".
+ *
+ *    Home          … see what Pool needs from them and what it is doing right now
+ *    Orders        … see and act on the group orders they are in
+ *    What you buy  … manage the list of things Pool watches for them
+ *
+ *  **Community was removed from here, not renamed.** It could not finish that sentence.
+ *  For a new account it was 3.45 viewport-heights of eight sections in which nearly every
+ *  figure read $0.00: community-wide economics, an attention ledger, a
+ *  responsibility-boundary explanation, a money ledger, a decision inbox for other
+ *  people, a scatter of dots, and a link to the Operations console. All of it real, none
+ *  of it an answer to anything a member came to the page with. It is judge proof and
+ *  operator capability, and both now live behind one entry point in the footer.
+ *
+ *  `Pools` became `Orders` for the collision the vocabulary audit found: `Pool` is the
+ *  product, and the nav was using the same word for the thing it makes. */
 const NAV: { id: View; label: string }[] = [
   { id: "home", label: "Home" },
-  { id: "pools", label: "Pools" },
-  { id: "needs", label: "Needs" },
-  { id: "community", label: "Community" },
+  { id: "pools", label: "Orders" },
+  { id: "needs", label: "What you buy" },
 ];
 
 /** Until the first state read lands, nobody. The consumer's identity is server state —
@@ -636,22 +652,8 @@ export default function App() {
               onOpenPool={openPoolDetail}
               onRespond={respond}
               busyDecision={busyDecision}
-              onOperations={() => showcaseTo("operations")}
-            />
-          ) : null}
-
-          {showcase === "operations" ? (
-            <OperationsView
-              hostPoolId={
-                state?.pools.find(
-                  (p) =>
-                    p.status === "distributing" ||
-                    p.status === "completed" ||
-                    p.status === "purchased",
-                )?.pool_id ?? null
-              }
-              onBack={() => showcaseTo("community")}
-              onWorldChanged={worldChanged}
+              /* No operations console in here. See SHOWCASE_NAV. */
+              onOperations={null}
             />
           ) : null}
 
@@ -759,6 +761,18 @@ export default function App() {
               onRespond={respond}
               busyDecision={busyDecision}
               onOperations={() => navigate("operations")}
+              onTechnical={() => {
+                const pool = state?.pools.find((p) => p.execution_proof) ?? state?.pools[0];
+                if (pool) void openPoolDetail(pool.pool_id, { tab: "activity", deep: "execution" });
+                else navigate("pools");
+              }}
+              /* Through `showcaseTo`, so entering the recording moves the partition every
+                 request addresses rather than only the screen. */
+              onLifecycle={() => {
+                if (scenario) showcaseTo("run");
+                else void runScenario();
+              }}
+              onAbout={() => navigate("about")}
             />
           ) : null}
 
@@ -831,7 +845,14 @@ export default function App() {
             <button className="linkish" onClick={() => setPanelOpen(true)}>
               {communityName} is a safe demo environment
             </button>{" "}
-            — synthetic people, simulated money, real software.
+            — synthetic people, simulated money, real software.{" "}
+            {/* The one door to everything a judge or an operator needs: how this
+                community works, where the money went, what the agent actually ran, and
+                the console that drives a multi-person demo alone. A member never has to
+                come through here, and nothing behind it is required to use Pool. */}
+            <button className="linkish" onClick={() => navigate("community")}>
+              Behind Pool
+            </button>
           </span>
         </div>
       </footer>

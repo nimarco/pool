@@ -392,7 +392,7 @@ describe("moving between screens keeps the member's own state", () => {
     expect(await screen.findByRole("button", { name: /Ask Pool to check now/ })).toBeTruthy();
     expect(screen.getByText(/What Pool is watching/)).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: "Needs" }));
+    await user.click(screen.getByRole("button", { name: "What you buy" }));
     await waitFor(() => expect(screen.queryByText(/Good \w+, Marco/)).toBeNull());
     await user.click(screen.getByRole("button", { name: "Home" }));
 
@@ -406,13 +406,13 @@ describe("moving between screens keeps the member's own state", () => {
   it("still renders the current outlook on Needs after Home → Needs → Home → Needs", async () => {
     const user = await home();
 
-    await user.click(screen.getByRole("button", { name: "Needs" }));
+    await user.click(screen.getByRole("button", { name: "What you buy" }));
     expect(await screen.findByText(/Not enough of it yet/)).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Home" }));
     await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
 
-    await user.click(screen.getByRole("button", { name: "Needs" }));
+    await user.click(screen.getByRole("button", { name: "What you buy" }));
     expect(await screen.findByText(/Not enough of it yet/)).toBeTruthy();
   });
 

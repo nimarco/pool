@@ -604,7 +604,7 @@ export function Needs({
   return (
     <div className="stack">
       <header className="stack-sm">
-        <h1 className="title">What you buy anyway</h1>
+        <h1 className="title">What you buy</h1>
         <p className="lede">
           Tell Pool what you restock and roughly when. Saving a need never commits money
           — it is what lets Pool notice that other people near you need the same thing.
@@ -733,7 +733,7 @@ export function Needs({
             <div className="btn-row">
               <button className="btn btn-primary" onClick={onFind} disabled={running}>
                 {running ? <span className="spinner" /> : null}
-                {running ? "Coordinator running" : "Run Pool now"}
+                {running ? "Pool is checking…" : "Ask Pool to check now"}
                 {running ? null : <IconArrowRight />}
               </button>
             </div>

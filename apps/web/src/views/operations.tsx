@@ -115,7 +115,7 @@ function SupplierQuotes({ onRecorded }: { onRecorded: () => void }) {
           These suppliers and terms are invented for this demo and are stored as
           synthetic, not as verified quotes — nobody negotiated them and no wholesaler
           relationship exists. Whether an order works is still the evaluator&apos;s
-          answer, computed when somebody presses <strong>Run Pool now</strong>.
+          answer, computed when somebody presses <strong>Ask Pool to check now</strong>.
         </p>
       </div>
     </section>

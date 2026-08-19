@@ -1,5 +1,16 @@
-/* Demo University — the dataset a judge can inspect, and the result of what happened
- * to it.
+/* Behind Pool — one door to everything a judge or an operator needs, and nothing a
+ * member does.
+ *
+ * This was the `Community` tab in the primary nav, and it could not finish the sentence
+ * "this page exists so a member can ___". For a new account it was 3.45 viewport-heights
+ * of eight sections in which nearly every figure read $0.00: community-wide economics, an
+ * attention ledger, a responsibility-boundary explanation, a money ledger, other people's
+ * pending decisions, a scatter of dots, and a link to the Operations console.
+ *
+ * None of that was wrong. It was in the wrong place. Every one of those is either proof
+ * that the thing is real or capability for driving a demo alone, and both belong to an
+ * audience that arrives on purpose. So this is now reached from the footer, it opens with
+ * the index of what can be inspected, and a member can use Pool without ever seeing it.
  *
  * Every figure is a sum over stored rows, labelled as synthetic. Nothing here is a
  * projection, a target, or traction.
@@ -20,7 +31,6 @@ import { blockingRuleExplanation } from "../labels";
 import {
   ActorGlyph,
   ActorTag,
-  Block,
   Chip,
   Empty,
   Fact,
@@ -283,13 +293,21 @@ export function CommunityView({
   onRespond,
   busyDecision,
   onOperations,
+  onTechnical,
+  onLifecycle,
+  onAbout,
 }: {
   state: AppState;
   map: MapData | null;
   onOpenPool: (id: string) => void;
   onRespond: (decisionId: string, approve: boolean) => void;
   busyDecision: string | null;
-  onOperations: () => void;
+  /** Null inside showcase mode, where the console must not be reachable — it writes
+   *  supplier facts to whichever partition the client is addressing. */
+  onOperations: (() => void) | null;
+  onTechnical?: () => void;
+  onLifecycle?: () => void;
+  onAbout?: () => void;
 }) {
   const m = state.metrics;
   const enablement = state.community?.enablement;
@@ -299,14 +317,72 @@ export function CommunityView({
     <div className="stack">
       <header className="row-between">
         <div>
-          <h1 className="title">{state.community?.name ?? "Community"}</h1>
+          <h1 className="title">Behind Pool</h1>
           <p className="small muted" style={{ marginTop: 6 }}>
-            {state.counts.members} members · {state.counts.needs} standing needs ·{" "}
-            {state.counts.standing_hosts} people willing to host · entirely synthetic
+            {state.community?.name ?? "This community"} — {state.counts.members} members ·{" "}
+            {state.counts.needs} standing needs · {state.counts.standing_hosts} people
+            willing to host · entirely synthetic
           </p>
         </div>
       </header>
 
+      {/* The index, first, because somebody who came here came to check something. Each
+          of these used to be reachable only from a different accordion, drawer or tab —
+          five labels led to the same technical proof — and a judge had to already know
+          the app to find any of them. */}
+      <section className="panel">
+        <div className="panel-head">
+          <h2>What you can inspect</h2>
+        </div>
+        <div className="panel-pad">
+          <div className="proof-index">
+            {onTechnical ? (
+              <button className="proof-link" onClick={onTechnical}>
+                <span className="proof-link-title">Technical proof</span>
+                <span className="proof-link-sub">
+                  The run that formed an order, its stored tool sequence, the pool&apos;s
+                  own <code>created_by_run</code>, and the AgentCore identifiers — read
+                  back from the same workspace.
+                </span>
+              </button>
+            ) : null}
+            {onLifecycle ? (
+              <button className="proof-link" onClick={onLifecycle}>
+                <span className="proof-link-title">One order, stage by stage</span>
+                <span className="proof-link-sub">
+                  The recorded lifecycle in its own copy of the community: demand, host,
+                  commitment, an authorisation failure, a replacement, purchase, pickup,
+                  reconciliation.
+                </span>
+              </button>
+            ) : null}
+            {onOperations ? (
+              <button className="proof-link" onClick={onOperations}>
+                <span className="proof-link-title">Operations console</span>
+                <span className="proof-link-sub">
+                  The operator side: supplier-quote freshness, the fulfilment job, and
+                  every authorization, capture and failure code intact.
+                </span>
+              </button>
+            ) : null}
+            {onAbout ? (
+              <button className="proof-link" onClick={onAbout}>
+                <span className="proof-link-title">What is real here</span>
+                <span className="proof-link-sub">
+                  Which parts are live software, which data is synthetic, and which
+                  payments are simulated — stated rather than implied.
+                </span>
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      {/* The money, once there is any. Three $0.00 figures above the fold on a page whose
+          job is to be inspected says "nothing here" about a page that is full of things —
+          and the honest version of "no money has moved" is one sentence, not a ledger of
+          zeroes. Both readings are true; only one of them is useful. */}
+      {m.pools_locked_or_beyond > 0 ? (
       <section className="grid grid-3">
         <Figure
           label="If everyone bought alone"
@@ -325,6 +401,12 @@ export function CommunityView({
           sub={`${money(m.average_buyer_savings_cents)} average after every buyer-funded cost`}
         />
       </section>
+      ) : (
+        <p className="small muted">
+          No money has moved in this community yet. Every figure below is a sum over
+          stored rows, so they read zero until an order locks.
+        </p>
+      )}
 
       {/* The second currency. Money saved is half the argument; the other half is that
           organising this cost nobody an evening, and that half has a number too. Both
@@ -438,7 +520,7 @@ export function CommunityView({
           </div>
           {state.pools.length === 0 ? (
             <Empty>
-              No pool yet. Use <strong>Run Pool now</strong> on Home to scan the
+              No order yet. Use <strong>Ask Pool to check now</strong> on Home to scan the
               community's standing needs.
             </Empty>
           ) : (
@@ -522,18 +604,6 @@ export function CommunityView({
         <Feed events={state.activity} limit={14} />
       </section>
 
-      <Block title="Behind the counter">
-        <p className="small muted prose">
-          Inspect the host job, supplier-quote freshness, and every authorization, capture
-          and failure code.
-        </p>
-        <div className="btn-row" style={{ marginTop: 14 }}>
-          <button className="btn btn-sm" onClick={onOperations}>
-            Open operations
-            <IconArrowRight />
-          </button>
-        </div>
-      </Block>
     </div>
   );
 }

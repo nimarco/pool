@@ -21,22 +21,23 @@ export function Pools({
   return (
     <div className="stack">
       <header className="stack-sm">
-        <h1 className="title">Pools</h1>
+        <h1 className="title">Orders</h1>
         <p className="lede">
-          Orders Pool found by matching standing needs; nobody created a group.
+          Group orders Pool put together by noticing that several people near you buy the
+          same thing. Nobody organised a group.
         </p>
       </header>
 
       {state.pools.length === 0 ? (
         <section className="panel">
           <Empty>
-            No pool yet. Pool forms one only when compatible, authorised demand clears a
-            supplier's minimum.
+            No order yet. Pool makes one only when compatible, authorised demand clears
+            a supplier's minimum and the all-in price actually beats buying alone.
           </Empty>
           <div className="panel-pad" style={{ paddingTop: 0 }}>
             <button className="btn btn-primary" onClick={onFind} disabled={running}>
               {running ? <span className="spinner" /> : null}
-              {running ? "Coordinator running" : "Run Pool now"}
+              {running ? "Pool is checking…" : "Ask Pool to check now"}
             </button>
             {running ? <CoordinatorWait live={liveDiscovery} region={region} /> : null}
           </div>

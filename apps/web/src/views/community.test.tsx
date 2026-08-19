@@ -131,6 +131,9 @@ describe("Community leads with both currencies", () => {
       estimated_retail_spend_cents: 112776,
       pool_spend_cents: 86144,
       collective_savings_cents: 26632,
+      // A community where an order actually locked, which is what makes the money
+      // figures figures rather than a row of zeroes.
+      pools_locked_or_beyond: 1,
       coordination_actions_automated: 18,
       human_decisions_requested: 3,
       commitments_without_asking: 8,
@@ -159,6 +162,19 @@ describe("Community leads with both currencies", () => {
     expect(screen.getByText("3")).toBeTruthy();
     expect(screen.getByText("8")).toBeTruthy();
     expect(screen.getByText(/counted from stored rows/i)).toBeTruthy();
+  });
+
+  it("says no money has moved rather than printing a ledger of zeroes", () => {
+    /* This page is inspected on purpose, and three $0.00 figures above the fold say
+       "nothing here" about a page that is full of things. "No money has moved yet" is
+       the same fact in one sentence, and it is the one that is useful. */
+    renderCommunity({ pools_locked_or_beyond: 0, collective_savings_cents: 0 });
+
+    expect(screen.getByText(/No money has moved in this community yet/i)).toBeTruthy();
+    expect(screen.queryByText("If everyone bought alone")).toBeNull();
+    // The attention ledger still shows, because that is where zero is the interesting
+    // number: nobody has been asked anything.
+    expect(screen.getByText(/What it cost anyone in attention/i)).toBeTruthy();
   });
 
   it("does not describe coordination it has not done", () => {

@@ -2707,3 +2707,45 @@ select.control {
   text-transform: uppercase;
   font-size: 11.5px;
 }
+
+/* Behind Pool's index. Each row is a destination with a sentence saying what it proves,
+ * because "Technical proof" alone tells a judge nothing about whether it is the thing
+ * they are looking for — and five different labels used to lead to this one page. */
+.proof-index {
+  display: grid;
+  gap: 10px;
+}
+.proof-link {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  padding: 13px 15px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.proof-link:hover {
+  border-color: var(--rule-strong);
+  background: var(--paper-raised);
+}
+.proof-link-title {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.proof-link-sub {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+.proof-link-sub code {
+  font-size: 11.5px;
+}
+@media (min-width: 760px) {
+  .proof-index {
+    grid-template-columns: 1fr 1fr;
+  }
+}

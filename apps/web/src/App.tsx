@@ -715,7 +715,6 @@ export default function App() {
                 void openPoolDetail(poolId, { tab: "activity", deep: "execution" })
               }
               onStartNeed={startNeed}
-              onGoCommunity={() => navigate("community")}
               liveDiscovery={Boolean(demoConfig?.live_agent_available)}
               region={demoConfig?.region ?? null}
             />

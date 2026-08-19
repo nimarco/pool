@@ -387,21 +387,20 @@ describe("moving between screens keeps the member's own state", () => {
     return user;
   }
 
-  it("still shows standing demand and Run Pool now after Home → Needs → Home", async () => {
+  it("still shows what Pool is watching after Home → Needs → Home", async () => {
     const user = await home();
-    expect(await screen.findByRole("button", { name: /Run Pool now/ })).toBeTruthy();
-    expect(screen.getByText(/What you buy, and what is around it/)).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /Ask Pool to check now/ })).toBeTruthy();
+    expect(screen.getByText(/What Pool is watching/)).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Needs" }));
     await waitFor(() => expect(screen.queryByText(/Good \w+, Marco/)).toBeNull());
     await user.click(screen.getByRole("button", { name: "Home" }));
 
     await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
-    expect(await screen.findByRole("button", { name: /Run Pool now/ })).toBeTruthy();
-    expect(screen.getByText(/What you buy, and what is around it/)).toBeTruthy();
-    // The reason the card is there: the member read is what carries it.
-    expect(screen.getByText(/independently declared something this could be bought for/))
-      .toBeTruthy();
+    expect(await screen.findByRole("button", { name: /Ask Pool to check now/ })).toBeTruthy();
+    expect(screen.getByText(/What Pool is watching/)).toBeTruthy();
+    // The reason the rows are there: the member read is what carries them.
+    expect(screen.getByText(/people near you/)).toBeTruthy();
   });
 
   it("still renders the current outlook on Needs after Home → Needs → Home → Needs", async () => {
@@ -450,16 +449,21 @@ describe("moving between screens keeps the member's own state", () => {
  * survive the world changing.
  */
 describe("a run's answer outlives the world it was given in", () => {
-  it("keeps the run report on screen after a supplier quote is recorded", async () => {
+  it("keeps what a run found after the world it ran in has changed", async () => {
+    /* The claim the changing-world sequence rests on, and it is now one frame rather
+       than two screens. The row carries what is true *now* and, under it, what the last
+       run found, dated. Recording a supplier quote moves the first and must not touch
+       the second — the run happened in a world where that quote did not exist, and
+       editing its finding to agree with the present would be Pool rewriting history to
+       look more consistent than it is. */
     const user = userEvent.setup();
     render(<App />);
     await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
 
-    await user.click(await screen.findByRole("button", { name: /Run Pool now/ }));
-    const answer = await screen.findByText(
-      /No supplier Pool has verified sells this in bulk yet/,
-    );
-    expect(answer).toBeTruthy();
+    await user.click(await screen.findByRole("button", { name: /Ask Pool to check now/ }));
+    await screen.findByText(/Last checked/);
+    const before = document.querySelector(".watch-row")?.textContent ?? "";
+    expect(before).toMatch(/No supplier Pool has verified sells/);
 
     // Record a quote from the operator console, then come back.
     await user.click(screen.getByTitle("Demo environment, controls, and what is real here"));
@@ -468,8 +472,9 @@ describe("a run's answer outlives the world it was given in", () => {
     await user.click(screen.getByRole("button", { name: "Home" }));
 
     await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
-    expect(
-      screen.getByText(/No supplier Pool has verified sells this in bulk yet/),
-    ).toBeTruthy();
+    await screen.findByText(/Last checked/);
+    // History survives, on the row, and still says what that run actually established.
+    const history = document.querySelector(".watch-history")?.textContent ?? "";
+    expect(history).toMatch(/No supplier Pool has verified sells/);
   });
 });

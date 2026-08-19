@@ -232,7 +232,6 @@ function renderHome(
       onRespond={() => {}}
       onShowAgent={options.onShowAgent ?? (() => {})}
       onStartNeed={() => {}}
-      onGoCommunity={() => {}}
       liveDiscovery={false}
       region={null}
     />,
@@ -435,24 +434,37 @@ describe("a pool that belongs to somebody else", () => {
       report: declinedReport(),
     });
 
-    expect(await screen.findByText(/Nothing worth coordinating yet/)).toBeTruthy();
+    expect(await screen.findByText(/What Pool is watching/)).toBeTruthy();
     expect(screen.queryByText(/Pool found something for you/)).toBeNull();
     expect(screen.queryByText(/Pool found overlapping demand/)).toBeNull();
-    // No figure from the unrelated pool is presented as this member's saving. The
-    // community block below still reports community sums, and says so in its heading.
+    // No figure from the unrelated pool is presented as this member's saving.
     expect(screen.queryByText("23.6%")).toBeNull();
     expect(screen.queryByText(/you save/)).toBeNull();
-    expect(screen.getByText(/What Pool did across/)).toBeTruthy();
+    /* And the community's own sums are not here at all any more, which is the stronger
+       version of the same rule. Home used to carry three coordination metrics and a
+       money figure summed over every member — true, labelled, and still an answer to a
+       question this member did not ask. A consumer surface stays personally scoped
+       (AGENTS.md §8); those figures live where judge proof lives. */
+    expect(screen.queryByText(/What Pool did across/)).toBeNull();
+    expect(screen.queryByText(/Things Pool did on its own/)).toBeNull();
+    expect(screen.queryByText(/Kept in the community/)).toBeNull();
   });
 
-  it("states what the run actually established about each declaration", async () => {
+  it("states what the run actually established, and dates it", async () => {
     renderHome([], {
       member: memberView({ opportunity: null, standing: [COFFEE_STANDING] }),
       report: declinedReport(),
     });
 
-    // The server's sentence, passed through — not a shrug, and not recomputed here.
-    expect(await screen.findByText(declinedReport().results[0].headline)).toBeTruthy();
+    /* The server's sentence, passed through — not a shrug, and not recomputed here. It
+       now sits on the row it is about, under the current state and marked with the time
+       the run happened, because "what that run found" and "what is true now" are two
+       claims and the changing-world sequence turns on them not being merged. */
+    const row = (await screen.findByText(/6 people near you/)).closest(
+      ".watch-row",
+    ) as HTMLElement;
+    expect(row.textContent).toMatch(/Last checked/);
+    expect(row.textContent).toContain(declinedReport().results[0].headline);
     expect(screen.getAllByText(COFFEE_STANDING.product_name).length).toBeGreaterThan(0);
   });
 
@@ -502,24 +514,56 @@ describe("before Pool has run", () => {
     sourceable_product_name: "",
   };
 
+  /** The outlook the server sends alongside the demand. Home reads the blocker from
+   *  here rather than composing its own, so the sentence a member sees on Home is the
+   *  same sentence, from the same evaluator, as the one on their list of things. */
+  function outlookFor(
+    overrides: Partial<apiModule.NeedOutlook> = {},
+  ): apiModule.NeedOutlook {
+    return {
+      need_id: STANDING.need_id,
+      product_id: STANDING.product_id,
+      product_name: STANDING.product_name,
+      state: "short",
+      reason:
+        "Not enough of it yet: 18 bags declared nearby, and the supplier will not sell fewer than 24.",
+      pool_id: "",
+      units_needed: 24,
+      units_available: 18,
+      status: "watching",
+      headline: "Not enough demand yet",
+      blocker: "",
+      ...overrides,
+    };
+  }
+
   it("poses the question rather than answering it", async () => {
     /* This slot used to draw the canonical whey arithmetic — eight due, eighteen units,
        two pulled forward, twenty-four — before the run. That told a judge the answer and
        then invited them to watch Pool produce it. What belongs here is the input. */
-    renderHome([], { member: memberView({ opportunity: null, standing: [STANDING] }) });
+    renderHome([], {
+      member: memberView({
+        opportunity: null,
+        standing: [STANDING],
+        outlook: [outlookFor()],
+      }),
+    });
 
-    expect(await screen.findByText(/What you buy, and what is around it/)).toBeTruthy();
-    const line = document.querySelector(".standing-line") as HTMLElement;
-    expect(line.textContent).toMatch(/5.*other.*members have independently declared/s);
-    expect(line.textContent).toMatch(/15 bags/);
-    expect(line.textContent).toMatch(/With yours, 18/);
-    expect(line.textContent).toMatch(/best price starts at 18/);
+    expect(await screen.findByText(/What Pool is watching/)).toBeTruthy();
+    const row = document.querySelector(".watch-row") as HTMLElement;
+    // The demand this member did not organise, as a count of people.
+    expect(row.textContent).toMatch(/6 people near you/);
+    expect(row.textContent).toMatch(/18 bags standing/);
+    expect(row.textContent).toMatch(/3 of them yours/);
+    // The state, in the five-word grammar, with its reason beside it.
+    expect(row.textContent).toMatch(/Watching/);
+    expect(row.textContent).toMatch(/Not enough demand yet/);
     // No verdict, because none has been earned.
     expect(screen.queryByText(/Worth pooling now/)).toBeNull();
     expect(screen.queryByText(/Nothing worth coordinating yet/)).toBeNull();
-    // And the things a run decides are named as still open.
-    expect(screen.getByText(/has not checked yet/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /run pool now/i })).toBeTruthy();
+    // Nothing dated, because no run has happened.
+    expect(row.textContent).not.toMatch(/Last checked/);
+    expect(screen.getByRole("button", { name: /ask pool to check now/i })).toBeTruthy();
   });
 
   it("says plainly when Pool has no supplier for something", async () => {
@@ -536,19 +580,26 @@ describe("before Pool has run", () => {
             minimum_units: 0,
           },
         ],
+        outlook: [
+          outlookFor({
+            product_name: "Cardamom pods, 500g",
+            state: "no_supply",
+            headline: "No verified supplier yet",
+            reason: "No supplier Pool has verified sells this in bulk yet.",
+          }),
+        ],
       }),
     });
 
     expect(
-      await screen.findByText(/Pool has no verified bulk supplier for this yet/),
+      await screen.findByText(/No supplier Pool has verified sells this in bulk yet/),
     ).toBeTruthy();
-    expect(screen.getByText(/Nobody else near you has declared anything compatible yet/))
-      .toBeTruthy();
+    expect(screen.getByText(/Nobody else near you buys this yet/)).toBeTruthy();
   });
 
-  /* The distinction the whole standing-demand section exists to draw. Both rows have
-     no supplier; only one of them has nobody behind it, and the screen used to say the
-     same thing about both. */
+  /* The distinction the whole watching row exists to draw, and the reason demand sits
+     above the blocker. Both rows have no supplier; only one of them has nobody behind
+     it, and the screen used to say the same thing about both. */
   it("still shows the demand when what is missing is a supplier, not people", async () => {
     renderHome([], {
       member: memberView({
@@ -565,17 +616,28 @@ describe("before Pool has run", () => {
             minimum_units: 0,
           },
         ],
+        outlook: [
+          outlookFor({
+            product_name: "Jasmine rice, 5 lb",
+            state: "no_supply",
+            headline: "No verified supplier yet",
+            reason:
+              "6 other members near you already buy this — 22 bags standing. No supplier Pool has verified sells it in bulk yet.",
+            units_needed: 0,
+          }),
+        ],
       }),
     });
 
-    // The demand, first.
-    expect(await screen.findByText(/independently declared something this could be bought for/))
-      .toBeTruthy();
-    expect(screen.getByText(/22 bags. With yours, 24./)).toBeTruthy();
+    const row = (await screen.findByText(/7 people near you/)).closest(
+      ".watch-row",
+    ) as HTMLElement;
+    // The demand, first, and as a number of people rather than a claim about supply.
+    expect(row.textContent).toMatch(/24 bags standing/);
     // Then the blocker, as a blocker.
-    expect(screen.getByText(/Pool has no verified bulk supplier for this yet/)).toBeTruthy();
+    expect(row.textContent).toMatch(/No supplier Pool has verified sells it in bulk yet/);
     // And no supplier minimum is invented to sit beside it.
-    expect(screen.queryByText(/best price starts at/)).toBeNull();
+    expect(row.textContent).not.toMatch(/will not sell fewer than/);
   });
 
   it("discloses a substitute before anything is bought, not after", async () => {
@@ -589,6 +651,7 @@ describe("before Pool has run", () => {
             sourceable_product_name: "100% Whey Protein",
           },
         ],
+        outlook: [outlookFor()],
       }),
     });
 
@@ -598,24 +661,77 @@ describe("before Pool has run", () => {
   });
 });
 
-describe("what Pool handled on its own", () => {
-  it("reports the server's own coordination counts, unmodified", async () => {
-    renderHome([poolView()]);
+describe("Home answers one question, and it is this member's", () => {
+  /* These figures used to be here too, in a `Across Demo University` block that read
+     `Members 24 / Standing needs 39 / Groups anyone organised 0` for a new account and
+     three coordination counters plus a money total afterwards. Every one of them is a
+     sum over the whole Community, and every one of them is still asserted — on the
+     Community surface, where `community.test.tsx` pins the same 18, 3, 8 and $266.32
+     along with the order they appear in. Two copies of one assertion is not twice the
+     coverage; it is one place for the number to be right and another for it to be in
+     front of somebody who did not ask.
 
-    expect(await screen.findByText("18")).toBeTruthy();
-    expect(screen.getByText("3")).toBeTruthy();
-    expect(screen.getByText(/Things Pool did on its own/i)).toBeTruthy();
-    expect(screen.getByText(/Times it had to ask a person/i)).toBeTruthy();
-    expect(screen.getByText(/8 commitments were made without asking/)).toBeTruthy();
-    expect(screen.getByText(/\$266\.32/)).toBeTruthy();
+     So what is pinned here is the boundary itself: Home is personally scoped, and a
+     community aggregate appearing on it is a regression (AGENTS.md §8). */
+  it("carries no community-wide aggregate, before or after a run", async () => {
+    renderHome([poolView()]);
+    await screen.findByRole("heading", { level: 1 });
+
+    for (const community of [
+      /Things Pool did on its own/i,
+      /Actions Pool took on its own/i,
+      /Times it had to ask a person/i,
+      /commitments were made without asking/i,
+      /Kept in the community/i,
+      /Groups anyone organised/i,
+      /Standing needs/i,
+    ]) {
+      expect(screen.queryByText(community)).toBeNull();
+    }
+    expect(screen.queryByText(/\$266\.32/)).toBeNull();
   });
 
-  it("states the premise rather than a row of zeroes before anything has run", async () => {
-    renderHome([]);
+  it("lists each thing the member buys exactly once", async () => {
+    /* The shape this rebuild exists to remove. After a run, two declarations produced
+       six rows: a verdict each under `POOL CHECKED`, demand and a blocker each under
+       `Still standing`, and a cadence each under `What you buy anyway` — which was also
+       the whole of the Needs page. */
+    const standing: apiModule.StandingDemand[] = [
+      {
+        need_id: "need_a",
+        product_id: "prod_coffee_beans",
+        product_name: "Coffee",
+        unit: "bag",
+        my_units: 2,
+        compatible_members: 6,
+        compatible_units: 22,
+        minimum_units: 16,
+        has_supplier: true,
+        sourceable_product_id: "",
+        sourceable_product_name: "",
+      },
+      {
+        need_id: "need_b",
+        product_id: "prod_paper_towels",
+        product_name: "Paper towels",
+        unit: "pack",
+        my_units: 2,
+        compatible_members: 2,
+        compatible_units: 4,
+        minimum_units: 48,
+        has_supplier: true,
+        sourceable_product_id: "",
+        sourceable_product_name: "",
+      },
+    ];
+    renderHome([], { member: memberView({ opportunity: null, standing }) });
 
-    expect(await screen.findByText(/Groups anyone organised/i)).toBeTruthy();
-    // No settled-outcome claim can appear before there is an outcome.
-    expect(screen.queryByText(/Things Pool did on its own/i)).toBeNull();
+    await screen.findByText(/What Pool is watching/);
+    expect(document.querySelectorAll(".watch-row")).toHaveLength(2);
+    expect(screen.getAllByText("Coffee")).toHaveLength(1);
+    expect(screen.getAllByText("Paper towels")).toHaveLength(1);
+    // And the member's own list is a page, not a second copy of itself.
+    expect(screen.queryByText(/What you buy anyway/)).toBeNull();
   });
 });
 

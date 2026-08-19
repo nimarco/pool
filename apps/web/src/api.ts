@@ -604,6 +604,8 @@ export interface NeedOutlook {
   need_id: string;
   product_id: string;
   product_name: string;
+  /** The deterministic outcome. Operator and judge surfaces branch on this; a member
+   *  reads `status` and `headline`. */
   state:
     | "in_pool"
     | "ready"
@@ -612,12 +614,31 @@ export interface NeedOutlook {
     | "not_matched"
     | "not_worth_it"
     | "not_in_round"
+    | "case_boundary"
     | "retired";
   reason: string;
   pool_id: string;
   units_needed: number;
   units_available: number;
+  /** The five words a member is ever shown for the state of one thing they buy. Decided
+   *  by the server so no screen can re-derive it and disagree with another screen about
+   *  whether Pool is waiting on somebody. */
+  status: ConsumerStatus;
+  /** Four or five words for *why*, so it sits on the row rather than in a paragraph
+   *  under it. `reason` is the full sentence, for whoever wants the detail. */
+  headline: string;
+  /** The blocker without the demand preamble, for a surface that has already printed
+   *  how many people buy the thing. Equal to `reason` everywhere that distinction does
+   *  not arise. */
+  blocker: string;
 }
+
+export type ConsumerStatus =
+  | "needs_you"
+  | "coordinating"
+  | "ready_to_collect"
+  | "watching"
+  | "done";
 
 /** The pool this member is genuinely in, and the declaration that put them there.
  *

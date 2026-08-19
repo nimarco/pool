@@ -303,10 +303,18 @@ class NeedOutlook:
     product_id: str
     product_name: str
     state: str
+    #: The whole answer, as one self-contained sentence. What a surface shows when it
+    #: shows nothing else — the member's own list of things does exactly that.
     reason: str
     pool_id: str = ""
     units_needed: int = 0
     units_available: int = 0
+    #: The blocker on its own, for a surface that has already said how much demand there
+    #: is. ``no_supply`` leads its sentence with the demand behind the declaration,
+    #: because "no supplier" and "nobody wants this" are the two readings and only one is
+    #: true — but a row that has already printed "7 people near you buy this" would then
+    #: say it twice. Empty means the reason *is* the blocker, which it is everywhere else.
+    blocker: str = ""
     detail: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -322,6 +330,7 @@ class NeedOutlook:
             # The consumer grammar, decided here so no screen re-derives it. ``state``
             # stays exactly what it was — the deterministic outcome every test and the
             # operator surfaces read — and these two are the reading of it.
+            "blocker": self.blocker or self.reason,
             "status": consumer_status(self.state),
             "headline": watching_headline(self.state),
             **({"detail": self.detail} if self.detail else {}),
@@ -410,6 +419,10 @@ def need_outlook(
                 else "No supplier Pool has verified sells this in bulk yet."
             ),
             units_available=standing.units,
+            blocker=(
+                "No supplier Pool has verified sells this in bulk yet, so there is "
+                "nothing to price a group order against."
+            ),
         )
 
     # A round that has already formed for this product, without this member in it. Said

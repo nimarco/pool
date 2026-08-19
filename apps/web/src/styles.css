@@ -1052,6 +1052,109 @@ table.data th.r {
 /* What a member declared, and the overlap that accumulated around it on its own.
    Stacked rather than gridded: each line is a small paragraph about one declaration, and
    the numbers inside it only mean anything in the sentence that carries them. */
+/* One thing you buy, and everything Pool has to say about it.
+ *
+ * This replaced three sections that each listed the same declarations, so the ordering
+ * inside a row is doing the work three headings used to: the status, then the demand,
+ * then the blocker, then what the last run found. Demand above blocker is not a
+ * preference — "six people buy this" and "no supplier has quoted it" are different
+ * problems, and putting the blocker first reads as "nobody wants this". */
+.watch-list {
+  display: flex;
+  flex-direction: column;
+}
+.watch-row {
+  padding: 13px 0;
+  border-bottom: 1px dotted var(--rule-strong);
+}
+.watch-row:first-child {
+  padding-top: 2px;
+}
+.watch-row:last-child {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+.watch-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.watch-name {
+  font-family: var(--display);
+  font-size: 19px;
+  line-height: 1.2;
+}
+.watch-demand {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--ink);
+}
+/* The blocker, as its own line. The whole of the changing-world beat is this sentence
+ * moving, and it used to be the tail of the demand line carried by a minimum-quantity
+ * number that went *up* when the better quote landed. */
+.watch-blocker {
+  margin: 3px 0 0;
+  font-size: 13.5px;
+  color: var(--ink-muted);
+}
+.watch-meta {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+/* What a run found, dated, so it reads as a record rather than as the present tense.
+ * Pool does not edit this to agree with the line above it. */
+.watch-history {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The status word, and the reason beside it. Right-aligned against the item's name so
+ * a column of rows can be read down the edge without reading any of the prose. */
+.status-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  gap: 1px;
+  min-width: 0;
+}
+.status-word {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.status-reason {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.status-chip.is-needs-you .status-word {
+  color: var(--clay);
+}
+.status-chip.is-coordinating .status-word,
+.status-chip.is-ready-to-collect .status-word,
+.status-chip.is-done .status-word {
+  color: var(--moss);
+}
+/* Under about 560px the chip stops being a column at the end of the row and becomes a
+ * line under the name, because two stacked columns in 300px is neither. */
+@media (max-width: 560px) {
+  .watch-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .status-chip {
+    align-items: flex-start;
+    text-align: left;
+    flex-direction: row;
+    gap: 8px;
+    align-items: baseline;
+  }
+}
+
 .standing {
   display: flex;
   flex-direction: column;

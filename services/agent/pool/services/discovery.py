@@ -45,6 +45,7 @@ from ..domain.matching import haversine_km
 from ..domain.models import NeedDeclaration, Product
 from ..domain.substitution import evaluate_compatibility
 from . import coordination as coord
+from . import needs as needs_service
 from .context import PoolContext
 
 #: Community-wide opportunities proposed per run, before the model's own projection
@@ -259,7 +260,9 @@ def standing_demand_for(
     base = {
         "need_id": need.id,
         "product_id": need.product_id,
-        "product_name": product.name if product else need.product_id,
+        # What the member called it, which for a family declaration is the family and
+        # never the exemplar row behind it.
+        "product_name": needs_service.declared_as(ctx, need) or need.product_id,
         "unit": product.unit if product else "unit",
         "my_units": need.quantity,
         "compatible_members": 0,

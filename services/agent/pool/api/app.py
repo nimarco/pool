@@ -37,7 +37,7 @@ from typing import Any
 from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..adapters.payments import build_payment_provider
 from ..adapters.purchase import build_purchase_executor
@@ -1681,7 +1681,15 @@ class SupplierQuoteRequest(BaseModel):
     nothing to validate a range on, because there is no number here to validate — the
     terms live in ``services/supplier_updates.py`` and the client selects between two
     fixed quotes it cannot edit.
+
+    ``extra="forbid"`` so a request that *tries* to send economics is refused rather than
+    quietly stripped, for the same reason a supplied ``instruction`` is refused rather
+    than dropped (``api/public_demo.resolve_run``): a silently ignored field looks like it
+    worked, and the first person to notice would be someone testing whether the price can
+    be steered.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     quote: str = Field(max_length=64)
 

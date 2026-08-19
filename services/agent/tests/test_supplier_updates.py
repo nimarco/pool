@@ -377,8 +377,12 @@ def test_a_second_run_acts_on_the_changed_world_and_says_so(client):
 
 
 def test_the_client_cannot_supply_any_economic_term(client):
-    """A key is the entire input. Extra fields are ignored by the model, and the offer
-    that lands carries the server's numbers — not the caller's."""
+    """A key is the entire input, and an attempt to send economics is *refused*.
+
+    Refused rather than stripped, for the same reason a supplied agent ``instruction`` is
+    refused rather than dropped: a silently ignored field looks like it worked, and the
+    first person to notice would be somebody testing whether the price can be steered.
+    """
     _onboard(client)
     response = client.post(
         "/api/demo/supplier-updates",
@@ -391,7 +395,12 @@ def test_the_client_cannot_supply_any_economic_term(client):
             "supplier_id": "sup_campusmart",
         },
     )
-    assert response.status_code == 200, response.text
+    assert response.status_code == 422, response.text
+    # And nothing was written on the way to refusing.
+    assert su.QUOTES[PROGRAM].offer_id not in {o.id for o in api._repo.list_offers("demo")}
+
+    # The same key on its own lands the server's terms, which are not the caller's.
+    _record(client, PROGRAM)
     offer = next(
         o for o in api._repo.list_offers("demo") if o.id == su.QUOTES[PROGRAM].offer_id
     )

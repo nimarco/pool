@@ -472,6 +472,11 @@ def _pool_view(ws: str, pool, *, detail: bool = False) -> dict[str, Any]:
         # So the pool card can show the same photograph the member chose from.
         "image_ref": product.image_ref if product else "",
         "supplier": supplier.name if supplier else "",
+        # Where this pool's *price* came from, which is a different question from where
+        # the product's identity came from. Real brands appear beside these figures now,
+        # so the interface has to be able to say that the quote behind them is invented
+        # (§41, §42). `Product.source` answers the identity half separately.
+        "offer_source": offer.source.value if offer else "",
         "status": pool.status.value,
         "pickup_site": site.name if site else "",
         "pickup_is_public": site.is_public if site else True,

@@ -103,6 +103,9 @@ export interface PoolView {
   variant: string;
   image_ref: string;
   supplier: string;
+  /** Provenance of the *quote*, not of the product identity. `synthetic` means Pool
+   *  invented these terms for the demo; nobody quoted them. */
+  offer_source: string;
   status: PoolStatus;
   pickup_site: string;
   pickup_is_public: boolean;

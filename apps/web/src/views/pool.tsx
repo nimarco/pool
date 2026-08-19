@@ -583,6 +583,18 @@ function EconomicsTab({ pool }: { pool: PoolView }) {
             />
             <LedgerLine label="Net saving" value={money(e.net_savings_cents)} kind="gain" />
           </div>
+          {/* One line, at the only place the supplier's number is the subject.
+              The product above it is real — a brand a judge recognises, with its own
+              photograph — and that is exactly why this has to be said here rather than
+              left to the About page: a recognisable brand beside an unlabelled wholesale
+              price implies a relationship that does not exist (AGENTS.md §8, §12). */}
+          {pool.offer_source === "synthetic" ? (
+            <p className="tiny faint" style={{ marginTop: 14 }}>
+              The supplier, this quote, its case size and its minimum are invented for
+              this demo. No wholesale relationship exists and no manufacturer is involved.
+              Every figure above is computed from those terms by Pool's own arithmetic.
+            </p>
+          ) : null}
         </div>
       </section>
 

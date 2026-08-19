@@ -56,6 +56,7 @@ function poolView(overrides: Partial<PoolView> = {}): PoolView {
     variant: "",
     image_ref: "",
     supplier: "Riverbend Wholesale",
+    offer_source: "synthetic",
     status: "final_offer",
     pickup_site: "North Hall lobby",
     pickup_is_public: true,

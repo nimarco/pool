@@ -49,6 +49,7 @@ const pool: PoolView = {
   variant: "",
   image_ref: "",
   supplier: "Synthetic Supply",
+  offer_source: "synthetic",
   status: "final_offer",
   pickup_site: "Commons",
   pickup_is_public: true,
@@ -191,6 +192,50 @@ describe("pool evidence and financial language", () => {
     expect(screen.getByText(/earns/i)).toBeTruthy();
     expect(screen.getByText(/recorded on the simulated transaction/i)).toBeTruthy();
     expect(screen.queryByText(/Paid \$82\.00/)).toBeNull();
+  });
+
+  it("says the quote is invented, on the screen where the money is the subject", () => {
+    /* This became load-bearing when the products became real. The header of this page
+       now reads "Optimum Nutrition · Riverbend Wholesale" above a complete price
+       breakdown; a recognisable brand beside an unlabelled wholesale figure implies a
+       relationship that does not exist. The About page says it too, but a judge reading
+       the economics should not have to go and look. */
+    renderPool(
+      { tab: "economics" },
+      {
+        economics: {
+          merchandise_cents: 75600,
+          host_compensation_cents: 4468,
+          other_fulfillment_cents: 0,
+          platform_fee_cents: 3270,
+          payment_processing_cents: 2806,
+          all_in_cents: 86144,
+          retail_baseline_cents: 112776,
+          gross_savings_cents: 37176,
+          net_savings_cents: 26632,
+          net_savings_bps: 2362,
+          host_is_estimated: false,
+          packages: {
+            total_units: 24,
+            case_units: 12,
+            cases: 2,
+            units_purchased: 24,
+            surplus_units: 0,
+            moq_units: 24,
+            moq_met: true,
+            surplus_resolved: true,
+          },
+        },
+      },
+    );
+
+    // JSX wraps this prose across text nodes, so match the rendered document rather
+    // than pinning where React chose to break the line.
+    const text = (document.body.textContent ?? "").replace(/\s+/g, " ");
+    expect(text).toMatch(/this quote, its case size and its minimum are invented/i);
+    expect(text).toMatch(/no wholesale relationship exists/i);
+    // And it must not undercut the figures themselves, which are genuinely computed.
+    expect(text).toMatch(/computed from those terms by Pool's own arithmetic/i);
   });
 });
 

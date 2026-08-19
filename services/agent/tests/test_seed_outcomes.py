@@ -112,13 +112,45 @@ def test_a_product_with_no_bulk_quote_says_exactly_that(seeded_ctx, sites):
     assert assessment.bulk_offer_id is None
 
 
+def test_latent_demand_with_no_supplier_is_a_state_of_its_own(seeded_ctx, sites):
+    """Jasmine rice: six independent declarations, and nothing to buy them from.
+
+    The reason code it reaches is the same one chocolate whey reaches, and the two are
+    not the same product state at all. Chocolate whey has no bulk quote *and* nobody has
+    declared it; rice has no bulk quote and twenty-two bags standing behind it. "Pool
+    cannot buy this" and "nobody wants this" are different sentences, and only one of
+    them is true here.
+
+    So the pair is pinned together. A fixture edit that gives rice a bulk offer, or that
+    removes the declarations behind it, takes the whole class away — and the class is
+    the only one in this world an outside event can change.
+    """
+    rice = _best(seeded_ctx, sites, "prod_rice_jasmine")
+    assert rice.viable is False
+    assert rice.reason_code == coord.REASON_NO_BULK_OFFER
+    assert rice.bulk_offer_id is None
+    # No supplier means no minimum. Nothing may print a threshold nobody quoted.
+    assert rice.minimum_units == 0
+
+    declared = [n for n in seeded_ctx.repo.list_needs(WS) if n.product_id == "prod_rice_jasmine"]
+    assert len({n.household_id for n in declared}) == 6
+    assert sum(n.quantity for n in declared) == 22
+
+    # The contrast that makes it a distinct class rather than a duplicate.
+    choc = [n for n in seeded_ctx.repo.list_needs(WS) if n.product_id == "prod_whey_chocolate"]
+    assert choc == []
+
+
 def test_every_seeded_product_reaches_a_distinct_named_outcome(seeded_ctx, sites):
     """The taxonomy itself, in one assertion.
 
-    Four different deterministic verdicts across six seeded products. A change that
+    Four different deterministic verdicts across seven seeded products. A change that
     collapses two of these classes into one takes a genuine capability out of the demo
     world, and does it silently — so it is pinned as a set rather than product by
     product.
+
+    Two products share ``no_bulk_offer`` and are kept apart by the test above: the code
+    is the same, the situation is not.
     """
     verdicts = {
         pid: (lambda a: a.reason_code if not a.viable else coord.REASON_VIABLE)(
@@ -133,6 +165,7 @@ def test_every_seeded_product_reaches_a_distinct_named_outcome(seeded_ctx, sites
         "prod_detergent_pods": coord.REASON_NOT_CHEAPER,
         "prod_paper_towels": coord.REASON_BELOW_MINIMUM,
         "prod_whey_chocolate": coord.REASON_NO_BULK_OFFER,
+        "prod_rice_jasmine": coord.REASON_NO_BULK_OFFER,
     }
     assert len(set(verdicts.values())) == 4
 

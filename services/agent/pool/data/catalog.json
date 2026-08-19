@@ -4207,6 +4207,26 @@
    "variant": ""
   },
   {
+   "brand": "",
+   "category": "pantry",
+   "display_size": "",
+   "gtin": "",
+   "image_ref": "",
+   "name": "Jasmine rice, 5 lb",
+   "product_id": "prod_rice_jasmine",
+   "source": "curated",
+   "source_ref": "pool:curated",
+   "substitute_group": "rice",
+   "synonyms": [
+    "jasmine rice",
+    "long grain rice",
+    "rice",
+    "white rice"
+   ],
+   "unit": "bag",
+   "variant": ""
+  },
+  {
    "brand": "Ben's Original",
    "category": "pantry",
    "display_size": "",

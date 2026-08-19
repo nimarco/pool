@@ -148,6 +148,22 @@ PRODUCTS = [
         "prod_paper_towels", "Paper towels, 6 rolls", "household", "pack", "paper_towels",
         brand="Mapleline", variant="select-a-size", unit_weight_grams=1200,
     ),
+    # Latent demand with nothing to buy it from. Six students independently buy this and
+    # Pool holds a shelf price for it, so it can say what buying alone costs — but no
+    # supplier has quoted it in bulk, so there is nothing to compare that against and no
+    # order can form. That is a different state from every other row here, and the one
+    # the seeded world was missing: the products above fail on demand, on a case
+    # boundary, or on economics, all of which are answers Pool reaches *after* it knows
+    # what a supplier would charge.
+    #
+    # Brandless and photographless on purpose (see ``build_catalog.CURATED``): a
+    # supplier quote for this arrives later as synthetic demo data, and a real barcode
+    # beside an invented case structure would assert a correspondence that does not
+    # exist.
+    Product(
+        "prod_rice_jasmine", "Jasmine rice, 5 lb", "pantry", "bag", "rice",
+        brand="", variant="", unit_weight_grams=2268,
+    ),
 ]
 
 
@@ -237,6 +253,14 @@ def build_offers() -> list[Offer]:
               1249, 1, MoqKind.UNITS, 1, fresh, "", OfferSource.SYNTHETIC, "SKU-TOWELS"),
         Offer("off_towels_bulk", "sup_riverbend", "prod_paper_towels", OfferKind.BULK,
               820, 12, MoqKind.CASES, 4, fresh, "", OfferSource.SYNTHETIC, "CASE-TOWELS-12"),
+
+        # --- Jasmine rice: a shelf price, and deliberately **no bulk tier**.
+        #     Six students already buy this independently. Pool can say exactly what one
+        #     of them pays alone and cannot say anything at all about buying together,
+        #     because no supplier has quoted it. Missing supply, not missing demand — and
+        #     the only condition in this fixture that an outside event can change.
+        Offer("off_rice_retail", "sup_campusmart", "prod_rice_jasmine", OfferKind.RETAIL,
+              1149, 1, MoqKind.UNITS, 1, fresh, "", OfferSource.SYNTHETIC, "SKU-RICE-J"),
     ]
 
 
@@ -469,6 +493,26 @@ _NEEDS: list[tuple] = [
     # paper towels. Nothing is lost — this product exists to show demand that *cannot*
     # reach a supplier minimum, and 4 units misses a 48-unit minimum exactly as 6 did.
     ("need_towels_castellanos", "hh_castellanos", "prod_paper_towels", 2, 35, 16, 16, 8, 18, 9500),
+
+    # --- Jasmine rice: six independent declarations and no supplier at all.
+    #     Everything here is ordinary current demand — each of them restocks about when
+    #     they run out, so none of these units depend on pulling a future purchase
+    #     forward. That matters: the blocker has to be *supply*, and a fixture that
+    #     needed permission to buy early as well would be demonstrating two things at
+    #     once and proving neither.
+    #
+    #     Four of the six also buy protein powder, which is what a real week looks like
+    #     and is why the same households appear in two stories. It cannot disturb the
+    #     whey scenario: rice is a different substitute group, so the matcher rejects
+    #     these declarations for a whey order on product family before anything else is
+    #     considered, and being inside one pool never excludes a household from a pool
+    #     for a different product.
+    ("need_rice_okafor",    "hh_okafor",    "prod_rice_jasmine", 4, 45, 13, 13, 13, 18, 9000),
+    ("need_rice_delacroix", "hh_delacroix", "prod_rice_jasmine", 4, 42, 11, 11, 11, 16, 9000),
+    ("need_rice_sandoval",  "hh_sandoval",  "prod_rice_jasmine", 4, 45, 15, 15, 15, 15, 9000),
+    ("need_rice_kowalski",  "hh_kowalski",  "prod_rice_jasmine", 4, 40, 12, 12, 12, 18, 9000),
+    ("need_rice_espinoza",  "hh_espinoza",  "prod_rice_jasmine", 3, 35, 10, 10, 10, 16, 9000),
+    ("need_rice_novak",     "hh_novak",     "prod_rice_jasmine", 3, 45, 14, 14, 14, 20, 9000),
 ]
 
 

@@ -174,6 +174,23 @@ CANONICAL_PINS: dict[str, tuple[str, str, str, tuple[str, ...]]] = {
 #: Pool genuinely does not know a brand here. They render with the category fallback tile,
 #: which is also how that path gets exercised for real.
 CURATED: list[dict] = [
+    # Rice is the one entry here the open catalogues *do* cover — twelve US records, and
+    # every one of them a specific retail SKU with its own barcode: 250 g microwave
+    # pouches, 8 oz boxes, a 16 oz bag of wild rice. Pool's scenario product is a 5 lb
+    # sack that a supplier later quotes by the case, and pinning a real barcode to it
+    # would assert a correspondence between an invented case structure and a specific
+    # package that does not exist — the same reason the canonical pins above emit no
+    # GTIN, applied to a product whose sizes disagree even more sharply.
+    #
+    # So it is curated and brandless, like the household rows: Pool genuinely does not
+    # know a brand here, and inventing one would put a fictional brand beside two
+    # hundred real ones. It renders with the category tile.
+    {
+        "product_id": "prod_rice_jasmine", "name": "Jasmine rice, 5 lb",
+        "brand": "", "variant": "", "category": "pantry",
+        "substitute_group": "rice", "unit": "bag",
+        "synonyms": ["rice", "jasmine rice", "white rice", "long grain rice"],
+    },
     {
         "product_id": "prod_detergent_pods", "name": "Laundry detergent pods, 96 count",
         "brand": "", "variant": "", "category": "household",

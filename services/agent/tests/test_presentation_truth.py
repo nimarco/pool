@@ -105,3 +105,59 @@ def test_readme_describes_the_product_run_as_its_own_proof():
     assert "`created_by_run`" in readme
     assert "zero EventBridge rules" in readme
     assert "29 allowlisted API paths" in readme
+
+
+def test_the_rehearsal_quotes_figures_the_screen_will_actually_show():
+    """Every number in the script is one the presenter will read off the page.
+
+    The script's own continuity rule is "never say a number not visible on screen", and
+    the detergent line broke it: the pair it quoted was the arithmetic of a *four*-unit
+    declaration, while step 6 tells the presenter to keep the form's default of two. Both
+    figures move together with the quantity, so a stale pair does not look wrong — it
+    looks like the presenter took a wrong turn.
+
+    Computed here through the same endpoints the browser calls, on the same defaults the
+    form ships (``apps/web/src/views/needs.tsx``), rather than asserted.
+    """
+    from datetime import date, timedelta
+
+    from fastapi.testclient import TestClient
+
+    from pool.api import app as api
+
+    api._repo.reset("demo")
+    client = TestClient(api.app)
+    client.get("/api/state")
+    client.post(
+        "/api/onboarding", json={"display_name": "Marco", "autonomy_mode": "ask_me_first"}
+    )
+    client.post("/api/onboarding/payment-method")
+    household = client.get("/api/state").json()["consumer"]["household_id"]
+    # `blankDraft` in the Needs form: two units, every 30 days, needed in 14.
+    response = client.post(
+        "/api/needs",
+        json={
+            "household_id": household,
+            "product_id": "prod_detergent_pods",
+            "quantity": 2,
+            "cadence_days": 30,
+            "expected_next_need_date": (date.today() + timedelta(days=14)).isoformat(),
+            "flexibility_days": 14,
+            "routine_lead_days": 7,
+            "min_savings_pct": 15,
+            "max_spend_cents": 12000,
+            "substitution": "exact_only",
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    run = client.post("/api/agent/run", json={"trigger": "member_scan"}).json()
+    report = client.get(
+        f"/api/runs/{run['run_id']}/report", params={"household_id": household}
+    ).json()
+    headline = report["results"][0]["headline"]
+
+    # Blockquote markers dropped, not just collapsed: the sentence is quoted across two
+    # lines, so a plain whitespace join leaves a ">" in the middle of it.
+    flat = " ".join(w for w in _read("docs/DEMO_SCRIPT.md").split() if w != ">")
+    assert headline in flat, f"the rehearsal does not quote what the screen says: {headline}"

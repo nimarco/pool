@@ -155,7 +155,7 @@ cannot legally run is not offered.
 ## The judge experience — live
 
 The public demo is a **separate, tiny stack** — one Lambda behind a Function URL, serving
-both the web app and a twenty-four-endpoint API, plus one DynamoDB table.
+both the web app and a twenty-nine-endpoint API, plus one DynamoDB table.
 
 ```
 browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda

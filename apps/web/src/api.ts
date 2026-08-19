@@ -960,21 +960,22 @@ export const api = {
   setShowcaseScope,
   inShowcaseScope,
 
-  /** What this deployment can do. Answers everywhere; `live_agent_available` is false
-   *  when no AgentCore runtime is configured, so the UI describes the action rather
-   *  than offering a button that cannot work. It is also what decides whether the
-   *  product's discovery action goes to AWS or runs here. */
   /** What one run did about this member's own declarations. Server-assembled from the
    *  evaluation records that run wrote; the browser renders and decides nothing. */
   runReport: (runId: string, householdId: string) =>
     request<RunReport>(`/api/runs/${runId}/report?household_id=${householdId}`),
 
+  /** What this deployment can do. Answers everywhere; `live_agent_available` is false
+   *  when no AgentCore runtime is configured, so the UI describes the action rather
+   *  than offering a button that cannot work. It is also what decides whether the
+   *  product's discovery action goes to AWS or runs here. */
   demoConfig: () => request<DemoConfig>("/api/demo/config"),
-  /** Run the deployed coordinator against *this session's* workspace. The workspace is
-   *  the query parameter every request already carries; the server re-validates it and
-   *  builds the runtime payload itself, so the browser names a session it already has,
-   *  never one it does not. */
-  /** Invoke the deployed coordinator, once, against this session.
+
+  /** Invoke the deployed coordinator, once, against *this session's* workspace.
+   *
+   *  The workspace is the query parameter every request already carries; the server
+   *  re-validates it and builds the runtime payload itself, so the browser names a
+   *  session it already has, never one it does not.
    *
    *  `action` is a key from the server's own map, never an objective: `member` asks
    *  about this member's own declarations, `community` runs the scan a scheduled

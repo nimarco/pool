@@ -224,8 +224,12 @@ Close on the collective outcome rather than a feature list:
 Type a third category during setup — `laundry` — and let the same run answer it too. The
 sentence names both figures; read whichever ones are on screen:
 
-> There is enough demand, but buying it together would cost $398.92 against $367.84
+> There is enough demand, but buying it together would cost $306.73 against $275.88
 > buying it alone.
+
+Those are the figures on the form's default quantity, which is what step 6 says to keep.
+Change the quantity and the order changes size, so both numbers move together — read the
+pair on screen rather than these.
 
 Three declarations, three genuinely different deterministic verdicts — formed, below the
 supplier minimum, and *worse than retail* — from one button press and seven model turns

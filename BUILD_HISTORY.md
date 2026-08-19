@@ -3834,3 +3834,152 @@ Bedrock / Strands → typed tools → DynamoDB → browser` path, and the live i
 real tool trace. Product, Needs, the pool record, both Showcase directions, the 13-stage reader, the
 demo drawer and the 390px layout were smoke-tested against production with no application console or
 network errors.
+
+---
+
+### #0036 — [2026-08-18] — A demo-first audit, and the three of its own findings it reversed
+`[DEMO]` `[FRONTEND]`
+
+**Goal / user intent**
+Work backward from one question — *if you had five minutes with the AWS judges, what would you
+actually show?* — then implement whatever survived a second, adversarial pass over the audit's own
+recommendations. Explicitly not another visual-polish pass, and explicitly not permission to
+implement a recommendation merely because it had been written down.
+
+**Starting state**
+Entries #0032–#0035 left the Product structurally correct, the same-run proof strong and the visual
+system finished. What none of them had examined is whether a *member* can see what Pool did for
+them. Four things the audit found by driving a full local lifecycle in a browser:
+
+1. Home's card was headed **"Your order"** and contained only community-level facts — ten members,
+   twenty-four units. Rosa's own two tubs, her $71.83, her saving and her pickup window appeared
+   nowhere on her own home screen.
+2. The decision card explained the autonomy boundary as *"your rule `autonomy_mode` did not
+   pass"*, rendering an identifier, while `facts.policy_checks` already carried the policy engine's
+   own sentence: *"member is on Ask Me — commitment requires explicit approval."*
+3. **"What Pool may decide for you"** listed four limits and omitted `autonomy_display.mode`, the
+   master switch that decides whether any of them are ever consulted. The panel therefore implied
+   Pool could act, one screen before Pool asked.
+4. `coordination_actions_automated` / `human_decisions_requested` / `commitments_without_asking` —
+   18 / 3 / 8 on the canonical run, and the single best evidence that an agent absorbed human
+   coordination — existed only ~2,200 px down the Community page, in the second column of a
+   two-column ledger.
+
+Two further defects surfaced while implementing: the Fulfilment tab offered *"Issue Chidi A.'s
+code"* to a signed-in Rosa, and `pct()` in the client rounded basis points while
+`bps_to_pct_str()` on the server truncated them, so one purchase read 23.6% and 23.5% six lines
+apart once the member's own figure was surfaced next to the decision's.
+
+**Decision**
+Recompose Home as a state-driven narrative — *what Pool needs from me → what it found for me →
+what it handled on its own → what I buy anyway → what it may decide for me* — with every section
+appearing only when it has something to say. Fix the four findings above at the source rather than
+by adding explanation. Reorder Community so both currencies (money created, coordination avoided)
+occupy the first viewport. Move the three authorisation constraints in the need form behind one
+disclosure that states their values, leaving the four intent fields primary. Reuse existing server
+values throughout; add no derived figure to React.
+
+Three of the audit's own recommendations were reversed on revalidation, and the reasoning matters
+more than the changes:
+
+- **A backend `estimated_savings` field on the pool view was dropped.** The audit wanted it because
+  the live AgentCore run leaves a pool at `host_recruiting`, where `_pool_view` reads only
+  `final_economics` and the payoff frame renders a dash. Implementing the member-scoped card showed
+  the estimate was *already* exposed per membership as `estimated_cost_cents` / `baseline_cents`,
+  written at pool creation. The card now reads **"Your 2 tubs · about $71.93 instead of $93.98"**
+  with the tail saying **"Not final yet — a fulfiller's pay is part of the price."** No new
+  derivation, no second source of truth for a savings figure, and a better frame: the reason the
+  price is not final teaches the host-before-authorization invariant instead of hiding behind it.
+- **The 8-hop `HopChain` was not moved onto Home, and its in-flight spinner was removed instead.**
+  The audit proposed reusing it during the ~17 s live wait. Rendered, it put eight AWS service names
+  on a consumer screen, and it spun every unobserved hop while the panel's own caption said *"no
+  intermediate stage is being inferred."* A browser making one HTTPS request cannot observe that any
+  hop is executing — not even the first, which can still fail at DNS or TLS. The Product wait is now
+  three rows: the send (resolved), the destination named but not claimed, and the answer; plus the
+  region, the runtime and a real elapsed clock. On the technical view no hop is ever marked active.
+- **The global typography change was dropped.** The audit flagged 90 uses of 12 px `.tiny`, 43 of
+  them `.faint`, from reading the CSS. Measured in the browser, `--ink-faint` on `--paper` is
+  **5.09:1**, comfortably past WCAG AA for normal text. The targeted fix was enough: Home now
+  contains **zero** `.tiny`, having moved its captions to `.small`.
+
+**Showcase was inspected and deliberately left untouched.** It duplicates the navigation and adds no
+unique content, which is what the audit objected to — but the video never enters it, the drawer
+gates it behind an explicit mode switch with a visible exit, and it genuinely serves a judge who
+would rather be walked through Pool than use it. Restructuring `App.tsx` routing is the
+highest-regression-risk change available for zero demo gain, so it was not made.
+
+**Implementation**
+Status: **Implemented and Tested; not Deployed.** Frontend composition only; no domain, agent,
+tool, viability, economics, IAM, CDK or AgentCore change, and no new API field.
+
+- `views/home.tsx` rewritten. Member-scoped opportunity card (own units, own price against own
+  baseline, own saving, pickup window), estimate labelled *about* with the invariant in the tail,
+  state-dependent heading, `failure_reason` surfaced where the member is. One community block
+  replaces the previous two, leading with what Pool did on its own and stating the premise —
+  *members · standing needs · groups anyone organised: 0* — before anything has run. The autonomy
+  disclosure leads with the mode in a member's words and collapses the limits. The last-run
+  `<details>` was deleted; it duplicated the pool record's proof card at L5 depth on an L1 screen.
+- `labels.ts` gained `blockingRuleExplanation()` (returns the matching `policy_checks[].detail`
+  verbatim, empty rather than invented) and `autonomyModeCopy()`.
+- `ui.tsx` gained the shared `Elapsed` and a rewritten `CoordinatorWait`; `views/live.tsx` now
+  imports `Elapsed` rather than keeping a second copy.
+- `views/community.tsx` reordered to money → attention → enablement → pools/map → decisions →
+  money ledger → feed → operations, with the attention ledger promoted from half a column to a
+  full-width section of three figures.
+- `views/needs.tsx` moved minimum saving, spend ceiling and substitution behind one disclosure whose
+  summary states both numeric values. Defaults in `blankDraft` are byte-for-byte unchanged.
+- `views/pool.tsx` `FulfilmentTab` now prefers the signed-in identity for a pickup credential
+  (*"Show my code"*), falling back to naming the subject for anyone not in the pool.
+- `api.ts` `pct()` now truncates the tenth digit exactly as `bps_to_pct_str` does.
+- `brand.tsx` convergence caption reduced to one sentence with the arithmetic behind a disclosure.
+- `docs/DEMO_SCRIPT.md` rewritten to ~4:45 for the new surfaces. The rehearsal now edits the
+  days-early window rather than the savings floor — same proof that the run answers current stored
+  state, but it edits the primary field the coordinator actually consults minutes later — and it
+  **holds** the live wait rather than cutting it, because the wait is now evidence.
+
+**AWS / external services touched**
+None. No AWS resource was read, changed, created or destroyed. No AgentCore or Bedrock invocation
+was made; the deployed `GET /api/demo/config` and `/api/health` were read once each, which are
+unauthenticated reads that spend nothing. A second local server was started on :8011 with a
+deliberately invalid runtime ARN so the live wait could be rendered, and the browser stubbed
+`POST /api/demo/agentcore` to a never-resolving promise so no request left the page.
+
+**Cost-relevant activity**
+None. Local fixture runs, local builds, and one local judge-mode server.
+
+**Validation**
+`make qa` green: ruff clean, ESLint clean, TypeScript clean, **734** agent/API/domain tests, **75**
+infrastructure tests, **48** frontend tests (was 20), production build, secret scan clean.
+`git diff --check` clean. Rendered browser QA was completed in-session this time, at 1512×804 and
+390px, across passive, running, opportunity, approval, active, distributing, completed and failed
+Home states, the Needs form open and its disclosure expanded, all five pool tabs, the technical
+proof, Community, Operations, Showcase Overview and Showcase Live on AWS: zero console errors, all
+network responses 200, no horizontal overflow at 390px. Home's busiest state fell from seven
+sections to five (1,668 px); passive Home is 1,321 px.
+
+Twenty-eight frontend tests were added, pinning the claims rather than the layout: that no hop
+resolves below the request the browser sent and none is marked active in flight or after a failure;
+that the wait names AgentCore and the region without claiming to watch the request arrive; that Home
+reports `state.metrics` unmodified and states the premise rather than a row of zeroes; that the card
+leads with the signed-in member's own allocation and shows nobody else's; that a pre-final pool says
+which invariant is holding instead of showing a dash; that the decision card renders the policy
+check's sentence and never the rule identifier; that the autonomy panel leads with the mode; that
+the credential belongs to the signed-in member; that the need form's collapsed constraints are still
+present and still send their original values; that Community places both currencies above the model
+that explains them; and that `pct()` agrees with `bps_to_pct_str`.
+
+**Failures / dead ends**
+The first implementation of the member-scoped card produced a visible contradiction — *"Your 2 tubs
+· $71.93"* directly above *"Not priced yet"* — because it surfaced `estimated_cost_display` while
+the tail still assumed no price existed. That contradiction is what made the dropped backend field
+unnecessary: the fix was to label the estimate and let the tail carry the reason it is not final.
+Separately, the autonomy disclosure initially reused `.section-title` for its summary and rendered a
+seventy-character sentence in 13 px uppercase; it now uses a short uppercase label beside the answer
+in ordinary case.
+
+**Relevant evidence / files**
+`apps/web/src/views/home.tsx`, `apps/web/src/views/community.tsx`, `apps/web/src/views/needs.tsx`,
+`apps/web/src/views/pool.tsx`, `apps/web/src/views/live.tsx`, `apps/web/src/ui.tsx`,
+`apps/web/src/labels.ts`, `apps/web/src/api.ts`, `apps/web/src/brand.tsx`,
+`apps/web/src/styles.css`, `apps/web/src/App.tsx`, `apps/web/src/ui.test.tsx`,
+`docs/DEMO_SCRIPT.md`, `README.md`.

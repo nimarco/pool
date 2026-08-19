@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { groupSavingsCaption } from "./labels";
+import { autonomyModeCopy, blockingRuleExplanation, groupSavingsCaption } from "./labels";
 
 describe("the group saving caption", () => {
   it("marks a candidate pool's total as an estimate", () => {
@@ -50,5 +50,45 @@ describe("the group saving caption", () => {
     });
 
     expect(provisional).not.toBe(final);
+  });
+});
+
+describe("why Pool asked", () => {
+  it("returns the policy engine's own sentence for the rule that blocked", () => {
+    expect(
+      blockingRuleExplanation({
+        blocking_rule: "autonomy_mode",
+        policy_checks: [
+          { rule: "max_spend", passed: true, detail: "fits" },
+          {
+            rule: "autonomy_mode",
+            passed: false,
+            detail: "member is on Ask Me — commitment requires explicit approval",
+          },
+        ],
+      }),
+    ).toBe("member is on Ask Me — commitment requires explicit approval");
+  });
+
+  it("says nothing rather than inventing a reason", () => {
+    expect(blockingRuleExplanation({})).toBe("");
+    expect(blockingRuleExplanation({ blocking_rule: "autonomy_mode" })).toBe("");
+    expect(
+      blockingRuleExplanation({
+        blocking_rule: "autonomy_mode",
+        policy_checks: [{ rule: "max_spend", passed: true, detail: "fits" }],
+      }),
+    ).toBe("");
+  });
+});
+
+describe("standing autonomy, in a member's words", () => {
+  it("answers the question the panel asks", () => {
+    expect(autonomyModeCopy("ask_me")).toBe("No — Pool always asks first");
+    expect(autonomyModeCopy("smart_join")).toBe("Yes — when every limit below passes");
+  });
+
+  it("does not guess at a mode it has never seen", () => {
+    expect(autonomyModeCopy("some_future_mode")).toBe("some future mode");
   });
 });

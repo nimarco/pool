@@ -1247,6 +1247,88 @@ table.data th.r {
   flex: none;
 }
 
+/* Advanced need constraints: available, not absent. Sits inside the form, so it needs
+   the form's own rhythm rather than the inset default. */
+.need-advanced {
+  margin-top: 4px;
+}
+.need-advanced > summary {
+  cursor: pointer;
+}
+
+/* The standing-autonomy disclosure: a short uppercase label, then the answer in the
+   case a person actually reads. */
+.autonomy-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  cursor: pointer;
+}
+.autonomy-summary .section-title {
+  margin: 0;
+}
+.autonomy-summary strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ================================================================= wait */
+
+/* The Product's wait state for one live coordinator invocation. Deliberately not a
+   progress bar: `.done` is only ever applied to the request this page actually sent. */
+.wait {
+  border: 1px solid var(--graphite-line);
+  background: var(--graphite-soft);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wait-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--graphite);
+  font-size: 14px;
+}
+.wait-head strong {
+  font-weight: 600;
+}
+.wait-lede {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin: -2px 0 0;
+}
+.wait-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 11px 0 2px;
+  border-top: 1px solid var(--graphite-line);
+}
+.wait-step {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+.wait-step.done {
+  color: var(--moss);
+}
+.wait-step.pending {
+  color: var(--graphite);
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+.wait-note {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  margin: 0;
+}
+
 /* ================================================================== map */
 
 .map-wrap {

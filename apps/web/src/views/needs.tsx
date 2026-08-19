@@ -180,50 +180,72 @@ function NeedForm({
           </span>
         </label>
 
-        <label className="field">
-          <span className="field-label">Won't join below … % saving</span>
-          <input
-            className="control"
-            type="number"
-            min={0}
-            max={limits?.max_min_savings_pct ?? 90}
-            value={draft.min_savings_pct}
-            onChange={(e) => set("min_savings_pct", Number(e.target.value))}
-          />
-        </label>
-
-        <label className="field">
-          <span className="field-label">Never spend more than</span>
-          <input
-            className="control"
-            type="number"
-            min={1}
-            max={maxSpend}
-            step="0.01"
-            value={(draft.max_spend_cents / 100).toFixed(2)}
-            onChange={(e) =>
-              set("max_spend_cents", Math.round(Number(e.target.value) * 100))
-            }
-            required
-          />
-          <span className="field-note">Checked against the exact final price, not an estimate.</span>
-        </label>
-
-        <label className="field field-wide">
-          <span className="field-label">Substitutes</span>
-          <select
-            className="control"
-            value={draft.substitution}
-            onChange={(e) => set("substitution", e.target.value)}
-          >
-            {SUBSTITUTION.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
+
+      {/* The three controls below are an authorisation policy, not a description of what
+          somebody buys. They already hold safe values, the deterministic engine already
+          takes the stricter of these and the member's standing policy, and nobody
+          setting up a restock reminder wants to think about a savings floor first. So
+          they are available rather than absent: closed by default, unchanged in the
+          payload either way. Collapsing a control must never quietly change what it
+          means (AGENTS.md §5). */}
+      <details className="inset need-advanced">
+        <summary className="small">
+          <strong>Fine-tune when Pool may act on this need</strong>
+          <span className="small faint">
+            {" "}
+            — never below {draft.min_savings_pct}% saving, never above $
+            {(draft.max_spend_cents / 100).toFixed(2)}
+          </span>
+        </summary>
+        <div className="field-grid" style={{ marginTop: 14 }}>
+          <label className="field">
+            <span className="field-label">Won't join below … % saving</span>
+            <input
+              className="control"
+              type="number"
+              min={0}
+              max={limits?.max_min_savings_pct ?? 90}
+              value={draft.min_savings_pct}
+              onChange={(e) => set("min_savings_pct", Number(e.target.value))}
+            />
+          </label>
+
+          <label className="field">
+            <span className="field-label">Never spend more than</span>
+            <input
+              className="control"
+              type="number"
+              min={1}
+              max={maxSpend}
+              step="0.01"
+              value={(draft.max_spend_cents / 100).toFixed(2)}
+              onChange={(e) =>
+                set("max_spend_cents", Math.round(Number(e.target.value) * 100))
+              }
+              required
+            />
+            <span className="field-note">
+              Checked against the exact final price, not an estimate.
+            </span>
+          </label>
+
+          <label className="field field-wide">
+            <span className="field-label">Substitutes</span>
+            <select
+              className="control"
+              value={draft.substitution}
+              onChange={(e) => set("substitution", e.target.value)}
+            >
+              {SUBSTITUTION.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </details>
 
       {error ? <p className="form-error">{error}</p> : null}
 
@@ -254,6 +276,7 @@ export function Needs({
   running,
   hasPool,
   liveDiscovery,
+  region,
 }: {
   identity: { id: string; display_name: string };
   communityName: string;
@@ -261,6 +284,7 @@ export function Needs({
   running: boolean;
   hasPool: boolean;
   liveDiscovery: boolean;
+  region: string | null;
 }) {
   const [needs, setNeeds] = useState<NeedRow[] | null>(null);
   const [products, setProducts] = useState<ProductRow[]>([]);
@@ -451,7 +475,7 @@ export function Needs({
                 {running ? null : <IconArrowRight />}
               </button>
             </div>
-            {running ? <CoordinatorWait live={liveDiscovery} /> : null}
+            {running ? <CoordinatorWait live={liveDiscovery} region={region} /> : null}
           </div>
         ) : null}
         {showAll ? (

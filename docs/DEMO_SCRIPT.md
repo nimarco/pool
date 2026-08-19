@@ -1,4 +1,4 @@
-# Demo rehearsal script — about 4:50
+# Demo rehearsal script — about 4:45
 
 This is a navigation and timing rehearsal, not a final word-for-word voiceover. The
 presentation pass happens later.
@@ -21,54 +21,84 @@ The defining technical rule is equally simple:
    deterministic planner; payments and supplier ordering are simulated.
 4. Leave the Product on **Needs**, signed in as Rosa.
 5. Keep one continuous browser journey. A short edit over the real AgentCore wait is
-   fine; switching to a different run or workspace is not.
+   permitted but no longer wanted — see 0:52. Switching to a different run or workspace
+   is never permitted.
 
-## 0:00–0:18 — The input is a recurring need
+## 0:00–0:14 — The input is a recurring need
 
-**Product → Needs → Rosa's whey declaration → Change.**
+**Product → Needs.**
 
-Establish only the product inversion: Rosa states what she buys anyway. She does not
-create a group, invite anyone, or know who else wants it.
+Rosa has two standing declarations and there is nothing else on the screen. Establish only
+the product inversion: she states what she buys anyway. She does not create a group,
+invite anyone, or know who else wants it.
 
-## 0:18–0:37 — Change one real constraint
+## 0:14–0:26 — Thirty-three declarations, no groups
 
-**Change minimum savings from 20% to 21% → Save.**
+**Needs → `Show all 33`.**
 
-The saved declaration is re-read from the server. This makes the later opportunity an
-answer to current stored preferences, not a pre-rendered scenario.
+A table of independent declarations by twenty-four people. This is the premise, and it is
+the one thing the interface cannot say in a sentence.
 
-## 0:37–0:55 — Independent latent demand
+## 0:26–0:44 — Change one real constraint
+
+**Rosa's whey declaration → `Change` → set the days-early window → Save.**
+
+The days-early window is a primary field, not an advanced one, and it is the exact
+constraint the coordinator consults minutes later when it pulls two people forward. The
+saved declaration is re-read from the server, so the later opportunity answers current
+stored preferences rather than a pre-rendered scenario.
+
+If the shot needs it, open **Fine-tune when Pool may act on this need** once to show that
+the savings floor and spend ceiling exist and are already set. Close it again.
+
+## 0:44–0:52 — Independent latent demand
 
 **Go to Home.**
 
-Point to the standing needs and convergence figure. Each member declared independently;
-no member noticed or organised the overlap.
+The convergence figure, and one line: nobody chose the same week, their restocks did.
+Do not read the expanded arithmetic aloud; it is behind a disclosure for that reason.
 
-## 0:55–1:18 — One live discovery run
+## 0:52–1:14 — One live discovery run
 
 **Click `Find opportunities` exactly once.**
 
-The wait state should say that Pool's coordinator is running on Amazon Bedrock AgentCore
-against this demo session's DynamoDB workspace. Show roughly three seconds of the honest
-wait, then cut or fast-forward. Resume only when that same request returns.
+Hold the wait. It names Amazon Bedrock AgentCore, names the region, runs a real elapsed
+clock, resolves the one thing the browser actually observed — that it sent the request —
+and says on screen that nothing between is being animated. Roughly seventeen seconds of
+that is the strongest AWS evidence in the recording, and cutting it throws that away.
 
 Do not open Showcase's live page and do not press `Run again` later.
 
-## 1:18–1:38 — The resulting pool
+## 1:14–1:34 — The resulting pool, from her side
 
-**Open the opportunity returned by that run.**
+**Stay on Home.**
 
-Show 10 people, 24 units, and the whole-case result with no speculative surplus. The pool
-exists because the live coordinator created it, not because the browser drew a result.
+The card is scoped to Rosa: her two tubs, about $71.93 against $93.98 buying alone, with
+nine others, collecting from North Hall lobby. The tail says **Not final yet — a
+fulfiller's pay is part of the price**, which is the invariant, not a missing number.
 
-## 1:38–1:58 — Host first, then final terms
+The pool exists because the live coordinator created it, not because the browser drew a
+result.
+
+## 1:34–1:54 — Host first, then final terms
 
 **Demo University drawer → Gio accepts the fulfilment job → Let Pool work the queue.**
 
 Offering to host did not claim the job: Pool ranked candidates and offered it to the best
-eligible one. Only after acceptance can host compensation enter the exact buyer price.
+eligible one. Only after acceptance can host compensation enter the exact buyer price,
+which is why the estimate above was labelled an estimate.
 
-## 1:58–2:24 — Exact economics
+## 1:54–2:12 — The one question, and why it was asked
+
+**Home.**
+
+Rosa is asked to approve $71.83 against $93.98. Under it, in the policy engine's own
+words: *member is on Ask Me — commitment requires explicit approval*. Answer it.
+
+Then point at the strip below: **things Pool did on its own**, **times it had to ask a
+person**. Eight of the ten buyers were never asked at all.
+
+## 2:12–2:36 — Exact economics
 
 **Pool → Economics.**
 
@@ -76,35 +106,36 @@ Show the final ledger: $861.44 all-in versus $1,127.76 retail, $266.32 collectiv
 savings, after merchandise, host compensation, processing and Pool's fee. Say that these
 figures are deterministic outputs. Payments and the supplier order are simulated.
 
-## 2:24–2:50 — Failure retained, recovery visible
+## 2:36–3:00 — Failure retained, recovery visible
 
 **Pool → People.**
 
 Show 10 buyers and 11 memberships on the record: one exact-amount authorization failed,
 the failed membership remains visible, and one compatible replacement restores exactly
-24 units. Do not say the failed buyer paid.
+24 units. The per-buyer chips say which rows Pool decided for and which it asked. Do not
+say the failed buyer paid.
 
-## 2:50–3:20 — Decisions, lock, order, pickup
+## 3:00–3:24 — Lock, order, pickup
 
 Use only the existing drawer controls:
 
-1. remaining buyers answer their questions;
-2. let Pool work the queue;
-3. open the pickup window;
-4. everyone collects their order.
+1. let Pool work the queue;
+2. open the pickup window;
+3. everyone collects their order.
 
 These controls call participant and scheduler endpoints; they do not set lifecycle state
 directly. Authorizations, simulated captures, the simulated supplier order, and one-time
 handoff credentials remain distinct.
 
-## 3:20–3:42 — Fulfilment completes
+## 3:24–3:40 — Fulfilment completes
 
 **Pool → Fulfilment.**
 
-Show 10/10 handoffs. Host compensation is earned and recorded in the simulated
-transaction; Pool does not claim that a payout rail exists.
+Show 10/10 handoffs. `Show my code` issues the signed-in member's own one-time
+credential. Host compensation is earned and recorded in the simulated transaction; Pool
+does not claim that a payout rail exists.
 
-## 3:42–4:20 — Same-run technical proof
+## 3:40–4:18 — Same-run technical proof
 
 **Pool → Activity.** Briefly show the stored recovery event, then click
 **`Technical proof for this run`**.
@@ -121,11 +152,20 @@ Show, without invoking anything:
 
 `Run again` is collapsed and secondary. Do not open it.
 
-## 4:20–4:50 — Community infrastructure and impact
+One optional sentence, if the take has room: the deterministic planner and the model
+choose different tool paths through the same twelve tools, which is what makes the model
+load-bearing rather than decorative.
+
+## 4:18–4:45 — Both currencies, and the close
 
 **Community.**
 
-Close on the visible model:
+The page opens on the two things that matter and nothing else: **$1,127.76 → $861.44 →
+$266.32 kept in the community**, and directly under it **what it cost anyone in
+attention** — actions Pool took on its own, times it had to ask a person, commitments
+made without asking.
+
+Below that, the visible model:
 
 > **Community enables → Pool coordinates → Members choose and collect.**
 
@@ -145,10 +185,12 @@ End with the collective outcome, not feature inventory:
 ## Continuity rules
 
 - One workspace, one `Find opportunities` click, one live AgentCore invocation.
-- A video cut may shorten the wait; it must not replace the run or its result.
+- The real wait is content, not dead air. Hold it rather than cutting it; if the take
+  must be shortened, a cut may not replace the run or its result.
 - Never say “deployed,” “paid,” “captured,” “final,” or “permission” more strongly than
   the screen supports.
-- Never say a number not visible on screen.
+- Never say a number not visible on screen. In particular, an estimate labelled
+  *about* on screen is an estimate out loud.
 - If the live call fails, keep the honest failure visible and stop the rehearsal. Do not
   spend a second invocation trying to manufacture a clean take.
 - Do not record until the rehearsal confirms the exact run id, pool id and
@@ -159,3 +201,8 @@ End with the collective outcome, not feature inventory:
 `make demo` produces a deterministic lifecycle transcript from the same domain and tool
 code. It is a truthful fallback for explaining the lifecycle, but it is not a substitute
 for the single live discovery proof required by the primary recording.
+
+The thirteen-stage reader (`Pool → Activity → How this pool happened`, or Showcase → The
+run) is the same transcript with a reader on it. It is excellent and it is too long for
+the recording; at most two stages belong in the video, and on the deployed stack it runs
+the deterministic planner rather than Bedrock, which the run record says on every row.

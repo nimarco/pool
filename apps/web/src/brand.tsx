@@ -161,13 +161,22 @@ export function ConvergenceFigure() {
           LATER
         </text>
       </svg>
-      <figcaption className="tiny muted" style={{ marginTop: 10, maxWidth: "46ch" }}>
-        Each line is one person's restock date. <strong>Eight</strong> were going to buy
-        about now anyway — eighteen units, against a supplier minimum of twenty-four.{" "}
-        <strong>Five</strong> more authorised an early purchase, and Pool takes exactly{" "}
-        <strong>two</strong> of them: their six units close the gap to twenty-four
-        precisely. The other three are left alone — pulling them in too would buy units
-        nobody ordered.
+      {/* One sentence carries the figure; the arithmetic behind it is genuinely
+          interesting and genuinely too much to read in the first ten seconds of a
+          screen recording, so it is one click away rather than in the way. */}
+      <figcaption className="small muted" style={{ marginTop: 10, maxWidth: "46ch" }}>
+        Each line is one person's restock date. Nobody chose the same week; their
+        restocks did.
+        <details style={{ marginTop: 8 }}>
+          <summary className="small faint">How eight becomes twenty-four</summary>
+          <p className="small muted" style={{ marginTop: 8 }}>
+            <strong>Eight</strong> were going to buy about now anyway — eighteen units,
+            against a supplier minimum of twenty-four. <strong>Five</strong> more
+            authorised an early purchase, and Pool takes exactly <strong>two</strong> of
+            them: their six units close the gap to twenty-four precisely. The other three
+            are left alone — pulling them in too would buy units nobody ordered.
+          </p>
+        </details>
       </figcaption>
     </figure>
   );

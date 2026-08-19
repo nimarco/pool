@@ -16,8 +16,10 @@ import {
   shortTime,
   statusCopy,
 } from "../api";
+import { blockingRuleExplanation } from "../labels";
 import {
   ActorGlyph,
+  ActorTag,
   Block,
   Chip,
   Empty,
@@ -105,6 +107,9 @@ function DecisionCard({
   const f = decision.facts as Record<string, never>;
   const breakdown = (f.cost_breakdown ?? {}) as Record<string, number>;
   const isHostOffer = decision.kind === "host_offer";
+  /* The policy engine's own sentence. The rule name stays too: this is the surface a
+     judge cross-references against `policy_checks`, unlike the member's own card. */
+  const why = blockingRuleExplanation(decision.facts);
 
   return (
     <div style={{ padding: "18px 22px" }}>
@@ -149,10 +154,10 @@ function DecisionCard({
             <Fact label="Pickup" value={String(f.pickup_site)} />
             <Fact label="Walk" value={`${String(f.travel_minutes)} min`} />
           </div>
-          {f.blocking_rule ? (
-            <p className="tiny muted" style={{ marginTop: 10 }}>
-              Pool did not decide this alone because the rule{" "}
-              <span className="mono">{String(f.blocking_rule)}</span> did not pass.
+          {why ? (
+            <p className="small muted" style={{ marginTop: 10 }}>
+              Pool did not decide this alone: {why} (
+              <span className="mono">{String(f.blocking_rule)}</span>).
             </p>
           ) : null}
         </>
@@ -302,6 +307,64 @@ export function CommunityView({
         </div>
       </header>
 
+      <section className="grid grid-3">
+        <Figure
+          label="If everyone bought alone"
+          value={money(m.estimated_retail_spend_cents)}
+          sub="recorded retail baseline"
+        />
+        <Figure
+          label="All-in through Pool"
+          value={money(m.pool_spend_cents)}
+          sub="merchandise + host + processing + Pool fee"
+        />
+        <Figure
+          label="Kept in the community"
+          value={money(m.collective_savings_cents)}
+          accent
+          sub={`${money(m.average_buyer_savings_cents)} average after every buyer-funded cost`}
+        />
+      </section>
+
+      {/* The second currency. Money saved is half the argument; the other half is that
+          organising this cost nobody an evening, and that half has a number too. Both
+          are sums over stored rows for this Community, and neither is a projection. */}
+      <section className="panel">
+        <div className="panel-head">
+          <h2>What it cost anyone in attention</h2>
+          <span className="spacer" />
+          <ActorTag actor="engine" label="Counted from stored rows" />
+        </div>
+        <div className="panel-pad stack-sm">
+          <p className="small muted prose">
+            In the informal version of this, one person does all of it. Here nobody did.
+          </p>
+          <div className="grid grid-3">
+            <Figure
+              label="Actions Pool took on its own"
+              value={String(m.coordination_actions_automated)}
+              accent
+              sub="discovery, pricing, recruiting, recovery, lock, order"
+            />
+            <Figure
+              label="Times it had to ask a person"
+              value={String(m.human_decisions_requested)}
+              sub="one question each, with the price already worked out"
+            />
+            <Figure
+              label="Commitments made without asking"
+              value={String(m.commitments_without_asking)}
+              sub="each one inside limits that member had already stored"
+            />
+          </div>
+          <p className="small muted">
+            {m.pools_recovered} order{m.pools_recovered === 1 ? "" : "s"} repaired after a
+            payment failed · {m.pickups_completed} of {m.pickups_expected} handoffs
+            confirmed against a one-time credential.
+          </p>
+        </div>
+      </section>
+
       {enablement ? (
         <section className="panel">
           <div className="panel-head">
@@ -366,25 +429,6 @@ export function CommunityView({
         </section>
       ) : null}
 
-      <section className="grid grid-3">
-        <Figure
-          label="If everyone bought alone"
-          value={money(m.estimated_retail_spend_cents)}
-          sub="recorded retail baseline"
-        />
-        <Figure
-          label="All-in through Pool"
-          value={money(m.pool_spend_cents)}
-          sub="merchandise + host + processing + Pool fee"
-        />
-        <Figure
-          label="Kept in the community"
-          value={money(m.collective_savings_cents)}
-          accent
-          sub={`${money(m.average_buyer_savings_cents)} average after every buyer-funded cost`}
-        />
-      </section>
-
       <section className="grid grid-side">
         <div className="panel">
           <div className="panel-head">
@@ -440,50 +484,23 @@ export function CommunityView({
         )}
       </section>
 
-      <section className="grid grid-2">
-        <div className="panel">
-          <div className="panel-head">
-            <h2>Where the money went</h2>
-          </div>
-          <div className="panel-pad">
-            <div className="ledger">
-              <LedgerLine label="Merchandise to the supplier" value={money(m.merchandise_cents)} />
-              <LedgerLine label="Compensation to hosts" value={money(m.host_compensation_cents)} />
-              <LedgerLine label="Card processing" value={money(m.payment_processing_cents)} />
-              <LedgerLine label="Pool's share of the saving" value={money(m.platform_fee_cents)} />
-              <LedgerLine
-                label="Recorded all-in buyer cost"
-                value={money(m.pool_spend_cents)}
-                kind="total"
-              />
-            </div>
-          </div>
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Where the money went</h2>
+          <span className="spacer" />
+          <ActorTag actor="engine" label="Every figure computed" />
         </div>
-
-        <div className="panel">
-          <div className="panel-head">
-            <h2>How much attention it cost anyone</h2>
-          </div>
-          <div className="panel-pad">
-            <div className="ledger">
-              <LedgerLine
-                label="Actions Pool took on its own"
-                value={String(m.coordination_actions_automated)}
-              />
-              <LedgerLine
-                label="Times a person was asked"
-                value={String(m.human_decisions_requested)}
-              />
-              <LedgerLine
-                label="Commitments made without asking"
-                value={String(m.commitments_without_asking)}
-              />
-              <LedgerLine label="Pools repaired after a failure" value={String(m.pools_recovered)} />
-              <LedgerLine
-                label="Handoffs confirmed"
-                value={`${m.pickups_completed} / ${m.pickups_expected}`}
-              />
-            </div>
+        <div className="panel-pad">
+          <div className="ledger">
+            <LedgerLine label="Merchandise to the supplier" value={money(m.merchandise_cents)} />
+            <LedgerLine label="Compensation to hosts" value={money(m.host_compensation_cents)} />
+            <LedgerLine label="Card processing" value={money(m.payment_processing_cents)} />
+            <LedgerLine label="Pool's share of the saving" value={money(m.platform_fee_cents)} />
+            <LedgerLine
+              label="Recorded all-in buyer cost"
+              value={money(m.pool_spend_cents)}
+              kind="total"
+            />
           </div>
         </div>
       </section>

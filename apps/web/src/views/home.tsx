@@ -1,8 +1,14 @@
 /* Home — what a member of Demo University sees when they open Pool.
  *
- * This is the product, not an explanation of the product. Everything on it is either
- * something this member has to do, something Pool has found for them, or something
- * they told Pool once and have not thought about since.
+ * This is the product, not an explanation of the product. It is composed as a short
+ * narrative rather than as an inventory of everything the system can show:
+ *
+ *   what Pool needs from me → what Pool found for me → what Pool handled on its own
+ *   → what I buy anyway → what Pool may decide for me
+ *
+ * Each section appears only when it has something to say, so the passive state is one
+ * card and the busiest state is five. Anything a member does not need in order to act
+ * — run ids, tool sequences, lifecycle internals — hangs off the pool record instead.
  *
  * Every figure comes off the server. The timing split, the buyer and membership counts,
  * the economics and the lifecycle state are all read from the same values the product
@@ -16,8 +22,9 @@ import {
   HostOpportunities,
   MemberView,
   NeedRow,
+  PoolMember,
+  PoolStatus,
   PoolView,
-  RunResult,
   api,
   money,
   pct,
@@ -25,6 +32,7 @@ import {
   shortTime,
   statusCopy,
 } from "../api";
+import { autonomyModeCopy, blockingRuleExplanation } from "../labels";
 import { ConvergenceFigure } from "../brand";
 import {
   ActorTag,
@@ -36,7 +44,6 @@ import {
   IconCheck,
   IconDot,
   Meter,
-  TracePills,
 } from "../ui";
 
 /* ------------------------------------------------------------------ greeting */
@@ -61,6 +68,9 @@ function DecisionCard({
 }) {
   const f = decision.facts as Record<string, never>;
   const isHostOffer = decision.kind === "host_offer";
+  /* The deterministic policy engine's own sentence, passed through. The rule's machine
+     name is an identifier; this is the answer to "why are you asking me?". */
+  const why = blockingRuleExplanation(decision.facts);
   return (
     <div className="panel-pad stack-sm">
       {isHostOffer ? (
@@ -80,11 +90,8 @@ function DecisionCard({
           {String(f.pickup_site)}, {String(f.travel_minutes)} minutes' walk.
         </p>
       )}
-      {f.blocking_rule ? (
-        <p className="tiny muted">
-          Pool did not decide this for you because your rule{" "}
-          <span className="mono">{String(f.blocking_rule)}</span> did not pass.
-        </p>
+      {why ? (
+        <p className="small muted">Pool asked instead of deciding: {why}.</p>
       ) : null}
       <div className="btn-row">
         <button
@@ -102,7 +109,7 @@ function DecisionCard({
           Not this time
         </button>
         {decision.expires_at ? (
-          <span className="tiny faint">answer by {shortTime(decision.expires_at)}</span>
+          <span className="small faint">answer by {shortTime(decision.expires_at)}</span>
         ) : null}
       </div>
     </div>
@@ -111,47 +118,118 @@ function DecisionCard({
 
 /* --------------------------------------------------------------- opportunity */
 
+/** What to call this pool on *this* member's home screen.
+ *
+ *  A pool is one object with one lifecycle, but it is a different thing to somebody who
+ *  is in it than to somebody who is not, and it is a different thing again once the
+ *  money has moved. The record keeps the canonical status chip; this only decides the
+ *  sentence above it. */
+function poolHeading(status: PoolStatus, mine: boolean): string {
+  if (status === "completed") return mine ? "Your order" : "The community's order";
+  if (status === "distributing") return mine ? "Ready to collect" : "Pickup is open";
+  if (status === "locked" || status === "purchase_ready" || status === "purchased") {
+    return mine ? "Your order is on the way" : "The order is on its way";
+  }
+  if (status === "failed" || status === "expired") return "This one did not go ahead";
+  return mine ? "Pool found something for you" : "Pool found overlapping demand";
+}
+
 function OpportunityCard({
   pool,
+  mine,
   onOpen,
   onShowAgent,
 }: {
   pool: PoolView;
+  /** This member's own membership row, when the server says they have one. */
+  mine: PoolMember | null;
   onOpen: () => void;
   /* Takes the pool id rather than firing a bare signal: the card is the only thing that
      knows which pool it drew, and the proof it offers has to be that pool's proof. */
   onShowAgent: (poolId: string) => void;
 }) {
   const s = statusCopy(pool.status);
-  const settled = pool.status === "completed" || pool.status === "purchased";
+  /* The member's own figures when they are in the pool, the group's otherwise. Both are
+     server strings; this only chooses which of the two to lead with.
+
+     Before a fulfiller accepts there is no exact price — their pay is part of it — but
+     there *is* a stored estimate, written when the pool was formed. Showing it labelled
+     is better than showing nothing, and better than deriving a second one here. */
+  const finalCost = mine?.final_cost_display ?? "";
+  const estimatedCost = mine?.estimated_cost_display ?? "";
+  const myCost = finalCost || estimatedCost;
+  const provisional = Boolean(mine) && !finalCost;
+  const savings = mine ? mine.savings_pct : pool.savings_pct;
+  const others = Math.max(0, pool.buyer_count - (mine ? 1 : 0));
+  const startsAt = pool.timing?.distribution_starts_at ?? "";
+
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>{settled ? "Your order" : "Pool found overlapping demand"}</h2>
+        <h2>{poolHeading(pool.status, Boolean(mine))}</h2>
         <Chip tone={s.tone}>{s.label}</Chip>
       </div>
       <div className="panel-pad stack-sm">
-        <div className="row-between" style={{ alignItems: "flex-start" }}>
+        <div className="row-between" style={{ alignItems: "flex-start", gap: 18 }}>
           <div>
             <div className="display" style={{ fontSize: 30, lineHeight: 1.1 }}>
               {pool.product_name}
             </div>
-            <p className="small muted" style={{ marginTop: 6 }}>
-              {pool.buyer_count} members · {pool.provisional_units} units · collect from{" "}
-              {pool.pickup_site}
+            {mine ? (
+              <p className="small" style={{ marginTop: 8 }}>
+                <strong>
+                  Your {mine.units} {pool.unit}
+                  {mine.units === 1 ? "" : "s"}
+                  {myCost ? ` · ${provisional ? "about " : ""}${myCost}` : ""}
+                </strong>
+                {myCost && mine.baseline_display
+                  ? ` instead of ${mine.baseline_display} buying alone`
+                  : ""}
+              </p>
+            ) : null}
+            <p className="small muted" style={{ marginTop: mine ? 4 : 6 }}>
+              {mine
+                ? `With ${others} ${others === 1 ? "other" : "others"} · collect from ${pool.pickup_site}`
+                : `${pool.buyer_count} members · ${pool.provisional_units} units · collect from ${pool.pickup_site}`}
               {pool.host ? ` · ${pool.host.display_name} is carrying it` : ""}
+              {startsAt && (pool.status === "distributing" || pool.status === "purchased")
+                ? ` · ${shortTime(startsAt)}`
+                : ""}
             </p>
           </div>
-          {pool.savings_pct ? (
+          {savings ? (
             <div className="figure-tail">
-              <div className="figure-value sm figure-accent">{pool.savings_pct}</div>
-              <div className="tiny faint">{pool.is_estimate ? "estimated" : "less than retail"}</div>
+              <div className="figure-value sm figure-accent">{savings}</div>
+              <div className="small faint">
+                {mine ? "you save" : pool.is_estimate ? "estimated" : "less than retail"}
+              </div>
             </div>
-          ) : null}
+          ) : (
+            /* Not a dash. Before a fulfiller accepts there is no exact price, because
+               their pay is part of it — so the slot names the invariant that is holding
+               rather than leaving an empty figure, and it never contradicts the
+               estimate shown on the line above it. */
+            <div className="figure-tail">
+              <div className="fact-value">{provisional ? "Not final yet" : "Not priced yet"}</div>
+              <div className="small faint" style={{ maxWidth: "20ch" }}>
+                {provisional
+                  ? "a fulfiller's pay is part of the price"
+                  : "fixed once a fulfiller accepts"}
+              </div>
+            </div>
+          )}
         </div>
 
+        {/* A pool that did not go ahead has to say so where the member is, not only on
+            its own record. The server writes the reason; this only shows it. */}
+        {pool.failure_reason ? (
+          <div className="banner banner-warn">
+            <span>{pool.failure_reason}</span>
+          </div>
+        ) : null}
+
         <Meter value={pool.provisional_units} max={pool.threshold_units} />
-        <p className="tiny muted">
+        <p className="small muted">
           {pool.provisional_units} of the {pool.threshold_units} units this supplier will
           sell.
           {pool.funded_units > 0
@@ -165,10 +243,7 @@ function OpportunityCard({
             <IconArrowRight />
           </button>
           {pool.execution_proof ? (
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => onShowAgent(pool.pool_id)}
-            >
+            <button className="btn btn-sm" onClick={() => onShowAgent(pool.pool_id)}>
               <ActorTag actor="agent" label="Technical proof for this run" />
             </button>
           ) : null}
@@ -184,12 +259,14 @@ function WatchingCard({
   memberCount,
   needCount,
   liveDiscovery,
+  region,
 }: {
   running: boolean;
   onFind: () => void;
   memberCount: number;
   needCount: number;
   liveDiscovery: boolean;
+  region: string | null;
 }) {
   return (
     <section className="panel">
@@ -208,7 +285,7 @@ function WatchingCard({
               {running ? "Coordinator running" : "Find opportunities"}
             </button>
           </div>
-          {running ? <CoordinatorWait live={liveDiscovery} /> : null}
+          {running ? <CoordinatorWait live={liveDiscovery} region={region} /> : null}
         </div>
         <div className="panel-pad" style={{ borderLeft: "1px solid var(--rule)" }}>
           <ConvergenceFigure />
@@ -223,7 +300,6 @@ function WatchingCard({
 export function Home({
   state,
   identity,
-  lastRun,
   running,
   busyDecision,
   onFind,
@@ -231,11 +307,12 @@ export function Home({
   onRespond,
   onShowAgent,
   onGoNeeds,
+  onGoCommunity,
   liveDiscovery,
+  region,
 }: {
   state: AppState;
   identity: { id: string; display_name: string };
-  lastRun: RunResult | null;
   running: boolean;
   busyDecision: string | null;
   onFind: () => void;
@@ -243,11 +320,20 @@ export function Home({
   onRespond: (id: string, approve: boolean) => void;
   onShowAgent: (poolId: string) => void;
   onGoNeeds: () => void;
+  onGoCommunity: () => void;
   liveDiscovery: boolean;
+  region: string | null;
 }) {
   const [needs, setNeeds] = useState<NeedRow[]>([]);
   const [me, setMe] = useState<MemberView | null>(null);
   const [hosting, setHosting] = useState<HostOpportunities | null>(null);
+  /** The headline pool's full record. The list on `/api/state` carries no memberships,
+   *  and this member's own allocation and price are the reason the card exists. */
+  const [detail, setDetail] = useState<PoolView | null>(null);
+
+  const pool = state.pools[0] ?? null;
+  const poolId = pool?.pool_id ?? "";
+  const poolStatus = pool?.status ?? "";
 
   useEffect(() => {
     api.needs().then((view) => setNeeds(view.needs)).catch(() => setNeeds([]));
@@ -261,12 +347,25 @@ export function Home({
     api.hostOpportunities(identity.id).then(setHosting).catch(() => setHosting(null));
   }, [identity.id, state.workspace, state.pools.length, state.decisions.length]);
 
+  useEffect(() => {
+    if (!poolId) {
+      setDetail(null);
+      return;
+    }
+    api.pool(poolId).then(setDetail).catch(() => setDetail(null));
+  }, [poolId, poolStatus, state.workspace, state.decisions.length]);
+
   const mine = needs
     .filter((n) => n.household_id === identity.id)
     .sort((a, b) => a.expected_next_need_date.localeCompare(b.expected_next_need_date));
   const forMe = state.decisions.filter((d) => d.household_id === identity.id);
   const forOthers = state.decisions.length - forMe.length;
-  const pool = state.pools[0] ?? null;
+  const myMembership =
+    detail && detail.pool_id === poolId
+      ? (detail.members ?? []).find((m) => m.household_id === identity.id) ?? null
+      : null;
+  const m = state.metrics;
+  const settled = state.pools.length > 0;
 
   return (
     <div className="stack">
@@ -327,7 +426,7 @@ export function Home({
                 <div className="figure-value sm figure-accent">
                   {String((job.earnings as Record<string, string>).total_display ?? "—")}
                 </div>
-                <div className="tiny faint">you earn</div>
+                <div className="small faint">you earn</div>
               </div>
             </div>
             <Meter value={job.picked_up} max={job.total} />
@@ -344,6 +443,7 @@ export function Home({
       {pool ? (
         <OpportunityCard
           pool={pool}
+          mine={myMembership}
           onOpen={() => onOpenPool(pool.pool_id)}
           onShowAgent={onShowAgent}
         />
@@ -354,16 +454,90 @@ export function Home({
           memberCount={state.counts.members}
           needCount={state.counts.needs}
           liveDiscovery={liveDiscovery}
+          region={region}
         />
       )}
 
       {forOthers > 0 ? (
-        <p className="tiny muted">
+        <p className="small muted">
           {forOthers} other {forOthers === 1 ? "person is" : "people are"} being asked
           something too. In the real product they answer on their own phone; here you can
           answer for them from <strong>Demo controls</strong>.
         </p>
       ) : null}
+
+      {/* One community block, not two. Before any pool exists it states the premise —
+          independent declarations, no groups. Afterwards it states the result, in the
+          two currencies this product actually saves: money, and the attention it took
+          nobody to arrange. Both halves are sums over stored rows for the whole
+          Community, so both are labelled that way. */}
+      <Block
+        title={
+          settled
+            ? `What Pool did across ${state.community?.name ?? "your community"}`
+            : `Across ${state.community?.name ?? "your community"}`
+        }
+        aside={
+          <button className="btn btn-sm btn-ghost" onClick={onGoCommunity}>
+            {settled ? "Where the money went" : "See the community"}
+            <IconArrowRight />
+          </button>
+        }
+      >
+        {settled ? (
+          <>
+            {/* The agent's work leads here, because that is what Home is missing and
+                what Community is not: Community opens on the money. The money still
+                appears, and it reads $0.00 until money actually moves. */}
+            <div className="grid grid-3">
+              <SmallStat
+                label="Things Pool did on its own"
+                value={String(m.coordination_actions_automated)}
+                accent
+              />
+              <SmallStat
+                label="Times it had to ask a person"
+                value={String(m.human_decisions_requested)}
+              />
+              <SmallStat
+                label="Kept in the community"
+                value={money(m.collective_savings_cents)}
+              />
+            </div>
+            {m.commitments_without_asking > 0 || m.pools_recovered > 0 ? (
+              <p className="small muted" style={{ marginTop: 12 }}>
+                {m.commitments_without_asking > 0
+                  ? `${m.commitments_without_asking} commitments were made without asking, each one inside the limits that member had already stored.`
+                  : ""}
+                {m.pools_recovered > 0
+                  ? ` ${m.pools_recovered} order${m.pools_recovered === 1 ? " was" : "s were"} repaired after a payment failed.`
+                  : ""}
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <div className="grid grid-3">
+            <SmallStat label="Members" value={String(state.counts.members)} />
+            <SmallStat label="Standing needs" value={String(state.counts.needs)} />
+            <SmallStat label="Groups anyone organised" value="0" />
+          </div>
+        )}
+        {state.activity.length > 0 ? (
+          <div className="rows" style={{ marginTop: 16, borderTop: "1px solid var(--rule)" }}>
+            {state.activity.slice(0, 3).map((e) => (
+              <div key={e.id} className="row" style={{ paddingInline: 0 }}>
+                <span style={{ color: "var(--moss)", display: "flex" }}>
+                  {e.kind.includes("completed") ? <IconCheck /> : <IconDot />}
+                </span>
+                <div className="row-body">
+                  <div className="small">{e.summary}</div>
+                  <div className="small faint">{shortTime(e.at)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </Block>
 
       <section className="panel">
         <div className="panel-head">
@@ -382,7 +556,7 @@ export function Home({
               <div key={n.need_id} className="row">
                 <div className="row-body">
                   <div className="row-title">{n.product_name}</div>
-                  <div className="tiny muted">
+                  <div className="small muted">
                     {n.quantity} {n.unit} · about every {n.cadence_days} days
                     {n.flexibility_days > 0
                       ? ` · happy to buy up to ${n.flexibility_days} days early if it saves money`
@@ -391,7 +565,7 @@ export function Home({
                 </div>
                 <div className="row-tail">
                   <div className="fact-value">{shortDateOnly(n.expected_next_need_date)}</div>
-                  <div className="tiny faint">next needed</div>
+                  <div className="small faint">next needed</div>
                 </div>
               </div>
             ))}
@@ -399,11 +573,22 @@ export function Home({
         )}
       </section>
 
+      {/* Collapsed, because the honest answer to "what may Pool decide for you" is a
+          single sentence and the four limits behind it are only consulted when that
+          sentence says yes. Opening it is how somebody checks the arithmetic. */}
       {me ? (
-        <Block title="What Pool may decide for you">
-          <div className="grid grid-lede">
+        <details className="block">
+          {/* The label stays a label — `.section-title` is uppercase, and a
+              seventy-character sentence set in caps is not a sentence anyone reads. The
+              answer sits beside it in ordinary case, because the answer is the point. */}
+          <summary className="autonomy-summary">
+            <span className="section-title">When Pool may act for you</span>
+            <strong>{autonomyModeCopy(me.autonomy_display.mode)}</strong>
+          </summary>
+          <div className="grid grid-lede" style={{ marginTop: 14 }}>
             <p className="small muted prose">
-              Pool acts only when every stored limit passes; otherwise it asks you.
+              Every limit below has to pass as well. When any one of them does not, Pool
+              stops and asks you instead of deciding.
             </p>
             <div className="ledger">
               <LedgerRow label="Minimum saving before it acts" value={me.autonomy_display.min_savings} />
@@ -418,45 +603,6 @@ export function Home({
                 value={me.has_payment_method ? "yes" : "no"}
               />
             </div>
-          </div>
-        </Block>
-      ) : null}
-
-      <Block title={`Around ${state.community?.name ?? "your community"}`}>
-        <div className="grid grid-3">
-          <SmallStat label="Members" value={String(state.counts.members)} />
-          <SmallStat label="Standing needs" value={String(state.counts.needs)} />
-          <SmallStat
-            label="Kept in the community"
-            value={money(state.metrics.collective_savings_cents)}
-            accent
-          />
-        </div>
-        {state.activity.length > 0 ? (
-          <div className="rows" style={{ marginTop: 16, borderTop: "1px solid var(--rule)" }}>
-            {state.activity.slice(0, 4).map((e) => (
-              <div key={e.id} className="row" style={{ paddingInline: 0 }}>
-                <span style={{ color: "var(--moss)", display: "flex" }}>
-                  {e.kind.includes("completed") ? <IconCheck /> : <IconDot />}
-                </span>
-                <div className="row-body">
-                  <div className="small">{e.summary}</div>
-                  <div className="tiny faint">{shortTime(e.at)}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </Block>
-
-      {lastRun && lastRun.tool_calls.length > 0 ? (
-        <details>
-          <summary className="tiny faint">
-            Last coordination run · {lastRun.tool_calls.length} tools · {lastRun.iterations}{" "}
-            iterations · {lastRun.termination_reason}
-          </summary>
-          <div style={{ marginTop: 8 }}>
-            <TracePills names={lastRun.tool_calls.map((t) => t.name)} />
           </div>
         </details>
       ) : null}

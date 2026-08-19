@@ -9,12 +9,14 @@ export function Pools({
   onFind,
   running,
   liveDiscovery,
+  region,
 }: {
   state: AppState;
   onOpen: (id: string) => void;
   onFind: () => void;
   running: boolean;
   liveDiscovery: boolean;
+  region: string | null;
 }) {
   return (
     <div className="stack">
@@ -36,7 +38,7 @@ export function Pools({
               {running ? <span className="spinner" /> : null}
               {running ? "Coordinator running" : "Find opportunities"}
             </button>
-            {running ? <CoordinatorWait live={liveDiscovery} /> : null}
+            {running ? <CoordinatorWait live={liveDiscovery} region={region} /> : null}
           </div>
         </section>
       ) : (

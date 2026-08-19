@@ -109,3 +109,56 @@ describe("stored execution evidence", () => {
     expect(proof.compareDocumentPosition(runAgain) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
+
+describe("what an in-flight invocation is allowed to claim", () => {
+  it("resolves no hop below the request the browser actually sent", () => {
+    const { container } = render(
+      <AgentExecution
+        config={CONFIG}
+        health={HEALTH}
+        result={null}
+        busy
+        onRun={() => {}}
+        runs={[]}
+        proof={null}
+      />,
+    );
+
+    const hops = Array.from(container.querySelectorAll(".hop"));
+    expect(hops.length).toBeGreaterThan(1);
+    // Exactly one row is resolved — the send — and nothing is dressed up as running.
+    expect(hops.filter((h) => h.classList.contains("done"))).toHaveLength(1);
+    expect(hops[0].classList.contains("done")).toBe(true);
+    expect(container.querySelectorAll(".hop .spinner")).toHaveLength(0);
+    expect(container.querySelectorAll(".hop.active")).toHaveLength(0);
+    expect(screen.getByText(/no intermediate stage is being inferred/i)).toBeTruthy();
+  });
+
+  it("leaves every hop unresolved when the invocation failed", () => {
+    const { container } = render(
+      <AgentExecution
+        config={CONFIG}
+        health={HEALTH}
+        result={{
+          ok: false,
+          live: false,
+          classification: "ambiguous_remote_execution",
+          remote_may_still_write: true,
+          allow_local_fallback: false,
+          refresh_state: true,
+          reason: "The live request did not complete.",
+        }}
+        busy={false}
+        onRun={() => {}}
+        runs={[]}
+        proof={null}
+      />,
+    );
+
+    // A failure must not guess which hop broke, and must not retroactively claim the
+    // ones before it succeeded.
+    const hops = Array.from(container.querySelectorAll(".hop"));
+    expect(hops.filter((h) => h.classList.contains("done"))).toHaveLength(1);
+    expect(screen.getByText(/The live request did not complete/)).toBeTruthy();
+  });
+});

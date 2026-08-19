@@ -61,6 +61,7 @@ function renderNeeds() {
       running={false}
       hasPool={false}
       liveDiscovery={false}
+      region={null}
     />,
   );
 }
@@ -190,5 +191,33 @@ describe("declaring a standing need", () => {
     expect(options).not.toContain("approved_products");
     expect(options).not.toContain("approved_brands");
     expect(options).toContain("exact_only");
+  });
+
+  it("keeps the authorisation constraints available, and unchanged, behind a disclosure", async () => {
+    const declare = vi.spyOn(apiModule.api, "declareNeed").mockResolvedValue(needRow());
+    renderNeeds();
+
+    await userEvent.click(await screen.findByRole("button", { name: /add a need/i }));
+
+    // Collapsed by default: setting up a restock reminder should not start with a
+    // savings floor. The summary still states the values, so nothing is hidden.
+    const advanced = document.querySelector("details.need-advanced") as HTMLDetailsElement;
+    expect(advanced).toBeTruthy();
+    expect(advanced.open).toBe(false);
+    expect(advanced.textContent).toMatch(/never below 15% saving/);
+    expect(advanced.textContent).toMatch(/never above \$40\.00/);
+
+    // Still real controls, and still reachable.
+    expect(screen.getByLabelText(/won't join below/i)).toBeTruthy();
+    expect(screen.getByLabelText(/never spend more than/i)).toBeTruthy();
+    expect(screen.getByLabelText(/substitutes/i)).toBeTruthy();
+
+    // Moving a control behind a disclosure must not change what it sends.
+    await userEvent.click(screen.getByRole("button", { name: /add this need/i }));
+    await waitFor(() => expect(declare).toHaveBeenCalled());
+    const sent = declare.mock.calls[0][0];
+    expect(sent.min_savings_pct).toBe(15);
+    expect(sent.max_spend_cents).toBe(4000);
+    expect(sent.substitution).toBe("exact_only");
   });
 });

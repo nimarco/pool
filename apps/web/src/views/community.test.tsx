@@ -97,3 +97,59 @@ describe("Community enablement", () => {
     expect(screen.queryByText(/payment captured ·/i)).toBeNull();
   });
 });
+
+describe("Community leads with both currencies", () => {
+  function renderCommunity(metrics: Partial<AppState["metrics"]> = {}) {
+    return render(
+      <CommunityView
+        state={{ ...state, metrics: { ...state.metrics, ...metrics } }}
+        map={null}
+        onOpenPool={() => {}}
+        onRespond={() => {}}
+        busyDecision={null}
+        onOperations={() => {}}
+      />,
+    );
+  }
+
+  it("puts money created and coordination avoided above the model that explains them", () => {
+    renderCommunity({
+      estimated_retail_spend_cents: 112776,
+      pool_spend_cents: 86144,
+      collective_savings_cents: 26632,
+      coordination_actions_automated: 18,
+      human_decisions_requested: 3,
+      commitments_without_asking: 8,
+      pools_recovered: 1,
+      pickups_completed: 10,
+      pickups_expected: 10,
+    });
+
+    const headings = Array.from(
+      document.querySelectorAll("h1, h2"),
+    ).map((h) => h.textContent?.trim() ?? "");
+
+    const attention = headings.indexOf("What it cost anyone in attention");
+    const enablement = headings.indexOf("How this Community enables Pool");
+    const money = headings.indexOf("Where the money went");
+
+    // The two things a Good Neighbor judge is scoring come before the responsibility
+    // model that explains how they were produced, and before the operator ledger.
+    expect(attention).toBeGreaterThan(-1);
+    expect(attention).toBeLessThan(enablement);
+    expect(enablement).toBeLessThan(money);
+
+    // Both currencies, both sums over stored rows.
+    expect(screen.getByText("$266.32")).toBeTruthy();
+    expect(screen.getByText("18")).toBeTruthy();
+    expect(screen.getByText("3")).toBeTruthy();
+    expect(screen.getByText("8")).toBeTruthy();
+    expect(screen.getByText(/counted from stored rows/i)).toBeTruthy();
+  });
+
+  it("does not describe coordination it has not done", () => {
+    renderCommunity();
+    expect(screen.getByText(/0 of 0 handoffs confirmed/i)).toBeTruthy();
+    expect(screen.queryByText(/no institutional partnership.*endorsed/i)).toBeNull();
+  });
+});

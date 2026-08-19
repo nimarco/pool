@@ -28,3 +28,42 @@ export function groupSavingsCaption(pool: {
     ? `about ${amount} across the group, estimated using provisional host compensation`
     : `${amount} across the group, after merchandise, host compensation, card processing and Pool's fee`;
 }
+
+/** Why Pool asked a person instead of deciding for them.
+ *
+ * The decision payload carries both the machine name of the rule that blocked the
+ * commitment (`blocking_rule`) and the deterministic policy engine's own sentence about
+ * it inside `policy_checks`. Only the second one means anything to the person being
+ * asked: "autonomy_mode" is an identifier, "member is on Ask Me — commitment requires
+ * explicit approval" is the answer to their question.
+ *
+ * Returned verbatim. The UI frames it, and never paraphrases it — a rewritten policy
+ * explanation is a second source of truth about an authorisation decision.
+ */
+export function blockingRuleExplanation(facts: Record<string, unknown>): string {
+  const rule = facts.blocking_rule;
+  if (typeof rule !== "string" || !rule) return "";
+  const checks = facts.policy_checks;
+  if (!Array.isArray(checks)) return "";
+  for (const entry of checks) {
+    if (entry && typeof entry === "object") {
+      const check = entry as { rule?: unknown; detail?: unknown };
+      if (check.rule === rule && typeof check.detail === "string" && check.detail) {
+        return check.detail;
+      }
+    }
+  }
+  return "";
+}
+
+/** How Pool describes its own standing permission over one member's money.
+ *
+ * `autonomy_display.mode` is the master switch: every other stored limit is only
+ * consulted when it is `smart_join`. Showing the limits without showing this was the
+ * interface claiming Pool might act when the stored policy said it never would.
+ */
+export function autonomyModeCopy(mode: string): string {
+  if (mode === "smart_join") return "Yes — when every limit below passes";
+  if (mode === "ask_me") return "No — Pool always asks first";
+  return mode.replace(/_/g, " ");
+}

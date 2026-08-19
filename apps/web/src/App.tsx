@@ -6,7 +6,6 @@ import {
   LiveAgentResult,
   MapData,
   PoolView,
-  RunResult,
   ScenarioResult,
   api,
   resetWorkspaceId,
@@ -67,7 +66,6 @@ export default function App() {
   const [running, setRunning] = useState(false);
   const [scenario, setScenario] = useState<ScenarioResult | null>(null);
   const [scenarioMs, setScenarioMs] = useState<number | null>(null);
-  const [lastRun, setLastRun] = useState<RunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [demoConfig, setDemoConfig] = useState<DemoConfig | null>(null);
   const [live, setLive] = useState<LiveAgentResult | null>(null);
@@ -171,10 +169,6 @@ export default function App() {
     try {
       const result = await api.liveAgent();
       setLive(result);
-      // The deployed run's own record, so the product's "what just happened" surfaces
-      // describe the run that actually happened rather than the last local one. `notes`
-      // is the one field the runtime does not return; it is empty, not invented.
-      if (result.ok) setLastRun({ ...result.run, notes: [] });
       // A failure is not proof that nothing changed: the invocation can time out after
       // the agent has written to the shared workspace. The server says when to re-read.
       if (result.refresh_state) await refresh();
@@ -228,8 +222,7 @@ export default function App() {
           return;
         }
       }
-      const run = await api.run("manual_scan");
-      setLastRun(run);
+      await api.run("manual_scan");
       await refresh();
       setView("home");
       window.scrollTo({ top: 0 });
@@ -298,7 +291,6 @@ export default function App() {
       await api.reset();
       setScenario(null);
       setScenarioMs(null);
-      setLastRun(null);
       setOpenPool(null);
       setLive(null);
       await refresh();
@@ -492,7 +484,6 @@ export default function App() {
             <Home
               state={state}
               identity={identity}
-              lastRun={lastRun}
               running={running}
               busyDecision={busyDecision}
               onFind={findOpportunities}
@@ -504,7 +495,9 @@ export default function App() {
                 void openPoolDetail(poolId, { tab: "activity", deep: "execution" })
               }
               onGoNeeds={() => navigate("needs")}
+              onGoCommunity={() => navigate("community")}
               liveDiscovery={Boolean(demoConfig?.live_agent_available)}
+              region={demoConfig?.region ?? null}
             />
           ) : null}
 
@@ -515,6 +508,7 @@ export default function App() {
               onFind={findOpportunities}
               running={running}
               liveDiscovery={Boolean(demoConfig?.live_agent_available)}
+              region={demoConfig?.region ?? null}
             />
           ) : null}
 
@@ -526,6 +520,7 @@ export default function App() {
               running={running}
               hasPool={(state?.pools.length ?? 0) > 0}
               liveDiscovery={Boolean(demoConfig?.live_agent_available)}
+              region={demoConfig?.region ?? null}
             />
           ) : null}
 

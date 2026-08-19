@@ -19,7 +19,6 @@
  * second one is evidence.
  */
 
-import { useEffect, useRef, useState } from "react";
 import {
   DemoConfig,
   Health,
@@ -30,6 +29,7 @@ import {
 import {
   ActorTag,
   Chip,
+  Elapsed,
   Empty,
   ExecutionPath,
   Fact,
@@ -65,20 +65,19 @@ function HopChain({ state }: { state: "idle" | "flight" | "done" | "failed" }) {
       {HOPS.map((hop, i) => {
         // Only the first hop's completion is observable from here: the browser knows it
         // sent. Everything below it is where the request *is*, not something this page
-        // watched happen — so in flight they read as pending, and they resolve only when
+        // watched happen — so in flight they stay unresolved, and they resolve only when
         // a real answer comes back through all of them. A failure leaves them unresolved
         // rather than guessing which hop broke; the reason underneath says what AWS
         // reported.
+        //
+        // No row is ever marked in-progress. A spinner on a hop asserts "this stage is
+        // executing now", and a browser cannot observe that about anything below the
+        // request it dispatched. The motion belongs to the elapsed clock and the button,
+        // both of which are timing a request this page really did send (AGENTS.md §8).
         const done = state === "done" || (state !== "idle" && i === 0);
-        const active = state === "flight" && i > 0;
         return (
-          <div
-            key={`${i}-${hop.name}`}
-            className={`hop${done ? " done" : ""}${active ? " active" : ""}`}
-          >
-            <span className="hop-mark">
-              {done ? <IconCheck /> : active ? <span className="spinner" /> : <IconDot />}
-            </span>
+          <div key={`${i}-${hop.name}`} className={`hop${done ? " done" : ""}`}>
+            <span className="hop-mark">{done ? <IconCheck /> : <IconDot />}</span>
             <span className="hop-name">{hop.name}</span>
             <span className="hop-note">{hop.note}</span>
           </div>
@@ -86,24 +85,6 @@ function HopChain({ state }: { state: "idle" | "flight" | "done" | "failed" }) {
       })}
     </div>
   );
-}
-
-/* ------------------------------------------------------------------- elapsed */
-
-function Elapsed({ running }: { running: boolean }) {
-  const [ms, setMs] = useState(0);
-  const start = useRef(0);
-
-  useEffect(() => {
-    if (!running) return undefined;
-    start.current = performance.now();
-    setMs(0);
-    const id = window.setInterval(() => setMs(performance.now() - start.current), 100);
-    return () => window.clearInterval(id);
-  }, [running]);
-
-  if (!running) return null;
-  return <span className="elapsed">{(ms / 1000).toFixed(1)}s elapsed</span>;
 }
 
 /* -------------------------------------------------------------- tool catalogue */

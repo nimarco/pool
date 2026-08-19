@@ -724,8 +724,17 @@ export function money(cents: number): string {
   return `${sign}$${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
 }
 
+/** Basis points as a percentage, formatted exactly the way the server formats them.
+ *
+ *  `bps_to_pct_str` in `pool/domain/money.py` truncates the tenth digit; `toFixed(1)`
+ *  rounds it. Same stored number, two formatters, and a decision card and a pool card
+ *  sitting six lines apart on Home disagreeing about one purchase by 0.1 point. The
+ *  arithmetic is the server's either way — this only stops the client from rendering
+ *  it differently. */
 export function pct(bps: number): string {
-  return `${(bps / 100).toFixed(1)}%`;
+  const sign = bps < 0 ? "-" : "";
+  const abs = Math.abs(bps);
+  return `${sign}${Math.floor(abs / 100)}.${Math.floor((abs % 100) / 10)}%`;
 }
 
 const STATUS_COPY: Record<PoolStatus, { label: string; tone: "ok" | "warn" | "info" | "stop" }> = {

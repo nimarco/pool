@@ -117,10 +117,10 @@ top-right control switches account, holds the demo controls, and explains what i
 
 | | |
 | --- | --- |
-| **Home** | Your restocks, anything Pool needs to ask you, and what it has found for the community |
+| **Home** | A short narrative, and only the parts of it that currently apply: what Pool needs you to answer, what it found *for you* — your units, your price, your pickup — what it handled across the Community without asking anyone, what you buy anyway, and, folded away, whether Pool may commit your money at all |
 | **Pools** | The orders people are making together, and the full record of each one |
-| **Needs** | What you buy anyway. Declare one, change one, or stop buying something — the product's primary action, and the only thing a member ever has to do. Underneath: the community's standing needs, none of which are organised into anything |
-| **Community** | Demo University: the map, what Pool did, and where the money went |
+| **Needs** | What you buy anyway. Declare one, change one, or stop buying something — the product's primary action, and the only thing a member ever has to do. Product, quantity, cadence and how many days early you'd tolerate; the authorisation limits sit behind one disclosure with their values stated on it. Underneath: the community's standing needs, none of which are organised into anything |
+| **Community** | Demo University, in the two currencies Pool saves: money created, then coordination avoided. Then the model behind them, the map, and where the money went |
 
 A pool's own record carries the depth: **Overview**, **People**, **Economics**,
 **Fulfilment**, and an **Activity** tab holding the audit trail, the agent's tool

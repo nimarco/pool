@@ -149,27 +149,87 @@ export function Chip({
   return <span className={cls}>{children}</span>;
 }
 
+/* ------------------------------------------------------------------ elapsed */
+
+/** A real clock, started when the caller says the request went out.
+ *
+ *  This is the one piece of progress information a browser genuinely has during a
+ *  remote invocation, so it is the one piece shown. Lives here rather than in the
+ *  technical view because the Product's wait needs it too, and two copies of a timer
+ *  would be two chances to disagree about what "elapsed" means. */
+export function Elapsed({ running }: { running: boolean }) {
+  const [ms, setMs] = React.useState(0);
+  const start = React.useRef(0);
+
+  React.useEffect(() => {
+    if (!running) return undefined;
+    start.current = performance.now();
+    setMs(0);
+    const id = window.setInterval(() => setMs(performance.now() - start.current), 100);
+    return () => window.clearInterval(id);
+  }, [running]);
+
+  if (!running) return null;
+  return <span className="elapsed">{(ms / 1000).toFixed(1)}s elapsed</span>;
+}
+
 /** A truthful wait state for one bounded coordinator invocation.
  *
- * There is deliberately no staged progress bar: until the response arrives the browser
- * knows only that the request is in flight. The label names AgentCore only when the
- * server advertised the live capability that the product action will use. */
-export function CoordinatorWait({ live }: { live: boolean }) {
+ * The honesty rule shapes everything here. A browser making one HTTPS request can
+ * observe exactly two things: that it sent, and when it got an answer. So the three
+ * rows below are not a progress bar with three steps — they are *one observed fact*,
+ * *one unobservable interval named for what it contains*, and *one thing that has not
+ * happened yet*. Only the first is ever marked complete before a response arrives, and
+ * the caption says so on screen rather than in a comment nobody reads.
+ *
+ * The deployment's own architecture (eight hops, IAM posture, bounds) is real evidence
+ * and it lives on the technical view. Putting it on a member's home screen would make
+ * the consumer product into an operations console for the fifteen seconds that matter
+ * most (AGENTS.md §1 "build it like a real product"), so what appears here is the
+ * shortest true description of where the request went. */
+export function CoordinatorWait({
+  live,
+  region,
+}: {
+  live: boolean;
+  region?: string | null;
+}) {
   return (
-    <div className="banner" role="status" aria-live="polite">
-      <IconCloud />
-      <span>
+    <div className="wait" role="status" aria-live="polite">
+      <div className="wait-head">
+        <IconCloud />
         <strong>
-          Running Pool&apos;s coordinator
+          Pool&apos;s coordinator is running
           {live ? " on Amazon Bedrock AgentCore" : " in this workspace"}
         </strong>
-        <br />
-        <span className="tiny">
-          {live
-            ? "One bounded run is working against this demo session’s DynamoDB workspace."
-            : "One bounded run is checking the Community’s standing needs."}
+        <span className="spacer" />
+        <Elapsed running />
+      </div>
+      <p className="wait-lede">
+        {live
+          ? `One bounded run${region ? `, in ${region},` : ""} against this session’s own DynamoDB workspace.`
+          : "One bounded run is reading the Community’s standing needs."}
+      </p>
+      <div className="wait-steps">
+        <span className="wait-step done">
+          <IconCheck size={14} />
+          Request sent from your browser
         </span>
-      </span>
+        <span className="wait-step pending">
+          <span className="spinner" />
+          {live
+            ? "AgentCore → Strands → Pool’s typed tools → DynamoDB"
+            : "Strands loop → Pool’s typed tools → the store"}
+        </span>
+        <span className="wait-step">
+          <IconDot size={14} />
+          An answer, and whatever it wrote
+        </span>
+      </div>
+      <p className="wait-note">
+        Only the first line is something this page watched happen. Nothing in between is
+        animated as if it were.
+      </p>
     </div>
   );
 }

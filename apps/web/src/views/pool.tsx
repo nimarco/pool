@@ -216,7 +216,9 @@ export function PoolRecord({
         <PeopleTab pool={pool} identity={identity} onRefresh={onRefresh} />
       ) : null}
       {tab === "economics" ? <EconomicsTab pool={pool} /> : null}
-      {tab === "fulfilment" ? <FulfilmentTab pool={pool} onRefresh={onRefresh} /> : null}
+      {tab === "fulfilment" ? (
+        <FulfilmentTab pool={pool} identity={identity} onRefresh={onRefresh} />
+      ) : null}
       {tab === "activity" ? (
         <ActivityTab
           pool={pool}
@@ -628,7 +630,15 @@ function EconomicsTab({ pool }: { pool: PoolView }) {
 
 /* ---------------------------------------------------------------- fulfilment */
 
-function FulfilmentTab({ pool, onRefresh }: { pool: PoolView; onRefresh: () => void }) {
+function FulfilmentTab({
+  pool,
+  identity,
+  onRefresh,
+}: {
+  pool: PoolView;
+  identity: { id: string; display_name: string };
+  onRefresh: () => void;
+}) {
   const [checklist, setChecklist] = useState<Checklist | null>(null);
   const [credential, setCredential] = useState<Credential | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -649,7 +659,14 @@ function FulfilmentTab({ pool, onRefresh }: { pool: PoolView; onRefresh: () => v
     );
   }
 
-  const first = (pool.members ?? []).find((m) => m.state !== "authorization_failed");
+  /* Whose credential this issues. A member looking at their own order should be able to
+     get *their* code; falling through to whoever sorts first was an operator affordance
+     wearing a member's screen. Anyone not in the pool still sees the mechanism, which is
+     what the host console and the drawer exercise for everybody else. */
+  const collectable = (pool.members ?? []).filter((m) => m.state !== "authorization_failed");
+  const subject =
+    collectable.find((m) => m.household_id === identity.id) ?? collectable[0] ?? undefined;
+  const isMine = Boolean(subject && subject.household_id === identity.id);
 
   return (
     <div className="stack">
@@ -698,13 +715,13 @@ function FulfilmentTab({ pool, onRefresh }: { pool: PoolView; onRefresh: () => v
               Every handoff is confirmed; the server now refuses fresh credentials.
             </p>
           ) : null}
-          {first ? (
+          {subject ? (
             <div className="btn-row">
               <button
                 className="btn btn-sm"
                 onClick={async () => {
                   try {
-                    setCredential(await api.issueCredential(pool.pool_id, first.household_id));
+                    setCredential(await api.issueCredential(pool.pool_id, subject.household_id));
                     setError(null);
                     onRefresh();
                   } catch (err) {
@@ -713,7 +730,7 @@ function FulfilmentTab({ pool, onRefresh }: { pool: PoolView; onRefresh: () => v
                   }
                 }}
               >
-                Issue {first.display_name}'s code
+                {isMine ? "Show my code" : `Issue ${subject.display_name}'s code`}
               </button>
             </div>
           ) : null}

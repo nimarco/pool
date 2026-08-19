@@ -1,7 +1,9 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DemoConfig, Health, PoolView } from "../api";
+import { DemoConfig, Health, PoolMember, PoolView } from "../api";
+import * as apiModule from "../api";
 import { PoolRecord } from "./pool";
 
 const proof = {
@@ -102,10 +104,39 @@ const health: Health = {
   agent_tools: [],
 };
 
-function renderPool(entry?: { tab?: string; deep?: string }) {
+const MEMBERS: PoolMember[] = [
+  {
+    household_id: "hh_first",
+    display_name: "Ada O.",
+    units: 3,
+    state: "locked",
+    path: "smart_join",
+    estimated_cost_display: "$107.90",
+    final_cost_display: "$107.61",
+    baseline_display: "$140.97",
+    savings_pct: "23.6%",
+    travel_minutes: 2,
+    is_host: false,
+  },
+  {
+    household_id: "hh_member",
+    display_name: "Rosa N.",
+    units: 2,
+    state: "locked",
+    path: "human_approved",
+    estimated_cost_display: "$71.93",
+    final_cost_display: "$71.83",
+    baseline_display: "$93.98",
+    savings_pct: "23.5%",
+    travel_minutes: 3,
+    is_host: false,
+  },
+];
+
+function renderPool(entry?: { tab?: string; deep?: string }, overrides: Partial<PoolView> = {}) {
   return render(
     <PoolRecord
-      pool={pool}
+      pool={{ ...pool, ...overrides }}
       runs={[proof.run]}
       activity={[]}
       identity={{ id: "hh_member", display_name: "Rosa N." }}
@@ -158,5 +189,49 @@ describe("pool evidence and financial language", () => {
     expect(screen.getByText(/earns/i)).toBeTruthy();
     expect(screen.getByText(/recorded on the simulated transaction/i)).toBeTruthy();
     expect(screen.queryByText(/Paid \$82\.00/)).toBeNull();
+  });
+});
+
+describe("pickup credentials belong to the person asking for one", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(apiModule.api, "checklist").mockRejectedValue(new Error("not needed"));
+  });
+
+  it("offers the signed-in member their own code, not whoever sorts first", async () => {
+    const issue = vi
+      .spyOn(apiModule.api, "issueCredential")
+      .mockResolvedValue({
+        pool_id: "pool_exact",
+        household_id: "hh_member",
+        code: "AAAA1111",
+        token: "tok",
+        replaced_previous: false,
+      });
+
+    renderPool({ tab: "fulfilment" }, { status: "distributing", members: MEMBERS });
+
+    const button = await screen.findByRole("button", { name: /show my code/i });
+    // Ada sorts first in the member list; the credential still has to be Rosa's.
+    expect(screen.queryByRole("button", { name: /Ada O\.'s code/ })).toBeNull();
+    await userEvent.click(button);
+
+    await waitFor(() => expect(issue).toHaveBeenCalled());
+    expect(issue.mock.calls[0][1]).toBe("hh_member");
+  });
+
+  it("still names the subject when the viewer is not one of the buyers", async () => {
+    vi.spyOn(apiModule.api, "issueCredential").mockResolvedValue({
+      pool_id: "pool_exact",
+      household_id: "hh_first",
+      code: "AAAA1111",
+      token: "tok",
+      replaced_previous: false,
+    });
+
+    renderPool({ tab: "fulfilment" }, { status: "distributing", members: [MEMBERS[0]] });
+
+    expect(await screen.findByRole("button", { name: /Issue Ada O\.'s code/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /show my code/i })).toBeNull();
   });
 });

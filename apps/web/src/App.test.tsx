@@ -107,8 +107,36 @@ function memberView(workspace: string) {
       declared_product_name: "",
     },
     other_pool_ids: [],
-    standing_demand: [],
-    needs_outlook: [],
+    /* A declaration that is *not* in the pool above, so Home's standing-demand card has
+       something to render. It is the whole of what the shell fetches on this member's
+       behalf, which is what makes it the right probe for whether that fetch happened. */
+    standing_demand: [
+      {
+        need_id: "need_coffee",
+        product_id: "prod_coffee_beans",
+        product_name: "Whole bean coffee, 2 lb",
+        unit: "bag",
+        my_units: 3,
+        compatible_members: 4,
+        compatible_units: 12,
+        minimum_units: 18,
+        has_supplier: true,
+        sourceable_product_id: "",
+        sourceable_product_name: "",
+      },
+    ],
+    needs_outlook: [
+      {
+        need_id: "need_coffee",
+        product_id: "prod_coffee_beans",
+        product_name: "Whole bean coffee, 2 lb",
+        state: "short",
+        reason: "Not enough of it yet.",
+        pool_id: "",
+        units_needed: 18,
+        units_available: 12,
+      },
+    ],
     community_membership: null,
     autonomy_display: {
       mode: "ask_me",
@@ -119,6 +147,34 @@ function memberView(workspace: string) {
     },
     has_payment_method: true,
     host_profile: null,
+  };
+}
+
+/** The declaration the standing-demand row and the outlook both hang off. */
+function coffeeNeed() {
+  return {
+    need_id: "need_coffee",
+    household_id: "hh_navarro",
+    household_name: "Marco",
+    product_id: "prod_coffee_beans",
+    product_name: "Whole bean coffee, 2 lb",
+    unit: "bag",
+    brand: "Ridgeline",
+    variant: "medium roast",
+    category: "beverage",
+    image_ref: "",
+    quantity: 3,
+    cadence_days: 30,
+    expected_next_need_date: "2099-01-01",
+    earliest_purchase_date: "2098-12-25",
+    latest_purchase_date: "2099-01-01",
+    flexibility_days: 7,
+    routine_lead_days: 7,
+    min_savings_pct: 18,
+    max_spend_display: "$90.00",
+    max_spend_cents: 9000,
+    substitution: "exact_only",
+    active: true,
   };
 }
 
@@ -147,7 +203,7 @@ function stubFetch() {
         purchase: "simulated",
       });
     }
-    if (path === "/api/needs") return body({ needs: [], products: [], limits: {} });
+    if (path === "/api/needs") return body({ needs: [coffeeNeed()], products: [], limits: {} });
     if (path.startsWith("/api/members/")) return body(memberView(workspace));
     if (path === "/api/hosting/opportunities") {
       return body({ household_id: "hh_navarro", offers: [], accepted: [] });
@@ -248,5 +304,80 @@ describe("showcase mode is a different world, not a different screen", () => {
         (r.workspace === showcase && r.path === `/api/pools/${VISITOR_POOL}`),
     );
     expect(crossed).toEqual([]);
+  });
+});
+
+/* Ordinary navigation is a change of screen, not a change of world.
+ *
+ * `member` is the shell's own state: the server's answer to "which of this is mine",
+ * fetched once per identity-and-partition and consumed by both Home and Needs. Leaving
+ * showcase mode has to drop it, because it describes a partition the app is no longer
+ * addressing. Walking from Home to Needs and back does not.
+ *
+ * It used to drop it either way. `navigate` called `forgetWorkspaceState` on every view
+ * change, and the effect that refetches is keyed on the identity, the workspace, and
+ * three counts off `/api/state` — none of which move when a member changes screens. So
+ * the state was cleared and never re-asked, and a member who came back to Home found
+ * their standing demand, their outlook and `Run Pool now` simply gone until they
+ * reloaded the page.
+ */
+describe("moving between screens keeps the member's own state", () => {
+  async function home() {
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
+    return user;
+  }
+
+  it("still shows standing demand and Run Pool now after Home → Needs → Home", async () => {
+    const user = await home();
+    expect(await screen.findByRole("button", { name: /Run Pool now/ })).toBeTruthy();
+    expect(screen.getByText(/What you buy, and what is around it/)).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Needs" }));
+    await waitFor(() => expect(screen.queryByText(/Good \w+, Marco/)).toBeNull());
+    await user.click(screen.getByRole("button", { name: "Home" }));
+
+    await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
+    expect(await screen.findByRole("button", { name: /Run Pool now/ })).toBeTruthy();
+    expect(screen.getByText(/What you buy, and what is around it/)).toBeTruthy();
+    // The reason the card is there: the member read is what carries it.
+    expect(screen.getByText(/independently declared something this could be bought for/))
+      .toBeTruthy();
+  });
+
+  it("still renders the current outlook on Needs after Home → Needs → Home → Needs", async () => {
+    const user = await home();
+
+    await user.click(screen.getByRole("button", { name: "Needs" }));
+    expect(await screen.findByText(/Not enough of it yet/)).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Home" }));
+    await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
+
+    await user.click(screen.getByRole("button", { name: "Needs" }));
+    expect(await screen.findByText(/Not enough of it yet/)).toBeTruthy();
+  });
+
+  /* The other half of the same rule: leaving the showcase *is* a change of world, so
+     the state read from it must not survive the trip. */
+  it("drops the showcase's member state on the way out", async () => {
+    const user = await openShowcaseFromTheDrawer();
+    const visitor = visitorWorkspace();
+    const showcase = `${visitor}-showcase`;
+    await waitFor(() => expect(addressed().some((r) => r.workspace === showcase)).toBe(true));
+
+    const before = addressed().length;
+    await user.click(screen.getByRole("button", { name: "Leave showcase" }));
+    await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
+
+    // The member read is re-asked, and asked of the visitor's own partition.
+    await waitFor(() =>
+      expect(
+        addressed()
+          .slice(before)
+          .some((r) => r.workspace === visitor && r.path.startsWith("/api/members/")),
+      ).toBe(true),
+    );
   });
 });

@@ -182,12 +182,22 @@ export default function App() {
    *
    *  Their state is not "restored" so much as never touched: the scripted lifecycle
    *  writes a separate partition, so stepping out is a matter of addressing the right
-   *  one again. */
+   *  one again.
+   *
+   *  **Dropping that state is conditional, and has to be.** `forgetWorkspaceState`
+   *  answers "we are about to address a different partition", not "the screen changed".
+   *  It used to run on every view change, and the effect that refetches `member` is
+   *  keyed on the identity, the workspace and three counts off `/api/state` — none of
+   *  which move when a member walks from Home to Needs. So the state was cleared and
+   *  then never re-asked: their standing demand, their current outlook and **Run Pool
+   *  now** disappeared until the page was reloaded. `showcaseTo` already guarded the
+   *  same call this way on the way in; this is the same rule on the way out. */
   const navigate = useCallback(
     (next: View) => {
+      const leaving = api.inShowcaseScope();
       api.setShowcaseScope(false);
       setShowcase(null);
-      forgetWorkspaceState();
+      if (leaving) forgetWorkspaceState();
       setView(next);
       setPanelOpen(false);
       void refresh();

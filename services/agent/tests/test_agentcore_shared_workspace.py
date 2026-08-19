@@ -211,6 +211,25 @@ def test_an_unknown_live_action_never_reaches_aws(deployment):
     assert deployment.client.calls == []
 
 
+def test_the_paid_action_refuses_a_showcase_workspace(deployment):
+    """The live allowance is counted per workspace, and a session can address two.
+
+    Its own partition and its showcase are both valid workspaces, so permitting the paid
+    action on the second would hand every visitor twice the live budget it is supposed to
+    have — for a replay that is deterministic and offline and proves nothing Bedrock
+    could add (AGENTS.md §3.3).
+    """
+    showcase = public_demo.showcase_workspace(WS)
+    deployment.get("/api/state", ws=showcase)
+
+    body = deployment.post("/api/demo/agentcore", ws=showcase).json()
+
+    assert body["ok"] is False
+    assert body["classification"] == public_demo.LIVE_CLASS_SAFE_PRE_EXECUTION
+    assert body["remote_may_still_write"] is False
+    assert deployment.client.calls == [], "a refused run must not reach AWS"
+
+
 def test_what_the_deployed_run_established_is_readable_from_the_other_side(deployment):
     """The reason evaluation evidence is a stored row rather than an in-process object.
 

@@ -215,6 +215,30 @@ NO_DECLARATIONS_PROMPT = (
 )
 
 
+#: How much of a product name may reach the run instruction. A catalogue name is short;
+#: this bounds the one field on this path a *member* authors.
+MAX_PROMPT_PRODUCT_NAME = 60
+
+
+def _prompt_safe(name: str) -> str:
+    """A product name, reduced to something that can only ever read as a product name.
+
+    Almost every name here comes from the bundled catalogue. One does not:
+    ``/api/products/custom`` lets a member record something Pool has never heard of, and
+    that string would otherwise be interpolated straight into the run instruction — which
+    is the one place this build promises the browser cannot write (§4). Newlines are the
+    part that matters: a name spanning lines can be shaped like a new instruction, and a
+    name that cannot contain one cannot be.
+
+    Not a security boundary on its own, and not treated as one. The model reaches the
+    world only through typed tools bound to this caller's own workspace, no tool takes a
+    workspace argument, and the run is bounded either way. This keeps the *claim* true
+    rather than nearly true.
+    """
+    flattened = " ".join(str(name).split())
+    return flattened[:MAX_PROMPT_PRODUCT_NAME] or "an unnamed product"
+
+
 def prompt_for(objective: RunObjective) -> str:
     """The run instruction, built by the server from the objective.
 
@@ -226,7 +250,7 @@ def prompt_for(objective: RunObjective) -> str:
     if not objective.needs:
         return NO_DECLARATIONS_PROMPT
     listed = "; ".join(
-        f"{n.quantity} × {n.product_name}" for n in objective.needs
+        f"{n.quantity} × {_prompt_safe(n.product_name)}" for n in objective.needs
     )
     return (
         "A member of this community has asked Pool to look at what they buy. They "

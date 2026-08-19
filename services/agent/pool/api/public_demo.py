@@ -1199,6 +1199,27 @@ def install(app: FastAPI, guard: PublicDemoGuard, observe: Any = None) -> None:
             raise HTTPException(
                 400, f"unknown action: {action}. Allowed: {sorted(LIVE_TRIGGERS)}"
             )
+        # The paid action never runs against a showcase partition.
+        #
+        # Two reasons, and the second is the one that matters. The showcase is a
+        # deterministic offline replay — invoking Bedrock inside it would prove nothing
+        # it does not already prove for free. And the live allowance is counted per
+        # workspace: since a session can address both its own partition and its
+        # showcase, permitting this here would hand every visitor two live budgets
+        # instead of one, which is a paid resource (AGENTS.md §3.3).
+        if is_showcase_workspace(ws):
+            return {
+                "ok": False,
+                "live": False,
+                "classification": LIVE_CLASS_SAFE_PRE_EXECUTION,
+                "remote_may_still_write": False,
+                "allow_local_fallback": False,
+                "refresh_state": False,
+                "reason": (
+                    "The scripted showcase replays a recorded lifecycle deterministically "
+                    "and does not invoke the deployed agent. Leave showcase mode to run it."
+                ),
+            }
         if not settings.live_available:
             return {
                 "ok": False,

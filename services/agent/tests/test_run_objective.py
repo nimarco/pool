@@ -277,3 +277,88 @@ def test_the_member_resolved_is_the_seeded_consumer_account(client):
     assert household == CONSUMER_HOUSEHOLD
     ctx = api.ctx_for("demo")
     assert obj.for_trigger(ctx, api.COMMUNITY_ID, "member_scan").household_id == CONSUMER_HOUSEHOLD
+
+
+# ------------------------------------------------- what the run says it did
+
+
+def _run_summaries(client) -> list[str]:
+    return [
+        event["summary"]
+        for event in client.get("/api/state").json()["activity"]
+        if event["kind"] == "agent_run"
+    ]
+
+
+def test_a_member_no_op_is_not_described_as_a_background_scan(client):
+    """The member pressed a button. Saying a background scan ran is two lies in one line.
+
+    Home states plainly that nothing is scheduled in this demo account and that the
+    coordinator starts when you press the button. A run summary that then claims a
+    background scan contradicts the screen it appears on, and credits Pool with a sweep
+    of the whole Community it did not perform (AGENTS.md §8).
+    """
+    _onboard(client)
+    run = _member_run(client)
+    assert run["outcome"] == "no_action"
+
+    summaries = _run_summaries(client)
+    assert summaries, "a run should log what it did"
+    assert not any("background scan" in s for s in summaries), summaries
+    assert any("standing declarations" in s for s in summaries), summaries
+
+
+def test_the_no_op_summary_names_the_trigger_that_caused_it(client):
+    """Both halves of the same rule, on the branch the defect was on.
+
+    Tested directly because the seeded Community always has a worthwhile whey order in
+    it, so a *community* scan against this fixture forms a pool and never reaches the
+    no-action line at all. The distinction being pinned is the one input that decides
+    the sentence, and the branch reads nothing else off the run.
+
+    The fix is truthfulness, not the removal of a word: the pool-day scan genuinely has
+    no subject, nobody asked for it, and it does sweep the whole Community.
+    """
+    from pool.agent.coordinator import _run_summary
+    from pool.domain.models import AgentRun, RunOutcome
+
+    def summary(kind: str) -> str:
+        run = AgentRun(
+            id="run_test",
+            trigger="member_scan" if kind == obj.MEMBER else "scheduled_scan",
+            model_id="offline",
+            model_provider="offline",
+            started_at="2026-01-01T00:00:00Z",
+            outcome=RunOutcome.NO_ACTION,
+            objective_kind=kind,
+        )
+        return _run_summary(run, None)
+
+    assert "background scan" in summary(obj.COMMUNITY)
+    assert "background scan" not in summary(obj.MEMBER)
+    assert "standing declarations" in summary(obj.MEMBER)
+
+
+def test_a_community_scan_never_borrows_the_members_words(client):
+    """The converse of the member case: a scan nobody triggered must not describe itself
+    as having answered somebody's question."""
+    _onboard(client)
+    _community_run(client)
+    summaries = _run_summaries(client)
+    assert summaries
+    assert not any("this member's" in s for s in summaries), summaries
+
+
+def test_a_member_run_that_forms_a_pool_says_whose_question_it_answered(client):
+    """The same distinction on the successful path: a member-anchored run that forms an
+    order did not "scan the community" either — it investigated the declarations of the
+    one person who asked."""
+    household = _onboard(client)
+    _declare(client, household, "prod_whey_vanilla", quantity=2)
+
+    run = _member_run(client)
+    assert run["outcome"] == "pool_created", run
+
+    formed = [s for s in _run_summaries(client) if "formed" in s]
+    assert formed, _run_summaries(client)
+    assert not any("scanned the community" in s for s in formed), formed

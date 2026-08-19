@@ -27,7 +27,7 @@ from ..domain.models import ActivityEvent, AgentRun, RunOutcome, iso, new_id, ut
 from ..services.context import PoolContext
 from .bounds import BoundedRun, BoundExceeded, RunTelemetry
 from .evidence import build as build_evidence
-from .objective import for_trigger, prompt_for
+from .objective import MEMBER, for_trigger, prompt_for
 from .tools import ToolContext, build_tools
 
 logger = logging.getLogger(__name__)
@@ -350,10 +350,30 @@ def _find_bound_exceeded(exc: BaseException) -> BoundExceeded | None:
 
 
 def _run_summary(record: AgentRun, ctx: ToolContext) -> str:
+    """One line describing what this run did, in the words of the trigger that caused it.
+
+    A run has two genuinely different subjects (``agent/objective.py``), and the summary
+    has to name the right one. A **community** run is the pool-day scan: nobody asked
+    for it, it sweeps the whole Community, and "background scan" is exactly what it was.
+    A **member** run happened because somebody pressed **Run Pool now** in their own
+    product, about their own declarations, three seconds ago.
+
+    Calling the second one a background scan was false twice over: it credits Pool with
+    a sweep it did not perform, and it does it on the one screen that states plainly
+    that nothing is scheduled in this demo — so the member is told a background job ran
+    immediately after being told none exists (AGENTS.md §8).
+    """
+    member = record.objective_kind == MEMBER
     if record.outcome == RunOutcome.POOL_CREATED:
+        formed = len(ctx.created_pool_ids)
         return (
-            f"Pool scanned the community and formed {len(ctx.created_pool_ids)} "
+            f"Pool checked this member's standing declarations and formed {formed} "
             "candidate pool nobody had to organise"
+            if member
+            else (
+                f"Pool scanned the community and formed {formed} "
+                "candidate pool nobody had to organise"
+            )
         )
     if record.outcome == RunOutcome.POOL_RECOVERED:
         return f"Pool repaired {len(ctx.recovered_pool_ids)} pool after losing funded demand"
@@ -363,4 +383,9 @@ def _run_summary(record: AgentRun, ctx: ToolContext) -> str:
         return f"Run stopped by a safety bound ({record.termination_reason})"
     if record.outcome == RunOutcome.ERROR:
         return "Run failed with an error"
-    return "Pool ran a background scan and found nothing worth acting on"
+    return (
+        "Pool checked this member's standing declarations and found nothing worth "
+        "acting on yet"
+        if member
+        else "Pool ran a background scan and found nothing worth acting on"
+    )

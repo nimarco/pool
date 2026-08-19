@@ -4303,3 +4303,798 @@ which is what the "as it stands" edit is for.
 **Relevant commits / files**
 `apps/web/src/views/onboarding.tsx` · `apps/web/src/api.ts` · `apps/web/src/brand.tsx` ·
 `services/agent/pool/api/{app.py,public_demo.py}` · `services/agent/tests/test_public_demo.py`
+
+---
+
+### #0040 — [2026-08-19] — "I declared coffee. Pool showed me whey."
+`[ARCHITECTURE]` `[FRONTEND]` `[AGENT]` `[DEMO]`
+
+**Goal / user intent**
+A reported bug: a member onboarded, declared coffee as their one standing need, pressed
+**Run Pool now**, and Home came back with a whey protein opportunity. Trace it, then audit
+the whole class it belongs to — every way the product a member declares, the state the
+coordinator evaluates, and the result shown back can come apart.
+
+**Starting state**
+`/api/agent/run` already ran the real `PoolCoordinator` against the caller's own workspace.
+No scripted helper was on that path, nothing reseeded, and no hidden need was injected.
+
+**Decision**
+The coordinator was right and the interface was wrong. Home selected `state.pools[0]` —
+the oldest pool in the workspace, whoever it belonged to. Fix the selection at the
+*server*, from stored lineage, and make "nothing for you" a first-class answer with a
+reason attached rather than an absence.
+
+**Why**
+The reproduction, end to end, from a cold workspace:
+
+1. `seed()` writes twelve whey declarations across twelve synthetic households and six
+   coffee ones across six. Neither is scripted for the visitor; both are the fixture.
+2. The member declares coffee. The stored need is correct — `product_id` is exactly what
+   the search returned, and it stays that way for the rest of the run.
+3. `Run Pool now` → `POST /api/agent/run` → `PoolCoordinator.run()`. `list_latent_demand`
+   ranks unserved demand by `(-member_count, -unserved_units, product_id)`, so whey (12
+   members) is first, energy drinks (8) second, coffee (6) third. The system prompt says
+   *form at most one pool per run*. The planner evaluates the first opportunity, finds it
+   viable, forms it, and stops. It never reaches coffee — correctly, by its own rules.
+4. `list_pools` sorts by `(created_at, id)`. Home read `[0]`.
+
+So the member was shown a real pool, formed from real declarations, by a run they
+triggered — and none of it was theirs. Nothing lied; nothing was traceable to them either.
+
+Rejected: making the interactive run prioritise the triggering member's products. It would
+have papered over the selection bug, given the community coordinator a favourite
+household, and required a payload change to the deployed AgentCore contract that could not
+be verified without spending on a deploy. The coordinator did not need changing.
+
+**Implementation** — implemented and tested.
+
+`services/agent/pool/services/relevance.py` (new) is the single place that decides what is
+whose. A pool is a member's when it is in their Community, a `Membership` row joins them
+to it, that membership is in a live state (`LIVE_PARTICIPATION_STATES` — declining or
+withdrawing ends it; a *failed authorisation* does not, because that member is exactly who
+needs telling), and the membership's `need_id` resolves to a declaration that household
+actually holds. Lineage was already in the model; it was simply never read.
+
+`need_outlook()` answers the other half. For each standing declaration with no pool, it
+runs the same `evaluate_opportunity` the agent's own tool calls, across every public
+pickup site and across substitute-group products Pool can actually source, and returns one
+of: `in_pool` · `ready` · `short` · `not_in_round` · `not_worth_it` · `not_matched` ·
+`no_supply` · `retired`. So Home says *"Not enough of it yet: 12 bags declared nearby, and
+the supplier will not sell fewer than 18"*, not *"nothing yet"*.
+
+`GET /api/members/{id}` now carries `opportunity` (or `null`) and `needs_outlook`. Home
+reads those instead of the pool list. No new routes, so the published endpoint counts hold.
+
+Four more defects the audit turned up, all in the same class:
+
+- **Retired declarations were still poolable.** `evaluate_opportunity` and `recover_pool`
+  passed the whole need table into `find_candidates`, which never checked `active`. A
+  member who retired a need could still be counted toward a supplier minimum and still
+  have their card authorised. Fixed in the matcher, where "who is even eligible" belongs,
+  as a rejection reason rather than a silent skip.
+- **A need already in a pool could be re-pointed at another product**, leaving the record
+  saying somebody joined a whey order because they buy coffee while the units, the price
+  and the authorisation stayed exactly as they were. `amend_need` now refuses that one
+  field; everything else stays amendable.
+- **An authorised substitute was undisclosed.** Declare Gold Standard chocolate with
+  "same brand, another flavour is fine" and the pool buys Optimum Nutrition vanilla — the
+  card led with that name and that photograph and said nothing. It now names what you
+  declared.
+- **Home listed retired declarations** under "what you buy anyway", and Needs counted them
+  in "N independent declarations across the community".
+
+`OpportunityAssessment` gained `matched_units`, `minimum_units` and `reason_code`. The
+shortfall was only ever inside a prose sentence, and anything that has to *branch* on why
+an opportunity failed should not be matching on wording that has been reworded twice.
+`LEFT_PARTICIPATION_STATES` replaces four inline copies of the same set.
+
+The outlook is not free: it runs `evaluate_opportunity` once per sourceable product per
+public pickup site, and each of those re-reads the need, household, product, offer and
+membership tables. One member view measured **86 repository reads** against 21 for
+`/api/state`. Two fixes, both kept: a read memo scoped to that one read-only pass (86 →
+**18**), and moving ownership of the member view up into the shell so Home and Needs share
+one request instead of making two. The memo is only sound because the pass writes nothing,
+which is now pinned by a test rather than assumed.
+
+**AWS / external services touched**
+None. Everything ran on the in-memory repository, the deterministic planner and the
+deterministic router.
+
+**Cost-relevant activity**
+None. No Bedrock, no AgentCore invocation, no deploy. The audit was deliberately run
+against the offline coordinator, which is what it exists for.
+
+**Agent behavior**
+Unchanged, and that is the finding. Offline planner, five iterations, tools
+`list_latent_demand → evaluate_pool_economics → create_candidate_pool →
+request_host_acceptance`. Same before and after the fix, for the coffee member and the
+whey member alike. What changed is which of its results is presented as whose.
+
+**Validation**
+Reproduced first, from a cold workspace through the real endpoints: coffee declared,
+whey pool formed, `opportunity` null, coffee need untouched. Then a product matrix, each
+from its own fresh workspace, run through onboarding → declare → Run Pool now:
+
+| Declared | Stored product | Coordinator | Shown to the member |
+| --- | --- | --- | --- |
+| `vanilla whey` → Optimum Nutrition, 2 tubs | `prod_whey_vanilla` | forms the whey pool | **their** pool, 2 tubs, $71.92 vs $93.98 |
+| same, 3 tubs | `prod_whey_vanilla` | forms it without them (case boundary) | `not_in_round`, honestly |
+| `coffee` → Death Wish Dark Roast | `prod_0810063343040` | forms the whey pool | `not_matched` — exact-only, different product |
+| same, category substitution allowed | `prod_0810063343040` | forms the whey pool | `short` — 12 bags of 18 |
+| Paper towels | `prod_paper_towels` | forms the whey pool | `short` — 5 of 48 |
+| Laundry pods | `prod_detergent_pods` | forms the whey pool | `not_worth_it` — clears the minimum, saves nothing |
+| Custom "Cardamom pods, 500g" | custom row | forms the whey pool | `no_supply` |
+| Gold Standard chocolate, substitution on | `prod_whey_chocolate` | forms the vanilla pool | their pool, **named as a substitute** |
+
+21 new API-level tests in `test_consumer_relevance.py`, plus 7 new Home tests. Full
+`make qa`: ruff clean, **815** Python, **79** web, **75** infrastructure, typecheck clean,
+production build, secret scan clean. Canonical showcase re-proved unchanged: 10 buyers,
+11 membership rows, 1 retained authorisation failure, 1 exact replacement, 24 funded /
+24 purchased / 24 pickup units, 2 cases, no surplus, $861.44 all-in against $1127.76
+retail, $266.32 saved, 23.6%.
+
+Visually walked on desktop and at 390 px: cold Home, post-run no-op, the community banner,
+the whey success, the substitute disclosure, a browser refresh, and stepping into a
+synthetic participant and back out.
+
+**Failures / dead ends**
+The first `need_outlook` reported "ready" for demand that a pool had already consumed — it
+evaluated without the `pooled_household_ids` exclusion the coordinator's own tools apply.
+It also attributed rejections by `household_id`, so a member holding two declarations saw
+their paper-towel need explained by their coffee one; keyed on `need_id` now. And the
+outlook list was first rendered with `.ledger`, whose values are tabular numerals set
+`nowrap` — one full sentence pushed the card off a 390 px screen.
+
+**What we learned**
+The bug was not in the agent, the tools, the economics or the store. Every one of those
+was right. It was one array index in a React component, and the reason it survived is that
+the interface was answering a question — *whose is this?* — that only the server could
+answer. Lineage existed in the data model the whole time (`Membership.need_id`); nothing
+read it. A "no result" state with a reason attached is also worth more than a successful
+one that belongs to somebody else, and it fell straight out of running the same
+deterministic evaluator at read time instead of inventing a second explanation.
+
+**Article fodder**
+Article 3 — the honesty boundary is not only *act vs. ask*; it is also *whose result is
+this*. A community-scoped agent and a personally-scoped interface disagree by default, and
+that disagreement is invisible in every test that only checks the agent.
+
+**Evidence worth preserving**
+Before: Home leading with "Pool found overlapping demand — 100% Whey Protein" for a member
+who declared coffee. After: "Nothing worth coordinating yet · POOL CHECKED", the coffee
+sentence, and "Pool is also coordinating 100% Whey Protein for other members here. You are
+not in it."
+
+**Relevant commits / files**
+`services/agent/pool/services/relevance.py` (new) · `services/agent/pool/services/{coordination,needs}.py` ·
+`services/agent/pool/domain/{models,matching}.py` · `services/agent/pool/api/app.py` ·
+`services/agent/tests/test_consumer_relevance.py` (new) · `apps/web/src/views/{home,needs,demo-panel}.tsx` ·
+`apps/web/src/{App.tsx,api.ts,styles.css}` · `apps/web/src/views/home.test.tsx`
+
+---
+
+### #0041 — [2026-08-19] — Whose question is the button asking?
+`[product]` `[agent]` `[domain]` `[demo]`
+
+**Goal / user intent**
+#0040 stopped a member being *shown* somebody else's pool. It left the coordinator itself
+community-scoped, so the causal chain was still wrong one step earlier: a member could declare
+coffee, press **Run Pool now**, and the run would go and form a whey order for ten other students.
+Home then said, correctly, that their coffee had not formed and that whey was being coordinated
+elsewhere — honest, and still not what the button means.
+
+**Starting state**
+One trigger. `PoolCoordinator.run()` took a free-text `instruction`, the public API substituted a
+server-owned prompt for it, and every prompt said the same thing: scan the community. Nothing in
+the system could express "answer *this* member's declarations".
+
+Two further defects turned up while measuring, and neither was cosmetic.
+
+**Decision — 1. Two triggers, one coordinator**
+`member_scan` versus `manual_scan`/`scheduled_scan`. The trigger is the only thing on the wire; the
+*objective* is derived server-side inside the coordinator from stored state
+(`agent/objective.py`), so the local API, the AgentCore runtime and the test suite all produce the
+same semantics from the same tiny payload.
+
+A member objective is that household's active declarations that no live pool is already serving,
+soonest first, capped at three — and capped at three for a measured reason, not taste: one listing,
+one evaluation each, one pool, one host offer and one closing turn is seven model calls against a
+bound of eight. A fourth would sit exactly on the safety net.
+
+There is no household field anywhere in the request. This build has no authentication, so "the
+member" resolves to the one household a real person uses — the same server-owned resolution
+`/api/onboarding/payment-method` already relies on. A caller cannot point a run at somebody else
+because there is nowhere to name them, and the prompt the model receives names products and
+quantities and never a person.
+
+The anchor sets the *objective*, never the *answer*. A member run investigates each declaration it
+took on and then acts on at most one; "nothing worth coordinating yet" remains a successful
+outcome.
+
+**Decision — 2. Discovery and the matcher had drifted apart**
+`list_latent_demand` bucketed declarations by substitute *group* and reported the whole bucket as
+the demand behind the group's largest product. The matcher then applied each member's own
+substitution policy and rejected some of them. A visitor who declared Death Wish coffee
+**exact-only** was therefore counted toward the actionable demand for Pike Place — an opportunity
+that shrank the moment it was costed.
+
+The listing now counts only declarations `domain.substitution` would let that product serve,
+evaluated at the most favourable bulk price any tier offers (so a declaration excluded here is
+excluded by every tier). Category interest survives under its own name — `group_interest_units` —
+because "people who buy some coffee" and "people whose standing authority this order can use" are
+two different numbers. One implementation, in `services/discovery.py`; the compatibility function
+is the matcher's own.
+
+The same rule decides what a member run may *act* on: `sourceable_targets_for_need` filters the
+substitute-group search through that member's authority, so an exact-only declaration for an
+unsourceable brand no longer forms a pool for six other people because two categories coincided.
+
+**Decision — 3. `FORMATION_RADIUS_KM` was a duplicate authority, and the wrong one**
+This was measured before it was touched. `Community.radius_km` — declared 2.5 km for Demo
+University — was read **nowhere in the codebase**. Meanwhile a module constant of 1.6 km decided
+who could form a pool, and the constants' own docstring claimed both radii were "bounded by the
+Community radius". Nothing bounded them; `RECOVERY_RADIUS_KM = 4.0` searched well outside a 2.5 km
+Community.
+
+The consequences were worse than a stale number. A verified member sitting in the 1.6–2.5 km
+annulus was inside their own Community and permanently undiscoverable — reachable only by a
+recovery. And the cut *overrode each member's own declared travel authority in the stricter
+direction, silently*: somebody who said they would walk 24 minutes was excluded by a rule they
+never agreed to and never saw, while the rule they did state was only ever a soft prompt.
+
+So the asymmetry survives and the authority moves. Formation searches the Community's own radius;
+recovery widens past it by a stated multiple (1.6 × 2.5 = 4.0 km, exactly today's value, now
+derived rather than declared twice). The 1.6 km figure is kept under the name it actually earns —
+`WALKABLE_PICKUP_KM` — and used *only* to rank candidate pickup sites, which excludes nobody. The
+per-member travel gate is `max_travel_minutes`, evaluated against real routed time by Smart Join,
+where it always belonged.
+
+**Why not simply raise the constant**
+Because "the audit said 2.5 makes the demo better" is not a domain reason, and a number chosen to
+make a demo work is exactly the kind of thing this project exists not to ship. The defensible
+statement is about authority, not distance: coarse geography is a search bound and a ranking
+preference; the boundary Pool coordinates inside is the Community, and the person who decides how
+far they will walk is the member.
+
+**Implementation**
+`agent/objective.py` (new), `services/discovery.py` (new), `agent/coordinator.py`,
+`agent/offline_model.py`, `agent/tools.py`, `agent/projection.py`, `services/coordination.py`,
+`services/relevance.py`, `api/public_demo.py`, `agentcore_app.py`. Status: **tested**.
+
+**AWS / external services touched**
+None. No deployment, no Bedrock or AgentCore invocation, no paid call of any kind.
+
+**Cost-relevant activity**
+None. Every run in this entry used the offline deterministic planner. A member-triggered run is
+*cheaper* than the scan it replaces on the consumer path: it evaluates at most three products
+instead of ranking the whole community, and the iteration and tool-call bounds are unchanged.
+
+**Agent behavior**
+Offline deterministic planner · same twelve tools · a member run calls
+`list_latent_demand` → `evaluate_pool_economics` per objective → `create_candidate_pool` →
+`request_host_acceptance`, five iterations · a member with no unserved declaration terminates on
+`record_no_action` with that as the recorded reason. The community scan is unchanged and still
+short-circuits on the first viable assessment, because the pool-day scan owes the best available
+action rather than a verdict per product.
+
+**Validation**
+844 backend tests pass (815 before; 29 new across `test_run_objective.py`, `test_discovery.py`,
+`test_seed_outcomes.py`). Measured, not assumed:
+
+- The canonical showcase is **bit-for-bit unchanged** by the radius correction. Same pickup site
+  (North Hall lobby), the same eleven membership rows, the same replacement household
+  (`hh_amadi`), 24 funded / 24 purchased / 2 cases / 0 surplus, $861.44 all-in against $1127.76
+  retail, $266.32 saved at 23.6%, host pay $44.68, Pool fee $32.70, processing $28.06, and the same
+  8-members/18-units due-now against 2-members/6-units pulled forward.
+- The seeded world's outcome taxonomy went from one reachable class to four. Before: whey viable,
+  everything else refused on geography. After: whey (23.5%), coffee (17.2%) and energy drinks
+  (14.7%) each viable on their own members; detergent refused on **economics** at −11.2% with 12
+  units against a 12-unit minimum; paper towels refused on the supplier minimum at 4 against 48;
+  chocolate whey refused for having no bulk quote at all.
+
+**Failures / dead ends**
+Three tests were passing for the wrong reason and are now fixed rather than deleted.
+`test_a_product_whose_bulk_price_does_not_beat_retail_forms_no_pool` asserted only that no pool
+formed — at 1.6 km the detergent demand never cleared its minimum, so the economics branch the test
+is *named after* had never once executed. Two AgentCore workspace tests asserted "exactly one pool
+exists" as a proxy for idempotency; with a richer world a second community scan legitimately finds
+the next opportunity, so they now assert what they meant — no duplicate for the same product, site
+and distribution day.
+
+An earlier draft let a member run form a pool for any product in their declaration's substitute
+group. It passed its tests and was wrong: it re-created the reported bug one level down, forming an
+order the member could never join because a category matched.
+
+**What we learned**
+A field nothing reads is not dead weight, it is a second opinion nobody is consulting — and the one
+the code *was* using turned out to be the one nobody could see. The give-away was the docstring:
+it described a constraint ("bounded by the Community radius") that had never been implemented, and
+had been quoted forward into the article notes.
+
+The other lesson is about test naming. A test called "bulk price does not beat retail" that asserts
+`viable is False` will pass for years on a fixture where the price is never reached. Assert the
+reason code, not the absence.
+
+**Article fodder**
+Article 1 — the difference between a system that is *honest* and a system that answers the question
+you asked. Article 3 — where a coarse safety constraint quietly outranks a preference the user
+actually stated, and why that is an autonomy bug rather than a tuning one.
+
+**Evidence worth preserving**
+The before/after outcome table for the seeded world. The canonical reconciliation being identical
+across the radius change is the load-bearing measurement: it is what makes "this was a correctness
+fix, not a demo tuning" checkable rather than asserted.
+
+---
+
+### #0042 — [2026-08-19] — Write down what the run found, before the process disappears
+`[agent]` `[observability]` `[product]`
+
+**Goal / user intent**
+Make a run explainable to the person who triggered it, from facts the system genuinely
+established — not from a recomputation, and not from prose a model was asked to write.
+
+**Starting state**
+A run computed a great deal and kept almost none of it. `evaluate_pool_economics` produced a
+complete `OpportunityAssessment` — matched units against the supplier minimum, which bulk tier won
+and what lost to it, the case fit, the per-declaration rejection reasons, the landed economics —
+and the model was shown a projection of it while the authoritative copy went onto
+`ToolContext.full_results`, an in-process object. Locally the API could reach it through
+`coordinator.last_tool_context`. After an AgentCore run it is in a microVM that no longer exists,
+so the deployed path had no way to explain anything. What survived either way was a count and a
+180-character tool summary.
+
+Recomputing afterwards was the obvious alternative and is a different claim: current state and
+"what this run found" diverge the moment anything else changes, and presenting the first as the
+second is retrospective omniscience (§8).
+
+**Decision — a stored evaluation record**
+`RunEvaluation`, one row per (run, product) the run actually costed, written through the repository
+at the end of the coordinator's own execution. Both entrypoints produce identical rows because both
+run the same coordinator.
+
+Written *after* the try/except deliberately: a run stopped by a safety bound still did real work
+first, and what it established is exactly what somebody will want to read. Written from the
+coordinator rather than from inside the tool so `evaluate_pool_economics` stays provably
+side-effect-free — the member outlook calls the same evaluator, and `test_a_member_view_writes_
+nothing` pins that a member opening their home screen changes no row.
+
+Bounded on every axis: a fixed field set, at most 12 evaluations per run, 6 supplier tiers, 8
+per-declaration verdicts, and the reason string capped at 300 characters.
+
+`AgentRun` also gained what the run was *asked* — objective kind, the anchoring household, and the
+declarations it took on, deferred, and skipped as already-served. Without that, "investigated and
+declined" and "never investigated" are indistinguishable after the fact, and a member with more
+declarations than one run takes on cannot be told which is which.
+
+**Privacy**
+An evaluation touches every declaration in the Community. `need_verdicts` carries only the
+declarations the run was asked about — the member's own — so one member's report cannot become a
+readout of why six neighbours were excluded. No names, no contact details, no payment references,
+no model text. A test asserts all of that against the seeded households rather than trusting the
+field list.
+
+**A real defect found on the way in**
+The earlier pass flagged as a risk that `OpportunityAssessment.rejected` might reflect the last
+bulk tier evaluated rather than the winning one. It did. `empty.rejected` was assigned inside the
+tier loop, so a *viable* assessment came back explaining itself with a *losing* tier's rejections —
+and the tiers genuinely disagree, because a member's per-unit price ceiling is applied against each
+tier's own price.
+
+Reproduced: whey has a $31.50/unit tier with a 24-unit minimum and a $39.80/unit tier with a
+12-unit one, evaluated in that order. A member whose substitution rule carries a ceiling between
+them is compatible with the cheap tier that wins and rejected by the expensive one that is
+evaluated last — so the assessment both selected and rejected the same declaration. Nothing
+downstream noticed, because nothing downstream had ever read the list.
+
+`matched_units` and `minimum_units` had a quieter version of the same problem: max-across-tiers
+paired with min-across-tiers, which is two true numbers describing a supplier offer nobody made.
+Both now come from one tier — the winner, or when nothing priced, the one that came closest.
+
+**Implementation**
+`domain/models.py` (`RunEvaluation`, objective fields on `AgentRun`), `agent/evidence.py` (new),
+`services/run_report.py` (new), `services/coordination.py` (per-tier attribution and
+`offers_considered`), `adapters/repository.py` (both stores), `api/app.py`
+(`GET /api/runs/{id}/report`), `api/public_demo.py` (allowlist). Status: **tested**.
+
+**AWS / external services touched**
+None.
+
+**Cost-relevant activity**
+None, and none added: the report is deterministic rendering of stored values. No model call is made
+to explain a run, which was the tempting and wrong design — it would have put a language model
+between a member and a price.
+
+**Validation**
+864 backend tests pass (846 before). The attribution fix was verified adversarially: reinstating
+the old last-tier assignment makes `test_rejections_belong_to_the_offer_that_won_not_the_one_
+evaluated_last` fail with the member appearing in both the selected and rejected sets, which is the
+bug exactly.
+
+**Failures / dead ends**
+First attempt wrote the evaluation from inside `evaluate_pool_economics`, which would have meant
+relabelling it from `read` to `record` in the tool surface. The label would have been honest — the
+kind's own definition is "an evaluation it wants to be able to show its reasoning from" — but it
+would have cost the strongest guarantee in the tool surface, that the read tools are provably inert
+under a whole-workspace snapshot. Not worth it for a write the coordinator can do once at the end.
+
+A structural slip worth recording: inserting `RunEvaluation` immediately after `AgentRun.from_dict`
+silently made `AgentRun.duration_ms` a method of the *new* class. 132 tests failed with
+`AttributeError: 'AgentRun' object has no attribute 'duration_ms'`, which is the good outcome — a
+property quietly landing on the wrong class is exactly the kind of thing a type checker over
+dataclasses does not catch.
+
+**What we learned**
+"The risk exists in principle" and "the risk is real" are worth ten minutes apart. The rejected-list
+attribution had been flagged as a *possible* problem and dismissed as low-impact because nothing
+read the field. Building something that reads it turned a latent inconsistency into a visible one —
+which is the argument for building the explanation feature at all: an unexamined intermediate result
+is where wrong answers accumulate quietly.
+
+**Article fodder**
+Article 2 — the process boundary is the design constraint. Explaining an agent run is easy while
+you are still in the process that ran it, and that is precisely the case that does not survive
+deployment. Article 3 — the difference between persisting deterministic evaluations and persisting
+model reasoning, and why only one of them is safe to show a user.
+
+**Evidence worth preserving**
+The two-tier whey reproduction. It is a small, complete example of an agent system producing
+confident, plausible, wrong evidence, caught only because something finally consumed it.
+
+---
+
+### #0043 — [2026-08-19] — The scripted proof gets its own community
+`[product]` `[demo]` `[architecture]`
+
+**Goal / user intent**
+Stop the canonical showcase writing into the visitor's account.
+
+**Starting state**
+`/api/demo/scenario` ran in the caller's own workspace. `run_showcase` opens by declaring the
+flagship whey need for `CONSUMER_HOUSEHOLD` — which *is* the household a real visitor uses — so a
+person who had declared coffee, pressed "run the full lifecycle" to see how a pool works, and gone
+back to Needs found Pool believing they also buy whey protein.
+
+The endpoint had already been patched once around this: reseeding wipes the partition, and that
+included the account somebody had just set up, so the reseed was skipped whenever the visitor had
+onboarded. That fixed the symptom (their account surviving) by causing the disease (the canonical
+declaration landing in it), and it made the interface's own copy false — "this starts the community
+over" could not be true of a replay that deliberately did not start anything over.
+
+Labelling the row `declared_by: scenario` was the third patch. A provenance tag on a row that
+should not exist is not consent.
+
+**Decision**
+Separate the state, not the labels. The showcase runs in `f"{workspace}-showcase"`, derived
+server-side from the caller's session. Two properties come free from the hyphen: a
+browser-generated session id can never contain one, so a visitor's own partition and their showcase
+partition can never collide; and reaching somebody else's showcase still requires guessing their
+session id, which is the property already protecting `/api/state`.
+
+The replay therefore always reseeds, unconditionally, which is what makes the copy literally true.
+
+On the client, showcase mode became a *world* rather than a screen: one module-level scope flag in
+`api.ts` decides which partition every request addresses. Entering showcase points everything at
+the showcase partition; leaving points it back. The visitor's state is not "restored" — it was
+never touched.
+
+**Why not thread a workspace through every call**
+Considered and rejected. The pool drawer is shared between the product and the showcase and carries
+real actions — approve a decision, redeem a credential, open distribution. Threading a workspace
+argument through each of those is the version of this change that silently misses one, and the one
+it misses writes a member's real account from inside a scripted replay. A single scope has exactly
+one thing to get right.
+
+**Also moved**
+`Run the full lifecycle` is gone from the ordinary consumer pool record. It replays a whole
+community from scratch, and offering that from inside a member's own order is an invitation to
+"start over" that reads as being about their order. It remains in Showcase and in Demo controls,
+where the surrounding copy says what it does.
+
+The demo panel's own entry point was reading `state.pools[0]` to decide where to land — the oldest
+pool in whatever workspace happened to be loaded, which after this change is the visitor's own and
+has nothing to do with the replay.
+
+**Implementation**
+`api/app.py`, `api/public_demo.py` (`SHOWCASE_SUFFIX`, `showcase_workspace`, widened
+`PUBLIC_WORKSPACE_RE`), `apps/web/src/api.ts` (scope), `App.tsx`, `views/pool.tsx`, `views/run.tsx`,
+`views/demo-panel.tsx`. Status: **tested**.
+
+**AWS / external services touched**
+None. The showcase partition inherits the same 24 h TTL as every other demo workspace, so it
+sweeps itself; no new table, no new resource.
+
+**Cost-relevant activity**
+Marginally *lower* contention: the lease the scenario takes is now on the partition it actually
+rewrites, so a visitor's own coordinator run and the scripted replay no longer block each other.
+
+**Validation**
+868 backend tests pass, 79 web tests pass. Four new tests pin the boundary: the visitor's consumer
+record, needs list, pools and personal opportunity are all identical across a full scripted
+lifecycle; the showcase workspace holds the canonical pool; a second replay produces a *different*
+pool id and leaves exactly one pool, proving the reseed is real; and a showcase workspace is only
+addressable by knowing the session it belongs to.
+
+**Failures / dead ends**
+Eleven existing tests used the scenario as a convenient way to populate a workspace and then read
+`/api/state`. They now read an empty one, which is the isolation working — but two of them,
+`test_workspaces_are_isolated` and `test_two_anonymous_judges_cannot_see_each_others_demo`, would
+have gone on *passing* while proving nothing, because they compared two workspaces neither of which
+was written any more. Both were rewritten to drive a real coordinator run instead.
+
+**What we learned**
+Three patches in a row around one endpoint, each fixing the previous one's side effect, is the
+signal that the shape is wrong rather than the code. The tell here was the copy: the interface had
+to be softened twice to stay honest about what the button did, and text bending around a behaviour
+is usually cheaper to notice than the behaviour itself.
+
+**Article fodder**
+Article 1 — a demo that mutates the user's own account to prove itself is not a demo of the
+product, and the fix is architectural rather than editorial.
+
+**Evidence worth preserving**
+The before/after of the demo panel copy. The old version had to explain that the replay would
+declare a whey need on your account and that you could retire it afterwards; the new one does not,
+because it does not.
+
+---
+
+### #0044 — [2026-08-19] — Making the sourceable product findable, without lying about the rest
+`[product]` `[demo]`
+
+**Goal / user intent**
+Close the gap between "the catalogue is real" and "Pool can actually buy this", without
+compromising either.
+
+**Starting state**
+Typing `coffee` returned eight real coffees ranked purely by how well the word matched, and the one
+Pool holds a synthetic verified bulk quote for was not among them. "Death Wish Coffee Co" outscored
+it because the noun appears in its *brand*; "Folgers Coffee" outscored it because the phrase appears
+in its label. A member picked one, kept `exact_only`, and Pool correctly reported that nothing could
+be done.
+
+Every step of that is honest and the whole path is a dead end. Worse, it made the demo's actual
+sourcing capability invisible unless you knew to type the magic phrase.
+
+**Decision**
+A ranking and a label, not a rewrite.
+
+`catalog.search` takes the set of products this deployment holds a usable bulk quote for and gives
+them a bounded boost — deliberately larger than a brand-word coincidence and smaller than a full
+phrase match, so `coffee` leads with the sourceable one while `death wish` and `folgers coffee`
+return exactly what was asked for. The boost cannot invent a match: a product the query does not
+hit scores zero and is excluded before any of this applies, so it changes the *order* of things a
+member could legitimately have meant and never what they get if they keep typing.
+
+The set comes from the same `offers_for` the evaluator consults, so nothing can be marked sourceable
+that an opportunity assessment could not price. No offer is fabricated for a catalogue product; the
+separation between real product identity and synthetic supplier economics is the thing this
+constraint exists to protect (§41, §48).
+
+Every result carries `sourceable`, and a card that has it says so — because a ranking a member
+cannot see the reason for is just a mysterious ranking.
+
+**The substitution control moved out of the advanced drawer**
+This is the change with the most product in it. Substitution decides whose demand may combine with
+whose; for a product Pool cannot source it is the *only* setting that could change the answer. It
+was behind a collapsed "fine-tune" disclosure, so a member never saw a choice they had already
+effectively made. It now sits in the main form, phrased as a question, and when the chosen product
+is unsourceable it says so plainly and adds that widening it is their call rather than Pool's.
+
+**What was deliberately not done**
+Auto-converting an unsourceable choice into the neighbouring product Pool can buy; silently
+widening `exact_only`; special-casing the string `coffee`; fabricating a bulk offer for a catalogue
+entry. Each would have made the demo smoother by making the product dishonest — and the first two
+are Pool deciding what somebody buys, which is the one decision it must never take.
+
+**Implementation**
+`data/catalog.py` (`SOURCEABLE_BOOST`, `search(sourceable_ids=…)`, `view(sourceable=…)`),
+`api/app.py` (`_sourceable_product_ids`), `product-search.tsx`, `views/needs.tsx`, `styles.css`.
+Status: **tested**.
+
+**AWS / external services touched**
+None. Still a bundled snapshot ranked by a pure function — no network on the keystroke path, no
+model, no per-character cost.
+
+**Validation**
+881 backend tests pass, 81 web tests pass. Thirteen new tests in `test_sourceability.py`: every
+sourceable product leads its own generic query (`coffee`, `whey`, `energy drink`, `laundry`,
+`paper towels`); a named brand still wins; the boost cannot make an unrelated product appear; the
+flag agrees with `offers_for` for every result of five different queries; and no catalogue entry
+outside the seeded six has an offer at all.
+
+**Failures / dead ends**
+Two existing tests had been quietly relying on `coffee` *not* resolving to the sourceable product —
+the way they expressed "pick something Pool cannot source" was "take the first result". They now say
+what they mean and ask for the first *unsourceable* one, which is a better test and only possible
+because the flag exists.
+
+**What we learned**
+The dead end was not a bug in any one component. Search was correct, substitution was correct, and
+the evaluator was correct; the product failed at the seam between them, where nobody had written
+down that "we can buy this" is a fact worth showing. Seams are where honest components combine into
+a misleading experience.
+
+**Article fodder**
+Article 1 — the difference between a demo that works when you type the memorised phrase and a
+product that works when you type what you buy.
+
+---
+
+### #0045 — [2026-08-19] — Home stops answering the question it is supposed to ask
+`[product]` `[ux]` `[agent]`
+
+**Goal / user intent**
+Make the consumer surface tell the truth in both directions: pose the question before a run, and
+answer it afterwards from what the run actually established.
+
+**Starting state — the answer key**
+The pre-run slot drew `ConvergenceFigure`: thirteen restock dates converging on one pool day, eight
+already due, eighteen units, two pulled forward, twenty-four. Every number is real and derived from
+the seed — and drawing it *before* the run tells a judge the answer and then invites them to watch
+Pool produce it. It also hardcodes the canonical scenario into a screen that a member with a coffee
+declaration would also see.
+
+The other half was the outlook. `needs_outlook` is a genuinely good thing — it runs the same
+deterministic evaluator the coordinator's tools use and says why nothing has formed — but on Home,
+before a run, it reads as a verdict ("Worth pooling now", "Nothing worth coordinating yet") for work
+that has not happened.
+
+**Decision — three states, each honest about which it is**
+
+*Before.* `standing_demand` on `/api/members/{id}`: per declaration, how many other members have
+independently declared something this order could serve, how many units that is, and the smallest
+quantity the supplier will sell. **Inputs only, no verdict.** The card then names what is still open
+— whether those people can reach one pickup point, whether their restock dates overlap, whether the
+units fill whole cases, whether the all-in price beats buying alone — because that is what stops the
+counts reading as a promise.
+
+*During.* Unchanged, deliberately: request sent, real elapsed time, no invented per-tool progress.
+One addition, and only when it is knowable in advance — with exactly one un-pooled declaration the
+wait names it ("Pool is checking your Pike Place Medium Roast declaration…"), because the objective
+is derived from stored state *before* anything is invoked. With several it says nothing, since which
+of them a bounded run takes on is the server's decision and not the browser's to guess.
+
+*After.* The run report, from `#0042`'s stored evaluations. An order the member is in leads with the
+order card and hangs "Why this worked" off it; everything else — declined, formed-without-them,
+viable-but-next, not-investigated — is the answer card. Nothing is recomputed in the browser and
+nothing appears for a product the run did not evaluate.
+
+The outlook moved to Needs, beside each declaration, under the label **As things stand**. "Pool
+evaluated this and declined" and "here is how it looks right now" are different claims, and the
+interface now says which one it is making (§15).
+
+**A gap the two-declaration case exposed**
+A member with coffee and whey, both viable: Pool forms one order per run, so the second was reported
+as `declined` with the evaluator's own internal string — *"viable bulk opportunity"*. Two fixes.
+`RESULT_VIABLE_NOT_ACTED` says what is true ("Pool can form this one too, and forms one order at a
+time — so it is next"). And the run now *prefers the viable order that includes the member's own
+declaration*: `evaluate_pool_economics` returns `includes_member_declaration`, a deterministic fact,
+so a run does not form an order its own requester was case-fitted out of when there is one they are
+in. Also made the objective's ordering deterministic — it tie-broke on random need ids, so which of
+two same-day declarations a run acted on moved between runs.
+
+**Implementation**
+`services/discovery.py` (`standing_demand_for`), `api/app.py`, `services/run_report.py`,
+`agent/tools.py`, `agent/projection.py`, `agent/offline_model.py`, `agent/objective.py`,
+`views/home.tsx`, `views/needs.tsx`, `ui.tsx`, `api.ts`, `App.tsx`, `styles.css`. `ConvergenceFigure`
+is kept and still drawn on About, where explaining the mechanism is the whole job. Status:
+**tested**.
+
+**AWS / external services touched**
+None.
+
+**Cost-relevant activity**
+None. The report is deterministic rendering of stored rows — no model is asked to write prose, which
+was the tempting design and would have put a language model between a member and a price.
+
+**Validation**
+`make qa` green: 881 backend, 75 infra, 84 web, lint, typecheck, production build, secret scan. Home
+tests were rewritten around the new states rather than deleted — the invariants they pin (an
+unrelated pool is never this member's result; a pool the member *is* in is never called somebody
+else's; the community's order is openable as the community's) all survive, now expressed against the
+report and the muted "Elsewhere" block.
+
+**Failures / dead ends**
+The first layout rendered the personal outcome twice — once as a run result and again as the order
+card — which made one answer look like two. Merging them, with the run's facts hanging off the order
+under "Why this worked", is both shorter and truer to what the two things are.
+
+**What we learned**
+The convergence figure was the most-admired thing on the screen and the most dishonest, and neither
+was obvious. It was accurate, derived, and tested against the seed; what made it wrong was *when* it
+was shown. Correct content in the wrong moment is still a claim about work that has not happened.
+
+**Article fodder**
+Article 1 — the pre-run screen is where a demo either poses a question or spoils it. Article 3 —
+"investigated and declined", "worth doing but not this run", and "not looked at" are three different
+answers, and collapsing them is how an agent product starts sounding like it knows more than it does.
+
+**Evidence worth preserving**
+Before/after of the Home pre-run slot: the convergence diagram against the standing-demand card. It
+is the clearest single illustration of the difference between showing the input and showing the
+answer.
+
+---
+
+### #0046 — [2026-08-19] — A demo that does not need a memorised phrase
+`[demo]` `[docs]`
+
+**Goal / user intent**
+Rewrite the rehearsal around what the product now does, and prove the claim it rests on: that Pool
+behaves correctly for arbitrary supported input rather than for one word.
+
+**Starting state**
+`DEMO_SCRIPT.md` ran 4:53 and opened by instructing the presenter to type `vanilla whey`. That was
+honest at the time — search could not surface what Pool could source, so typing a category was a
+dead end — but it meant the recording could not survive a judge typing anything else, and it spent
+most of its length walking a lifecycle a reader can step through themselves.
+
+**Decision**
+Type a **category**. `whey`, `coffee`, `energy`, `laundry`, `towels` — each leads with the option
+Pool can genuinely source, labelled, and each reaches a different truthful outcome.
+
+Two declarations in setup rather than one, which is the change that makes the demo about the right
+thing. One product proves Pool can find an overlap; two prove it tells the truth about **both**,
+and the second answer is *no*. Measured, from the real endpoints, on the form's own defaults:
+
+- whey → formed, member included, 10 buyers, 24 units, 2 cases, six stored facts behind it
+- paper towels → declined: "6 compatible packs were declared near you, and the supplier will not
+  sell fewer than 48"
+- and with a third — laundry → declined on **economics**: "$398.92 against $367.84 buying it alone"
+
+Three declarations, three genuinely different deterministic verdicts, one button, seven model turns
+against a bound of eight.
+
+The canonical lifecycle becomes the **backup and regression proof** rather than the recording — now
+that it runs in its own copy of the community, saying so is also literally true.
+
+**One inconsistency the rehearsal caught**
+The pre-run card said "the supplier will not sell fewer than 12" and the run afterwards said
+"reached the supplier's 24-unit minimum". Both true — whey has a 12-unit tier at $39.80 and a
+24-unit one at $31.50, and the evaluator takes the second — and side by side they read as a
+contradiction. The pre-run card now reports the *cheapest tier's* minimum, which is both the honest
+"best price starts at" figure and the one the run actually clears.
+
+Also: the run's all-in figure is now prefixed "about", because an evaluation is always made before
+a fulfiller has accepted and their pay is part of the price. A judge comparing $862.45 in the
+explanation against $861.44 in the locked ledger should find the difference already accounted for.
+
+**Documentation reconciled**
+`docs/ARTICLE_NOTES.md` still described "form tight (1.6 km), repair wide (4 km)" as a clean product
+decision. It was quoting a docstring that described a constraint never implemented, so the note now
+records what was actually wrong and why the correction is about *authority* rather than distance.
+`AGENTS.md` §8 gained the two-trigger rule and the showcase-workspace boundary. Endpoint counts in
+`README.md`, `docs/architecture.svg` and `public_demo.py`'s own docstring were three different
+stale numbers; all four now agree at 29 of 45, pinned by the test that noticed.
+
+**Implementation**
+`docs/DEMO_SCRIPT.md` (rewritten), `docs/ARTICLE_NOTES.md`, `AGENTS.md`, `README.md`,
+`docs/architecture.svg`, `services/discovery.py`, `services/run_report.py`,
+`tests/test_presentation_truth.py`. Status: **tested**.
+
+**AWS / external services touched**
+None. No deployment and no paid invocation in this pass.
+
+**Validation**
+`make qa` green: 897 backend, 75 infra, 84 web, lint, typecheck, production build, secret scan.
+Every figure quoted in the script was measured through the real endpoints first; two new
+presentation tests assert the rehearsal shows a refusal as well as a result, and that it says the
+showcase has its own community.
+
+**Failures / dead ends**
+`test_the_rehearsal_opens_on_the_person_not_a_dashboard` asserted the script contained
+``` `vanilla whey` ``` — pinning the magic phrase as a *requirement*. Inverting it (the phrase must
+**not** appear as an instruction) then failed against the paragraph explaining why it was removed,
+which is the right kind of failure: the assertion had to become specific about instructions rather
+than mentions.
+
+**What we learned**
+The strongest beat in the new script is the one that says no. A demo built entirely from successes
+cannot demonstrate the property that actually matters here — that the run answers *your*
+declarations — because a system that always succeeds looks identical to one that always says yes.
+
+**Article fodder**
+Article 1 — "the demo needs a magic word" is a product finding, not a presentation problem, and the
+fix was in search rather than in the script.

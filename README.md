@@ -155,12 +155,12 @@ cannot legally run is not offered.
 ## The judge experience — live
 
 The public demo is a **separate, tiny stack** — one Lambda behind a Function URL, serving
-both the web app and a twenty-four-endpoint API, plus one DynamoDB table.
+both the web app and a twenty-nine-endpoint API, plus one DynamoDB table.
 
 ```
 browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
                                              ├─ the built SPA (same origin, no CORS)
-                                             ├─ 28 allowlisted API paths
+                                             ├─ 29 allowlisted API paths
                                              ├─ DynamoDB — this session only, 24 h TTL
                                              └─ InvokeAgentRuntime — bound to this session
                                                        │
@@ -179,7 +179,7 @@ What judge mode changes, and why each one matters:
 
 | Reduction | Why |
 | --- | --- |
-| 28 of 44 endpoints exist; the rest 404 | Supplier-offer mutation, the operator pickup override, the payment webhook, and direct `lock`/`purchase` calls have no business on an anonymous URL |
+| 29 of 45 endpoints exist; the rest 404 | Supplier-offer mutation, the operator pickup override, the payment webhook, and direct `lock`/`purchase` calls have no business on an anonymous URL |
 | **No prompt surface.** The client sends an action *name*; the server owns the prompt | `coordinator.run(instruction=…)` replaces the entire run prompt — forwarding a client string would let a stranger write the agent's instructions |
 | Per-session and per-day caps on every action that costs anything | An anonymous URL is a cost surface before it is a demo |
 | One session per visitor, isolated by DynamoDB partition, expiring in 24 h | Two judges cannot see or corrupt each other's demo |

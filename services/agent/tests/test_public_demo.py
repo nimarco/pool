@@ -319,7 +319,12 @@ def test_only_browser_generated_session_ids_are_accepted(client, ws):
 
 
 def test_two_anonymous_judges_cannot_see_each_others_demo(client):
-    post(client, "/api/demo/scenario", ws=WS)
+    """Isolation by workspace, driven by a real coordinator run.
+
+    Not by the showcase: it writes its own partition now, so using it here would prove
+    two *unwritten* workspaces are different, which they trivially are.
+    """
+    post(client, "/api/agent/run", ws=WS, json={"trigger": "manual_scan"})
     mine = get(client, "/api/state", ws=WS).json()
     theirs = get(client, "/api/state", ws=OTHER_WS).json()
 
@@ -332,11 +337,70 @@ def test_two_anonymous_judges_cannot_see_each_others_demo(client):
     )
 
 
+def test_the_showcase_runs_in_its_own_partition_and_leaves_the_visitor_alone(client):
+    """The scripted proof cannot mutate consumer truth.
+
+    A visitor who declares coffee and then watches the canonical lifecycle must not come
+    back to a Needs page saying they also buy whey — which is exactly what happened while
+    the showcase reseeded, or wrote into, the account they had just set up.
+    """
+    post(client, "/api/onboarding", ws=WS,
+         json={"display_name": "Marco", "autonomy_mode": "smart_join"})
+    post(client, "/api/onboarding/payment-method", ws=WS)
+    me = get(client, "/api/state", ws=WS).json()["consumer"]
+    before = get(client, "/api/needs", ws=WS).json()["needs"]
+
+    body = post(client, "/api/demo/scenario", ws=WS).json()
+    assert body["ok"] is True
+    assert body["workspace"] == f"{WS}{public_demo.SHOWCASE_SUFFIX}"
+    assert body["workspace"] != WS
+
+    # The showcase's own world holds the canonical pool.
+    showcase = get(client, "/api/state", ws=body["workspace"]).json()
+    assert showcase["pools"]
+
+    # The visitor's world holds exactly what it held before.
+    assert get(client, "/api/state", ws=WS).json()["consumer"] == me
+    assert get(client, "/api/needs", ws=WS).json()["needs"] == before
+    assert get(client, "/api/state", ws=WS).json()["pools"] == []
+    assert get(client, f"/api/members/{me['household_id']}", ws=WS).json()["opportunity"] is None
+
+
+def test_the_showcase_always_starts_from_a_clean_fixture(client):
+    """"This starts the community over" has to be literally true.
+
+    It could not be while the showcase shared the visitor's workspace: reseeding would
+    have deleted their account, so it skipped the reseed once they had one — and then
+    replayed on top of whatever was already there.
+    """
+    first = post(client, "/api/demo/scenario", ws=WS).json()
+    second = post(client, "/api/demo/scenario", ws=WS).json()
+
+    assert (first["ok"], second["ok"]) == (True, True)
+    assert first["pool_id"] != second["pool_id"], "the replay reused the previous pool"
+    pools = get(client, "/api/state", ws=first["workspace"]).json()["pools"]
+    assert [p["pool_id"] for p in pools] == [second["pool_id"]]
+
+
+def test_a_visitor_cannot_address_another_session_showcase(client):
+    """A showcase workspace is reachable only by knowing the session it belongs to —
+    the same property that already protects ``/api/state``. Nothing else about the name
+    is guessable, and a session id can never contain the hyphen the suffix uses."""
+    assert public_demo.PUBLIC_WORKSPACE_RE.match(f"{WS}{public_demo.SHOWCASE_SUFFIX}")
+    assert not public_demo.PUBLIC_WORKSPACE_RE.match("demo-showcase")
+    assert not public_demo.PUBLIC_WORKSPACE_RE.match(f"{WS}-showcase-showcase")
+    assert public_demo.showcase_workspace(WS) == f"{WS}{public_demo.SHOWCASE_SUFFIX}"
+    # Idempotent, so a surface already reading the showcase does not accumulate suffixes.
+    assert public_demo.showcase_workspace(
+        public_demo.showcase_workspace(WS)
+    ) == f"{WS}{public_demo.SHOWCASE_SUFFIX}"
+
+
 def test_a_judge_can_always_start_over(client):
-    post(client, "/api/demo/scenario")
-    assert get(client, "/api/state").json()["pools"]
-    assert post(client, "/api/demo/reset").status_code == 200
-    assert get(client, "/api/state").json()["pools"] == []
+    ws = post(client, "/api/demo/scenario").json()["workspace"]
+    assert get(client, "/api/state", ws=ws).json()["pools"]
+    assert post(client, "/api/demo/reset", ws=ws).status_code == 200
+    assert get(client, "/api/state", ws=ws).json()["pools"] == []
 
 
 def test_the_scenario_runs_the_whole_lifecycle_for_a_public_visitor(client):
@@ -768,6 +832,7 @@ MIRROR = {
     "issues": "put_issue",
     "decisions": "put_decision",
     "runs": "put_run",
+    "run_evaluations": "put_run_evaluation",
 }
 
 
@@ -1082,9 +1147,9 @@ def test_both_stores_return_every_list_in_the_same_order():
         assert a == b, f"{method} came back in a different order"
         compared += 1
         populated += 1 if a else 0
-    # 24 list methods agree, and 22 of them actually held data — a comparison over
+    # 25 list methods agree, and 23 of them actually held data — a comparison over
     # empty lists would pass without proving anything.
-    assert (compared, populated) == (24, 22), (compared, populated)
+    assert (compared, populated) == (25, 23), (compared, populated)
 
 
 def test_a_completed_demo_session_stays_far_inside_dynamodbs_item_limit():
@@ -1259,7 +1324,7 @@ def test_the_published_endpoint_counts_are_the_real_ones():
 
     public = {e for e in endpoints if reachable(*e)}
 
-    assert len(endpoints) == 44, f"the full API is now {len(endpoints)} endpoints"
-    assert len(public) == 28, f"judge mode now exposes {len(public)} endpoints"
+    assert len(endpoints) == 45, f"the full API is now {len(endpoints)} endpoints"
+    assert len(public) == 29, f"judge mode now exposes {len(public)} endpoints"
     # The reduction is the point: most of the application is not on the public URL.
     assert len(public) < len(endpoints) / 1.5

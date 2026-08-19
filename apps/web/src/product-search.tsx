@@ -65,6 +65,14 @@ export function ProductCard({
         {product.brand ? <span className="product-brand">{product.brand}</span> : null}
         <span className="product-name">{product.name}</span>
         {secondary ? <span className="product-meta">{secondary}</span> : null}
+        {/* Why this one is near the top. Pool holds a verified bulk quote for it, which
+            is a fact about this deployment rather than about the product — so it is said
+            plainly instead of being an unexplained ranking. Everything else in the list
+            is equally real and equally declarable; Pool simply cannot buy it in bulk
+            yet, and says so rather than quietly steering. */}
+        {product.sourceable ? (
+          <span className="product-sourceable">Pool can source this</span>
+        ) : null}
       </span>
     </>
   );

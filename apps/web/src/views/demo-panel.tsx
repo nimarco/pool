@@ -465,6 +465,11 @@ export function DemoPanel({
                 </button>
                 <p className="tiny faint" style={{ marginTop: 4 }}>
                   All 13 stages and figures; runs the server lifecycle first if needed.
+                  {" "}It is a scripted rehearsal, not something the coordinator does on
+                  its own, and it runs in the showcase&apos;s own copy of Demo University
+                  — starting that community over from scratch each time. Your account,
+                  your declarations and any order of yours are in a different place
+                  entirely and are not read or written by it.
                 </p>
               </div>
               <div>

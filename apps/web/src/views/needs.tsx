@@ -21,6 +21,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   NeedDraft,
   NeedLimits,
+  NeedOutlook,
   NeedRow,
   ProductCandidate,
   api,
@@ -253,6 +254,41 @@ function NeedForm({
               : "Pool will only buy on that date — never earlier."}
           </span>
         </label>
+
+        {/* Out of the advanced drawer, deliberately.
+            This is the one setting that decides whose demand may combine with whose, and
+            it is the difference between joining an order and being told nothing can be
+            done. Somebody who never opens a collapsed section never sees a choice they
+            have already effectively made — and for a product Pool cannot source, it is
+            the *only* thing that could change the answer. The matcher reads the value
+            structurally; the model never decides two products are close enough (§21). */}
+        <label className="field field-wide">
+          <span className="field-label">Would another product do?</span>
+          <select
+            className="control"
+            value={draft.substitution}
+            onChange={(e) => set("substitution", e.target.value)}
+          >
+            {SUBSTITUTION.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <span className="field-note">
+            {chosen.sourceable === false ? (
+              <>
+                Pool has no bulk supplier for this exact product yet, so it cannot form an
+                order for it on its own. Your declaration is still recorded, and widening
+                this is the only thing that would change that — your call, not Pool&apos;s.
+              </>
+            ) : draft.substitution === "exact_only" ? (
+              "Only this exact product will ever be bought for you."
+            ) : (
+              "Pool may use another product that structurally matches this rule — and always tells you which."
+            )}
+          </span>
+        </label>
       </div>
 
       {/* Available rather than absent. These already hold safe values, the deterministic
@@ -335,20 +371,6 @@ function NeedForm({
             </span>
           </label>
 
-          <label className="field field-wide">
-            <span className="field-label">Substitutes</span>
-            <select
-              className="control"
-              value={draft.substitution}
-              onChange={(e) => set("substitution", e.target.value)}
-            >
-              {SUBSTITUTION.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
       </details>
 
@@ -404,6 +426,7 @@ export function Needs({
   onFind,
   running,
   hasPool,
+  outlook,
   liveDiscovery,
   region,
 }: {
@@ -414,6 +437,17 @@ export function Needs({
   onConsumeInitialProduct: () => void;
   onFind: () => void;
   running: boolean;
+  /** What the deterministic evaluator says about each declaration *right now*.
+   *
+   *  Explicitly a current outlook and not a run's finding: it is recomputed on every
+   *  read, creates nothing and commits nothing, and it lives here rather than on Home
+   *  because Home's job before a run is to pose the question rather than answer it. The
+   *  label beside it says which of the two this is, because "Pool evaluated this and
+   *  declined" and "here is how it looks as things stand" are different claims. */
+  outlook: NeedOutlook[];
+  /** Whether *this member* is in a pool — the server's answer, not "does any pool
+   *  exist in the workspace". A community order formed for ten other students is not a
+   *  reason to stop offering this member the one action they have. */
   hasPool: boolean;
   liveDiscovery: boolean;
   region: string | null;
@@ -461,7 +495,13 @@ export function Needs({
   const mine = needs
     .filter((n) => n.household_id === identity.id && n.active)
     .sort((a, b) => a.expected_next_need_date.localeCompare(b.expected_next_need_date));
-  const others = needs.filter((n) => n.household_id !== identity.id);
+  /* Active only, on both sides. A retired declaration is not a standing need, so
+     counting it under "standing needs across the community" would overstate the very
+     number this screen exists to make legible — and it is no longer demand the matcher
+     will act on either. */
+  const others = needs.filter((n) => n.household_id !== identity.id && n.active);
+  const standing = needs.filter((n) => n.active);
+  const byNeed = new Map(outlook.map((o) => [o.need_id, o]));
 
   const openAdd = () => {
     setError(null);
@@ -625,6 +665,12 @@ export function Needs({
                       Will not join below {n.min_savings_pct}% saving, and never above{" "}
                       {n.max_spend_display}
                     </div>
+                    {byNeed.get(n.need_id) ? (
+                      <div className="tiny muted" style={{ marginTop: 4 }}>
+                        <span className="outlook-tag">As things stand</span>{" "}
+                        {byNeed.get(n.need_id)!.reason}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="row-tail">
                     <div className="fact-value">{shortDateOnly(n.expected_next_need_date)}</div>
@@ -649,13 +695,13 @@ export function Needs({
         title={`Standing needs across ${communityName}`}
         aside={
           <button className="btn btn-sm" onClick={() => setShowAll((v) => !v)}>
-            {showAll ? "Hide" : `Show all ${needs.length}`}
+            {showAll ? "Hide" : `Show all ${standing.length}`}
           </button>
         }
       >
         <p className="small muted prose">
-          {needs.length} independent declarations. Pool finds the overlap; members do not
-          create or organise a group.
+          {standing.length} independent declarations. Pool finds the overlap; members do
+          not create or organise a group.
         </p>
         {!hasPool ? (
           <div className="stack-sm" style={{ marginTop: 14 }}>

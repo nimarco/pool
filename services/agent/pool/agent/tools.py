@@ -28,7 +28,6 @@ from typing import Any
 
 from strands import tool
 
-from ..domain.matching import haversine_km
 from ..domain.models import (
     DecisionState,
     ParticipationState,
@@ -38,8 +37,8 @@ from ..domain.models import (
 from ..domain.money import bps_to_pct_str, format_cents
 from ..domain.viability import ViabilityStage
 from ..services import coordination as coord
+from ..services import discovery, hosting
 from ..services import fulfillment as fulfil
-from ..services import hosting
 from ..services.context import PoolContext
 from . import projection as proj
 
@@ -63,6 +62,10 @@ class ToolContext:
 
     pool: PoolContext
     community_id: str
+    #: The bounded question this run is answering (``agent/objective.py``). Derived by
+    #: the coordinator from stored state, never from a caller. ``None`` only in the
+    #: narrow unit tests that build a context directly.
+    objective: Any = None
     outcome: RunOutcome = RunOutcome.NO_ACTION
     created_pool_ids: list[str] = field(default_factory=list)
     advanced_pool_ids: list[str] = field(default_factory=list)
@@ -103,33 +106,10 @@ def _json(payload: dict[str, Any]) -> str:
 def _suggest_site(ctx: ToolContext, household_ids: list[str]) -> tuple[str, str]:
     """Pick the public pickup site that serves the most interested members.
 
-    Coverage first, then total travel: the best site is the one with the most people
-    inside the formation radius, breaking ties on aggregate distance. A centroid would
-    drift toward outliers and pick a site convenient for nobody.
-
-    Public sites only. Naming a private residence is a consequential action needing its
-    owner's approval, so the agent is never handed one as a default (AGENTS.md §5).
+    The rule lives in ``services.discovery`` so discovery and the tool cannot disagree
+    about which site an opportunity is proposed at.
     """
-    households = {h.id: h for h in ctx.repo.list_households(ctx.ws)}
-    points = [households[h] for h in household_ids if h in households]
-    sites = [
-        s
-        for s in ctx.repo.list_sites(ctx.ws)
-        if s.is_public and s.community_id == ctx.community_id
-    ]
-    if not sites:
-        return "", ""
-    if not points:
-        return sites[0].id, sites[0].name
-
-    def score(site) -> tuple[int, float, str]:
-        distances = [haversine_km(p.lat, p.lon, site.lat, site.lon) for p in points]
-        covered = sum(1 for d in distances if d <= coord.FORMATION_RADIUS_KM)
-        # Negative coverage so a plain min() prefers more members.
-        return (-covered, sum(d for d in distances if d <= coord.FORMATION_RADIUS_KM), site.id)
-
-    best = min(sites, key=score)
-    return best.id, best.name
+    return discovery.suggest_site(ctx.pool, ctx.community_id, household_ids)
 
 
 #: The complete tool surface, in the order the model is given it, with the authority
@@ -185,54 +165,24 @@ def build_tools(ctx: ToolContext) -> list:
 
     @tool
     def list_latent_demand() -> str:
-        """List recurring needs in this community that no active pool is serving.
+        """List products in this community worth investigating, and why.
 
         Read-only. This is where the product's core claim lives: nobody declared a
         group, so the opportunity has to be discovered from standing declarations.
-        Returns candidate products ranked by how much aggregate demand is unserved,
-        each with a suggested public pickup site.
+
+        ``unserved_units`` and ``member_count`` count only declarations whose own
+        substitution rules a pool for that product could actually serve, and that no
+        live pool is already serving — the same rule the matcher applies later, so this
+        listing and the evaluation cannot disagree about who constitutes demand.
+        ``group_interest_units`` is the wider category, for context only.
+
+        When this run was triggered by a member, the entries marked ``for_member`` are
+        that member's own declarations, listed first and in priority order, each
+        naming the declaration behind it. Evaluate every one of those before acting.
         """
-        products = {p.id: p for p in ctx.repo.list_products(ctx.ws)}
-        buckets: dict[str, list] = {}
-        for need in ctx.repo.list_needs(ctx.ws):
-            if not need.active or need.community_id != ctx.community_id:
-                continue
-            product = products.get(need.product_id)
-            if product is None:
-                continue
-            buckets.setdefault(product.substitute_group or product.id, []).append(need)
-
-        opportunities = []
-        for group, needs in buckets.items():
-            by_product: dict[str, int] = {}
-            for n in needs:
-                by_product[n.product_id] = by_product.get(n.product_id, 0) + n.quantity
-            target_id = max(by_product.items(), key=lambda kv: (kv[1], kv[0]))[0]
-            representative = products[target_id]
-
-            already = coord.pooled_household_ids(ctx.pool, ctx.community_id, target_id)
-            open_needs = [n for n in needs if n.household_id not in already]
-            if not open_needs:
-                continue
-            site_id, site_name = _suggest_site(ctx, [n.household_id for n in open_needs])
-            opportunities.append(
-                {
-                    "product_id": target_id,
-                    "product_name": representative.name,
-                    "substitute_group": group,
-                    "unserved_units": sum(n.quantity for n in open_needs),
-                    "member_count": len({n.household_id for n in open_needs}),
-                    "suggested_pickup_site_id": site_id,
-                    "suggested_pickup_site_name": site_name,
-                }
-            )
-
-        opportunities.sort(
-            key=lambda o: (-o["member_count"], -o["unserved_units"], o["product_id"])
-        )
-        full = {"opportunities": opportunities, "count": len(opportunities)}
+        full = discovery.latent_demand(ctx.pool, ctx.community_id, ctx.objective)
         ctx.record_full("list_latent_demand", {}, full)
-        return _json(proj.demand_view(opportunities))
+        return _json(proj.demand_view(full["opportunities"], objective=full["objective"]))
 
     @tool
     def evaluate_pool_economics(
@@ -262,6 +212,19 @@ def build_tools(ctx: ToolContext) -> list:
             ),
         )
         payload = assessment.to_dict()
+        # Whether *this run's own member* would be in the order. A deterministic fact,
+        # computed here rather than left to the model, and the difference between "Pool
+        # formed the thing you asked about" and "Pool formed an order you are not in"
+        # (§48). Absent on a community scan, which has no member to be in anything.
+        objective_needs = {
+            entry.need_id
+            for entry in (getattr(ctx.objective, "needs", ()) or ())
+            if product_id in entry.target_product_ids
+        }
+        if objective_needs:
+            payload["includes_member_declaration"] = bool(
+                objective_needs & {c.need_id for c in assessment.candidates}
+            )
         if assessment.viable and assessment.economics:
             econ = assessment.economics
             payload["headline"] = (

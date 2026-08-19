@@ -30,6 +30,7 @@ from typing import Any
 
 from ..data import catalog
 from ..domain.models import (
+    LEFT_PARTICIPATION_STATES,
     MembershipStatus,
     NeedDeclaration,
     SubstitutionPolicy,
@@ -157,6 +158,20 @@ def amend_need(
             "changed to match it."
         )
 
+    # A declaration that is already in a pool is the *reason* that member is in it —
+    # `Membership.need_id` is the stored lineage every consumer surface reads to answer
+    # "why am I in this". Re-pointing it at another product would leave the record
+    # saying somebody joined a whey order because they buy coffee, while the units,
+    # the price and the authorisation all stayed exactly as they were. Every other
+    # field on the declaration stays amendable.
+    if data.product_id != need.product_id:
+        pooled = _pool_holding(ctx, need.id)
+        if pooled:
+            raise NeedError(
+                "Pool is already coordinating this declaration, so the item cannot be "
+                "changed. Leave that pool first, or add a separate declaration."
+            )
+
     need.product_id = data.product_id
     need.quantity = data.quantity
     need.cadence_days = data.cadence_days
@@ -259,6 +274,15 @@ def _ensure_product(ctx: PoolContext, product_id: str) -> bool:
         return False
     ctx.repo.put_product(ctx.ws, entry.to_product())
     return True
+
+
+def _pool_holding(ctx: PoolContext, need_id: str) -> str:
+    """The live pool this declaration put its owner into, if there is one."""
+    for pool in ctx.repo.list_pools(ctx.ws):
+        for m in ctx.repo.list_memberships(ctx.ws, pool.id):
+            if m.need_id == need_id and m.state not in LEFT_PARTICIPATION_STATES:
+                return pool.id
+    return ""
 
 
 def _active_for_product(

@@ -26,6 +26,8 @@ from ..config import Settings, get_settings
 from ..domain.models import ActivityEvent, AgentRun, RunOutcome, iso, new_id, utcnow
 from ..services.context import PoolContext
 from .bounds import BoundedRun, BoundExceeded, RunTelemetry
+from .evidence import build as build_evidence
+from .objective import for_trigger, prompt_for
 from .tools import ToolContext, build_tools
 
 logger = logging.getLogger(__name__)
@@ -38,6 +40,11 @@ Your job is to notice when several of them want the same thing, decide whether a
 purchase is genuinely worth it, move a viable pool through its lifecycle, and stop \
 cleanly when nothing is worth doing.
 
+Every run is asked one of two questions, and the instruction says which. A community \
+scan may investigate anything in the community. A member-triggered run is about one \
+member's own standing declarations: investigate those, give each of them a verdict, and \
+do not go looking for a better opportunity somebody else would benefit from.
+
 The lifecycle, in order:
 latent demand -> candidate pool -> host recruiting -> host accepts -> supplier quote \
 refreshed -> exact landed price -> buyer authorisation -> funded -> lock -> purchase.
@@ -49,7 +56,9 @@ those, you do not.
 - Investigate the most promising opportunity first. Not every product is worth pooling; \
 concluding "nothing worthwhile" and calling record_no_action is a good outcome.
 - Form at most one pool per run. Members should hear from Pool rarely, and only when \
-there is a real decision for them.
+there is a real decision for them. On a member-triggered run, prefer the viable \
+opportunity that includes that member's own declaration: an order they are not in is a \
+legitimate outcome, and a worse answer to their own question.
 - Never assume a member will accept something, and never assume a host will take a job. \
 The tools apply each person's own rules and return the verdict.
 - A pool cannot be priced exactly until a host has accepted, and cannot lock until the \
@@ -150,6 +159,33 @@ class PoolCoordinator:
 
     # -- run ---------------------------------------------------------------
 
+    def _record_evidence(self, ws: str, run_id: str, ctx: ToolContext, objective) -> None:
+        """Persist what this run's deterministic evaluations established.
+
+        Never allowed to fail the run: the coordination already happened and is already
+        recorded, and losing the explanation is strictly better than losing the pool.
+        The failure is logged rather than swallowed silently.
+        """
+        try:
+            sites = [
+                s
+                for s in self.repo.list_sites(ws)
+                if s.is_public and s.community_id == ctx.community_id
+            ]
+            for evaluation in build_evidence(
+                run_id=run_id,
+                community_id=ctx.community_id,
+                full_results=ctx.full_results,
+                objective=objective,
+                pool_ids_by_product=_pool_ids_by_product(
+                    self.repo, ws, ctx.created_pool_ids + ctx.advanced_pool_ids
+                ),
+                sites_considered=len(sites),
+            ):
+                self.repo.put_run_evaluation(ws, evaluation)
+        except Exception:  # noqa: BLE001 - explanation is not worth failing a run over
+            logger.exception("run %s: could not record evaluation evidence", run_id)
+
     def run(
         self,
         ws: str,
@@ -159,8 +195,14 @@ class PoolCoordinator:
     ) -> AgentRun:
         """Execute one bounded coordination run and return its record.
 
-        The same method serves the EventBridge schedule, the demo button, and the
-        tests. There is no separate demo code path (AGENTS.md §8).
+        The same method serves the EventBridge schedule, the member's own **Run Pool
+        now**, the AgentCore runtime, and the tests. There is no separate demo code path
+        (AGENTS.md §8).
+
+        ``trigger`` is the only discriminator, and the objective it implies is derived
+        *here* from stored state (``agent/objective.py``) rather than supplied by the
+        caller — so a browser, a Lambda and the deployed runtime all send the same tiny
+        payload and get the same semantics.
         """
         model, model_id, provider = self._build_model()
         run_id = new_id("run")
@@ -171,17 +213,20 @@ class PoolCoordinator:
             communities = self.repo.list_communities(ws)
             community_id = communities[0].id if communities else ""
 
+        pool_ctx = PoolContext(
+            repo=self.repo,
+            ws=ws,
+            routing=self.routing,
+            payments=self.payments,
+            purchaser=self.purchaser,
+            sourcing=self.sourcing,
+            run_id=run_id,
+        )
+        objective = for_trigger(pool_ctx, community_id, trigger)
         ctx = ToolContext(
-            pool=PoolContext(
-                repo=self.repo,
-                ws=ws,
-                routing=self.routing,
-                payments=self.payments,
-                purchaser=self.purchaser,
-                sourcing=self.sourcing,
-                run_id=run_id,
-            ),
+            pool=pool_ctx,
             community_id=community_id,
+            objective=objective,
         )
         # The model sees compact projections of the larger tool results; the complete
         # authoritative results stay on the context, reachable after the run for the
@@ -197,11 +242,7 @@ class PoolCoordinator:
             started_at=iso(utcnow()),
         )
 
-        prompt = instruction or (
-            "Run a background scan of this community. Find the most worthwhile bulk "
-            "buying opportunity among unserved recurring needs and form a candidate "
-            "pool if one is genuinely worth forming."
-        )
+        prompt = instruction or prompt_for(objective)
 
         try:
             agent = Agent(
@@ -238,10 +279,21 @@ class PoolCoordinator:
         record.input_tokens = telemetry.input_tokens
         record.output_tokens = telemetry.output_tokens
         record.hitl_decisions_created = ctx.decisions_created
+        record.objective_kind = objective.kind
+        record.objective_household_id = objective.household_id
+        record.objective_need_ids = [n.need_id for n in objective.needs]
+        record.deferred_need_ids = list(objective.deferred_need_ids)
+        record.served_need_ids = list(objective.served_need_ids)
         if ctx.no_action_reason:
             record.notes.append(ctx.no_action_reason)
 
         self.repo.put_run(ws, record)
+        # After the try/except on purpose: a run stopped by a safety bound still did
+        # real work before it stopped, and what it established is exactly what somebody
+        # will want to read afterwards. Written here rather than inside the tools so
+        # `evaluate_pool_economics` stays provably side-effect-free — the member view
+        # calls the same evaluator, and that view must change no row.
+        self._record_evidence(ws, record.id, ctx, objective)
         self.repo.append_activity(
             ws,
             ActivityEvent(
@@ -251,6 +303,8 @@ class PoolCoordinator:
                 facts={
                     "outcome": record.outcome.value,
                     "trigger": trigger,
+                    "objective": objective.kind,
+                    "objective_products": list(objective.product_ids),
                     "iterations": record.iterations,
                     "tool_calls": len(record.tool_calls),
                     "tools_used": [t.name for t in record.tool_calls],
@@ -265,6 +319,15 @@ class PoolCoordinator:
             ),
         )
         return record
+
+
+def _pool_ids_by_product(repo, ws: str, pool_ids: list[str]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for pool_id in pool_ids:
+        pool = repo.get_pool(ws, pool_id)
+        if pool is not None:
+            out.setdefault(pool.product_id, pool.id)
+    return out
 
 
 def _find_bound_exceeded(exc: BaseException) -> BoundExceeded | None:

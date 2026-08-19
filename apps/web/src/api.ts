@@ -367,6 +367,10 @@ export interface ProductCandidate {
   unit: string;
   category: string;
   image_ref: string;
+  /** Pool currently holds a verified bulk quote it could buy this against. A fact about
+   *  this deployment, not about the product — and never a reason to change what somebody
+   *  declared. Absent on a candidate that came from somewhere other than search. */
+  sourceable?: boolean;
 }
 
 /** Licence obligations that travel with the bundled catalogue snapshot. */
@@ -466,6 +470,8 @@ export interface ScenarioResult {
   failure: string;
   pool_id: string;
   steps: ScenarioStep[];
+  /** The partition the scripted lifecycle ran in — never the visitor's own. */
+  workspace: string;
 }
 
 export interface Checklist {
@@ -521,10 +527,123 @@ export interface OperatorView {
   metrics: Metrics;
 }
 
+/** Why one of this member's standing declarations has not produced a pool.
+ *
+ *  Server-computed by the same deterministic evaluator the coordinator's own tool
+ *  calls, so the sentence a member reads and the verdict the agent acts on come from
+ *  one implementation. */
+export interface NeedOutlook {
+  need_id: string;
+  product_id: string;
+  product_name: string;
+  state:
+    | "in_pool"
+    | "ready"
+    | "short"
+    | "no_supply"
+    | "not_matched"
+    | "not_worth_it"
+    | "not_in_round"
+    | "retired";
+  reason: string;
+  pool_id: string;
+  units_needed: number;
+  units_available: number;
+}
+
+/** The pool this member is genuinely in, and the declaration that put them there.
+ *
+ *  `null` when they are in none — which is a real answer. A consumer surface must never
+ *  fill that gap with whichever pool happens to exist in the workspace. */
+export interface PersonalOpportunity {
+  pool_id: string;
+  status: PoolStatus;
+  product_id: string;
+  participation_state: ParticipationState;
+  units: number;
+  /** Lineage: the stored `Membership.need_id`, not an inference from product names. */
+  need_id: string;
+  declared_product_id: string;
+  /** False when the pool is buying an authorised substitute rather than the exact
+   *  product this member typed. The card must say so; the photograph will not. */
+  is_exact_product: boolean;
+  /** What they typed, when it differs from what the pool buys. */
+  declared_product_name: string;
+}
+
+/** What already exists around one declaration, before Pool has evaluated anything.
+ *
+ *  Inputs, deliberately without a verdict: how much compatible demand accumulated on its
+ *  own, and the smallest quantity the supplier will sell. Whether those people can reach
+ *  one pickup point, whether their timing overlaps, whether the units fill a case and
+ *  whether it beats retail are what a run decides — and a screen that answered them in
+ *  advance would be telling somebody the result before Pool had done the work. */
+export interface StandingDemand {
+  need_id: string;
+  product_id: string;
+  product_name: string;
+  unit: string;
+  my_units: number;
+  compatible_members: number;
+  compatible_units: number;
+  minimum_units: number;
+  has_supplier: boolean;
+  /** Set when the order Pool could form would buy an authorised substitute rather than
+   *  the exact product declared. Never silent. */
+  sourceable_product_id: string;
+  sourceable_product_name: string;
+}
+
+/** One declaration's outcome in one run, as the server assembled it from what that run
+ *  actually established. Never recomputed here, and never shown for another run. */
+export interface RunReportResult {
+  need_id: string;
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  unit: string;
+  result:
+    | "formed_included"
+    | "formed_excluded"
+    | "declined"
+    | "viable_not_acted"
+    | "not_investigated"
+    | "already_coordinated";
+  pool_id: string;
+  units: number;
+  reason_code: string;
+  is_exact_product: boolean;
+  declared_product_name: string;
+  headline: string;
+  facts: string[];
+  participation_state?: string;
+  status?: string;
+}
+
+export interface RunReport {
+  run_id: string;
+  trigger: string;
+  objective_kind: string;
+  outcome: string;
+  at: string;
+  model_provider: string;
+  /** False when this run was not anchored to this member — a community-wide scan, or
+   *  somebody else's. The report is then empty by construction. */
+  is_mine: boolean;
+  results: RunReportResult[];
+  evaluated_product_ids: string[];
+  also_evaluated?: { product_id: string; product_name: string; viable: boolean; reason_code: string }[];
+  elsewhere?: { pool_id: string; product_name: string; status: string; buyer_count: number }[];
+}
+
 export interface MemberView {
   id: string;
   display_name: string;
   zone: string;
+  opportunity: PersonalOpportunity | null;
+  other_pool_ids: string[];
+  standing_demand: StandingDemand[];
+  needs_outlook: NeedOutlook[];
   community_membership: {
     community_id: string;
     status: string;
@@ -667,6 +786,28 @@ function freshWorkspaceId(): string {
  *  stable session for the tab rather than a new one on every request. */
 let cachedWorkspace: string | null = null;
 
+/** The suffix the server derives the canonical showcase's own partition with.
+ *  Mirrors `public_demo.SHOWCASE_SUFFIX`; a session id can never contain a hyphen, so
+ *  the two can never collide. */
+const SHOWCASE_SUFFIX = "-showcase";
+
+/** Showcase mode is a different world, not a different screen.
+ *
+ *  The scripted lifecycle declares a flagship need, drives a payment failure, a
+ *  recovery, a lock and ten pickups. None of that may land in the account the person at
+ *  the screen set up for themselves — so while showcase mode is on, every request this
+ *  module makes addresses the showcase partition instead. Turning it off restores the
+ *  visitor's own session exactly, because nothing about it was ever written. */
+let showcaseScope = false;
+
+export function setShowcaseScope(on: boolean): void {
+  showcaseScope = on;
+}
+
+export function inShowcaseScope(): boolean {
+  return showcaseScope;
+}
+
 /** Each visitor gets an isolated dataset, so two judges cannot corrupt each other. */
 function workspaceId(): string {
   if (cachedWorkspace) return cachedWorkspace;
@@ -690,6 +831,12 @@ function workspaceId(): string {
   return fresh;
 }
 
+/** The workspace this request should address: the visitor's own, or the showcase's. */
+function activeWorkspace(): string {
+  const base = workspaceId();
+  return showcaseScope ? `${base}${SHOWCASE_SUFFIX}` : base;
+}
+
 export function resetWorkspaceId(): void {
   cachedWorkspace = null;
   try {
@@ -703,7 +850,7 @@ const BASE = import.meta.env.VITE_API_BASE ?? "";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const sep = path.includes("?") ? "&" : "?";
-  const response = await fetch(`${BASE}${path}${sep}workspace=${workspaceId()}`, {
+  const response = await fetch(`${BASE}${path}${sep}workspace=${activeWorkspace()}`, {
     headers: { "content-type": "application/json" },
     ...init,
   });
@@ -771,7 +918,12 @@ export const api = {
   // The client picks an action *name*; the server owns the prompt. `instruction`
   // replaces the coordinator's entire run prompt, so a browser that could set it
   // would be writing the agent's instructions (see api/public_demo.py).
-  run: (trigger: "manual_scan" | "manual_advance") =>
+  /** Start one coordination run. A trigger name from the server's own allowlist is the
+   *  entire client surface: `member_scan` asks Pool about this member's own standing
+   *  declarations, `manual_scan` is the community-wide scan a scheduled pool-day
+   *  invocation performs, and `manual_advance` moves blocked pools along. Which
+   *  declarations, whose, and what the model is told are all derived server-side. */
+  run: (trigger: "member_scan" | "manual_scan" | "manual_advance") =>
     post<RunResult>("/api/agent/run", { trigger }),
   respond: (decisionId: string, approve: boolean) =>
     post<Record<string, unknown>>(`/api/decisions/${decisionId}/respond`, { approve }),
@@ -803,17 +955,34 @@ export const api = {
     }),
   reset: () => post<Record<string, unknown>>("/api/demo/reset"),
   scenario: () => post<ScenarioResult>("/api/demo/scenario"),
+  /** Point every subsequent request at the showcase's own partition, or back at the
+   *  visitor's. The scripted lifecycle is a different world, not a different screen. */
+  setShowcaseScope,
+  inShowcaseScope,
+
+  /** What one run did about this member's own declarations. Server-assembled from the
+   *  evaluation records that run wrote; the browser renders and decides nothing. */
+  runReport: (runId: string, householdId: string) =>
+    request<RunReport>(`/api/runs/${runId}/report?household_id=${householdId}`),
 
   /** What this deployment can do. Answers everywhere; `live_agent_available` is false
    *  when no AgentCore runtime is configured, so the UI describes the action rather
    *  than offering a button that cannot work. It is also what decides whether the
    *  product's discovery action goes to AWS or runs here. */
   demoConfig: () => request<DemoConfig>("/api/demo/config"),
-  /** Run the deployed coordinator against *this session's* workspace. The workspace is
-   *  the query parameter every request already carries; the server re-validates it and
-   *  builds the runtime payload itself, so the browser names a session it already has,
-   *  never one it does not. */
-  liveAgent: () => post<LiveAgentResult>("/api/demo/agentcore"),
+
+  /** Invoke the deployed coordinator, once, against *this session's* workspace.
+   *
+   *  The workspace is the query parameter every request already carries; the server
+   *  re-validates it and builds the runtime payload itself, so the browser names a
+   *  session it already has, never one it does not.
+   *
+   *  `action` is a key from the server's own map, never an objective: `member` asks
+   *  about this member's own declarations, `community` runs the scan a scheduled
+   *  pool-day invocation performs. The server turns it into a trigger the runtime's own
+   *  allowlist accepts, and builds every other field of the payload itself. */
+  liveAgent: (action: "member" | "community" = "member") =>
+    post<LiveAgentResult>(`/api/demo/agentcore?action=${action}`),
 };
 
 /* ------------------------------------------------------------------ formatting */

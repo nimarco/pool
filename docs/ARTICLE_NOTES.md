@@ -237,9 +237,18 @@ can put in front of someone's money.
   compatible latent demand beats broadcasting to the whole pool. The measurable claim:
   during recovery, zero existing members were contacted. There's a test asserting nobody
   else was re-invited.
-- **Form tight, repair wide.** The formation radius is 1.6 km; the recovery radius is 4 km.
-  Deliberate asymmetry: keep the initial travel burden low, widen only to repair — and even
-  then every candidate is still bounded by their own travel policy.
+- **Form inside the Community, repair beyond it.** The asymmetry is deliberate — a repair may
+  reach further than a speculative formation — but it took a correction to state honestly. It
+  was implemented as two module constants (1.6 km and 4 km) while `Community.radius_km`, the
+  field that declares how far apart a community's members are, was read *nowhere*. Two
+  consequences, and the second is the interesting one: a verified member in the 1.6–2.5 km
+  annulus was inside their own community and permanently undiscoverable; and the cut silently
+  overrode each member's *own declared* travel limit in the stricter direction, while the limit
+  they actually stated was only ever a soft prompt. Formation now searches the Community;
+  recovery widens past it by a stated multiple; and 1.6 km survives under the name it earns —
+  a walkable-pickup preference used only to rank candidate sites, which excludes nobody. The
+  give-away was a docstring describing a constraint ("bounded by the Community radius") that
+  had never been implemented — and had been quoted forward into these notes.
 - **Explainability without chain-of-thought.** Run records store tool names, counters,
   termination reasons, and token usage. They store *no* model reasoning, and tool arguments
   only as a hash — so the log is safe to publish and still answers "why did this happen?".

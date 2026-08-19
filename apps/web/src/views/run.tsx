@@ -723,7 +723,10 @@ export function RunView({
   scenario: ScenarioResult | null;
   roundTripMs: number | null;
   running: boolean;
-  onRun: () => void;
+  /** Absent on surfaces that may not start the scripted replay — it rewrites a whole
+   *  community, in the showcase's own copy of one, and that is a Showcase/Demo-controls
+   *  affordance rather than something to offer from inside a member's own record. */
+  onRun?: () => void;
   onOpenPool: (poolId: string) => void;
   onLive: () => void;
   /** Rendered inside a pool's record rather than as its own page: the record already
@@ -781,12 +784,14 @@ export function RunView({
             The run finishes before the reader opens; its measured round trip appears at
             the top. Nothing is animated as if work were still happening.
           </p>
-          <div className="btn-row" style={{ marginTop: 6 }}>
-            <button className="btn btn-primary btn-lg" onClick={onRun} disabled={running}>
-              <IconPlay />
-              {running ? "Running…" : "Run the full lifecycle"}
-            </button>
-          </div>
+          {onRun ? (
+            <div className="btn-row" style={{ marginTop: 6 }}>
+              <button className="btn btn-primary btn-lg" onClick={onRun} disabled={running}>
+                <IconPlay />
+                {running ? "Running…" : "Run the full lifecycle"}
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     );
@@ -814,10 +819,12 @@ export function RunView({
               Open the pool record
             </button>
           ) : null}
-          <button className="btn btn-sm" onClick={onRun} disabled={running}>
-            <IconReplay />
-            {running ? "Running…" : "Run it again"}
-          </button>
+          {onRun ? (
+            <button className="btn btn-sm" onClick={onRun} disabled={running}>
+              <IconReplay />
+              {running ? "Running…" : "Run it again"}
+            </button>
+          ) : null}
         </div>
       </header>
 

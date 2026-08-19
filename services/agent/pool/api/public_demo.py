@@ -1,13 +1,13 @@
 """Public judge mode — the narrow surface Pool exposes to an anonymous browser.
 
-The local API (``pool/api/app.py``) is a full four-surface application: 40 endpoints
+The local API (``pool/api/app.py``) is a full four-surface application: 45 endpoints
 covering buyer, host, operator, and demo flows, plus a payment webhook. That is the
 right shape for development and for the test suite. It is **not** the right shape to
 put on the open internet with no authentication, so this module reduces it.
 
 Turned on with ``POOL_PUBLIC_DEMO=true``. What it changes, and why each one matters:
 
-1. **Route allowlist.** Twenty-four of those forty endpoints are reachable; everything
+1. **Route allowlist.** Twenty-nine of those forty-five endpoints are reachable; everything
    else 404s before it reaches a handler. Supplier-offer mutation, the operator pickup
    override, the payment webhook, direct ``lock``/``purchase`` calls, and the private
    message threads are all outside it. The lifecycle still reaches those code paths —
@@ -81,7 +81,28 @@ logger = logging.getLogger(__name__)
 #: Session workspaces the public client is allowed to ask for. Deliberately narrower
 #: than the API's own ``WORKSPACE_RE``: the public client generates exactly this shape,
 #: so anything else is either a mistake or someone probing.
-PUBLIC_WORKSPACE_RE = re.compile(r"^w[a-z0-9]{8,32}$")
+#: The canonical scripted showcase runs in its own partition, derived from the visitor's
+#: session by :func:`showcase_workspace`. Two properties matter and both come from the
+#: hyphen: a browser-generated session id can never contain one, so a visitor's *own*
+#: workspace and their showcase workspace can never be the same partition; and reaching
+#: somebody else's showcase still means guessing their session id, which is the property
+#: that already protects ``/api/state``.
+SHOWCASE_SUFFIX = "-showcase"
+
+PUBLIC_WORKSPACE_RE = re.compile(rf"^w[a-z0-9]{{8,32}}({re.escape(SHOWCASE_SUFFIX)})?$")
+
+
+def showcase_workspace(ws: str) -> str:
+    """The partition the scripted showcase runs in, for a given visitor session.
+
+    Idempotent, so a surface already reading the showcase can pass its own workspace
+    without accumulating suffixes.
+    """
+    return ws if ws.endswith(SHOWCASE_SUFFIX) else f"{ws}{SHOWCASE_SUFFIX}"
+
+
+def is_showcase_workspace(ws: str) -> bool:
+    return ws.endswith(SHOWCASE_SUFFIX)
 
 #: Never reachable as a workspace prefix — ``WORKSPACE_RE`` requires a leading
 #: ``[a-z0-9]`` — so quota and lease rows cannot collide with a session's data.
@@ -193,6 +214,10 @@ ALLOWED_GET_PATTERNS = tuple(
         rf"^/api/pools/{_ID}/checklist$",
         rf"^/api/pools/{_ID}/allocations$",
         rf"^/api/runs/{_ID}$",
+        # What one run did about this member's own declarations. A pure read over
+        # records that run already wrote: it creates nothing, spends no model tokens,
+        # and refuses to describe a run that was not this member's.
+        rf"^/api/runs/{_ID}/report$",
         rf"^/api/members/{_ID}$",
     )
 )
@@ -279,6 +304,11 @@ ALLOWED_POST_PATTERNS = tuple(
 #: on an environment variable, which is exactly the kind of difference that survives until
 #: someone demonstrates it live.
 TRIGGER_PROMPTS: dict[str, str | None] = {
+    # The consumer's own **Run Pool now**. ``None`` because the server does not have a
+    # fixed sentence for it: the coordinator derives the instruction from the member's
+    # authoritative standing declarations (``agent/objective.py``), which is the whole
+    # point of the trigger. A client selects the key and never the objective.
+    "member_scan": None,
     "manual_scan": None,
     "manual_advance": (
         "Advance every pool that is blocked: recruit a host, refresh the supplier "
@@ -287,9 +317,19 @@ TRIGGER_PROMPTS: dict[str, str | None] = {
     ),
 }
 
-#: Trigger the live AgentCore action sends. Must be in the runtime entrypoint's own
+#: Triggers the live AgentCore action may send, keyed by the action the *server*
+#: classifies the request as. Both must be in the runtime entrypoint's own
 #: ``ALLOWED_TRIGGERS`` (``services/agent/agentcore_app.py``).
-LIVE_TRIGGER = "manual"
+#:
+#: The default is the member's own question, because the live button on the product is
+#: the consumer's. The community scan stays reachable — it is what the scheduled
+#: pool-day invocation means, and the technical surface exists to demonstrate it — but a
+#: caller selects a key from this map and never an objective.
+LIVE_TRIGGERS: dict[str, str] = {
+    "member": "member_scan",
+    "community": "scheduled_scan",
+}
+LIVE_TRIGGER = LIVE_TRIGGERS["member"]
 
 #: Server-owned classification of the live action. The browser may use
 #: ``allow_local_fallback`` to choose a safe path, but it must never infer safety from
@@ -948,7 +988,7 @@ class AgentCoreBridge:
             )
         return self._client
 
-    def invoke(self, workspace: str) -> dict[str, Any]:
+    def invoke(self, workspace: str, trigger: str = LIVE_TRIGGER) -> dict[str, Any]:
         """Run one live coordination cycle on AWS, in ``workspace``, and project it.
 
         ``workspace`` is the caller's own session, already checked against
@@ -957,12 +997,20 @@ class AgentCoreBridge:
         purpose: the runtime coordinates inside that partition, so the pool a visitor
         sees afterwards is the one this run created rather than a copy of its answer.
 
+        ``trigger`` names which of two questions the run answers — the member's own
+        declarations, or a community-wide scan — and is a key from :data:`LIVE_TRIGGERS`
+        chosen by the server, never a value from the browser. Nothing about *whose*
+        declarations travels: the runtime resolves the member from the workspace itself,
+        so the payload carries no household id, no name and no contact detail.
+
         Everything else is still built here from constants — no prompt, no community id,
         no instruction. The runtime rejects a trigger outside its own allowlist, so even
         this value cannot be steered into a different behaviour.
         """
         session_id = new_session_id()
-        payload = json.dumps({"workspace": workspace, "trigger": LIVE_TRIGGER}).encode()
+        if trigger not in set(LIVE_TRIGGERS.values()):
+            raise ValueError(f"trigger not permitted on the live action: {trigger!r}")
+        payload = json.dumps({"workspace": workspace, "trigger": trigger}).encode()
 
         started = time.perf_counter()
         response = self.client.invoke_agent_runtime(
@@ -1125,7 +1173,7 @@ def install(app: FastAPI, guard: PublicDemoGuard, observe: Any = None) -> None:
         return response
 
     @app.post("/api/demo/agentcore")
-    def demo_agentcore(workspace: str = "") -> dict[str, Any]:
+    def demo_agentcore(workspace: str = "", action: str = "member") -> dict[str, Any]:
         """Invoke the deployed AgentCore Runtime, for real, once, on this session.
 
         Returns ``ok: false`` with a reason rather than raising for the situations a
@@ -1143,6 +1191,35 @@ def install(app: FastAPI, guard: PublicDemoGuard, observe: Any = None) -> None:
         # without a rebuild, and a handler holding a stale snapshot would ignore them.
         settings = guard.settings
         ws = guard.check_workspace(workspace)
+        # A key, never a value. ``member`` is the consumer's own button; ``community``
+        # is the scan the scheduled pool-day invocation performs. Anything else is a
+        # caller inventing an objective, which is exactly what this refuses.
+        trigger = LIVE_TRIGGERS.get(action, "")
+        if not trigger:
+            raise HTTPException(
+                400, f"unknown action: {action}. Allowed: {sorted(LIVE_TRIGGERS)}"
+            )
+        # The paid action never runs against a showcase partition.
+        #
+        # Two reasons, and the second is the one that matters. The showcase is a
+        # deterministic offline replay — invoking Bedrock inside it would prove nothing
+        # it does not already prove for free. And the live allowance is counted per
+        # workspace: since a session can address both its own partition and its
+        # showcase, permitting this here would hand every visitor two live budgets
+        # instead of one, which is a paid resource (AGENTS.md §3.3).
+        if is_showcase_workspace(ws):
+            return {
+                "ok": False,
+                "live": False,
+                "classification": LIVE_CLASS_SAFE_PRE_EXECUTION,
+                "remote_may_still_write": False,
+                "allow_local_fallback": False,
+                "refresh_state": False,
+                "reason": (
+                    "The scripted showcase replays a recorded lifecycle deterministically "
+                    "and does not invoke the deployed agent. Leave showcase mode to run it."
+                ),
+            }
         if not settings.live_available:
             return {
                 "ok": False,
@@ -1179,7 +1256,7 @@ def install(app: FastAPI, guard: PublicDemoGuard, observe: Any = None) -> None:
             raise
 
         try:
-            result = guard.bridge.invoke(ws)
+            result = guard.bridge.invoke(ws, trigger)
         except RuntimeRefusal as refusal:
             # A refusal is an answer. The runtime validated the payload and declined
             # before running anything, so the workspace goes straight back and the client

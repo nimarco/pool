@@ -50,6 +50,7 @@ from ..config import get_settings
 from ..data import catalog
 from ..data.seed import COMMUNITY_ID, seed
 from ..domain.models import (
+    LEFT_PARTICIPATION_STATES,
     AllocationState,
     AnnouncementKind,
     DecisionState,
@@ -68,7 +69,15 @@ from ..domain.models import (
 from ..domain.money import bps_to_pct_str, format_cents
 from ..domain.state import IllegalTransition
 from ..domain.viability import ViabilityStage
-from ..services import communication, fulfillment, hosting, onboarding
+from ..services import (
+    communication,
+    discovery,
+    fulfillment,
+    hosting,
+    onboarding,
+    relevance,
+    run_report,
+)
 from ..services import coordination as coord
 from ..services import needs as needs_service
 from ..services import payments as payment_service
@@ -454,9 +463,7 @@ def _pool_view(ws: str, pool, *, detail: bool = False) -> dict[str, Any]:
     supplier = r.get_supplier(ws, offer.supplier_id) if offer else None
     assignment = r.get_host_assignment(ws, pool.id)
     members = r.list_memberships(ws, pool.id)
-    live = [m for m in members if m.state not in {
-        ParticipationState.WITHDRAWN, ParticipationState.DECLINED
-    }]
+    live = [m for m in members if m.state not in LEFT_PARTICIPATION_STATES]
     econ = pool.final_economics or {}
 
     view: dict[str, Any] = {
@@ -704,7 +711,7 @@ def get_map(workspace: str = Query("demo")) -> dict[str, Any]:
     pooled: dict[str, str] = {}
     for p in r.list_pools(ws):
         for m in r.list_memberships(ws, p.id):
-            if m.state not in {ParticipationState.WITHDRAWN, ParticipationState.DECLINED}:
+            if m.state not in LEFT_PARTICIPATION_STATES:
                 pooled[m.household_id] = p.id
 
     need_counts: dict[str, int] = {}
@@ -767,14 +774,33 @@ def search_products(
     member still confirms, and compatibility is decided later by
     ``domain.substitution`` from structure alone.
     """
-    check_workspace(workspace)
-    found = catalog.search(q, limit)
+    ws = check_workspace(workspace)
+    ensure_seeded(ws)
+    # What Pool can actually buy right now, read from this workspace's own offers. It is
+    # a deployment fact, not a product fact, so it is computed here rather than baked
+    # into the snapshot — and it is the reason a broad query like "coffee" surfaces the
+    # coffee Pool holds a quote for instead of burying it under eight it does not.
+    sourceable = _sourceable_product_ids(ws)
+    found = catalog.search(q, limit, sourceable_ids=sourceable)
     return {
         "query": q.strip(),
-        "results": [e.view() for e in found],
+        "results": [e.view(sourceable=e.product_id in sourceable) for e in found],
         # So the client can render the licence obligation next to what it obliges.
         "attribution": catalog.attribution().to_dict(),
     }
+
+
+def _sourceable_product_ids(ws: str) -> frozenset[str]:
+    """Products this workspace holds a usable bulk quote for.
+
+    Truthful by construction: it is the same ``offers_for`` the evaluator consults, so a
+    product marked sourceable is one an opportunity assessment could genuinely price.
+    No offer is fabricated for a catalogue product to make this list longer.
+    """
+    ctx = ctx_for(ws)
+    return frozenset(
+        p.id for p in repo().list_products(ws) if coord.offers_for(ctx, p.id)[1]
+    )
 
 
 class OnboardingRequest(BaseModel):
@@ -993,18 +1019,53 @@ def update_need(
 
 @app.get("/api/members/{household_id}")
 def get_member(household_id: str, workspace: str = Query("demo")) -> dict[str, Any]:
-    """One member's own view. Contact details and payment references never leave here."""
+    """One member's own view. Contact details and payment references never leave here.
+
+    Also the one endpoint that answers "what of this is *mine*". A consumer surface must
+    not decide that for itself: Home used to lead with the first pool in the workspace,
+    which is how somebody who had declared coffee was shown a whey protein order formed
+    out of ten other students' declarations. ``opportunity`` is the server's answer,
+    computed by ``services.relevance`` from membership and need lineage, and ``null``
+    when this member is genuinely in nothing — which is a first-class answer, not a gap
+    to fill with somebody else's pool.
+    """
     ws = check_workspace(workspace)
     r = repo()
     h = r.get_household(ws, household_id)
     if h is None:
         raise HTTPException(404, "member not found")
+    # Read-only for its whole length, so the repository reads are memoised: the outlook
+    # evaluates every sourceable product against every pickup site, and without this one
+    # member view costs four times what `/api/state` does.
+    ctx = relevance.read_only(ctx_for(ws))
     membership = r.get_community_membership(ws, COMMUNITY_ID, household_id)
     profile = r.get_host_profile(ws, COMMUNITY_ID, household_id)
+    personal = relevance.personal_pools(ctx, COMMUNITY_ID, household_id)
+    in_pool = {p.need.id: p.pool.id for p in personal}
+    mine = [n for n in r.list_needs(ws) if n.household_id == household_id and n.active]
     return {
         "id": h.id,
         "display_name": h.display_name,
         "zone": h.neighborhood,
+        # The pool this member is actually in, if any, with the declaration that put
+        # them there. Everything else about relevance is derived from this.
+        "opportunity": personal[0].to_dict() if personal else None,
+        "other_pool_ids": [p.pool.id for p in personal[1:]],
+        # What already exists around each declaration, before anything is evaluated:
+        # how much compatible demand has independently accumulated, and the smallest
+        # quantity the supplier will sell. Inputs, deliberately without a verdict — the
+        # pre-run screen poses the question the run is about to answer (§8).
+        "standing_demand": [
+            discovery.standing_demand_for(ctx, COMMUNITY_ID, need) for need in mine
+        ],
+        # Why each standing declaration has not produced a pool, in checkable facts.
+        # Read-only: the same deterministic evaluator the coordinator's own tool uses,
+        # and labelled everywhere it is shown as a *current outlook* rather than as
+        # something a run concluded.
+        "needs_outlook": [
+            relevance.need_outlook(ctx, COMMUNITY_ID, need, in_pool=in_pool).to_dict()
+            for need in mine
+        ],
         "community_membership": (
             {
                 "community_id": membership.community_id,
@@ -1614,28 +1675,33 @@ def reset(workspace: str = Query("demo")) -> dict[str, Any]:
 
 @app.post("/api/demo/scenario")
 def scenario(workspace: str = Query("demo")) -> dict[str, Any]:
-    """Run the full showcase end to end and return the transcript."""
-    ws = check_workspace(workspace)
-    # The showcase reseeds the workspace and then drives the entire lifecycle through
-    # it — several hundred writes. A live agent run, a reset, or a second tab's scenario
-    # landing anywhere inside that produces a workspace that is inconsistent without
-    # looking broken, so it holds the lease for the whole thing.
+    """Run the full canonical showcase end to end, in its own workspace.
+
+    **The showcase never touches the visitor's account.** It declares a flagship whey
+    need, drives host recruitment, a payment failure, a recovery, a lock, a purchase and
+    ten pickups — as its own scripted consumer, in a partition derived from the caller's
+    session and reserved for exactly this. A coffee-only visitor who watches the scripted
+    lifecycle does not come back to a Needs page saying they also buy whey.
+
+    It used to run in the visitor's own workspace and skip the reseed when they had
+    onboarded, which was an attempt to avoid wiping their account and instead wrote the
+    canonical declaration *into* it. Labelling the row ``declared_by: scenario`` did not
+    make that acceptable product behaviour; separating the state does.
+
+    So the replay always starts from a known clean fixture, which is also what makes the
+    copy — "this starts the community over" — literally true.
+    """
+    visitor = check_workspace(workspace)
+    ws = public_demo.showcase_workspace(visitor)
+    # The lease is taken on the showcase partition, because that is the one being
+    # rewritten. A visitor's own coordinator run is now free to proceed alongside it:
+    # they are different partitions, and that is the whole point.
     with _public.workspace_mutation(ws, public_demo.WORKSPACE_BUSY):
-        _public.spend_action(ws)
-        # Reseeding wipes the workspace, and that used to include the account the person
-        # at the screen had just set up — they would finish onboarding, replay the
-        # lifecycle to see it end to end, and be thrown back to "what should Pool call
-        # you?" with their own declaration gone. So the replay only starts from a clean
-        # fixture when there is nothing of theirs to lose.
-        me = onboarding.consumer_household(ctx_for(ws))
-        result = run_showcase(
-            repo(),
-            ws,
-            settings=_settings,
-            routing=_routing,
-            reseed=not (me and me.is_onboarded),
-        )
-    return result.to_dict()
+        # The quota is spent against the *visitor*, though. Session caps exist to bound
+        # what one person can start, not what one partition can absorb.
+        _public.spend_action(visitor)
+        result = run_showcase(repo(), ws, settings=_settings, routing=_routing)
+    return {**result.to_dict(), "workspace": ws}
 
 
 @app.get("/api/runs/{run_id}")
@@ -1648,6 +1714,36 @@ def get_run(run_id: str, workspace: str = Query("demo")) -> dict[str, Any]:
     d = run.to_dict()
     d["duration_ms"] = run.duration_ms
     return d
+
+
+@app.get("/api/runs/{run_id}/report")
+def get_run_report(
+    run_id: str, household_id: str = Query(""), workspace: str = Query("demo")
+) -> dict[str, Any]:
+    """What one run did about one member's own declarations.
+
+    The consumer answer to **Run Pool now**, assembled server-side from the evaluation
+    records that run wrote while it was running — so it describes what the coordinator
+    actually established rather than what is true now, and it cannot drift into
+    describing a product the run never looked at.
+
+    ``is_mine`` is false when the run was not anchored to this member. That is the guard
+    against a previous run, or a community-wide scan, becoming the answer on somebody's
+    home screen.
+    """
+    ws = check_workspace(workspace)
+    run = repo().get_run(ws, run_id)
+    if run is None:
+        raise HTTPException(404, "run not found")
+    # Read-only for its whole length, like the member view, and for the same reason: it
+    # re-reads the same few tables once per declaration.
+    ctx = relevance.read_only(ctx_for(ws))
+    report = run_report.build(ctx, COMMUNITY_ID, run, household_id)
+    if household_id:
+        report["elsewhere"] = run_report.community_pools_elsewhere(
+            ctx, COMMUNITY_ID, household_id
+        )
+    return report
 
 
 @app.get("/api/pools/{pool_id}/allocations")

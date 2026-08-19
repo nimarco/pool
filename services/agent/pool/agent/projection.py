@@ -52,9 +52,18 @@ def _money(payload: dict[str, Any], key: str) -> str:
     return format_cents(int(value)) if isinstance(value, int) else ""
 
 
-def demand_view(opportunities: list[dict[str, Any]]) -> dict[str, Any]:
-    """Latent-demand listing, capped and stripped of fields no tool call consumes."""
-    shown = opportunities[:MAX_AGENT_OPPORTUNITIES]
+def demand_view(
+    opportunities: list[dict[str, Any]], objective: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Latent-demand listing, capped and stripped of fields no tool call consumes.
+
+    A member-anchored run's own entries are never trimmed: they are the question the run
+    was asked, and dropping one would silently turn "declined" into "not investigated".
+    The community tail is what the cap applies to.
+    """
+    mine = [o for o in opportunities if o.get("for_member")]
+    rest = [o for o in opportunities if not o.get("for_member")]
+    shown = mine + rest[: max(0, MAX_AGENT_OPPORTUNITIES - len(mine))]
     out: dict[str, Any] = {
         "opportunities": [
             {
@@ -64,11 +73,32 @@ def demand_view(opportunities: list[dict[str, Any]]) -> dict[str, Any]:
                 "member_count": o["member_count"],
                 "suggested_pickup_site_id": o["suggested_pickup_site_id"],
                 "suggested_pickup_site_name": o["suggested_pickup_site_name"],
+                **({"for_member": True} if o.get("for_member") else {}),
+                **(
+                    {"member_need_ids": o["member_need_ids"]}
+                    if o.get("member_need_ids")
+                    else {}
+                ),
             }
             for o in shown
         ],
         "count": len(opportunities),
     }
+    if objective:
+        # Product identities and the run's own shape. No household id, no name, no
+        # contact detail — the model does not need to know who asked (AGENTS.md §4).
+        out["objective"] = {
+            "kind": objective.get("kind", ""),
+            "declared": [
+                {
+                    "need_id": n["need_id"],
+                    "product_id": n["product_id"],
+                    "product_name": n["product_name"],
+                    "quantity": n["quantity"],
+                }
+                for n in objective.get("needs") or []
+            ],
+        }
     if len(opportunities) > len(shown):
         out["omitted_lower_ranked"] = len(opportunities) - len(shown)
     return out
@@ -135,6 +165,10 @@ def opportunity_view(full: dict[str, Any]) -> dict[str, Any]:
         "current_units": full.get("current_units", 0),
         "future_units": full.get("future_units", 0),
     }
+    if "includes_member_declaration" in full:
+        # Decision-critical on a member-triggered run: an order this member is not in is
+        # a legitimate outcome, and a worse one than an order they are.
+        view["includes_member_declaration"] = full["includes_member_declaration"]
     if not full.get("viable"):
         # A refusal only has to explain itself well enough for the model to move on.
         # The key keeps the authoritative name so a consumer reading either shape —

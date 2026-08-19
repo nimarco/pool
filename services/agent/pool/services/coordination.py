@@ -42,12 +42,14 @@ from ..domain.economics import (
 from ..domain.hosting import estimate_weight_kg
 from ..domain.matching import MatchResult, find_candidates, haversine_km
 from ..domain.models import (
+    LEFT_PARTICIPATION_STATES,
     AutonomyPath,
     Community,
     DecisionKind,
     DecisionRequest,
     DecisionState,
     Membership,
+    NeedDeclaration,
     Offer,
     OfferKind,
     ParticipationState,
@@ -63,6 +65,7 @@ from ..domain.models import (
 from ..domain.money import bps_to_pct_str, format_cents
 from ..domain.policy import JoinVerdictKind, PolicyVerdict, evaluate_smart_join
 from ..domain.state import assert_transition, is_open_to_joining
+from ..domain.substitution import evaluate_compatibility
 from ..domain.timing import build_timing, next_pool_day
 from ..domain.viability import (
     ViabilityInputs,
@@ -72,11 +75,50 @@ from ..domain.viability import (
 )
 from .context import CoordinationError, PoolContext
 
-#: Pools form tight and repair wide: the initial search stays close to the pickup site
-#: so travel burden is low, and only a recovery widens the net. Both remain bounded by
-#: each member's own max-travel policy and by the Community radius.
-FORMATION_RADIUS_KM = 1.6
-RECOVERY_RADIUS_KM = 4.0
+#: Pools form inside the Community and repair beyond it.
+#:
+#: The Community is the boundary Pool coordinates inside (AGENTS.md §1, §2), and its
+#: ``radius_km`` is the authoritative statement of how far apart its members are. A
+#: verified member of a Community is therefore eligible to be *discovered* anywhere
+#: inside it, and how far any one of them is willing to travel is decided by their own
+#: ``max_travel_minutes`` — a real declared preference the Smart Join engine already
+#: evaluates against real routed travel time (``domain.policy``).
+#:
+#: Formation used to stop at a global ``FORMATION_RADIUS_KM = 1.6``. Two things were
+#: wrong with that, and neither was the number:
+#:
+#: * ``Community.radius_km`` was read nowhere at all, so the model carried a field
+#:   declaring the community's extent while the engine silently used a different,
+#:   tighter one. The constants' own docstring claimed both radii were "bounded by the
+#:   Community radius"; nothing bounded them, and ``RECOVERY_RADIUS_KM = 4.0`` in fact
+#:   searched well outside a 2.5 km Community.
+#: * A hard geographic cut *overrides* each member's stated travel authority in the
+#:   stricter direction and never tells them. Somebody who said they would walk 24
+#:   minutes was excluded from their own community's order by a rule they never agreed
+#:   to and never saw — while the rule they did state was only ever a soft prompt.
+#:
+#: The asymmetry itself is still right, and it survives: formation searches the
+#: Community; recovery widens *past* it, because repairing a funded pool is worth
+#: reaching further than forming a speculative one. Coarse geography is a search bound
+#: and a site-ranking preference here — never an authority over a member.
+RECOVERY_WIDENING = 1.6
+
+#: How far a member is assumed to be willing to walk to a pickup point, used **only**
+#: to rank candidate pickup sites (``agent/tools.py``): the best site is the one most of
+#: the interested members can reach on foot. It excludes nobody. Ranking by the demand
+#: centroid instead drifts toward outliers and picks a site convenient for nobody, which
+#: is the failure this replaced.
+WALKABLE_PICKUP_KM = 1.6
+
+
+def formation_radius_km(community: Community) -> float:
+    """How far from a pickup site formation may look. The Community's own extent."""
+    return community.radius_km
+
+
+def recovery_radius_km(community: Community) -> float:
+    """How far a *repair* may look — deliberately wider than the Community (§27)."""
+    return community.radius_km * RECOVERY_WIDENING
 
 #: Distance assumed for the supplier round trip when no host has been selected yet, so
 #: a candidate pool can show an honest *estimate* rather than a precise-looking lie.
@@ -134,6 +176,44 @@ class CandidateAssessment:
         }
 
 
+#: What happened to one bulk tier inside an evaluation. Values, not prose, so a run
+#: report can group and count them without parsing a sentence.
+TIER_SELECTED = "selected"
+TIER_NO_COMPATIBLE_DEMAND = "no_compatible_demand"
+TIER_BELOW_MINIMUM = "below_minimum"
+TIER_NO_CASE_FIT = "no_case_fit"
+TIER_LOWER_SAVINGS = "lower_savings"
+TIER_OUTCOMES = frozenset(
+    {
+        TIER_SELECTED,
+        TIER_NO_COMPATIBLE_DEMAND,
+        TIER_BELOW_MINIMUM,
+        TIER_NO_CASE_FIT,
+        TIER_LOWER_SAVINGS,
+    }
+)
+
+#: Why an opportunity is not worth forming, as a value rather than a sentence.
+REASON_VIABLE = ""
+REASON_NO_RETAIL_BASELINE = "no_retail_baseline"
+REASON_NO_BULK_OFFER = "no_bulk_offer"
+REASON_NO_COMPATIBLE_DEMAND = "no_compatible_demand"
+REASON_BELOW_MINIMUM = "below_minimum"
+REASON_NOT_CHEAPER = "not_cheaper"
+REASON_ROUTING_UNAVAILABLE = "routing_unavailable"
+OPPORTUNITY_REASON_CODES = frozenset(
+    {
+        REASON_VIABLE,
+        REASON_NO_RETAIL_BASELINE,
+        REASON_NO_BULK_OFFER,
+        REASON_NO_COMPATIBLE_DEMAND,
+        REASON_BELOW_MINIMUM,
+        REASON_NOT_CHEAPER,
+        REASON_ROUTING_UNAVAILABLE,
+    }
+)
+
+
 @dataclass
 class OpportunityAssessment:
     """A fully-costed candidate opportunity. Not yet a pool; nobody has been contacted.
@@ -153,6 +233,11 @@ class OpportunityAssessment:
     retail_offer_id: str | None
     viable: bool
     reason: str
+    #: Machine-readable form of ``reason``. ``reason`` is a sentence written for a human
+    #: reading a run trace and has been reworded more than once; anything that has to
+    #: *branch* on why an opportunity failed reads this instead of matching on prose.
+    #: One of :data:`OPPORTUNITY_REASON_CODES`.
+    reason_code: str
     economics: LandedEconomics | None
     timing: PoolTiming | None = None
     candidates: list[CandidateAssessment] = field(default_factory=list)
@@ -162,6 +247,26 @@ class OpportunityAssessment:
     max_travel_minutes: int = 0
     current_units: int = 0
     future_units: int = 0
+    #: Compatible, in-range, in-time units this evaluation actually found, before any
+    #: case fitting. Populated on the *unviable* path too, which the prose ``reason``
+    #: already carried inside a sentence — a member asking "how far off is this" needs
+    #: the number, and parsing it back out of a string is not an answer.
+    #:
+    #: Always read together with :attr:`minimum_units`, and always from the *same*
+    #: supplier tier: the winning one when a tier priced, otherwise the one that came
+    #: closest. Taking the largest match from one tier and the smallest minimum from
+    #: another produces a pair of true numbers that together describe a supplier offer
+    #: nobody made.
+    matched_units: int = 0
+    #: The quantity that tier will not sell below.
+    minimum_units: int = 0
+    #: Every bulk tier this evaluation actually compared, and what happened to each.
+    #: The agent is never shown it (a tier it cannot name is not a decision it can
+    #: make), but "which supplier offer won, and what lost to it" is one of the few
+    #: genuinely interesting things a run establishes, and it existed nowhere durable.
+    #: Shape: ``{offer_id, unit_price_cents, min_units, case_units, matched_units,
+    #: outcome}`` where outcome is one of :data:`TIER_OUTCOMES`.
+    offers_considered: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         econ = self.economics
@@ -177,11 +282,15 @@ class OpportunityAssessment:
             "retail_offer_id": self.retail_offer_id,
             "viable": self.viable,
             "reason": self.reason,
+            "reason_code": self.reason_code,
             "routing_provider": self.routing_provider,
             "avg_travel_minutes": self.avg_travel_minutes,
             "max_travel_minutes": self.max_travel_minutes,
             "current_units": self.current_units,
             "future_units": self.future_units,
+            "matched_units": self.matched_units,
+            "minimum_units": self.minimum_units,
+            "offers_considered": self.offers_considered,
             "economics": econ.to_dict() if econ else None,
             "estimated_savings_pct": bps_to_pct_str(econ.net_savings_bps) if econ else "0.0%",
             "candidates": [c.to_dict() for c in self.candidates],
@@ -232,6 +341,79 @@ def _memberships_map(ctx: PoolContext, community_id: str) -> dict[str, Any]:
     }
 
 
+def sourceable_targets(ctx: PoolContext, product_id: str) -> list[str]:
+    """Products a pool could actually buy that might serve a need for ``product_id``.
+
+    The declared product first, then anything else in its substitute group Pool holds a
+    bulk offer for. The member's own substitution policy still decides whether any of
+    them may serve *them* — that verdict belongs to ``domain.substitution`` and is
+    reached inside the matcher, not here. Widening the *search* is not widening the
+    *authority*: without this, somebody who said "any equivalent product is fine" was
+    told no supplier existed while Pool held a bulk quote for the neighbouring brand.
+
+    One implementation, because three callers need the same answer: the member outlook,
+    the run objective a member-triggered run is built from, and discovery.
+    """
+    declared = ctx.repo.get_product(ctx.ws, product_id)
+    group = declared.substitute_group if declared else ""
+    out: list[str] = []
+    for candidate in [declared, *ctx.repo.list_products(ctx.ws)]:
+        if candidate is None or candidate.id in out:
+            continue
+        if candidate.id != product_id and (
+            not group or candidate.substitute_group != group
+        ):
+            continue
+        if offers_for(ctx, candidate.id)[1]:
+            out.append(candidate.id)
+    return out
+
+
+def sourceable_targets_for_need(ctx: PoolContext, need: NeedDeclaration) -> list[str]:
+    """The subset of :func:`sourceable_targets` this member's own rules authorise.
+
+    Widening the *search* to a substitute group is right when the question is "what
+    might serve this declaration"; it is wrong when the question is "what may this run
+    act on". A member who declared one coffee **exact-only** cannot join an order for a
+    different one, so proposing that order as an answer to *their* button would form a
+    pool for six other people because their categories happened to coincide.
+
+    The authority is ``domain.substitution`` — the same pure function the matcher
+    applies — evaluated at the most favourable bulk price any tier offers, so a target
+    kept here is one some tier can genuinely use.
+    """
+    declared = ctx.repo.get_product(ctx.ws, need.product_id)
+    if declared is None:
+        return []
+    out: list[str] = []
+    for target_id in sourceable_targets(ctx, need.product_id):
+        target = ctx.repo.get_product(ctx.ws, target_id)
+        if target is None:
+            continue
+        verdict = evaluate_compatibility(
+            target=target,
+            candidate=declared,
+            need=need,
+            offer_unit_price_cents=best_bulk_unit_price_cents(ctx, target_id),
+        )
+        if verdict.compatible:
+            out.append(target_id)
+    return out
+
+
+def best_bulk_unit_price_cents(ctx: PoolContext, product_id: str) -> int | None:
+    """The cheapest per-unit price any usable bulk tier for this product will sell at.
+
+    Discovery needs this to ask the compatibility question the matcher will later ask
+    per tier: a member's per-unit price ceiling applies to every non-exact substitution,
+    so a declaration rejected even at the *cheapest* tier is rejected at all of them.
+    ``None`` when there is no bulk tier, which is also what the matcher is passed when
+    no price is known.
+    """
+    _, bulk = offers_for(ctx, product_id)
+    return min((o.unit_price_cents for o in bulk), default=None)
+
+
 def pooled_household_ids(ctx: PoolContext, community_id: str, product_id: str) -> set[str]:
     """Members already inside a live pool for this product — do not re-recruit them."""
     out: set[str] = set()
@@ -241,7 +423,7 @@ def pooled_household_ids(ctx: PoolContext, community_id: str, product_id: str) -
         if pool.status in {PoolStatus.FAILED, PoolStatus.EXPIRED}:
             continue
         for m in ctx.repo.list_memberships(ctx.ws, pool.id):
-            if m.state not in {ParticipationState.WITHDRAWN, ParticipationState.DECLINED}:
+            if m.state not in LEFT_PARTICIPATION_STATES:
                 out.add(m.household_id)
     return out
 
@@ -332,7 +514,7 @@ def evaluate_opportunity(
     product_id: str,
     pickup_site_id: str,
     distribution_day: date | None = None,
-    radius_km: float = FORMATION_RADIUS_KM,
+    radius_km: float | None = None,
     exclude_household_ids: frozenset[str] = frozenset(),
     include_future_demand: bool = True,
 ) -> OpportunityAssessment:
@@ -350,6 +532,8 @@ def evaluate_opportunity(
         raise CoordinationError(f"unknown pickup site: {pickup_site_id}")
     if site.community_id != community_id:
         raise CoordinationError("pickup site belongs to a different community")
+    if radius_km is None:
+        radius_km = formation_radius_km(community)
 
     today = ctx.now.date()
     dist_day = distribution_day or next_pool_day(today, community.schedule)
@@ -367,6 +551,7 @@ def evaluate_opportunity(
         retail_offer_id=None,
         viable=False,
         reason="",
+        reason_code=REASON_NO_COMPATIBLE_DEMAND,
         economics=None,
         timing=timing,
         routing_provider=ctx.routing.name,
@@ -375,10 +560,12 @@ def evaluate_opportunity(
     retail, bulk_offers = offers_for(ctx, product_id)
     if retail is None:
         empty.reason = "no retail baseline offer available for this product"
+        empty.reason_code = REASON_NO_RETAIL_BASELINE
         return empty
     empty.retail_offer_id = retail.id
     if not bulk_offers:
         empty.reason = "no bulk offer available for this product"
+        empty.reason_code = REASON_NO_BULK_OFFER
         return empty
 
     households = {h.id: h for h in ctx.repo.list_households(ctx.ws)}
@@ -388,8 +575,21 @@ def evaluate_opportunity(
     # Compare every bulk tier and keep the one that maximises *net landed* savings
     # while actually clearing its own minimum. The comparison is ours; the decision to
     # investigate this product at all was the agent's.
+    #
+    # Everything a tier establishes is kept *with that tier*. It used to be written onto
+    # one shared record inside the loop, so the rejections a caller read back were
+    # whichever tier happened to be evaluated last — and the tiers genuinely disagree,
+    # because a member's per-unit price ceiling is applied against each tier's own price.
+    # An assessment explaining a *winning* offer with a *losing* offer's rejections is
+    # exactly the kind of plausible-looking evidence a run report must not be built on.
     best: tuple[Offer, LandedEconomics, MatchResult] | None = None
+    best_rejected: list[dict[str, str]] = []
+    best_matched = 0
     shortfalls: list[str] = []
+    #: (shortfall, -matched, min_units, offer_id) for every tier that produced no
+    #: economics — the tier that came closest is the one whose numbers explain a refusal.
+    near_misses: list[tuple[int, int, int, str, list[dict[str, str]]]] = []
+    tiers: dict[str, dict[str, Any]] = {}
     for offer in bulk_offers:
         match = find_candidates(
             community_id=community_id,
@@ -406,13 +606,31 @@ def evaluate_opportunity(
             exclude_household_ids=exclude_household_ids,
             include_future_demand=include_future_demand,
         )
-        empty.rejected = [
+        rejected = [
             {"need_id": r.need_id, "household_id": r.household_id, "reason": r.reason}
             for r in match.rejections
         ]
+        near_misses.append(
+            (
+                max(0, offer.min_units - match.total_units),
+                -match.total_units,
+                offer.min_units,
+                offer.id,
+                rejected,
+            )
+        )
+        tiers[offer.id] = {
+            "offer_id": offer.id,
+            "unit_price_cents": offer.unit_price_cents,
+            "min_units": offer.min_units,
+            "case_units": offer.case_units,
+            "matched_units": match.total_units,
+            "outcome": TIER_NO_COMPATIBLE_DEMAND,
+        }
         if not match.candidates:
             continue
         if match.total_units < offer.min_units:
+            tiers[offer.id]["outcome"] = TIER_BELOW_MINIMUM
             shortfalls.append(
                 f"{offer.id} needs {offer.min_units} units, have {match.total_units}"
             )
@@ -421,6 +639,7 @@ def evaluate_opportunity(
         # Case rounding must not create inventory nobody bought, so the buyer set is
         # chosen to fill whole cases exactly rather than trimmed afterwards (§48).
         # Members whose need is already due are preferred over demand pulled forward.
+        pre_fit_units = match.total_units
         fit = fit_to_cases(
             [c.need.quantity for c in match.candidates],
             case_units=offer.case_units,
@@ -428,6 +647,7 @@ def evaluate_opportunity(
             priority=[i for i, c in enumerate(match.candidates) if not c.is_future_pull_forward],
         )
         if not fit.ok:
+            tiers[offer.id]["outcome"] = TIER_NO_CASE_FIT
             shortfalls.append(f"{offer.id}: {fit.reason}")
             continue
 
@@ -453,14 +673,33 @@ def evaluate_opportunity(
             processing_fee=community.processing_fee,
             host_is_estimated=True,
         )
+        tiers[offer.id]["outcome"] = TIER_LOWER_SAVINGS
+        tiers[offer.id]["net_savings_cents"] = economics.net_savings_cents
         if best is None or economics.net_savings_cents > best[1].net_savings_cents:
             best = (offer, economics, match)
+            best_rejected = rejected
+            # Before case fitting, which is what this field documents: how much
+            # compatible, in-range, in-time demand this tier actually found.
+            best_matched = pre_fit_units
 
     if best is None:
+        # No tier priced. The refusal is explained by the tier that came closest, so the
+        # two numbers a member reads — how much exists, how much is required — describe
+        # one real supplier offer rather than being taken from two different ones.
+        empty.offers_considered = list(tiers.values())
+        near_misses.sort()
+        if near_misses:
+            _, negative_matched, minimum, _, rejected = near_misses[0]
+            empty.matched_units = -negative_matched
+            empty.minimum_units = minimum
+            empty.rejected = rejected
         empty.reason = (
             "aggregate demand below every bulk minimum: " + "; ".join(shortfalls)
             if shortfalls
             else "no compatible declared demand within range"
+        )
+        empty.reason_code = (
+            REASON_BELOW_MINIMUM if shortfalls else REASON_NO_COMPATIBLE_DEMAND
         )
         return empty
 
@@ -468,10 +707,16 @@ def evaluate_opportunity(
     empty.bulk_offer_id = bulk_offer.id
     empty.current_units = match.current_units
     empty.future_units = match.future_units
+    empty.matched_units = best_matched
+    empty.minimum_units = bulk_offer.min_units
+    empty.rejected = best_rejected
+    tiers[bulk_offer.id]["outcome"] = TIER_SELECTED
+    empty.offers_considered = list(tiers.values())
 
     if economics.net_savings_cents <= 0:
         empty.economics = economics
         empty.reason = "all-in Pool cost does not beat buying retail alone"
+        empty.reason_code = REASON_NOT_CHEAPER
         return empty
 
     try:
@@ -481,6 +726,7 @@ def evaluate_opportunity(
     except Exception as exc:  # noqa: BLE001 - routing failure is reported, never faked
         empty.economics = economics
         empty.reason = f"routing unavailable: {exc}"
+        empty.reason_code = REASON_ROUTING_UNAVAILABLE
         return empty
 
     assessments: list[CandidateAssessment] = []
@@ -533,15 +779,21 @@ def evaluate_opportunity(
         retail_offer_id=retail.id,
         viable=True,
         reason="viable bulk opportunity",
+        reason_code=REASON_VIABLE,
         economics=economics,
         timing=timing,
         candidates=assessments,
+        # The *winning* tier's rejections. Which offer a member was measured against
+        # changes who it excluded, so this list travels with the offer that produced it.
         rejected=empty.rejected,
         routing_provider=provider,
         avg_travel_minutes=round(sum(travel_values) / len(travel_values)),
         max_travel_minutes=max(travel_values),
         current_units=match.current_units,
         future_units=match.future_units,
+        matched_units=empty.matched_units,
+        minimum_units=empty.minimum_units,
+        offers_considered=empty.offers_considered,
     )
 
 
@@ -1414,7 +1666,7 @@ class RecoveryResult:
 
 
 def recover_pool(
-    *, ctx: PoolContext, pool_id: str, radius_km: float = RECOVERY_RADIUS_KM
+    *, ctx: PoolContext, pool_id: str, radius_km: float | None = None
 ) -> RecoveryResult:
     """Attempt to restore a pool that lost funded demand.
 
@@ -1432,6 +1684,8 @@ def recover_pool(
     assignment = ctx.repo.get_host_assignment(ctx.ws, pool_id)
     if product is None or site is None or offer is None:
         raise CoordinationError("pool references a missing product, site, or offer")
+    if radius_km is None:
+        radius_km = recovery_radius_km(community)
 
     # Replace only what is genuinely gone. Buyers who have not yet answered their final
     # offer are still in play, and recruiting over the top of them would leave Pool

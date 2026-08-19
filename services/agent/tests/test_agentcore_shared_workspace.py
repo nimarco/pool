@@ -112,8 +112,15 @@ class Deployment:
         sep = "&" if "?" in path else "?"
         return f"{path}{sep}workspace={quote(ws, safe='')}"
 
-    def live(self, ws: str = WS):
-        return self.post("/api/demo/agentcore", ws=ws)
+    def live(self, ws: str = WS, action: str = "community"):
+        """Invoke the deployed runtime.
+
+        ``community`` by default because this file is about the runtime/store boundary
+        rather than about whose question a run answers: a community scan needs no
+        declaration to exist first, so every test here stays about the thing it names.
+        The member-anchored action has its own tests below.
+        """
+        return self.post(f"/api/demo/agentcore?action={action}", ws=ws)
 
     def state(self, ws: str = WS) -> dict:
         return self.get("/api/state", ws=ws).json()
@@ -172,6 +179,115 @@ def deployment(public_api, monkeypatch, request) -> Deployment:
     monkeypatch.setattr(public_api, "_repo", api_repo)
 
     return Deployment(public_api, table, client)
+
+
+# ------------------------------------------------------ the same run, both sides
+
+
+def test_the_member_action_reaches_the_runtime_as_a_member_trigger(deployment):
+    """The consumer's own button, over the wire.
+
+    The payload is a workspace and a trigger name and nothing else — no household, no
+    prompt, no community id. Whose declarations the run is about is resolved *inside*
+    the runtime, from the workspace it was given, so there is no field in which a
+    caller could point it at somebody else.
+    """
+    deployment.get("/api/state")
+    _declare_for_the_visitor(deployment)
+
+    body = deployment.live(action="member").json()
+    assert body["ok"] is True
+
+    payload = json.loads(deployment.client.calls[-1]["payload"])
+    assert payload == {"workspace": WS, "trigger": "member_scan"}
+    assert set(payload) == {"workspace", "trigger"}
+
+
+def test_an_unknown_live_action_never_reaches_aws(deployment):
+    """A key from the server's own map, never an objective."""
+    deployment.get("/api/state")
+    response = deployment.post("/api/demo/agentcore?action=whatever", ws=WS)
+    assert response.status_code == 400
+    assert deployment.client.calls == []
+
+
+def test_the_paid_action_refuses_a_showcase_workspace(deployment):
+    """The live allowance is counted per workspace, and a session can address two.
+
+    Its own partition and its showcase are both valid workspaces, so permitting the paid
+    action on the second would hand every visitor twice the live budget it is supposed to
+    have — for a replay that is deterministic and offline and proves nothing Bedrock
+    could add (AGENTS.md §3.3).
+    """
+    showcase = public_demo.showcase_workspace(WS)
+    deployment.get("/api/state", ws=showcase)
+
+    body = deployment.post("/api/demo/agentcore", ws=showcase).json()
+
+    assert body["ok"] is False
+    assert body["classification"] == public_demo.LIVE_CLASS_SAFE_PRE_EXECUTION
+    assert body["remote_may_still_write"] is False
+    assert deployment.client.calls == [], "a refused run must not reach AWS"
+
+
+def test_what_the_deployed_run_established_is_readable_from_the_other_side(deployment):
+    """The reason evaluation evidence is a stored row rather than an in-process object.
+
+    The runtime computed these facts inside a process the API cannot reach — in the
+    deployment that process is a microVM that no longer exists by the time anybody asks.
+    The Lambda's own repository reads them back, and builds the member's report from
+    them, which is the only path the two halves share.
+    """
+    deployment.get("/api/state")
+    household = _declare_for_the_visitor(deployment)
+
+    body = deployment.live(action="member").json()
+    run_id = body["run"]["run_id"]
+
+    # Read through the *API's* repository object, not the runtime's.
+    stored = deployment.api._repo.list_run_evaluations(WS, run_id)
+    assert stored, "the deployed run recorded nothing the browser could be shown"
+    assert {e.run_id for e in stored} == {run_id}
+
+    report = deployment.get(
+        f"/api/runs/{run_id}/report?household_id={household}", ws=WS
+    ).json()
+    assert report["is_mine"] is True
+    assert report["results"], "the member has no answer to the button they pressed"
+    assert report["evaluated_product_ids"]
+    # Every product named is one this run actually evaluated.
+    named = {r["product_id"] for r in report["results"] if r["result"] != "not_investigated"}
+    assert named <= set(report["evaluated_product_ids"])
+
+
+def _declare_for_the_visitor(deployment) -> str:
+    """Onboard and declare through the public endpoints, as a visitor would."""
+    from datetime import date, timedelta
+
+    deployment.post(
+        "/api/onboarding", ws=WS,
+        json={"display_name": "Marco", "autonomy_mode": "smart_join"},
+    )
+    deployment.post("/api/onboarding/payment-method", ws=WS)
+    household = deployment.state()["consumer"]["household_id"]
+    due = date.today() + timedelta(days=12)
+    response = deployment.post(
+        "/api/needs", ws=WS,
+        json={
+            "household_id": household,
+            "product_id": "prod_whey_vanilla",
+            "quantity": 2,
+            "cadence_days": 40,
+            "expected_next_need_date": due.isoformat(),
+            "flexibility_days": 11,
+            "routine_lead_days": 11,
+            "min_savings_pct": 20,
+            "max_spend_cents": 9000,
+            "substitution": "exact_only",
+        },
+    )
+    assert response.status_code == 200, response.text
+    return household
 
 
 # --------------------------------------------------------------- the central claim
@@ -426,7 +542,14 @@ def test_a_second_invocation_cannot_start_while_one_is_running(deployment):
 def test_a_repeated_invocation_does_not_produce_a_second_pool(deployment):
     """Sequential duplicates are allowed — a judge may press it again — and the domain's
     own idempotency key is what makes that safe. Agent systems retry; a coordinator that
-    formed a second identical pool on the second press would be one."""
+    formed a second *identical* pool on the second press would be one.
+
+    "Identical" is the claim, not "only one pool exists". A community scan that finds
+    the next unserved opportunity on its second pass is the coordinator working: the
+    Community really does hold more than one, and refusing to see the second would be a
+    worse bug than seeing it twice. So the invariant is per product, per site, per
+    distribution day — which is exactly the idempotency key the domain keeps.
+    """
     deployment.get("/api/state")
     first = deployment.live().json()
     second = deployment.live().json()
@@ -434,7 +557,8 @@ def test_a_repeated_invocation_does_not_produce_a_second_pool(deployment):
     assert (first["ok"], second["ok"]) == (True, True)
     assert first["run"]["run_id"] != second["run"]["run_id"], "two real runs happened"
     pools = deployment.pools()
-    assert len(pools) == 1, [p["product_name"] for p in pools]
+    keys = [(p["product_id"], p["pickup_site"]) for p in pools]
+    assert len(keys) == len(set(keys)), [p["product_name"] for p in pools]
     # Both runs are on the record. Idempotent does not mean invisible.
     assert len(deployment.state()["runs"]) == 2
 
@@ -639,7 +763,11 @@ def test_the_paid_cap_still_bounds_the_shared_path(deployment):
     assert deployment.live().json()["ok"] is True
     assert deployment.live().status_code == 429
     assert len(deployment.client.calls) == 2, "a refused run must not reach AWS"
-    assert len(deployment.pools()) == 1
+    pools = deployment.pools()
+    # Two permitted scans, two distinct opportunities, no duplicate of either. The cap
+    # bounds how many *runs* are paid for, not how much the community turns out to hold.
+    keys = [(p["product_id"], p["pickup_site"]) for p in pools]
+    assert len(keys) == len(set(keys)) and len(keys) <= 2
 
 
 def test_a_run_refused_by_the_cap_hands_the_workspace_straight_back(deployment):

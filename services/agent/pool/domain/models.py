@@ -21,7 +21,7 @@ account can belong to several Communities.
 from __future__ import annotations
 
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, date, datetime
 from enum import Enum
 from typing import Any
@@ -159,6 +159,18 @@ PROVISIONAL_PARTICIPATION_STATES = {
     ParticipationState.AUTHORIZED,
     ParticipationState.LOCKED,
 }
+#: States in which the member is no longer part of the pool at all — they said no, or
+#: they left. Everything else, including a *failed* authorisation, is still a live
+#: relationship: the row stays on the record, the member still needs to know about it,
+#: and the recovery branch is built on being able to see it.
+#:
+#: Stated once because four different places were deciding "is this person still in
+#: this pool" with their own inline copy of this set, and a pool card, a map pin and a
+#: re-recruitment guard disagreeing about that is exactly how somebody ends up being
+#: shown an order they had already withdrawn from.
+LEFT_PARTICIPATION_STATES = {ParticipationState.DECLINED, ParticipationState.WITHDRAWN}
+#: The complement: the member is genuinely in this pool right now.
+LIVE_PARTICIPATION_STATES = frozenset(set(ParticipationState) - LEFT_PARTICIPATION_STATES)
 
 
 class AutonomyPath(str, Enum):
@@ -1647,6 +1659,20 @@ class AgentRun:
     output_tokens: int | None = None
     hitl_decisions_created: int = 0
     notes: list[str] = field(default_factory=list)
+    #: What this run was *asked* — the objective the coordinator derived from stored
+    #: state before it began (``agent/objective.py``). Recorded because a run report has
+    #: to distinguish "investigated and declined" from "never investigated", and the
+    #: difference is not visible anywhere in what the run did.
+    objective_kind: str = "community"
+    #: The member a member-triggered run belongs to. A synthetic household id, never a
+    #: name or a contact detail; it is what stops one member's report being served for
+    #: another member's run.
+    objective_household_id: str = ""
+    #: Declarations the run took on, held back by the per-run cap, and already inside a
+    #: live pool. Ids only.
+    objective_need_ids: list[str] = field(default_factory=list)
+    deferred_need_ids: list[str] = field(default_factory=list)
+    served_need_ids: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -1670,6 +1696,11 @@ class AgentRun:
             output_tokens=d.get("output_tokens"),
             hitl_decisions_created=int(d.get("hitl_decisions_created", 0)),
             notes=list(d.get("notes", [])),
+            objective_kind=d.get("objective_kind", "community"),
+            objective_household_id=d.get("objective_household_id", ""),
+            objective_need_ids=list(d.get("objective_need_ids", [])),
+            deferred_need_ids=list(d.get("deferred_need_ids", [])),
+            served_need_ids=list(d.get("served_need_ids", [])),
         )
 
     @property
@@ -1679,3 +1710,89 @@ class AgentRun:
         start = datetime.fromisoformat(self.started_at)
         end = datetime.fromisoformat(self.ended_at)
         return int((end - start).total_seconds() * 1000)
+
+
+#: What one run actually established about one product. Deliberately bounded on every
+#: axis — a fixed field set, a capped list of supplier tiers, a capped list of per-need
+#: verdicts — because an explanation feature that grows with community size is a storage
+#: bill wearing a product's clothes.
+MAX_EVALUATION_TIERS = 6
+MAX_EVALUATION_NEED_VERDICTS = 8
+
+
+@dataclass
+class RunEvaluation:
+    """One deterministic evaluation a run performed, kept so it can be explained later.
+
+    **Why this is a stored row rather than a derived answer.** The facts a member wants
+    after pressing the button — how many compatible units existed, what the supplier
+    minimum was, which tier won and what lost to it, whether the case filled, why *they*
+    were left out — are all computed during the run and were all discarded the moment it
+    ended. What survived was a count. Recomputing them afterwards would answer a
+    different question: current state, not what the run found, and the two diverge the
+    instant anything else changes.
+
+    **What is deliberately not here.** No model reasoning, no scratchpad, no free text
+    the model authored — the fields below are the deterministic services' own values
+    (AGENTS.md §9). No contact details, no names, no payment references, and no roster
+    of who was excluded and why: ``need_verdicts`` carries only the declarations the run
+    was *asked* about, so one member's report cannot become a readout of another
+    member's policy failures (§4).
+    """
+
+    id: str
+    run_id: str
+    community_id: str
+    product_id: str
+    product_name: str
+    #: Which of the run's objectives this evaluation served. Empty for a community scan.
+    need_ids: list[str] = field(default_factory=list)
+    viable: bool = False
+    #: One of ``coordination.OPPORTUNITY_REASON_CODES``.
+    reason_code: str = ""
+    reason: str = ""
+    pickup_site_id: str = ""
+    pickup_site_name: str = ""
+    sites_considered: int = 0
+    distribution_day: str = ""
+    matched_units: int = 0
+    minimum_units: int = 0
+    current_units: int = 0
+    future_units: int = 0
+    selected_units: int = 0
+    selected_member_count: int = 0
+    cases: int = 0
+    case_units: int = 0
+    surplus_units: int = 0
+    auto_join_count: int = 0
+    approval_required_count: int = 0
+    bulk_offer_id: str = ""
+    retail_offer_id: str = ""
+    #: The supplier tiers this evaluation compared: ``{offer_id, unit_price_cents,
+    #: min_units, case_units, matched_units, outcome}``.
+    offers_considered: list[dict[str, Any]] = field(default_factory=list)
+    all_in_cents: int = 0
+    retail_baseline_cents: int = 0
+    net_savings_cents: int = 0
+    net_savings_bps: int = 0
+    host_compensation_cents: int = 0
+    platform_fee_cents: int = 0
+    processing_fee_cents: int = 0
+    #: Per-declaration outcome, for the declarations this run was asked about only:
+    #: ``{need_id, included, units, reason}``.
+    need_verdicts: list[dict[str, Any]] = field(default_factory=list)
+    #: The pool this evaluation led to, when the run went on to form one.
+    pool_id: str = ""
+    at: str = field(default_factory=lambda: iso(utcnow()))
+
+    @property
+    def key(self) -> str:
+        return f"{self.run_id}#{self.id}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> RunEvaluation:
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in known})

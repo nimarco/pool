@@ -1008,6 +1008,116 @@ table.data th.r {
 
 /* Money, one component per line, against a rule. The all-in and the saving get a
    heavier rule above them, the way a printed statement subtotals. */
+/* What Pool established about each of this member's standing declarations.
+   Deliberately *not* `.ledger`: that is a money table, its values are tabular numerals
+   set `nowrap`, and putting a full sentence in one pushed the card off a 390 px screen.
+   Here the sentence is the point, so it wraps, and the pair stacks below the measure
+   where two columns stop being readable. */
+.outlook {
+  display: flex;
+  flex-direction: column;
+}
+.outlook-line {
+  display: grid;
+  grid-template-columns: minmax(0, 0.45fr) minmax(0, 1fr);
+  gap: 6px 18px;
+  padding: 9px 0;
+  border-bottom: 1px dotted var(--rule-strong);
+}
+.outlook-line:last-child {
+  border-bottom: none;
+}
+.outlook-product {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.outlook-reason {
+  font-size: 13.5px;
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+@media (max-width: 640px) {
+  .outlook-line {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* What a member declared, and the overlap that accumulated around it on its own.
+   Stacked rather than gridded: each line is a small paragraph about one declaration, and
+   the numbers inside it only mean anything in the sentence that carries them. */
+.standing {
+  display: flex;
+  flex-direction: column;
+}
+.standing-line {
+  padding: 11px 0;
+  border-bottom: 1px dotted var(--rule-strong);
+}
+.standing-line:last-child {
+  border-bottom: none;
+}
+.standing-line p {
+  margin: 5px 0 0;
+}
+.standing-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.standing-product {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.run-result {
+  padding: 11px 0;
+  border-bottom: 1px dotted var(--rule-strong);
+}
+.run-result:last-child {
+  border-bottom: none;
+}
+.run-result p {
+  margin: 6px 0 0;
+}
+/* The deterministic facts behind an outcome. Short lines, so they read as a list of
+   things that are true rather than as prose defending a decision. */
+.fact-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  /* Long deterministic reasons can be a whole sentence; wrapping is what stops one
+     breaking the card on a narrow screen. */
+  overflow-wrap: anywhere;
+}
+.fact-list li::marker {
+  color: var(--ink-faint);
+}
+/* Work Pool is doing for other people. Present, and visibly not the member's own. */
+.panel-muted {
+  background: var(--paper-sunken);
+}
+.panel-muted .panel-head h2 {
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  color: var(--ink-muted);
+}
+
+/* Marks a line as a *current* deterministic outlook rather than something a run
+   concluded. The two are different claims and the interface has to be able to say which
+   one it is making. */
+.outlook-tag {
+  display: inline-block;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
 .ledger {
   display: flex;
   flex-direction: column;
@@ -2140,6 +2250,25 @@ select.control {
 .product-meta {
   font-size: 12px;
   color: var(--ink-muted);
+}
+/* "Pool can source this" — a fact about the deployment, so it reads as a quiet note
+   rather than a badge competing with the product's own name. */
+.product-sourceable {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--moss);
+}
+.product-sourceable::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
 }
 .product-attribution {
   margin: 0;

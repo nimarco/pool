@@ -84,7 +84,7 @@ Ten seconds, because it is the one place a demo like this normally lies.
 
 ## 0:20–0:45 — Two things you buy
 
-**Continue.** Type `rice`.
+**Continue.** **Type a category** — `rice` — not a memorised product name.
 
 The first result is **Jasmine rice, 5 lb**. Notice what it is *not* labelled: there is no
 *Pool can source this* mark on it, and the real branded rices underneath are equally
@@ -147,8 +147,8 @@ The answer is two refusals, for two different reasons:
 
 > **Jasmine rice, 5 lb** — No supplier Pool has verified sells this in bulk yet.
 
-> **Paper towels, 6 rolls** — 6 compatible packs were declared near you, and the supplier
-> will not sell fewer than 48.
+> **Paper towels, 6 rolls** — 6 compatible packs were declared near you,
+> and the supplier will not sell fewer than 48.
 
 Pool answered both things you told it, and both answers are no. Read the tail out loud,
 because it is the promise the rest of the recording keeps:
@@ -168,7 +168,7 @@ independently — 24 bags standing*, and a **no bulk quote** chip. Both quotes a
 **synthetic**, and the footer says nobody negotiated them and no wholesaler relationship
 exists.
 
-**Record the split-case quote.** $9.75 a bag, four to a case, twelve minimum.
+**Record the split-case quote.** $9.75 a bag, 4 to a case, minimum 12 bags.
 
 Say what just happened and what did not: one supplier offer row was written. No
 declaration, no household, no pool, no past run record was touched — and **no agent ran**.
@@ -183,16 +183,16 @@ minimum clears, the units fill whole cases. And Pool still says no, because once
 fulfiller's pay, card processing and Pool's own fee are counted the group pays more than
 its members would pay alone. **Removing an obstacle did not buy a yes.**
 
-**Back to Operations. Record the case-programme quote.** $6.25 a bag, eight to a case,
-sixteen minimum.
+**Back to Operations. Record the case-programme quote.** $6.25 a bag, 8 to a case,
+minimum 16 bags.
 
 **Home.** Now hold both panels in one frame, because this is the most important screenful
 in the recording:
 
-- the run report still says *No supplier Pool has verified sells this in bulk yet* —
-  because that is what was true when that run happened;
-- the standing card now says *The supplier's best price starts at 16* — because that is
-  what is true now.
+- the run report still says **No supplier Pool has verified sells this in bulk yet.**
+  That is what was true when that run happened.
+- the standing card now says **The supplier's best price starts at 16.** That is what is
+  true now.
 
 One is history and one is the present, and Pool does not edit the first to agree with the
 second. Nothing has run.
@@ -204,8 +204,8 @@ second. Nothing has run.
 Same declaration. Same six neighbours. Same quantities, same dates, same rules. The only
 thing that changed is a supplier fact somebody recorded ninety seconds ago.
 
-> Your 2 bags · about **$17.53** instead of $22.98 buying alone. With 6 others · collect
-> from Central Quad pavilion.
+> Your 2 bags · about $17.53 instead of $22.98 buying alone.
+> With 6 others · collect from Central Quad pavilion.
 
 Open **Why this worked** and read three lines, not all six:
 

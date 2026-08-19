@@ -158,6 +158,35 @@ def _verdict_for(evaluation: RunEvaluation, need_id: str) -> dict[str, Any] | No
     return None
 
 
+def _most_telling(
+    evaluations: list[RunEvaluation], need_id: str
+) -> RunEvaluation | None:
+    """Of the evaluations that named this declaration, the one that explains its outcome.
+
+    One declaration can have more than one sourceable target — the declared product and
+    any permitted substitute Pool holds a bulk quote for (``coordination.
+    sourceable_targets``) — so a run can cost two products on its behalf and reach two
+    different verdicts. Taking whichever was evaluated first reported the wrong one: a
+    member whose substitute *did* form an order they were left out of was told "nobody
+    near you has declared anything this order could be shared with", which was true of
+    the other target and no answer at all to what happened. ``formed_excluded`` exists
+    for exactly that outcome and was unreachable.
+
+    An order Pool actually placed outranks one it decided against, and a viable
+    assessment outranks an unviable one. ``max`` keeps the first of equals, so a
+    declaration with a single target reads exactly as it did.
+
+    Currently latent: every substitute group in the seeded catalogue holds one
+    bulk-quoted product, so no declaration in it has two targets. It stops being latent
+    the first time a second supplier offer lands in one group, which is the case
+    ``sourceable_targets`` was widened for.
+    """
+    named = [e for e in evaluations if need_id in e.need_ids]
+    if not named:
+        return None
+    return max(named, key=lambda e: (bool(e.pool_id), e.viable, e.matched_units))
+
+
 def _result_for_need(
     ctx: PoolContext,
     *,
@@ -211,9 +240,8 @@ def _result_for_need(
         }
 
     # Investigated, and this member is not in the result.
-    for evaluation in evaluations:
-        if need.id not in evaluation.need_ids:
-            continue
+    evaluation = _most_telling(evaluations, need.id)
+    if evaluation is not None:
         verdict = _verdict_for(evaluation, need.id)
         if evaluation.pool_id and verdict is not None and not verdict.get("included"):
             reason = relevance.plain_reason(str(verdict.get("reason", "")))

@@ -373,3 +373,71 @@ def test_the_evaluation_record_is_bounded(client):
     for evaluation in stored:
         assert len(evaluation.offers_considered) <= MAX_EVALUATION_TIERS
         assert len(evaluation.need_verdicts) <= MAX_EVALUATION_NEED_VERDICTS
+
+
+def test_a_declaration_with_two_targets_is_explained_by_the_order_that_formed(client):
+    """One declaration, two sourceable targets, two different verdicts.
+
+    ``coordination.sourceable_targets`` deliberately widens the search to the declared
+    product *and* any permitted substitute Pool holds a bulk quote for, so a run can cost
+    two products on one declaration's behalf. When one of them formed an order this
+    member did not fit inside and the other simply had no demand, the report used to name
+    whichever was evaluated first: "nobody near you has declared anything this order could
+    be shared with" — true of the target with none, and no answer at all to what happened,
+    on a screen also showing the order that did form.
+
+    Latent in the shipped catalogue, where every substitute group holds exactly one
+    bulk-quoted product. So the second offer is added here, which is what makes the case
+    reachable and is the change that would make it real.
+    """
+    from pool.domain.models import MoqKind, Offer, OfferKind, iso, utcnow
+
+    household = _onboard(client)
+    # A bulk tier for chocolate whey that its own demand can never clear. Now a member
+    # who authorises the same-brand variant has two targets: this one, and vanilla.
+    api._repo.put_offer(
+        "demo",
+        Offer(
+            id="off_choc_bulk",
+            supplier_id="sup_bulkline",
+            product_id="prod_whey_chocolate",
+            kind=OfferKind.BULK,
+            unit_price_cents=3000,
+            case_units=12,
+            moq_kind=MoqKind.UNITS,
+            moq_amount=500,
+            verified_at=iso(utcnow()),
+        ),
+    )
+    # Needed far enough out that the case fitter prefers members whose whey is already
+    # due, so the vanilla order forms without these units.
+    _declare(
+        client,
+        household,
+        "prod_whey_chocolate",
+        quantity=3,
+        days=40,
+        substitution="same_product_other_variant",
+    )
+
+    run = _run(client)
+    evaluated = {
+        e.product_id: e for e in api._repo.list_run_evaluations("demo", run["run_id"])
+    }
+    # Both targets really were costed, and they really do disagree.
+    assert set(evaluated) == {"prod_whey_chocolate", "prod_whey_vanilla"}
+    assert evaluated["prod_whey_chocolate"].viable is False
+    assert evaluated["prod_whey_chocolate"].pool_id == ""
+    assert evaluated["prod_whey_vanilla"].pool_id
+
+    result = _report(client, run["run_id"], household)["results"][0]
+
+    assert result["result"] == run_report.RESULT_FORMED_EXCLUDED
+    assert result["pool_id"] == evaluated["prod_whey_vanilla"].pool_id
+    # The declaration is still the member's own product; the order names the one bought.
+    assert result["product_id"] == "prod_whey_chocolate"
+    assert "100% Whey Protein" in result["headline"]
+    assert "not in this one" in result["headline"]
+    assert any("Nothing was charged" in f for f in result["facts"])
+    # And it is genuinely not theirs, by the same lineage every other surface reads.
+    assert client.get(f"/api/members/{household}").json()["opportunity"] is None

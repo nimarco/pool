@@ -1,13 +1,13 @@
 """Public judge mode — the narrow surface Pool exposes to an anonymous browser.
 
-The local API (``pool/api/app.py``) is a full four-surface application: 45 endpoints
+The local API (``pool/api/app.py``) is a full four-surface application: 47 endpoints
 covering buyer, host, operator, and demo flows, plus a payment webhook. That is the
 right shape for development and for the test suite. It is **not** the right shape to
 put on the open internet with no authentication, so this module reduces it.
 
 Turned on with ``POOL_PUBLIC_DEMO=true``. What it changes, and why each one matters:
 
-1. **Route allowlist.** Twenty-nine of those forty-five endpoints are reachable; everything
+1. **Route allowlist.** Thirty-one of those forty-seven endpoints are reachable; everything
    else 404s before it reaches a handler. Supplier-offer mutation, the operator pickup
    override, the payment webhook, direct ``lock``/``purchase`` calls, and the private
    message threads are all outside it. The lifecycle still reaches those code paths —
@@ -194,6 +194,11 @@ ALLOWED_GET = frozenset(
         "/api/operator",
         "/api/pickup-sites",
         "/api/demo/config",
+        # What supplier quotes exist for the changing-world demonstration, and which of
+        # them this session has already recorded. A pure read over the caller's own
+        # workspace: it prices nothing, spends no model tokens, and the quote terms it
+        # returns are server constants rather than anything a caller supplied.
+        "/api/demo/supplier-updates",
         # Resolving what somebody typed into products they might mean. The first half of
         # the product's primary action, so it has to be reachable for the same reason
         # `/api/needs` is. Cheap to expose: it reads a bundled snapshot with a pure
@@ -228,6 +233,13 @@ ALLOWED_POST = frozenset(
         "/api/demo/reset",
         "/api/demo/scenario",
         "/api/demo/agentcore",
+        # Recording one of two predetermined supplier quotes. The counterpart of
+        # `operator/offers` below, and the reason that one can stay off this list: the
+        # client sends an allowlisted key and the server owns every economic term, so
+        # there is no field in which a stranger could set a price. Writes exactly one
+        # offer row, in the caller's own session workspace, under the same lease and the
+        # same action quota as every other mutation here.
+        "/api/demo/supplier-updates",
         # Declaring a standing need. The product's primary user action, and the one a
         # judge has to be able to *perform* rather than read about — the whole thesis is
         # that this is all anybody does and the agent finds the overlap. It creates no

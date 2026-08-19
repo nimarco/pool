@@ -81,6 +81,7 @@ from ..services import (
 from ..services import coordination as coord
 from ..services import needs as needs_service
 from ..services import payments as payment_service
+from ..services import supplier_updates as supplier_updates_svc
 from ..services.context import CoordinationError, PoolContext
 from ..services.demo import run_showcase
 from . import public_demo
@@ -1671,6 +1672,92 @@ def reset(workspace: str = Query("demo")) -> dict[str, Any]:
         _public.spend_action(ws)
         counts = seed(repo(), ws)
     return {"workspace": ws, "reset": True, "seeded": counts}
+
+
+class SupplierQuoteRequest(BaseModel):
+    """The whole of what a caller may say. A key, from a server-owned allowlist.
+
+    Deliberately has no price, minimum, case size, product or supplier field. There is
+    nothing to validate a range on, because there is no number here to validate — the
+    terms live in ``services/supplier_updates.py`` and the client selects between two
+    fixed quotes it cannot edit.
+    """
+
+    quote: str = Field(max_length=64)
+
+
+@app.get("/api/demo/supplier-updates")
+def supplier_updates(workspace: str = Query("demo")) -> dict[str, Any]:
+    """The operator's view of what could arrive, and what already has.
+
+    Read-only. Carries the standing demand behind the product as well as the quotes,
+    because "six households already buy this" is the fact that makes recording a quote a
+    meaningful act rather than a button.
+    """
+    ws = check_workspace(workspace)
+    ensure_seeded(ws)
+    ctx = relevance.read_only(ctx_for(ws))
+    product = ctx.repo.get_product(ws, supplier_updates_svc.PRODUCT_ID)
+    declared = [
+        n
+        for n in ctx.repo.list_needs(ws)
+        if n.product_id == supplier_updates_svc.PRODUCT_ID and n.active
+    ]
+    held = supplier_updates_svc.recorded_keys(ctx)
+    _, bulk = coord.offers_for(ctx, supplier_updates_svc.PRODUCT_ID)
+    return {
+        "product_id": supplier_updates_svc.PRODUCT_ID,
+        "product_name": product.name if product else supplier_updates_svc.PRODUCT_ID,
+        "unit": product.unit if product else "unit",
+        # Inputs, not a verdict. Whether an order works is a run's answer, and this
+        # screen does not pre-empt it (§8).
+        "declared_members": len({n.household_id for n in declared}),
+        "declared_units": sum(n.quantity for n in declared),
+        "has_bulk_offer": bool(bulk),
+        "quotes": [
+            {**quote.to_dict(), "recorded": quote.key in held}
+            for quote in supplier_updates_svc.QUOTES.values()
+        ],
+    }
+
+
+@app.post("/api/demo/supplier-updates")
+def record_supplier_update(
+    body: SupplierQuoteRequest, workspace: str = Query("demo")
+) -> dict[str, Any]:
+    """Record one predetermined supplier quote against this workspace.
+
+    An **operator** action: a member cannot conjure a wholesale quote, and this is not on
+    a consumer screen. What it changes is one offer row — the deterministic outlook that
+    every member surface recomputes then changes with it, and the record of any run that
+    already happened does not, because that run happened in a world where this quote did
+    not exist.
+
+    Takes the workspace lease. Recording a supplier price is exactly the kind of write
+    that must not land halfway through a coordinator run: the run would price part of
+    its work against one set of supply facts and part against another, and its stored
+    evidence would describe a world that never existed.
+    """
+    ws = check_workspace(workspace)
+    with _public.workspace_mutation(ws, public_demo.WORKSPACE_BUSY):
+        _public.spend_action(ws)
+        ensure_seeded(ws)
+        try:
+            offer = supplier_updates_svc.record(ctx_for(ws), body.quote)
+        except supplier_updates_svc.SupplierUpdateError as exc:
+            raise HTTPException(400, str(exc)) from exc
+    return {
+        "recorded": True,
+        "quote": body.quote,
+        "offer_id": offer.id,
+        "product_id": offer.product_id,
+        "unit_price_display": format_cents(offer.unit_price_cents),
+        "case_units": offer.case_units,
+        "min_units": offer.min_units,
+        "verified_at": offer.verified_at,
+        "source": offer.source.value,
+        "synthetic": True,
+    }
 
 
 @app.post("/api/demo/scenario")

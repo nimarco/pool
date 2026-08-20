@@ -7,7 +7,7 @@
       "stock": {
         "role": "neutral",
         "displayName": "Chart Stock",
-        "canonical": "#dbe3e1",
+        "canonical": "#eaefee",
         "darkCounterpart": "#0f1719",
         "tonalRamp": [
           "#0a1113",
@@ -16,14 +16,14 @@
           "#2b3a38",
           "#5b706c",
           "#8fa5a1",
-          "#c3d0cd",
+          "#cbd6d3",
           "#eef2f1"
         ]
       },
       "stock-raised": {
         "role": "neutral",
         "displayName": "Stock Raised",
-        "canonical": "#e4eae9",
+        "canonical": "#f4f7f6",
         "darkCounterpart": "#162023",
         "tonalRamp": [
           "#0d1415",
@@ -39,7 +39,7 @@
       "stock-sunken": {
         "role": "neutral",
         "displayName": "Stock Sunken",
-        "canonical": "#d0dad8",
+        "canonical": "#dde5e3",
         "darkCounterpart": "#0a1113",
         "tonalRamp": [
           "#0a1010",
@@ -55,7 +55,7 @@
       "stock-deep": {
         "role": "neutral",
         "displayName": "Stock Deep",
-        "canonical": "#c3d0cd",
+        "canonical": "#cbd6d3",
         "darkCounterpart": "#060c0d",
         "tonalRamp": [
           "#080e0e",
@@ -64,7 +64,7 @@
           "#41504d",
           "#697a76",
           "#96a5a1",
-          "#c3d0cd",
+          "#cbd6d3",
           "#e7ecea"
         ]
       },
@@ -330,7 +330,7 @@
       "refersTo": "button-primary",
       "description": "The main instrument control. Ink ground, stock label, square; hover swaps to petrol.",
       "html": "<button class=\"ds-btn ds-btn-primary\">Start a pool</button>",
-      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 10px 17px; background: transparent; color: var(--ink, #101a1c); border: 2px solid var(--ink, #101a1c); border-radius: 0; font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; } .ds-btn-primary { background: var(--ink, #101a1c); color: var(--stock, #dbe3e1); } .ds-btn-primary:hover { background: var(--petrol, #0e4c50); border-color: var(--petrol, #0e4c50); } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 2px solid var(--ink, #101a1c); outline-offset: 2px; }"
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 10px 17px; background: transparent; color: var(--ink, #101a1c); border: 2px solid var(--ink, #101a1c); border-radius: 0; font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; } .ds-btn-primary { background: var(--ink, #101a1c); color: var(--stock, #eaefee); } .ds-btn-primary:hover { background: var(--petrol, #0e4c50); border-color: var(--petrol, #0e4c50); } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 2px solid var(--ink, #101a1c); outline-offset: 2px; }"
     },
     {
       "name": "Accept Button (advisory)",
@@ -338,7 +338,7 @@
       "refersTo": "button-accept",
       "description": "The one control that answers an advisory. Amber ground carrying constant dark ink.",
       "html": "<button class=\"ds-btn ds-btn-accept\">Authorise</button>",
-      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 10px 17px; border-radius: 0; font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; } .ds-btn-accept { background: var(--signal, #c87a0a); border: 2px solid var(--ink, #101a1c); color: var(--on-signal, #101a1c); } .ds-btn-accept:hover { background: var(--signal-deep, #7a4705); color: var(--stock, #dbe3e1); } .ds-btn-accept:focus-visible { outline: 2px solid var(--ink, #101a1c); outline-offset: 2px; }"
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 10px 17px; border-radius: 0; font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; } .ds-btn-accept { background: var(--signal, #c87a0a); border: 2px solid var(--ink, #101a1c); color: var(--on-signal, #101a1c); } .ds-btn-accept:hover { background: var(--signal-deep, #7a4705); color: var(--stock, #eaefee); } .ds-btn-accept:focus-visible { outline: 2px solid var(--ink, #101a1c); outline-offset: 2px; }"
     },
     {
       "name": "Ghost Button",
@@ -354,7 +354,7 @@
       "refersTo": "control",
       "description": "A ruled input on raised stock. Focus goes to an ink border plus an inset ink ring.",
       "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Units per restock</span><input class=\"ds-control\" value=\"3\" /></label>",
-      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; } .ds-field-label { font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-faint, rgba(16,26,28,0.68)); } .ds-control { width: 100%; min-height: 38px; padding: 9px 11px; background: var(--stock-raised, #e4eae9); border: 1.5px solid var(--rule-strong, rgba(16,26,28,0.34)); border-radius: 0; color: var(--ink, #101a1c); font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 15px; font-variant-numeric: tabular-nums; } .ds-control:focus { border-color: var(--ink, #101a1c); outline: none; box-shadow: inset 0 0 0 1px var(--ink, #101a1c); }"
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; } .ds-field-label { font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-faint, rgba(16,26,28,0.68)); } .ds-control { width: 100%; min-height: 38px; padding: 9px 11px; background: var(--stock-raised, #f4f7f6); border: 1.5px solid var(--rule-strong, rgba(16,26,28,0.34)); border-radius: 0; color: var(--ink, #101a1c); font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 15px; font-variant-numeric: tabular-nums; } .ds-control:focus { border-color: var(--ink, #101a1c); outline: none; box-shadow: inset 0 0 0 1px var(--ink, #101a1c); }"
     },
     {
       "name": "Chip",
@@ -370,7 +370,7 @@
       "refersTo": "nav-item",
       "description": "The analysis masthead: sticky, stock ground, 2px ink bottom rule. Items are station labels with a transparent 2px underline that promotes to ink when current.",
       "html": "<div class=\"ds-topbar\"><span class=\"ds-brand\"><svg class=\"ds-mark\" viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><circle cx=\"12\" cy=\"12\" r=\"7.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\"/><circle cx=\"12\" cy=\"12\" r=\"4.1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.1\"/><circle cx=\"12\" cy=\"12\" r=\"1.9\" fill=\"#0e4c50\"/></svg><span class=\"ds-brand-name\">Pool</span></span><nav class=\"ds-nav\"><button aria-current=\"page\">Watching</button><button>Community</button><button>Behind Pool</button></nav></div>",
-      "css": ".ds-topbar { display: flex; align-items: center; gap: 18px; min-height: 58px; background: var(--stock, #dbe3e1); border-bottom: 2px solid var(--ink, #101a1c); color: var(--ink, #101a1c); } .ds-brand { display: inline-flex; align-items: center; gap: 9px; color: var(--ink, #101a1c); } .ds-brand-name { font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 21px; font-weight: 700; letter-spacing: 0.005em; line-height: 1; } .ds-nav { display: flex; gap: 1px; } .ds-nav button { min-height: 30px; padding: 5px 12px; background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--ink-muted, rgba(16,26,28,0.74)); font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; white-space: nowrap; cursor: pointer; } .ds-nav button:hover { color: var(--ink, #101a1c); } .ds-nav button[aria-current=\"page\"] { color: var(--ink, #101a1c); border-bottom-color: var(--ink, #101a1c); } .ds-nav button:focus-visible { outline: 2px solid var(--ink, #101a1c); outline-offset: -2px; }"
+      "css": ".ds-topbar { display: flex; align-items: center; gap: 18px; min-height: 58px; background: var(--stock, #eaefee); border-bottom: 2px solid var(--ink, #101a1c); color: var(--ink, #101a1c); } .ds-brand { display: inline-flex; align-items: center; gap: 9px; color: var(--ink, #101a1c); } .ds-brand-name { font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 21px; font-weight: 700; letter-spacing: 0.005em; line-height: 1; } .ds-nav { display: flex; gap: 1px; } .ds-nav button { min-height: 30px; padding: 5px 12px; background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--ink-muted, rgba(16,26,28,0.74)); font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; white-space: nowrap; cursor: pointer; } .ds-nav button:hover { color: var(--ink, #101a1c); } .ds-nav button[aria-current=\"page\"] { color: var(--ink, #101a1c); border-bottom-color: var(--ink, #101a1c); } .ds-nav button:focus-visible { outline: 2px solid var(--ink, #101a1c); outline-offset: -2px; }"
     },
     {
       "name": "Section Strip (with threshold)",
@@ -378,7 +378,7 @@
       "refersTo": "panel",
       "description": "Quantity as a section: fixed unit axis, extent = max(demand, minimum), the minimum as the one major tick, case boundaries as minor ticks, a bracket over the segment the verdict is about.",
       "html": "<div class=\"ds-sect\" role=\"img\" aria-label=\"A section through the demand field. Its full extent is 24 units of standing demand. The supplier minimum of 18 is marked at its true position, cleared by 6. Case boundaries every 6 units.\"><div class=\"ds-sect-head\"><span class=\"ds-sect-minlabel\">Min 18 &middot; supplier minimum</span></div><div class=\"ds-sect-bar\"><span class=\"ds-sect-under\" style=\"width:75%\"></span><span class=\"ds-sect-over\" style=\"width:25%\"></span><span class=\"ds-sect-case\" style=\"left:25%\"></span><span class=\"ds-sect-case\" style=\"left:50%\"></span><span class=\"ds-sect-tick\" style=\"left:75%\"></span></div><div class=\"ds-sect-bracket\" style=\"margin-left:75%;width:25%\"><span>Cleared by 6</span></div><div class=\"ds-sect-axis\"><span>0</span><span>24 units standing</span></div></div>",
-      "css": ".ds-sect { margin-top: 14px; font-family: \"Archivo Variable\", system-ui, sans-serif; } .ds-sect-head { position: relative; height: 15px; } .ds-sect-minlabel { position: absolute; bottom: 0; left: calc(75% + 7px); white-space: nowrap; font-size: 10px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink, #101a1c); } .ds-sect-bar { position: relative; display: flex; height: 26px; background: var(--field-1, #c6d6d3); } .ds-sect-under { height: 100%; background: var(--field-3, #6c9e99); } .ds-sect-over { height: 100%; background: var(--field-4, #0e4c50); } .ds-sect-case { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--stock, #dbe3e1); } .ds-sect-tick { position: absolute; top: -6px; bottom: -6px; width: 3px; margin-left: -1.5px; background: var(--ink, #101a1c); } .ds-sect-bracket { position: relative; height: 22px; padding-top: 5px; } .ds-sect-bracket::before { content: \"\"; position: absolute; left: 0; right: 0; top: 0; height: 5px; border: 1px solid var(--ink, #101a1c); border-top: 0; } .ds-sect-bracket > span { display: block; text-align: center; padding-top: 5px; white-space: nowrap; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink, #101a1c); } .ds-sect-axis { display: flex; justify-content: space-between; gap: 14px; margin-top: 7px; font-size: 10px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-faint, rgba(16,26,28,0.68)); }"
+      "css": ".ds-sect { margin-top: 14px; font-family: \"Archivo Variable\", system-ui, sans-serif; } .ds-sect-head { position: relative; height: 15px; } .ds-sect-minlabel { position: absolute; bottom: 0; left: calc(75% + 7px); white-space: nowrap; font-size: 10px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink, #101a1c); } .ds-sect-bar { position: relative; display: flex; height: 26px; background: var(--field-1, #c6d6d3); } .ds-sect-under { height: 100%; background: var(--field-3, #6c9e99); } .ds-sect-over { height: 100%; background: var(--field-4, #0e4c50); } .ds-sect-case { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--stock, #eaefee); } .ds-sect-tick { position: absolute; top: -6px; bottom: -6px; width: 3px; margin-left: -1.5px; background: var(--ink, #101a1c); } .ds-sect-bracket { position: relative; height: 22px; padding-top: 5px; } .ds-sect-bracket::before { content: \"\"; position: absolute; left: 0; right: 0; top: 0; height: 5px; border: 1px solid var(--ink, #101a1c); border-top: 0; } .ds-sect-bracket > span { display: block; text-align: center; padding-top: 5px; white-space: nowrap; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink, #101a1c); } .ds-sect-axis { display: flex; justify-content: space-between; gap: 14px; margin-top: 7px; font-size: 10px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-faint, rgba(16,26,28,0.68)); }"
     },
     {
       "name": "Section Strip (no threshold)",
@@ -418,14 +418,14 @@
       "refersTo": "banner",
       "description": "A refusal is a result: ink on sunken stock, no colour and no alarm. Only an advisory gets the amber edge.",
       "html": "<div class=\"ds-banner ds-banner-stop\">There is enough demand and it still would not be cheaper. Nothing was ordered.</div><div class=\"ds-banner ds-banner-warn\">An authorisation is waiting on a person.</div>",
-      "css": ".ds-banner { display: flex; gap: 10px; align-items: flex-start; padding: 13px 15px; border: 1.5px solid var(--rule-strong, rgba(16,26,28,0.34)); border-radius: 0; margin-bottom: 12px; font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 15px; line-height: 1.55; color: var(--ink, #101a1c); } .ds-banner-stop { border-color: var(--ink, #101a1c); background: var(--stock-sunken, #d0dad8); } .ds-banner-warn { border-color: var(--ink, #101a1c); border-left: 4px solid var(--signal, #c87a0a); background: var(--signal-soft, #f0e0c6); }"
+      "css": ".ds-banner { display: flex; gap: 10px; align-items: flex-start; padding: 13px 15px; border: 1.5px solid var(--rule-strong, rgba(16,26,28,0.34)); border-radius: 0; margin-bottom: 12px; font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 15px; line-height: 1.55; color: var(--ink, #101a1c); } .ds-banner-stop { border-color: var(--ink, #101a1c); background: var(--stock-sunken, #dde5e3); } .ds-banner-warn { border-color: var(--ink, #101a1c); border-left: 4px solid var(--signal, #c87a0a); background: var(--signal-soft, #f0e0c6); }"
     }
   ],
   "narrative": {
     "northStar": "Synoptic Hour",
     "overview": "Many people observe independently at the same hour, nobody coordinates them, and the coherent picture exists only because someone drew an analysis over their separate marks. That is a synoptic chart, and it is also the product's one sentence: nobody organised the group, Pool noticed. Every surface is therefore drawn, not decorated \u2014 an analysis sheet with a masthead naming its source and the hour it was drawn, station rows beneath it, and notation demoted to an enclosure at the foot.\n\nThe material is cold chart stock, never warm paper. Ink is graphite, and graphite carries every analysis line and every refusal, because a refusal here is a result and gets set in the same voice as a finding. Colour is rationed to two jobs and no others: a five-step petrol field scale for accumulating demand, and amber as an advisory in effect. There is no red anywhere on any surface.\n\nThe density is high and the dividing is done by rules and rails. No card, no shadow, no glow, and every corner is square. Quantity is drawn as a section \u2014 a fixed unit axis with the supplier's threshold as a tick on it \u2014 never as a contour and never as a progress bar. Contours survive in exactly two places, the mark and the map's isodistance rings, where the geometry is genuinely geographic. The system explicitly refuses both the agent-dashboard card grid and its cream-editorial opposite.",
     "keyCharacteristics": [
-      "Cold chart stock (#dbe3e1 light / #0f1719 dark) with graphite ink, both schemes first-class",
+      "Cold chart stock (#eaefee light / #0f1719 dark) with graphite ink, both schemes first-class",
       "Zero radius, zero shadow; hairline and 2px rules divide everything",
       "One self-hosted variable font (Archivo Variable, weight axis, latin subset, 34.1 kB, SIL OFL)",
       "Petrol means accumulating demand; amber means an advisory waiting on a person; nothing else is coloured",

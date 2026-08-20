@@ -295,7 +295,7 @@ describe("the member's own stake in a pool", () => {
     });
     renderHome([shown]);
 
-    expect(await screen.findByText(/Your 2 tubs/)).toBeTruthy();
+    expect(await screen.findByText(/For your 2 tubs/)).toBeTruthy();
     // Her own final cost and her own baseline, both server strings.
     expect(screen.getByText(/\$71\.83/)).toBeTruthy();
     expect(screen.getByText(/instead of \$93\.98 buying alone/)).toBeTruthy();
@@ -325,7 +325,7 @@ describe("the member's own stake in a pool", () => {
     renderHome([shown]);
 
     expect(await screen.findByText(/Pool found overlapping demand/)).toBeTruthy();
-    expect(screen.queryByText(/Your 2 tubs/)).toBeNull();
+    expect(screen.queryByText(/For your 2 tubs/)).toBeNull();
     expect(screen.getByText("23.6%")).toBeTruthy();
   });
 
@@ -343,7 +343,7 @@ describe("the member's own stake in a pool", () => {
 
     // A dash here would read as a missing number rather than as a rule being enforced.
     expect(await screen.findByText(/Not priced yet/)).toBeTruthy();
-    expect(screen.getByText(/fixed once a fulfiller accepts/)).toBeTruthy();
+    expect(screen.getByText(/fixed once a host accepts/)).toBeTruthy();
   });
 });
 
@@ -372,7 +372,7 @@ describe("a pool buying an authorised substitute", () => {
     vi.spyOn(apiModule.api, "pool").mockResolvedValue({ ...shown, members: [ROSA_MEMBERSHIP] });
     renderHome([shown]);
 
-    expect(await screen.findByText(/Your 2 tubs/)).toBeTruthy();
+    expect(await screen.findByText(/For your 2 tubs/)).toBeTruthy();
     expect(screen.queryByText(/A substitute for the/)).toBeNull();
   });
 });

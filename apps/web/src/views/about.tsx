@@ -104,7 +104,7 @@ export function About({
         <article className="claim">
           <h2>Somebody still has to carry the box</h2>
           <p>
-            Pool ranks willing fulfillers on job facts and pays the best eligible fit. Every
+            Pool ranks willing hosts on job facts and pays the best eligible fit. Every
             unit is sold before the host collects it.
           </p>
         </article>

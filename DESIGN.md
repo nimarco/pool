@@ -2,10 +2,10 @@
 name: Pool
 description: A synoptic analysis of latent demand — chart stock, graphite ink, one petrol scale for accumulating demand.
 colors:
-  stock: "#dbe3e1"
-  stock-raised: "#e4eae9"
-  stock-sunken: "#d0dad8"
-  stock-deep: "#c3d0cd"
+  stock: "#eaefee"
+  stock-raised: "#f4f7f6"
+  stock-sunken: "#dde5e3"
+  stock-deep: "#cbd6d3"
   ink: "#101a1c"
   ink-muted: "rgba(16, 26, 28, 0.74)"
   ink-faint: "rgba(16, 26, 28, 0.68)"
@@ -284,22 +284,31 @@ shipped stylesheet is 34.8 kB (7.8 kB gzip).
 **Character:** An instrument label, not a display face. The type stays out of the way so the drawing can be the display element; condensation is carried by tracking and weight rather than by a width axis (which exists in this family and costs 54 kB more).
 
 ### Hierarchy
-- **Display / section titles** (700, `clamp(27px, 3.3vw, 39px)`, 1.03, −0.024em): the primary heading of a surface.
-- **Headline** (700, `clamp(26px, 2.7vw, 34px)`, 1.04): the watched-item name in a station row — the item at display scale, which is the first viewport's anchor.
-- **Figure** (700, `clamp(23px, 2.4vw, 31px)`, 1.05): a single standing quantity set as a figure. Also the "yours" value at `clamp(25px, 2.6vw, 33px)` and the bulletin lede at `clamp(21px, 2.3vw, 28px)`.
+- **Display / section titles** (800, `clamp(34px, 4.6vw, 60px)`, 1.0, −0.03em): the primary heading of a surface.
+- **Headline** (800, `clamp(28px, 3.6vw, 48px)`, 1.0, balanced): the watched-item name in a station row — the item at display scale, which is the first viewport's anchor.
+- **Figure** (900, `clamp(38px, 5vw, 76px)`, 0.98, −0.04em): a single standing quantity set as the figure it is. `.figure-value.sm` steps down to `clamp(24px, 2.4vw, 32px)`; the "yours" value runs to 84px and the bulletin lede to 52px. A hedge rides inside the figure as `.figure-approx` (0.33em, uppercase, superior) so "about" can never detach from the number it qualifies.
 - **Title** (700, 17px, 1.12, −0.017em): judge step titles and panel headings; `h1`–`h4` all inherit 700/1.12/−0.017em with balanced wrapping.
 - **Lede** (17px, 1.55, ink-muted, max 62ch): the sentence under a masthead.
-- **Body** (15px, 1.55, tabular numerals globally): station prose. `.prose` caps at 68ch.
+- **Body** (16px, 1.55, tabular numerals globally): station prose. `.prose` caps at 68ch.
 - **Small** (13.5px) / **Tiny** (12px, 1.5): metadata, captions, notes.
-- **Station label** (700, 11px, 0.14em, uppercase, 1.35): the single most-used register in the system — every label, section title, chip, actor tag, status word, legend item and axis mark. Chart-scale variants drop to 10px at 0.12–0.13em.
+- **Stencil label** (700, 11px, 0.13em, uppercase, 1.35): states, attributions, act names and figure labels only. Chart marks sit at 11–12px.
+- **Heading label** (700, 13px, no tracking, sentence case): section titles, chips, legends, captions and rail metadata.
 - **Notation** (mono, 11–12.5px, no tracking): receipts, hashes, paths, step indices, judge step numbers, meteogram axis marks.
 
 ### Named Rules
-**The Instrument-Label Rule.** Anything that *names* rather than *states* is set in the station-label register: 11px, 700, 0.14em, uppercase. One register, applied by every label class. Do not invent a second label style.
+**The Two-Register Rule.** There are exactly two label registers, and which one applies is decided by what the text does.
+
+*Stencil* — 11px, 700, 0.13em, uppercase — is reserved for what a chart actually stencils onto a drawing: a **state** (`.status-word`), an **attribution** (`.actor`), an **act name** (`.entry-act`), and a **figure's own label** (`.fact-label`, `.prov-label`, `.figure-label`).
+
+*Heading* — 13px, 700, no tracking, sentence case — carries everything that merely *heads* a region: `.section-title`, `.label`, `.chip`, `.outlook-tag`, `.legend-item`, `.arch-tier`, `.hop-name`, `.tl-meta`, `.spine-caption`.
+
+This replaced a single register applied to all of the above, which was the most-used style in the system and made every surface read like an institutional form. Tracked caps everywhere is not a chart; it is paperwork. A third register is the bug this rule exists to refuse.
 
 **The Tabular Rule.** `font-variant-numeric: tabular-nums` is set on `body` and re-asserted on every value, table and ledger. Numbers in this system are read in columns and must not shift. Because tabular numerals do not shrink, long values wrap (`overflow-wrap: anywhere`) rather than overflow.
 
 **The Drawing-Is-The-Display-Face Rule.** No decorative type. If a surface needs presence, it gets a section, a meteogram, or the figure register — not a larger, looser typeface.
+
+The corollary, which the first build of this system missed: **if the drawing is the display face, it has to be drawn at display scale.** A 26px section is a hairline pretending to be a chart, and a system whose type is deliberately reticent then has no peak anywhere. `--sect-h` is 68px on a primary row (`--sect-h-sm`, 34px, in compact contexts), and the figure register runs to 76px at weight 900. Reticent type and a large drawing is the intended balance; reticent type and a small drawing is just quiet.
 
 ## Layout
 
@@ -498,3 +507,21 @@ the spinner to a static ring.
 - **Don't** let a nav or act rail wrap; rails scroll.
 - **Don't** add a second label register, a decorative typeface, or a second font request.
 - **Don't** crop a chart's axis to make a movement look larger than it is.
+
+### The inverted band
+
+One region per screen may invert, and only when it is genuinely the news: an order that
+actually formed. `.panel-inverted` swaps the ink/stock/rule/field tokens locally, so every
+child keeps its meaning without knowing where it sits — a section drawn inside it is still
+"demand in petrol against the ground", it is just that the ground is now ink and petrol is
+the light end of the ramp.
+
+- Ground `#0d1517`, type `#eaefee`, field ramp inverted so more demand still reads deeper.
+- Inset within the measure, **not** full-bleed. It carried a negative margin briefly; the
+  gutter container is not its parent, so the band escaped the measure and made the
+  document wider than the viewport at 375px.
+- Depth is contrast. There is still no shadow anywhere in this system.
+- Measured: 0 contrast failures inside the band at either reference viewport.
+
+**The One-Inversion Rule.** A second inverted region on the same screen makes both of them
+ordinary. If something else needs emphasis, it gets scale or the figure register.

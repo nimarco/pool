@@ -197,7 +197,7 @@ function OpportunityCard({
   /* The member's own figures when they are in the pool, the group's otherwise. Both are
      server strings; this only chooses which of the two to lead with.
 
-     Before a fulfiller accepts there is no exact price — their pay is part of it — but
+     Before a host accepts there is no exact price — their pay is part of it — but
      there *is* a stored estimate, written when the pool was formed. Showing it labelled
      is better than showing nothing, and better than deriving a second one here. */
   const finalCost = mine?.final_cost_display ?? "";
@@ -209,7 +209,10 @@ function OpportunityCard({
   const startsAt = pool.timing?.distribution_starts_at ?? "";
 
   return (
-    <section className="panel">
+    /* The peak of the scroll. An order that actually formed is the one thing on this
+       screen that is news, so it inverts: ink ground, stock type, and the section drawn
+       in full-strength petrol against it. Depth from contrast, not from a shadow. */
+    <section className="panel panel-inverted">
       <div className="panel-head">
         <h2>{poolHeading(pool.status, Boolean(mine))}</h2>
         <Chip tone={s.tone}>{s.label}</Chip>
@@ -231,17 +234,37 @@ function OpportunityCard({
                 allowed by the substitution rule you set.
               </p>
             ) : null}
+            {/* The money is what a member came back for, so it is set as the figure it
+                is rather than as a clause in a sentence. "About" stays attached to it —
+                an estimate that looks exact is the one thing this number may not do. */}
             {mine ? (
-              <p className="small" style={{ marginTop: 8 }}>
-                <strong>
-                  Your {mine.units} {pool.unit}
-                  {mine.units === 1 ? "" : "s"}
-                  {myCost ? ` · ${provisional ? "about " : ""}${myCost}` : ""}
-                </strong>
-                {myCost && mine.baseline_display
-                  ? ` instead of ${mine.baseline_display} buying alone`
-                  : ""}
-              </p>
+              myCost ? (
+                <div style={{ marginTop: 14 }}>
+                  <span className="figure-label">
+                    For your {mine.units} {pool.unit}
+                    {mine.units === 1 ? "" : "s"}
+                  </span>
+                  <span className="figure-value">
+                    {/* The hedge stays welded to the number. A figure this size that
+                        drops "about" is the screen claiming an exactness the quote does
+                        not have yet. */}
+                    {provisional ? <span className="figure-approx">about</span> : null}
+                    {myCost}
+                  </span>
+                  {mine.baseline_display ? (
+                    <span className="figure-sub" style={{ display: "block", marginTop: 6 }}>
+                      instead of {mine.baseline_display} buying alone
+                    </span>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="small" style={{ marginTop: 8 }}>
+                  <strong>
+                    Your {mine.units} {pool.unit}
+                    {mine.units === 1 ? "" : "s"}
+                  </strong>
+                </p>
+              )
             ) : null}
             <p className="small muted" style={{ marginTop: mine ? 4 : 6 }}>
               {mine
@@ -262,7 +285,7 @@ function OpportunityCard({
               </div>
             </div>
           ) : (
-            /* Not a dash. Before a fulfiller accepts there is no exact price, because
+            /* Not a dash. Before a host accepts there is no exact price, because
                their pay is part of it — so the slot names the invariant that is holding
                rather than leaving an empty figure, and it never contradicts the
                estimate shown on the line above it. */
@@ -270,8 +293,8 @@ function OpportunityCard({
               <div className="fact-value">{provisional ? "Not final yet" : "Not priced yet"}</div>
               <div className="small faint" style={{ maxWidth: "20ch" }}>
                 {provisional
-                  ? "a fulfiller's pay is part of the price"
-                  : "fixed once a fulfiller accepts"}
+                  ? "the host's pay is part of the price"
+                  : "fixed once a host accepts"}
               </div>
             </div>
           )}

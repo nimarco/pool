@@ -240,9 +240,6 @@ a {
 .num {
   font-variant-numeric: tabular-nums;
 }
-.nowrap {
-  white-space: nowrap;
-}
 /* Identifiers and other unbreakable tokens: wrap between words, never mid-token, so a
    run id stays copyable and readable at any width. */
 .token {
@@ -994,7 +991,7 @@ table.data {
 }
 table.data th {
   text-align: left;
-  font-size: 11px;
+  font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--ink-faint);
@@ -1034,30 +1031,8 @@ table.data th.r {
   display: flex;
   flex-direction: column;
 }
-.outlook-line {
-  display: grid;
-  grid-template-columns: minmax(0, 0.45fr) minmax(0, 1fr);
-  gap: 6px 18px;
-  padding: 9px 0;
-  border-bottom: 1px dotted var(--rule-strong);
-}
-.outlook-line:last-child {
-  border-bottom: none;
-}
-.outlook-product {
-  font-size: 14.5px;
-  font-weight: 600;
-}
-.outlook-reason {
-  font-size: 13.5px;
-  color: var(--ink-muted);
-  line-height: 1.45;
-}
 @media (max-width: 640px) {
-  .outlook-line {
-    grid-template-columns: minmax(0, 1fr);
   }
-}
 
 /* What a member declared, and the overlap that accumulated around it on its own.
    Stacked rather than gridded: each line is a small paragraph about one declaration, and
@@ -1171,36 +1146,6 @@ table.data th.r {
   display: flex;
   flex-direction: column;
 }
-.standing-line {
-  padding: 11px 0;
-  border-bottom: 1px dotted var(--rule-strong);
-}
-.standing-line:last-child {
-  border-bottom: none;
-}
-.standing-line p {
-  margin: 5px 0 0;
-}
-.standing-head {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-}
-.standing-product {
-  font-size: 14.5px;
-  font-weight: 600;
-}
-.run-result {
-  padding: 11px 0;
-  border-bottom: 1px dotted var(--rule-strong);
-}
-.run-result:last-child {
-  border-bottom: none;
-}
-.run-result p {
-  margin: 6px 0 0;
-}
 /* The deterministic facts behind an outcome. Short lines, so they read as a list of
    things that are true rather than as prose defending a decision. */
 .fact-list {
@@ -1234,7 +1179,7 @@ table.data th.r {
    one it is making. */
 .outlook-tag {
   display: inline-block;
-  font-size: 10.5px;
+  font-size: 11.5px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -2436,7 +2381,7 @@ select.control {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }
 .is-current .onboard-step-dot {
@@ -2663,7 +2608,7 @@ select.control {
  * one. Quiet by design: this is a fact about scope, not a status. */
 .scope-mine,
 .scope-theirs {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;

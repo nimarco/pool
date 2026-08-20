@@ -414,7 +414,10 @@ a {
 .linkish {
   background: none;
   border: none;
-  padding: 2px 0;
+  /* Vertical padding rather than the 2px it had, so the tap area clears 24px even at the
+     footer's smaller type. An inline link that is 23px tall is a link a thumb misses. */
+  padding: 4px 0;
+  min-height: 24px;
   cursor: pointer;
   font: inherit;
   color: inherit;

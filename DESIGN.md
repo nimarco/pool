@@ -9,8 +9,8 @@ colors:
   ink: "#101a1c"
   ink-muted: "rgba(16, 26, 28, 0.74)"
   ink-faint: "rgba(16, 26, 28, 0.68)"
-  rule: "rgba(16, 26, 28, 0.2)"
-  rule-strong: "rgba(16, 26, 28, 0.34)"
+  rule: "rgba(16, 26, 28, 0.28)"
+  rule-strong: "rgba(16, 26, 28, 0.52)"
   field-1: "#c6d6d3"
   field-2: "#6c9e99"
   field-3: "#387b78"
@@ -558,3 +558,32 @@ part of why the surface read as robotic rather than precise.
 
 Under `prefers-reduced-motion: reduce` every duration collapses to 0.01ms, so state still
 changes but nothing travels.
+
+### Non-text contrast
+
+**The Visible-Boundary Rule.** `--rule-strong` is the boundary of anything a person can
+interact with — buttons, inputs, chips, result rows, choice rows, panels, the map frame —
+and it is set to reach **3:1 against the ground**, because WCAG 2.2 SC 1.4.11 asks for that
+and a control whose edge you cannot see is not a control. Measured 3.46:1. `--rule`, at
+1.83:1, is a quiet separator between rows of text and is never a component boundary.
+
+This was a real defect, not a preference. `--rule-strong` sat at 2.12:1 while the ground was
+lightened, which put every control in the app below the floor at once: a button was a 1.08:1
+surface inside a 2.12:1 border. Every audit run before this one measured **text only** and
+reported zero failures, because the label inside the invisible button was 13:1. A contrast
+audit that does not check non-text contrast will pass an interface nobody can navigate.
+
+**Disabled is muted, never absent.** A disabled primary keeps a visible fill
+(`--stock-deep`) and a visible border. Where the primary action *is* counts as navigational
+information; it used to dissolve into the page until a field validated.
+
+### Setting up
+
+Onboarding is one focused task, so it is centred at 620px inside a real container:
+`--stock-raised`, a `--rule-strong` border, `--r-region` corners, generous padding. The
+judge door is a nested surface inside it rather than a section divided off by a rule.
+
+This came back from the incumbent world by comparison. When every region in this system
+became a rule instead of a surface, a four-step form lost its figure-ground and read as
+loose fields on a page with 640px of dead space beside them. A single container for a
+single task is not a card grid, and the separation is tone plus a visible edge — no shadow.

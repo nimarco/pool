@@ -57,8 +57,12 @@
      small text somewhere. Measured, not eyeballed. */
   --ink-muted: rgba(16, 26, 28, 0.74);
   --ink-faint: rgba(16, 26, 28, 0.68);
-  --rule: rgba(16, 26, 28, 0.2);
-  --rule-strong: rgba(16, 26, 28, 0.34);
+  /* Quiet separator between rows of text. Not a component boundary. */
+  --rule: rgba(16, 26, 28, 0.28);
+  /* The visible boundary of anything you can interact with. Measured at 3.4:1 against
+     the ground, because WCAG 2.2 SC 1.4.11 asks for 3:1 and a control whose edge you
+     cannot see is not a control. */
+  --rule-strong: rgba(16, 26, 28, 0.52);
 
   /* The field scale. The only quantity that gets colour is accumulating demand. */
   --field-1: #c6d6d3;
@@ -119,8 +123,8 @@
     --ink: #e6eeec;
     --ink-muted: rgba(230, 238, 236, 0.74);
     --ink-faint: rgba(230, 238, 236, 0.66);
-    --rule: rgba(230, 238, 236, 0.22);
-    --rule-strong: rgba(230, 238, 236, 0.36);
+    --rule: rgba(230, 238, 236, 0.3);
+    --rule-strong: rgba(230, 238, 236, 0.56);
 
     --field-1: #1d3033;
     --field-2: #43706f;
@@ -591,12 +595,19 @@ table.data,
   transform: translateY(1px);
 }
 .btn:disabled {
-  /* Also clears the primary and advisory fills: faint ink on an ink fill is
-     dark-on-dark, and a disabled control has to stay legible. */
-  background: transparent;
+  /* Clears the ink fill — faint ink on ink is dark-on-dark — but keeps a visible
+     surface, so a disabled control still reads as a control in its place. */
+  background: var(--stock-deep);
   color: var(--ink-faint);
   border-color: var(--rule-strong);
   cursor: not-allowed;
+}
+.btn-primary:disabled,
+.btn-accept:disabled {
+  /* The primary action's location is navigational information. Muted, never absent. */
+  background: var(--stock-deep);
+  border-color: var(--ink-faint);
+  color: var(--ink-muted);
 }
 .btn-primary {
   background: var(--ink);
@@ -1008,11 +1019,10 @@ table.data td {
   grid-column: 1 / -1;
 }
 .field-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--ink-muted);
 }
 .field-note {
   font-size: 12.5px;
@@ -1413,22 +1423,45 @@ table.data td {
 
 /* ================================================================== onboarding */
 
-.onboard { max-width: 620px; display: flex; flex-direction: column; gap: 22px; }
-.onboard-panel { border-top: 2px solid var(--ink); padding-top: 22px; }
+/* Setting up is one focused task, not a page of loose fields. It is centred, and it has
+   a boundary — which is what the incumbent got right and this world lost when every
+   region became a rule instead of a surface. A single container for one task is not a
+   card grid, and the separation here is tone plus a visible edge rather than a shadow. */
+.onboard {
+  max-width: 620px;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.onboard-panel {
+  background: var(--stock-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-region);
+  padding: 30px 32px 32px;
+}
+/* The judge door is a second, quieter task inside the first. */
+.onboard-panel .banner,
+.onboard-panel .acting-banner {
+  background: var(--stock);
+}
 .onboard-title {
-  font-family: var(--display); font-size: clamp(25px, 3vw, 33px);
+  font-family: var(--display); font-size: clamp(26px, 2.8vw, 34px);
   font-weight: 700; letter-spacing: -0.024em; line-height: 1.06;
 }
 .onboard-steps { display: flex; gap: 8px; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
-.onboard-steps li {
-  display: flex; align-items: center; gap: 7px;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-faint);
+.onboard-steps {
+  justify-content: center;
 }
-.onboard-steps li.is-current { color: var(--ink); }
+.onboard-steps li {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; letter-spacing: -0.005em; color: var(--ink-faint);
+}
+.onboard-steps li.is-current { color: var(--ink); font-weight: 700; }
 .onboard-step-dot {
-  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--rule-strong); border-radius: 999px;
-  font-family: var(--mono); font-size: 11px;
+  font-family: var(--mono); font-size: 11.5px; flex: none;
 }
 .onboard-steps li.is-current .onboard-step-dot { border-color: var(--ink); background: var(--ink); color: var(--stock); }
 .onboard-added { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 0; padding: 0; }
@@ -1576,7 +1609,17 @@ table.data td {
 .judge-receipt { font-family: var(--mono); font-size: 12px; color: var(--ink-muted); }
 .judge-verdict { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-weight: 700; }
 .judge-next { margin-top: 12px; }
-.judge-door { display: flex; align-items: baseline; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap; padding: 16px 0; border-top: 2px solid var(--ink); }
+/* A second, quieter task inside the first. It carried a 2px ink rule, which was heavier
+   than the container holding it — an inverted hierarchy that made the aside look like
+   the headline act. A nested surface says "also available" without competing. */
+.judge-door {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px 18px; flex-wrap: wrap;
+  margin-top: 8px; padding: 16px 18px;
+  background: var(--stock);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-region);
+}
 .judge-door p { max-width: 46ch; color: var(--ink-muted); }
 
 /* ================================================================ small things */
@@ -1789,8 +1832,8 @@ table.data td {
   --stock-raised: #162124;
   --stock-sunken: #0a1012;
   --stock-deep: #060c0d;
-  --rule: rgba(234, 239, 238, 0.24);
-  --rule-strong: rgba(234, 239, 238, 0.4);
+  --rule: rgba(234, 239, 238, 0.32);
+  --rule-strong: rgba(234, 239, 238, 0.58);
   --field-1: #1d3033;
   --field-2: #43706f;
   --field-3: #6ba09b;

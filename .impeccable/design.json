@@ -576,6 +576,15 @@
       "rule": "zero-radius",
       "status": "revised",
       "note": "Radius now applies to touchable chrome (control 7px, region 12px) while drawn chart marks stay square. The blanket zero read as machined rather than technical."
+    },
+    {
+      "rule": "rule-strong at 0.34 alpha",
+      "status": "fixed",
+      "note": "Raised to 0.52 so interactive boundaries reach 3:1. Previously 2.12:1 \u2014 every button, input and card edge failed SC 1.4.11."
     }
-  ]
+  ],
+  "accessibilityFloor": {
+    "nonTextContrast": "3:1 on every interactive boundary (SC 1.4.11); --rule-strong measured 3.46:1",
+    "auditNote": "Text-only contrast audits passed this system while every control boundary was below 3:1. Both passes are required."
+  }
 }

@@ -143,8 +143,23 @@ recheck the current title requirement immediately before publishing.
 
 ## Current gate
 
-The structural pass is frozen: architecture, deployed Product, same-run evidence and
-submission narrative are aligned, and the one-run rehearsal passed. The next engineering
-task is the bounded `/impeccable` visual/accessibility pass in
-[`IMPECCABLE_HANDOFF.md`](IMPECCABLE_HANDOFF.md). The public video, repository visibility,
-Builder ID and submission remain human-owned checks; none is claimed complete here.
+The visual and UX finishing pass is done (`BUILD_HISTORY.md` #0051): the Showcase reads as
+one sheet with the quantity drawn rather than narrated, Behind Pool is ordered for a judge,
+the order record answers a member before an operator, and colour is semantic again. Verified
+rather than asserted — 0 contrast failures across 444 rendered pairs in both themes, 0 focus
+stops without a ring under real Tab traversal, no target under 24x24, and three demo
+rehearsals from reset that were byte-identical.
+
+The live app is now self-testable. **Judge demo**, reached from the first screen and the
+footer, walks a first-time visitor through the central claim in four clicks: pre-existing
+rice demand (7 people, 24 bags, 2 theirs), a committed supplier quote that clears the
+minimum and is still refused, a better one that is worth doing, and a run that forms the
+order. Every control is a door onto the mechanism that already existed — the two quote
+imports call the same `_ingest_supplier_bytes` an upload reaches, digest check included —
+so nothing on that page is a canned verdict. Measured: 423 words and 12 s of clicking, so
+roughly 2–2.5 minutes for somebody reading at 200–250 wpm.
+
+What remains is human-owned and none of it is claimed complete here: the public video,
+repository visibility, the Builder ID, the Builder Center articles, and the submission
+itself. `docs/IMPECCABLE_HANDOFF.md` is a redirect now, not a task list — the structure it
+froze was replaced.

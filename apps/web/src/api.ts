@@ -1258,6 +1258,30 @@ export async function importSupplierQuotes(file: File): Promise<SupplierImportRe
   return (await response.json()) as SupplierImportResult;
 }
 
+/** Import one of the committed sheets by name, for the judge walkthrough.
+ *
+ *  The same server function an upload reaches (`_ingest_supplier_bytes`): the parser runs
+ *  on the committed bytes, the digest is checked against `MANIFEST.json`, and the offer
+ *  row is written by the same code under the same lease. The browser sends a name, never
+ *  a number — there is still no field here in which anybody could set a price. */
+export async function importSampleQuote(name: string): Promise<SupplierImportResult> {
+  const response = await fetch(
+    `${BASE}/api/demo/supplier-sample?name=${encodeURIComponent(name)}&workspace=${activeWorkspace()}`,
+    { method: "POST" },
+  );
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try {
+      const parsed = await response.json();
+      if (parsed?.detail) detail = String(parsed.detail);
+    } catch {
+      /* keep the status line */
+    }
+    throw new Error(detail);
+  }
+  return (await response.json()) as SupplierImportResult;
+}
+
 /** What the deployment will accept. Absent on a public deployment, where the browser does
  *  not need it: the path is a constant and the digests are committed in the repository. */
 export async function supplierFileInfo(): Promise<SupplierFileInfo | null> {

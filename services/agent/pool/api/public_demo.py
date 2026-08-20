@@ -253,6 +253,17 @@ ALLOWED_POST = frozenset(
         # So a stranger cannot set a price, which is the property `extra="forbid"` on
         # `SupplierQuoteRequest` exists to protect, and the pipeline is still real.
         "/api/demo/supplier-import",
+        # The same ingestion, reached by naming one of the committed sheets instead of
+        # uploading it. Added for the judge walkthrough, where asking a first-time visitor
+        # to go and find a CSV is the difference between reproducing the claim and not.
+        #
+        # It is a door onto `supplier-import`, not a bypass of it: both call one function,
+        # `_ingest_supplier_bytes`, so the parser runs on real bytes and the digest is
+        # checked against `MANIFEST.json` here exactly as it is for a stranger's upload.
+        # The name is matched against the manifest's own list, never joined onto a path,
+        # so this cannot read a file the repository did not commit. Still no field in
+        # which anybody can set a price — which is the property the whole list protects.
+        "/api/demo/supplier-sample",
         # Declaring a standing need. The product's primary user action, and the one a
         # judge has to be able to *perform* rather than read about — the whole thesis is
         # that this is all anybody does and the agent finds the overlap. It creates no

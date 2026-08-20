@@ -5837,3 +5837,94 @@ transcripts. The 444-pair contrast sweep.
 `views/operations.tsx`, `views/demo-panel.tsx`, `styles.css`, `views/run.test.tsx`,
 `views/community.test.tsx`, `views/home.test.tsx`, `PRODUCT.md`, `DESIGN.md`,
 `.impeccable/design.json`, `docs/DEMO_SCRIPT.md`, `docs/IMPECCABLE_HANDOFF.md`.
+
+### #0052 — [2026-08-19] — A judge can now check the claim themselves
+`[FRONTEND]` `[DEMO]` `[SECURITY]` `[ARTICLE-1]`
+
+**Goal / user intent**
+The video can explain the product. The live app could not be *used* by somebody who had
+never seen it: reproducing the central claim meant knowing to complete four onboarding
+screens, find the Operations console, and go download a CSV from GitHub. Make the deployed
+demo self-testable in about four minutes, without inventing a parallel fake demo.
+
+**What we did**
+
+*One endpoint, and it is a door rather than a shortcut.* Everything in
+`import_supplier_quotes` after `data = await file.read()` moved into
+`_ingest_supplier_bytes(ws, data, filename)`. `POST /api/demo/supplier-sample?name=` checks
+the name against the manifest's own list, reads `demo-data/<name>`, and calls that same
+function — so the parser runs on real bytes, the digest is checked against
+`MANIFEST.json` exactly as it is for a stranger's upload, and the offer row is written by
+the same code under the same lease and quota. The gate lives *inside* the shared function
+on purpose: a convenience control that skipped it would be a second, weaker door onto the
+one endpoint whose whole design is that nobody can set a price.
+
+`/api/demo/supplier-file` was left alone. It deliberately does not serve the fixture bytes
+and is deliberately not public, and its own comment says why — "serving the bytes from here
+would invite the mistake of thinking the server made them up". Bundling the CSVs into the
+SPA would have been the same mistake wearing a different hat.
+
+*One view, two doors, no new navigation.* `views/judge.tsx` is a five-step checklist:
+become a member, see the demand that pre-existed, watch a willing supplier get refused,
+watch better terms change the answer, ask Pool to act. Reached from a card on the first
+screen a fresh visitor already lands on, and from the footer beside Behind Pool. It is
+allowed to render *before* onboarding — the only destination that is — because step 1
+performs that setup through the same three endpoints the forms call.
+
+**Three defects the browser found, none of which the tests could have**
+
+1. **Nothing happened when a quote was imported.** An import writes one offer row and
+   deliberately moves none of the counts the member read is keyed on — that *is* the
+   no-demand-injection property — so the walkthrough went on showing the previous answer.
+   There was already a mechanism for exactly this, `worldChanged`, added when the
+   Operations console hit it; the judge view now uses it. Every rehearsal harness in the
+   repository had been reloading the page after each import, which is why nothing had
+   noticed.
+2. **Finished steps rewrote themselves.** They rendered the *live* outlook, so once the
+   order formed, the step whose entire point is "a supplier would sell and Pool said no"
+   began reading "already coordinating this one". A judge scrolling back to check what
+   they had just seen found it had changed. Each step now captures the server's answer at
+   the moment it ran and shows that — the same historical-versus-current boundary the run
+   reports keep.
+3. **"1 people near you buy this."** The demand line read `compatible_members` live, and
+   that field counts households *not* already in a live pool — the right number for "how
+   much demand is available" and completely the wrong number for "seven people already
+   wanted this", because after the run everyone who buys rice is in the order. Captured
+   once, at the start. This is the third time this field has produced a wrong sentence
+   (#0050 twice); the lesson is that it is a capacity number and never a population one.
+
+**Verification**
+`make qa` green: **980 agent + 75 infra + 119 web = 1,174**, ruff, eslint, tsc, production
+build, secret scan, `git diff --check`. Five new server tests assert the door is the path:
+naming a sheet produces the same body as uploading its bytes, field for field, including
+every economic term on the offer row; a tampered fixture is still refused under judge mode;
+a name outside the manifest is a 400; and the declaration rows are byte-identical either
+side of both imports. Seven web tests pin the honesty properties — no step can be skipped,
+no verdict is written by the page, and the word "success" appears nowhere on it.
+
+Three rehearsals from a cold workspace: 12 beats each, byte-identical, 0 console errors, 0
+failed requests, and the visitor's needs count unchanged by entering the Showcase. Focus
+re-measured with real `Input.dispatchKeyEvent` Tab presses rather than programmatic
+`.focus()`, which does not trigger `:focus-visible` in Chrome and therefore could not have
+proved the earlier claim: **0 of 94 stops across four surfaces at two viewports lack a
+visible ring.** No horizontal overflow at 1280×720 or 390×844. Reduced motion still
+collapses every transition. 423 words on the finished page plus 12 s of measured clicking
+puts a first-time reader at roughly 2–2.5 minutes.
+
+The endpoint-count guard fired, as designed — the API is 50 paths and judge mode exposes 33
+— so the README, `docs/ARCHITECTURE.md` and the test moved together rather than drifting.
+
+No AWS deploy, no AgentCore invocation, no Bedrock call, no live payment.
+
+**What we learned**
+The property that makes the demo honest is the same property that broke it. An import moves
+no counts *because* nothing about people may change, and a client that watches counts to
+decide when to re-read therefore cannot see the one thing the sequence exists to show. The
+fix is not a wider heuristic — it is the caller saying "I changed the world", which is what
+`worldChanged` already was.
+
+**Relevant commits / files**
+`services/agent/pool/api/app.py`, `api/public_demo.py`, `services/supplier_import.py`,
+`apps/web/src/views/judge.tsx`, `views/judge.test.tsx`, `views/onboarding.tsx`, `App.tsx`,
+`api.ts`, `styles.css`, `tests/test_supplier_import.py`, `tests/test_public_demo.py`,
+`README.md`, `docs/ARCHITECTURE.md`, `docs/HACKATHON_SCORECARD.md`.

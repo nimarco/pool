@@ -3272,3 +3272,180 @@ select.control {
 .status-chip.just-changed .status-reason {
   animation-delay: 0.06s;
 }
+
+/* ========================================================== judge walkthrough
+ *
+ * A numbered checklist, not a tutorial framework. The step a judge is on is marked by an
+ * ink rule and a filled number; finished steps get a tick and recede. No progress bar,
+ * because progress here is a fact about the world the server holds rather than about how
+ * far down the page somebody has scrolled.
+ */
+
+.judge-head {
+  align-items: flex-start;
+  gap: 18px;
+}
+.judge-honesty {
+  display: flex;
+  align-items: baseline;
+  gap: 11px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper-sunken);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.judge-honesty > span {
+  flex: 1 1 34ch;
+}
+/* The chip is a label, not a column: as a flex child it stretched the whole width. */
+.judge-honesty > .chip {
+  flex: none;
+}
+
+.judge-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.judge-step {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 16px;
+  padding: 20px 0 22px;
+  border-top: 1px solid var(--rule);
+}
+/* The one the judge is on. A rule and a filled numeral — the same device the run sheet
+   uses for the entry in view, so the two proof surfaces mark position the same way. */
+.judge-step.is-current {
+  border-top-color: var(--ink);
+}
+.judge-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--rule-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  flex: none;
+  margin-top: 1px;
+}
+.judge-step.is-current .judge-num {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+.judge-step.is-done .judge-num {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+/* Finished steps stay readable — a judge scrolls back to check what they just did — but
+   stop competing with the one that wants a decision. */
+.judge-step.is-done .judge-step-title {
+  color: var(--ink-muted);
+}
+.judge-step.is-todo .judge-body {
+  opacity: 0.62;
+}
+
+.judge-step-title {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 21px;
+  line-height: 1.16;
+  letter-spacing: -0.012em;
+  margin: 0 0 8px;
+  max-width: 34ch;
+}
+.judge-body > p {
+  margin: 0 0 10px;
+  max-width: 68ch;
+}
+.judge-note {
+  font-size: 13.5px;
+  color: var(--ink-muted);
+}
+.judge-said {
+  font-size: 15px;
+}
+/* What the server answered, marked as the engine's rather than the page's. */
+.judge-verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 11px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+  font-size: 14.5px;
+}
+.judge-because {
+  color: var(--ink-muted);
+  font-size: 13.5px;
+}
+.judge-receipt {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+.judge-receipt code {
+  font-family: inherit;
+  color: var(--ink);
+}
+.judge-next {
+  margin-top: 8px;
+}
+
+/* The door in, on the first screen a fresh visitor lands on. */
+.judge-door {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px 18px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+  padding: 14px 16px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+}
+.judge-door p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink-muted);
+  max-width: 46ch;
+}
+.judge-door strong {
+  color: var(--ink);
+}
+
+@media (max-width: 560px) {
+  .judge-step {
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 12px;
+    padding: 17px 0 19px;
+  }
+  .judge-num {
+    width: 22px;
+    height: 22px;
+    font-size: 11.5px;
+  }
+  .judge-step-title {
+    font-size: 19px;
+  }
+  .judge-head {
+    flex-direction: column;
+  }
+}

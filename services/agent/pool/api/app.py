@@ -1840,8 +1840,24 @@ async def import_supplier_quotes(
             "against a live community — leave showcase mode to change the world.",
         )
     data = await file.read()
+    return _ingest_supplier_bytes(ws, data, file.filename or "upload.csv")
+
+
+def _ingest_supplier_bytes(ws: str, data: bytes, filename: str) -> dict[str, Any]:
+    """Read a quote sheet's bytes and write what they say.
+
+    Everything after "the bytes arrived" lives here, so there is exactly one ingestion
+    path and no caller can acquire a cheaper one. An upload reaches it with a judge's
+    bytes; ``/api/demo/supplier-sample`` reaches it with the committed fixture's bytes.
+    Both then run the same parser, the same digest allowlist, the same workspace lease,
+    the same action quota and the same offer write, and get the same body back.
+
+    The digest check is inside this function on purpose. A convenience control that
+    skipped it would be a second, weaker door onto the one endpoint whose whole design is
+    that a stranger cannot set a price.
+    """
     try:
-        parsed = supplier_import.parse(data, filename=file.filename or "upload.csv")
+        parsed = supplier_import.parse(data, filename=filename)
     except supplier_import.SupplierImportError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -1892,6 +1908,47 @@ async def import_supplier_quotes(
             for o in offers
         ],
     }
+
+
+@app.post("/api/demo/supplier-sample")
+def import_supplier_sample(
+    name: str = Query(...), workspace: str = Query("demo")
+) -> dict[str, Any]:
+    """Import one of the committed quote sheets, by name, without a file picker.
+
+    For the judge walkthrough. A first-time visitor with four minutes cannot be asked to
+    find a repository, download a CSV and come back — but the sequence those two sheets
+    demonstrate is the whole argument, so it cannot be faked either.
+
+    So this is a *door*, not a shortcut: it reads the bytes committed at
+    ``demo-data/<name>`` and hands them to :func:`_ingest_supplier_bytes`, which is the
+    same function an upload reaches. The parser runs on real bytes, the digest is checked
+    against ``MANIFEST.json`` exactly as it is for a stranger's upload, and the offer row
+    is written by the same code under the same lease and quota. Nothing is precomputed:
+    whether either sheet is *worth acting on* is still the evaluator's answer, produced
+    when somebody asks for it.
+
+    ``name`` is checked against the manifest's own order rather than joined onto a path,
+    so this cannot be pointed at a file the repository did not commit.
+    """
+    ws = check_workspace(workspace)
+    if public_demo.is_showcase_workspace(ws):
+        raise HTTPException(
+            400,
+            "The showcase replays one recorded lifecycle. Supplier facts are recorded "
+            "against a live community — leave showcase mode to change the world.",
+        )
+    allowed = supplier_import.fixture_order()
+    if name not in allowed:
+        raise HTTPException(
+            400,
+            f"{name!r} is not one of the committed sheets. "
+            f"Expected one of: {', '.join(allowed)}.",
+        )
+    path = supplier_import.fixture_path(name)
+    if not path.is_file():
+        raise HTTPException(500, f"the committed sheet {name!r} is missing from the build")
+    return _ingest_supplier_bytes(ws, path.read_bytes(), name)
 
 
 @app.post("/api/demo/supplier-updates")

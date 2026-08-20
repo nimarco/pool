@@ -66,6 +66,7 @@ import io
 import json
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from ..domain.models import MoqKind, Offer, OfferKind, OfferSource, iso, utcnow
@@ -196,6 +197,17 @@ def manifest() -> dict[str, dict[str, Any]]:
             return dict(json.load(handle).get("files", {}))
     except (OSError, ValueError):
         return {}
+
+
+def fixture_path(name: str) -> Path:
+    """Where a committed sheet lives, for a name already checked against the manifest.
+
+    Takes the basename only. The caller validates ``name`` against
+    :func:`fixture_order`, and this refuses to build a path out of anything else, so
+    neither a traversal nor a sibling file can be reached even if that check is ever
+    weakened.
+    """
+    return Path(DEMO_DATA_DIR) / os.path.basename(name)
 
 
 def fixture_order() -> list[str]:

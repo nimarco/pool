@@ -498,3 +498,138 @@ def test_the_operator_screen_can_name_the_file_it_expects(client):
     # Listed in sequence order, because which sheet arrives first is the point.
     assert [f["filename"] for f in body["allowlisted"]] == [SPLIT, PROGRAMME]
     assert body["synthetic"] is True
+
+
+# --------------------------------------------- the judge's door onto the same path
+
+
+def _sample(client: TestClient, name: str):
+    return client.post(f"/api/demo/supplier-sample?name={name}")
+
+
+def test_the_sample_control_takes_the_same_path_as_an_upload(client, committed):
+    """A convenience control that skipped the pipeline would be a fake demo.
+
+    So the door is checked against the thing it is a door onto: naming the committed
+    sheet must produce the same body an upload of the same bytes produces — same parse
+    counts, same digest match, same offer written. The only permitted difference is the
+    identifiers of rows created at different moments.
+    """
+    uploaded = _upload(client, committed).json()
+
+    api._repo.reset("demo")
+    fresh = TestClient(api.app)
+    fresh.get("/api/state")
+    sampled = _sample(fresh, SPLIT).json()
+
+    assert sampled["recorded"] is True
+    assert sampled["allowlisted_as"] == uploaded["allowlisted_as"] == SPLIT
+    for field in ("records", "valid", "rejected", "rejections", "filename"):
+        assert sampled[field] == uploaded[field], field
+    # The economics reached the offer row identically. These are the numbers the whole
+    # sequence turns on, so they are compared term by term rather than in aggregate.
+    assert len(sampled["offers"]) == len(uploaded["offers"]) == 1
+    for key in ("product_id", "unit_price_display", "case_units", "min_units",
+                "supplier_reference", "source", "synthetic"):
+        assert sampled["offers"][0][key] == uploaded["offers"][0][key], key
+
+
+def test_the_sample_control_still_checks_the_digest(public_api, monkeypatch, tmp_path):
+    """The gate is inside the shared function, so the door cannot route around it.
+
+    Pointed at a directory whose bytes are not the committed ones, the endpoint reads
+    them, parses them, and refuses to record them — exactly as it would refuse a
+    stranger's edited upload. Run under judge mode, because that is the deployment where
+    the digest decides anything.
+    """
+    tampered = _read(SPLIT).replace(b"975", b"111")
+    (tmp_path / SPLIT).write_bytes(tampered)
+    monkeypatch.setattr(si, "DEMO_DATA_DIR", str(tmp_path))
+
+    client = TestClient(public_api.app)
+    client.get(f"/api/state?workspace={PUBLIC_WS}")
+    body = client.post(
+        f"/api/demo/supplier-sample?name={SPLIT}&workspace={PUBLIC_WS}"
+    ).json()
+    assert body["recorded"] is False
+    assert body["refused"] == "not_allowlisted"
+    # And it still says what the file contained, because "rejected" and "unreadable" are
+    # different facts.
+    assert len(body["records"]) == 1
+    assert body["records"][0]["unit_price_cents"] == 111
+    assert body["offers"] == []
+
+
+def test_the_sample_control_cannot_name_a_file_the_repository_did_not_commit(client):
+    for name in ("../../../etc/passwd", "anything.csv", "MANIFEST.json"):
+        response = _sample(client, name)
+        assert response.status_code == 400, name
+        assert "committed sheets" in response.json()["detail"]
+
+
+def test_neither_sample_import_moves_the_demand(client):
+    """The claim the judge walkthrough exists to let somebody reproduce.
+
+    Same people, same declarations, twice over. Every difference between the three
+    answers is a file arriving, and this asserts the stored rows either side rather than
+    trusting the sentence on the screen.
+    """
+    household = client.get("/api/state").json()["consumer"]["household_id"]
+    client.post(
+        "/api/needs",
+        json={
+            "household_id": household,
+            "group": "rice",
+            "quantity": 2,
+            "cadence_days": 30,
+            "expected_next_need_date": str(date.today() + timedelta(days=14)),
+            "flexibility_days": 14,
+            "routine_lead_days": 7,
+            "min_savings_pct": 15,
+            "max_spend_cents": 12000,
+            "substitution": "exact_only",
+            "active": True,
+        },
+    )
+    counts = client.get("/api/state").json()["counts"]
+    needs = client.get("/api/needs").json()["needs"]
+
+    assert _sample(client, SPLIT).json()["recorded"] is True
+    assert client.get("/api/state").json()["counts"] == counts
+    assert client.get("/api/needs").json()["needs"] == needs
+
+    assert _sample(client, PROGRAMME).json()["recorded"] is True
+    assert client.get("/api/state").json()["counts"] == counts
+    assert client.get("/api/needs").json()["needs"] == needs
+
+
+def test_the_two_samples_still_produce_a_refusal_before_a_yes(client):
+    """The half of the sequence that makes it evidence. Reached by the judge's door, the
+    verdicts have to be the evaluator's own — not a canned pair of outcomes."""
+    household = client.get("/api/state").json()["consumer"]["household_id"]
+    client.post(
+        "/api/needs",
+        json={
+            "household_id": household, "group": "rice", "quantity": 2,
+            "cadence_days": 30,
+            "expected_next_need_date": str(date.today() + timedelta(days=14)),
+            "flexibility_days": 14, "routine_lead_days": 7, "min_savings_pct": 15,
+            "max_spend_cents": 12000, "substitution": "exact_only", "active": True,
+        },
+    )
+
+    def state() -> str:
+        outlook = client.get(f"/api/members/{household}").json()["needs_outlook"]
+        return next(o["state"] for o in outlook if o["product_id"] == RICE)
+
+    before = state()
+    _sample(client, SPLIT)
+    after_split = state()
+    _sample(client, PROGRAMME)
+    after_programme = state()
+
+    # Three different answers, from the evaluator, about demand that never moved.
+    assert before != after_split != after_programme
+    assert before == "no_supply", before
+    assert after_split == "not_worth_it", after_split
+    assert after_programme == "ready", after_programme

@@ -16,6 +16,7 @@ import { BrandMark } from "./brand";
 import { Picked } from "./chosen";
 import { IconArrowLeft, IconCross } from "./ui";
 import { About } from "./views/about";
+import { JudgeDemo } from "./views/judge";
 import { Onboarding } from "./views/onboarding";
 import { CommunityView } from "./views/community";
 import { DemoPanel, Identity } from "./views/demo-panel";
@@ -27,7 +28,7 @@ import { Pools } from "./views/pools";
 import { AgentExecution } from "./views/live";
 import { RunView } from "./views/run";
 
-type View = "home" | "pools" | "needs" | "community" | "pool" | "operations" | "about";
+type View = "home" | "pools" | "needs" | "community" | "pool" | "operations" | "about" | "judge";
 
 /** Showcase mode: the guided judge experience, kept alongside the product rather than
  *  instead of it. Same components, same state, same API — a different order and a
@@ -696,9 +697,10 @@ export default function App() {
               build ended up greeting people by a stranger's name. Showcase mode skips
               it: that is the guided walkthrough, and it is explicitly not the consumer
               experience. */}
-          {!showcase && needsOnboarding && consumer ? (
+          {!showcase && needsOnboarding && view !== "judge" && consumer ? (
             <Onboarding
               consumer={consumer}
+              onJudgeDemo={() => navigate("judge")}
               onDone={async () => {
                 setActingAs(null);
                 await refresh();
@@ -799,6 +801,35 @@ export default function App() {
             />
           ) : null}
 
+          {/* Reachable *before* setup, unlike every other destination: a judge who has
+              never seen Pool should not have to guess their way through four onboarding
+              screens to reproduce one claim, and step 1 performs that setup for them
+              through the same endpoints. */}
+          {!showcase && view === "judge" ? (
+            <JudgeDemo
+              member={member}
+              hasOrder={Boolean(member?.opportunity)}
+              onBack={() => navigate("home")}
+              /* The lifecycle itself, not the showcase's front page. The same handler
+                 Behind Pool's "one order, stage by stage" uses — it runs the scripted
+                 replay if it has not run yet, in the showcase's own partition, so a judge
+                 arriving from the walkthrough lands on the sheet rather than on a
+                 second home screen with nothing on it. */
+              onShowcase={() => {
+                if (scenario) showcaseTo("run");
+                else void runScenario();
+              }}
+              onBehindPool={() => navigate("community")}
+              /* `worldChanged`, not `refreshAll`. Importing a quote writes one offer row
+                 and deliberately moves none of the counts the member read is keyed on —
+                 that is the no-demand-injection property — so a plain refresh would
+                 leave the walkthrough showing the previous answer. This is the epoch that
+                 already exists for exactly this case; the operations console uses it for
+                 the same reason. */
+              onRefresh={worldChanged}
+            />
+          ) : null}
+
           {!showcase && !needsOnboarding && view === "about" ? (
             <About
               health={health}
@@ -867,6 +898,10 @@ export default function App() {
                 come through here, and nothing behind it is required to use Pool. */}
             <button className="linkish" onClick={() => navigate("community")}>
               Behind Pool
+            </button>{" "}
+            ·{" "}
+            <button className="linkish" onClick={() => navigate("judge")}>
+              Judge demo
             </button>
           </span>
         </div>

@@ -81,10 +81,12 @@ function YouStep({
   name,
   onName,
   onNext,
+  onJudgeDemo,
 }: {
   name: string;
   onName: (v: string) => void;
   onNext: () => void;
+  onJudgeDemo?: () => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => ref.current?.focus(), []);
@@ -123,6 +125,21 @@ function YouStep({
           <IconArrowRight />
         </button>
       </div>
+      {/* The second door, on the first screen, because a judge with four minutes should
+          not have to discover it. Below the form rather than above it: a member is the
+          primary user of this screen and setup is what they came to do. */}
+      {onJudgeDemo ? (
+        <div className="judge-door">
+          <p>
+            <strong>Here to evaluate Pool?</strong> Skip setup and reproduce its central
+            claim in about four minutes — no forms, nothing to install.
+          </p>
+          <button className="btn btn-sm" type="button" onClick={onJudgeDemo}>
+            Open the judge walkthrough
+            <IconArrowRight />
+          </button>
+        </div>
+      ) : null}
     </form>
   );
 }
@@ -505,9 +522,14 @@ function AuthorityStep({
 export function Onboarding({
   consumer,
   onDone,
+  onJudgeDemo,
 }: {
   consumer: Consumer;
   onDone: () => Promise<void> | void;
+  /** The other way in. Setup is four screens because a member is going to live in this
+   *  product; somebody who has four minutes and wants to check one claim should not have
+   *  to complete it, and the walkthrough performs the same setup for them. */
+  onJudgeDemo?: () => void;
 }) {
   const [step, setStep] = useState<Step>("you");
   const [name, setName] = useState("");
@@ -623,7 +645,12 @@ export function Onboarding({
         aria-label={`Step ${STEPS.findIndex((s) => s.id === step) + 1} of ${STEPS.length}`}
       >
         {step === "you" ? (
-          <YouStep name={name} onName={setName} onNext={() => setStep("where")} />
+          <YouStep
+            name={name}
+            onName={setName}
+            onNext={() => setStep("where")}
+            onJudgeDemo={onJudgeDemo}
+          />
         ) : null}
         {step === "where" ? (
           <WhereStep

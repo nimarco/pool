@@ -558,5 +558,24 @@
       "Don't add a second label register, a decorative typeface, or a second font request.",
       "Don't crop a chart's axis to make a movement look larger than it is."
     ]
-  }
+  },
+  "radius": {
+    "control": "7px",
+    "region": "12px",
+    "pill": "999px",
+    "drawn": "0"
+  },
+  "motion": {
+    "ease": "cubic-bezier(0.2, 0, 0, 1)",
+    "durFast": "120ms",
+    "dur": "180ms",
+    "rule": "Feedback about the reader input only; values snap, never tween. One authored beat on a changed state word."
+  },
+  "knownDeviations": [
+    {
+      "rule": "zero-radius",
+      "status": "revised",
+      "note": "Radius now applies to touchable chrome (control 7px, region 12px) while drawn chart marks stay square. The blanket zero read as machined rather than technical."
+    }
+  ]
 }

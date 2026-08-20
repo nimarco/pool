@@ -304,7 +304,7 @@ shipped stylesheet is 34.8 kB (7.8 kB gzip).
 
 This replaced a single register applied to all of the above, which was the most-used style in the system and made every surface read like an institutional form. Tracked caps everywhere is not a chart; it is paperwork. A third register is the bug this rule exists to refuse.
 
-**The Tabular Rule.** `font-variant-numeric: tabular-nums` is set on `body` and re-asserted on every value, table and ledger. Numbers in this system are read in columns and must not shift. Because tabular numerals do not shrink, long values wrap (`overflow-wrap: anywhere`) rather than overflow.
+**The Tabular Rule.** `font-variant-numeric: tabular-nums` is set on **data, not on prose**: figures, values, tables, ledgers, chart marks, elapsed clocks and mono. Numbers read in columns must not shift. It used to be set on `body`, which meant every sentence rendered in fixed-width digits — "7 people near you buy this" then reads as a meter rather than as a sentence, and that was a large part of what made the interface feel mechanical. Because tabular numerals do not shrink, long values wrap (`overflow-wrap: anywhere`) rather than overflow.
 
 **The Drawing-Is-The-Display-Face Rule.** No decorative type. If a surface needs presence, it gets a section, a meteogram, or the figure register — not a larger, looser typeface.
 
@@ -349,10 +349,21 @@ elevation. The drawer's scrim (`rgba(16,26,28,0.42)`) is the one true overlay.
 
 ## Shapes
 
-Every corner is square. There is no radius token at all — `--radius` and `--radius-lg`
-were declared during the build, referenced by nothing, and removed; squareness is a
-property of the system rather than a value anything opts into. The focus outline
-explicitly re-asserts `border-radius: 0`. Form language is orthogonal: rectangles, hairlines, ticks, caps and
+**The Touch-Or-Drawn Rule.** Radius is decided by what kind of object something is.
+
+*Things you can touch* take a radius: `--r-control` (7px) on buttons, inputs, chips,
+thumbnails, result rows and result cards; `--r-region` (12px) on banners, the inverted
+band, the drawer, the map frame and choice rows; a full pill on chips, step dots and
+judge numbers.
+
+*Things that are drawn* stay square, at zero: the section bar, its threshold tick, its
+end caps and extent line, case cells, track cells, the meteogram and the map's own
+geometry. A chart mark with a rounded corner is a lie about what kind of object it is.
+
+This replaced a blanket zero. Ninety-degree corners on every control, plus 2px borders,
+read as machined rather than technical — the interface felt like switch plates around the
+instrument. Softening the chrome while the instrument stays hard-edged is the whole
+distinction the rule exists to hold. The focus ring follows `--r-control`. Form language is orthogonal: rectangles, hairlines, ticks, caps and
 brackets — the vocabulary of a drawing instrument.
 
 The exceptions are geometric, not stylistic. Circles appear as the human actor glyph, the
@@ -368,7 +379,7 @@ contours. The actor's engine glyph is a square with a 1.2-unit corner at a 10-un
 
 ### Buttons
 An instrument control: square, ruled, its label set like a switch legend.
-- **Shape:** square (0 radius), `2px solid` border, 40px minimum height, `10px 17px`
+- **Shape:** `--r-control` radius, `1px solid` border on a `--stock-raised` surface, 40px minimum height, `10px 18px`
 - **Default:** transparent ground, ink border and label; hover fills `--stock-deep`; active nudges down 1px
 - **Primary:** ink ground, stock label; hover swaps ground and border to petrol
 - **Accept (advisory):** amber ground, ink border, `--on-signal` label; hover deepens to `--signal-deep` with stock label
@@ -525,3 +536,25 @@ the light end of the ramp.
 
 **The One-Inversion Rule.** A second inverted region on the same screen makes both of them
 ordinary. If something else needs emphasis, it gets scale or the figure register.
+
+### Motion
+
+Two durations and one easing: `--dur-fast` 120ms, `--dur` 180ms, `--ease`
+`cubic-bezier(0.2, 0, 0, 1)`.
+
+**The Feedback-Not-Progress Rule.** Motion in this system answers *the reader's own
+input* and never narrates Pool's work. Controls, rows, result cards, inputs and nav items
+transition their colour and border on hover, focus and press. Values do **not** tween: a
+quantity moving from 24 to 22 snaps, because a recomputation is not a journey and an
+eased number implies elapsed effort that did not happen.
+
+The one authored moment is `.status-chip.just-changed`, a single 0.9s beat under a state
+word that has actually changed. Plus the drawer slide and a spinner during a genuinely
+real wait.
+
+Before this, nothing in the interface transitioned at all — every interaction was an
+instant hard swap, which is correct for data and wrong for a control, and was a large
+part of why the surface read as robotic rather than precise.
+
+Under `prefers-reduced-motion: reduce` every duration collapses to 0.01ms, so state still
+changes but nothing travels.

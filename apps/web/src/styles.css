@@ -83,6 +83,20 @@
   --display: var(--sans);
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
+  /* Radius applies to what you can touch. It does not apply to what is drawn: a
+     section bar, a tick, a cap, a case cell and a meteogram trace all stay square,
+     because those are chart marks and a chart mark with a rounded corner is a lie about
+     what kind of object it is. Softening the chrome while the instrument stays hard-
+     edged is the whole difference between technical and mechanical. */
+  --r-control: 7px;
+  --r-region: 12px;
+
+  /* One easing, two durations. This is feedback about the reader's own input, never
+     about work Pool did — values still snap, because a recomputation is not a journey. */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+
   --max: 1180px;
   --gutter: 34px;
   /* The section is the display element in this system. It was 26px tall, which is a
@@ -146,8 +160,10 @@ body {
   color: var(--ink);
   font-family: var(--sans);
   font-size: 16px;
-  line-height: 1.55;
-  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+  /* Tabular numerals used to be set here, on everything. Running prose then read like a
+     readout — "7 people near you" in fixed-width digits is a meter, not a sentence. The
+     figure classes, tables, ledgers and chart marks opt in below; prose does not. */
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -179,7 +195,7 @@ a {
 :focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
-  border-radius: 0;
+  border-radius: var(--r-control);
 }
 .nav button:focus-visible {
   outline-offset: -2px;
@@ -195,11 +211,10 @@ a {
   z-index: 100;
   background: var(--ink);
   color: var(--stock);
-  padding: 10px 16px;
-  font-size: 11px;
+  padding: 11px 17px;
+  border-radius: 0 0 var(--r-control) 0;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 .skip-link:focus {
   left: 0;
@@ -225,16 +240,26 @@ a {
    set in sentence case at a readable size, which is the single change that stopped this
    looking like municipal paperwork. */
 .status-word,
-.actor,
-.entry-act,
-.fact-label,
-.prov-label,
-.figure-label {
+.entry-act {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.13em;
   text-transform: uppercase;
   line-height: 1.35;
+}
+
+/* A figure's own label and an attribution sit next to something already emphatic, so
+   they do not need to shout in caps to be found. Stencil caps are now only the state
+   word, the act name, and the marks drawn on a chart. */
+.actor,
+.fact-label,
+.prov-label,
+.figure-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  text-transform: none;
+  line-height: 1.4;
 }
 
 .section-title,
@@ -297,8 +322,28 @@ a {
   font-size: 0.88em;
   letter-spacing: -0.01em;
 }
-.num {
+.num,
+.value,
+.figure-value,
+.your-value,
+.your-value-sm,
+.amt,
+.fact-value,
+.prov-value,
+.elapsed,
+.spine-meta,
+.gram-mark,
+.mono,
+table.data,
+.ledger-line,
+.sect-axis,
+.sect-minlabel,
+.sect-bracket,
+.casefit-total,
+.onboard-added-qty {
   font-variant-numeric: tabular-nums;
+}
+.num {
   letter-spacing: -0.005em;
 }
 .value {
@@ -446,17 +491,25 @@ a {
   flex-wrap: wrap;
 }
 .nav button {
-  min-height: 30px;
-  padding: 5px 12px;
+  min-height: 34px;
+  padding: 6px 13px;
   background: transparent;
   border: 0;
   border-bottom: 2px solid transparent;
   color: var(--ink-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  /* The last institutional element in the chrome. Tracked caps on the one component
+     present on every screen set the tone for everything under it. */
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: none;
   cursor: pointer;
+}
+.nav button[aria-current="page"] {
+  font-weight: 700;
+}
+.nav button {
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
 .nav button:hover {
   color: var(--ink);
@@ -466,10 +519,9 @@ a {
   border-bottom-color: var(--ink);
 }
 .nav-setup {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 .topbar-tail {
@@ -513,18 +565,27 @@ a {
   justify-content: center;
   gap: 8px;
   min-height: 40px;
-  padding: 10px 17px;
-  background: transparent;
+  padding: 10px 18px;
+  background: var(--stock-raised);
   color: var(--ink);
-  border: 2px solid var(--ink);
-  font-size: 11px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-control);
+  /* Sentence case at a readable size. Tracked caps on every control is what made these
+     read as industrial switch plates rather than as things a person presses. */
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: -0.008em;
+  text-transform: none;
   cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
 }
 .btn:hover:not(:disabled) {
-  background: var(--stock-deep);
+  border-color: var(--ink);
+  background: var(--stock);
 }
 .btn:active:not(:disabled) {
   transform: translateY(1px);
@@ -539,6 +600,7 @@ a {
 }
 .btn-primary {
   background: var(--ink);
+  border-color: var(--ink);
   color: var(--stock);
 }
 .btn-primary:hover:not(:disabled) {
@@ -566,15 +628,13 @@ a {
 }
 .btn-sm {
   min-height: 32px;
-  padding: 6px 11px;
-  font-size: 10px;
-  letter-spacing: 0.13em;
-  border-width: 1.5px;
+  padding: 6px 12px;
+  font-size: 12.5px;
 }
 .btn-lg {
-  min-height: 48px;
-  padding: 14px 22px;
-  font-size: 12px;
+  min-height: 50px;
+  padding: 15px 24px;
+  font-size: 15px;
 }
 .btn-row {
   display: flex;
@@ -706,9 +766,10 @@ details[open] > summary::before {
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
+  gap: 6px;
+  padding: 4px 10px;
   border: 1px solid var(--rule-strong);
+  border-radius: 999px;
   color: var(--ink-muted);
 }
 .chip-ok {
@@ -871,6 +932,10 @@ details[open] > summary::before {
 .rows > .row:first-child {
   border-top: 0;
 }
+.row {
+  border-radius: var(--r-control);
+  transition: background-color var(--dur-fast) var(--ease);
+}
 .row:hover {
   background: var(--stock-raised);
 }
@@ -955,13 +1020,19 @@ table.data td {
 }
 .control {
   width: 100%;
-  min-height: 38px;
-  padding: 9px 11px;
+  min-height: 42px;
+  padding: 10px 13px;
   background: var(--stock-raised);
-  border: 1.5px solid var(--rule-strong);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-control);
   color: var(--ink);
   font: inherit;
-  font-variant-numeric: tabular-nums;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+.control:hover {
+  border-color: var(--rule-strong);
 }
 .control:focus {
   border-color: var(--ink);
@@ -994,10 +1065,11 @@ table.data td {
    gets the amber edge. */
 .banner {
   display: flex;
-  gap: 10px;
+  gap: 11px;
   align-items: flex-start;
-  padding: 13px 15px;
-  border: 1.5px solid var(--rule-strong);
+  padding: 14px 16px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-region);
 }
 .banner .btn {
   flex: none;
@@ -1223,7 +1295,7 @@ table.data td {
 
 /* The one place contours are allowed, because here the geometry is genuinely
    geographic: isodistance rings at the distance the matcher actually permits. */
-.map-wrap { position: relative; overflow: hidden; border: 1px solid var(--rule-strong); background: var(--stock-raised); }
+.map-wrap { position: relative; overflow: hidden; border: 1px solid var(--rule-strong); border-radius: var(--r-region); background: var(--stock-raised); }
 .map-wrap svg { display: block; width: 100%; height: auto; }
 .map-svg { max-height: 360px; }
 .map-ring { fill: var(--petrol); fill-opacity: 0.1; stroke: var(--petrol); stroke-width: 1; stroke-dasharray: 5 4; }
@@ -1293,11 +1365,15 @@ table.data td {
 .product-search { display: flex; flex-direction: column; gap: 12px; }
 .product-results { display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow-y: auto; }
 .product-card, .family-card, .community-choice {
-  display: flex; align-items: center; gap: 12px; width: 100%;
-  padding: 9px 10px; background: transparent; border: 1px solid var(--rule);
+  display: flex; align-items: center; gap: 13px; width: 100%;
+  padding: 11px 12px; background: var(--stock-raised); border: 1px solid var(--rule);
+  border-radius: var(--r-control);
   text-align: left; cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
 }
-.product-card:hover, .family-card:hover, .community-choice:hover { border-color: var(--ink); }
+.product-card:hover, .family-card:hover, .community-choice:hover {
+  border-color: var(--ink); background: var(--stock);
+}
 .family-card { border-color: var(--ink); border-width: 2px; }
 .family-name { font-family: var(--display); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
 /* A photograph Pool did not take, in a frame that admits it: ruled, cold ground, never
@@ -1306,6 +1382,7 @@ table.data td {
   flex: 0 0 auto; width: 46px; height: 46px; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
   background: var(--stock-deep); border: 1px solid var(--rule-strong);
+  border-radius: var(--r-control);
 }
 .need-thumb { width: 38px; height: 38px; align-self: flex-start; }
 .pool-thumb { width: 56px; height: 56px; }
@@ -1349,8 +1426,9 @@ table.data td {
 }
 .onboard-steps li.is-current { color: var(--ink); }
 .onboard-step-dot {
-  width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
-  border: 1.5px solid var(--rule-strong); font-family: var(--mono); font-size: 11px;
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--rule-strong); border-radius: 999px;
+  font-family: var(--mono); font-size: 11px;
 }
 .onboard-steps li.is-current .onboard-step-dot { border-color: var(--ink); background: var(--ink); color: var(--stock); }
 .onboard-added { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 0; padding: 0; }
@@ -1359,13 +1437,20 @@ table.data td {
 .onboard-added li .product-card { flex: 1; min-width: 0; }
 .onboard-added-qty { flex: 0 0 auto; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--ink-muted); }
 .onboard-choices { display: flex; flex-direction: column; gap: 10px; }
-.onboard-choice { display: flex; align-items: flex-start; gap: 12px; padding: 12px 13px; border: 1px solid var(--rule-strong); cursor: pointer; }
-.onboard-choice:has(input:checked) { border-color: var(--ink); border-width: 2px; padding: 11px 12px; }
+.onboard-choice {
+  display: flex; align-items: flex-start; gap: 13px; padding: 14px 15px;
+  border: 1px solid var(--rule-strong); border-radius: var(--r-region);
+  background: var(--stock-raised); cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+.onboard-choice:hover { border-color: var(--ink); }
+.onboard-choice:has(input:checked) { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .onboard-choice input { flex: 0 0 auto; margin-top: 3px; accent-color: var(--ink); }
 .onboard-choice > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .acting-banner {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 11px 14px; border: 1.5px solid var(--ink); background: var(--stock-sunken);
+  padding: 12px 15px; border: 1px solid var(--ink); border-radius: var(--r-region);
+  background: var(--stock-sunken);
 }
 
 /* ================================================================= behind pool */
@@ -1377,6 +1462,7 @@ table.data td {
   display: flex; flex-direction: column; gap: 3px; padding: 12px 0;
   border: 0; border-top: 1px solid var(--rule); background: none; text-align: left; cursor: pointer;
 }
+.proof-link { transition: color var(--dur-fast) var(--ease); }
 .proof-link:hover .proof-link-title { text-decoration: underline; text-underline-offset: 3px; }
 .proof-link-title { font-weight: 700; font-size: 15px; }
 .proof-link-sub { font-size: 12.5px; color: var(--ink-muted); }
@@ -1481,7 +1567,7 @@ table.data td {
 .judge-step { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 16px; padding: 18px 0; border-top: 1px solid var(--rule-strong); }
 .judge-num {
   width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; flex: none;
-  background: var(--ink); color: var(--stock);
+  background: var(--ink); color: var(--stock); border-radius: 999px;
   font-family: var(--mono); font-size: 13px; letter-spacing: 0; text-transform: none;
 }
 .judge-step-title { max-width: 34ch; font-weight: 700; font-size: 17px; }
@@ -1507,6 +1593,12 @@ table.data td {
 
 @media (prefers-reduced-motion: reduce) {
   .sheet, .reveal { animation: none; }
+  /* Feedback becomes instant rather than absent: the state still changes, it just does
+     not travel. */
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
 
 /* ==================================================================== responsive */
@@ -1710,6 +1802,7 @@ table.data td {
   background: var(--stock);
   color: var(--ink);
   border-top: 0;
+  border-radius: var(--r-region);
   /* Inset, not full-bleed. The negative margin this used to carry assumed the gutter
      container was its parent; it is not, so the band escaped the measure and made the
      document wider than the viewport. A dark plate on the sheet is force enough. */

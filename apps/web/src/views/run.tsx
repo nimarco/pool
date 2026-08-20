@@ -39,7 +39,6 @@ import {
   IconPlay,
   IconReplay,
   LedgerLine,
-  Meter,
   TracePills,
 } from "../ui";
 
@@ -251,7 +250,6 @@ function DiscoveryBody({ f, sub }: { f: Facts; sub: SubLevel }) {
           sub="chosen for the members who actually joined"
         />
       </div>
-      <Meter value={units} max={threshold} />
 
       {/* The one place the "ten" is explained. Both halves are server-computed by the
           same evaluate_timing the matcher used, so the split cannot disagree with the
@@ -485,7 +483,6 @@ function DecisionBody({ f }: { f: Facts }) {
           sub="only an authorised payment counts toward the threshold"
         />
       </div>
-      <Meter value={funded} max={threshold} />
       <StageNote>
         <p className="small muted prose">
           Pool asks only when a stored rule does not pass; everyone else is left alone.
@@ -813,6 +810,170 @@ function UnitTrack({
   );
 }
 
+/** The lifecycle as a time series: one quantity across the recorded stages.
+ *
+ *  The unit track above says what the quantity *is* right now. This says what it *did* —
+ *  and the two horizontal rules are why the dip means anything, because the trace falls
+ *  below the line that says a case is full and then climbs back over it. Repaired, not
+ *  written over.
+ *
+ *  Every value is `spineFor`'s own funded count for that stage, so nothing here is
+ *  derived twice. A 2-unit loss on a 24-unit axis is a small shape honestly, so the
+ *  second panel is the meteographer's answer rather than an exaggeration: the same
+ *  series on its own stated scale, where the fall is half the panel.
+ *
+ *  Geometry is SVG with non-scaling strokes; every label is an element, because text
+ *  inside a scaled viewBox is sized for one container width and wrong at every other.
+ */
+function Meteogram({
+  series,
+  target,
+  caseUnits,
+}: {
+  series: { name: string; funded: number }[];
+  target: number;
+  caseUnits: number;
+}) {
+  if (series.length < 2 || target <= 0) return null;
+  const W = 1000;
+  const H = 150;
+  const x = (i: number) => (i / (series.length - 1)) * W;
+  const y = (u: number) => H - (u / target) * H;
+
+  const path = (h: number, lo: number, hi: number) => {
+    const yy = (u: number) => h - ((u - lo) / (hi - lo)) * h;
+    let d = "";
+    let prev: number | null = null;
+    series.forEach((pt, i) => {
+      if (pt.funded < lo) {
+        prev = null;
+        return;
+      }
+      if (prev !== null && prev !== pt.funded) d += ` L${x(i).toFixed(1)} ${yy(prev).toFixed(1)}`;
+      d += `${prev === null ? "M" : " L"}${x(i).toFixed(1)} ${yy(pt.funded).toFixed(1)}`;
+      prev = pt.funded;
+    });
+    return d;
+  };
+
+  // The span the quantity sat below a whole case, and by how much.
+  const dipFrom = series.findIndex((p) => p.funded > 0 && p.funded < target);
+  const dipTo = dipFrom >= 0 ? series.findIndex((p, i) => i > dipFrom && p.funded >= target) : -1;
+  const dipUnits = dipFrom >= 0 ? target - series[dipFrom].funded : 0;
+
+  const rules: number[] = [];
+  if (caseUnits > 0) for (let u = caseUnits; u <= target; u += caseUnits) rules.push(u);
+
+  const band = (h: number, lo: number, hi: number) =>
+    dipFrom >= 0 && dipTo > dipFrom ? (
+      <rect
+        x={x(dipFrom)}
+        y={h - ((target - lo) / (hi - lo)) * h}
+        width={x(dipTo) - x(dipFrom)}
+        height={((target - series[dipFrom].funded) / (hi - lo)) * h}
+        fill="url(#gram-hatch)"
+        stroke="var(--ink)"
+        strokeWidth="1"
+        vectorEffect="non-scaling-stroke"
+      />
+    ) : null;
+
+  const hatch = (
+    <defs>
+      <pattern id="gram-hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+        <line x1="0" y1="0" x2="0" y2="7" stroke="var(--ink)" strokeWidth="1.4" opacity="0.55" />
+      </pattern>
+    </defs>
+  );
+
+  const aria =
+    `Funded units across ${series.length} recorded stages. The quantity holds at ${target}, ` +
+    (dipFrom >= 0
+      ? `falls to ${series[dipFrom].funded} when an authorisation is declined — ${dipUnits} short of a whole case — and returns to ${target} when a replacement is found.`
+      : `and never falls.`);
+
+  return (
+    <div className="gram">
+      <div className="gram-plot" role="img" aria-label={aria}>
+        <span className="gram-mark" style={{ top: 0 }}>{target}</span>
+        <span className="gram-mark is-zero" style={{ top: "100%" }}>0</span>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+          {hatch}
+          {rules.map((u) => (
+            <line
+              key={u}
+              x1="0"
+              y1={y(u)}
+              x2={W}
+              y2={y(u)}
+              stroke="var(--ink)"
+              strokeWidth="1"
+              opacity="0.45"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          {band(H, 0, target)}
+          <path
+            d={path(H, 0, target)}
+            fill="none"
+            stroke="var(--petrol)"
+            strokeWidth="3.4"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      </div>
+      {dipFrom >= 0 && dipTo > dipFrom ? (
+        <>
+          <p className="gram-dip">
+            {dipUnits} {dipUnits === 1 ? "unit" : "units"} short of a whole case, for two
+            stages
+          </p>
+          {/* The same series on its own scale, stated. Not a zoom for drama — the axis
+              is labelled, so the reader can see it is a different scale. */}
+          <div className="gram-expanded">
+            <span className="section-title">
+              Expanded · {target - 4} to {target} units
+            </span>
+            <div className="gram-plot is-small">
+              <span className="gram-mark" style={{ top: 0 }}>{target}</span>
+              {dipFrom >= 0 ? (
+                <span
+                  className="gram-mark is-dip"
+                  style={{ top: `${((target - series[dipFrom].funded) / 4) * 100}%` }}
+                >
+                  {series[dipFrom].funded}
+                </span>
+              ) : null}
+              <span className="gram-mark is-zero" style={{ top: "100%" }}>{target - 4}</span>
+              <svg viewBox={`0 0 ${W} 60`} preserveAspectRatio="none" aria-hidden="true">
+                {hatch}
+                <line
+                  x1="0"
+                  y1="0.5"
+                  x2={W}
+                  y2="0.5"
+                  stroke="var(--ink)"
+                  strokeWidth="1"
+                  opacity="0.45"
+                  vectorEffect="non-scaling-stroke"
+                />
+                {band(60, target - 4, target)}
+                <path
+                  d={path(60, target - 4, target)}
+                  fill="none"
+                  stroke="var(--petrol)"
+                  strokeWidth="3.4"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+            </div>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 /** What the spine shows, per act. Derived once from the transcript. */
 interface SpineState {
   caption: string;
@@ -976,6 +1137,12 @@ export function RunView({
     ? Math.round(n(factsByName.purchase, "units") / Math.max(1, n(factsByName.purchase, "cases")))
     : 0;
   const spine = spineFor(steps[active]?.name ?? "seed", factsByName, target);
+  /* The same derivation, once per stage, so the trace and the track can never disagree
+     about the quantity: funded is what is in the pool less what stopped counting. */
+  const series = steps.map((step) => {
+    const at = spineFor(step.name, factsByName, target);
+    return { name: step.name, funded: Math.max(0, at.filled - at.declined) };
+  });
 
   /* The acts, in server order, each one a real destination instead of an unlabelled
      hairline. The ruler used to be fourteen 15x32px buttons carrying no text — under the
@@ -1032,6 +1199,8 @@ export function RunView({
             {total} steps · {roundTripMs !== null ? `${roundTripMs} ms` : "already executed"}
           </span>
         </div>
+        {/* The quantity's own history, beneath the quantity's current shape. */}
+        <Meteogram series={series} target={target} caseUnits={caseUnits} />
         {/* The caption is the same fact in words, so the drawing is never the only
             carrier — which is what makes it survive reduced motion and a screen reader. */}
         <p className="spine-caption" aria-live="polite">

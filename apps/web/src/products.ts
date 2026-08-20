@@ -43,22 +43,24 @@ export function productImage(imageRef: string): string | null {
   return BY_REF[imageRef] ?? null;
 }
 
-/** Category-coloured fallback, so a missing photograph is a considered state rather
- *  than a broken box. Deterministic: the same product always gets the same tile. */
+/** The ground a missing photograph sits on.
+ *
+ *  It used to be category-coloured. In this visual system colour means exactly one
+ *  thing — demand accumulating toward a threshold — so tinting a tile by category would
+ *  spend the only meaningful hue on a fact that is not a quantity. The tile is therefore
+ *  a cold neutral step of the same chart stock everything else is drawn on, which also
+ *  says the true thing: there is no photograph here.
+ *
+ *  Still deterministic, and still varies a little across the two neutral steps, so a
+ *  results list of unphotographed products does not read as one solid block.
+ */
 export function categoryTone(category: string): string {
   switch (category) {
     case "nutrition":
-      return "var(--moss)";
     case "beverage":
-      return "var(--clay)";
-    case "pantry":
-      return "var(--graphite)";
-    case "household":
-      return "var(--ink-muted)";
-    case "toiletries":
-      return "var(--graphite)";
+      return "var(--stock-sunken)";
     default:
-      return "var(--ink-faint)";
+      return "var(--stock-deep)";
   }
 }
 

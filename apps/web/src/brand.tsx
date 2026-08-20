@@ -1,26 +1,43 @@
 /* Brand marks and the one explanatory figure on the site.
  *
- * The wordmark's glyph is a ring of separate people around a single pooled order: the
- * product in one shape. The centre is clay because the thing in the middle is not
- * automation — it is a person's order, and one of the people carries the box.
+ * The glyph is a closed contour around a single centre. Concentric isolines are
+ * separate people at their own distances; the centre is one order. It is the same
+ * shape as the product and the same shape as the notation — the one place in Synoptic
+ * Hour where a contour is allowed on a non-geographic surface, because here it is an
+ * emblem rather than a quantity.
+ *
+ * The centre is petrol, not ink: the thing in the middle is not automation, it is the
+ * order the demand became.
  */
 
-/** The logo glyph. Legible from 16 px (favicon) to 96 px. */
+/** The logo glyph. Two rings under 20 px, three above, so it holds at favicon size. */
 export function BrandMark({ size = 24 }: { size?: number }) {
-  const ring = [
-    [12, 4],
-    [18.93, 8],
-    [18.93, 16],
-    [12, 20],
-    [5.07, 16],
-    [5.07, 8],
-  ];
+  // Stroke weight increases inward, the way a contour interval reads on a chart.
+  const rings =
+    size < 20
+      ? [
+          { r: 10.2, w: 2.4 },
+          { r: 5.6, w: 2.8 },
+        ]
+      : [
+          { r: 10.6, w: 1.3 },
+          { r: 7.3, w: 1.7 },
+          { r: 4.1, w: 2.1 },
+        ];
   return (
     <svg className="brand-mark" viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
-      {ring.map(([cx, cy]) => (
-        <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="2.05" fill="var(--moss)" />
+      {rings.map((ring) => (
+        <circle
+          key={ring.r}
+          cx="12"
+          cy="12"
+          r={ring.r}
+          fill="none"
+          stroke="var(--ink)"
+          strokeWidth={ring.w}
+        />
       ))}
-      <circle cx="12" cy="12" r="3.4" fill="var(--clay)" />
+      <circle cx="12" cy="12" r={size < 20 ? 2.4 : 1.9} fill="var(--petrol)" />
     </svg>
   );
 }
@@ -90,13 +107,13 @@ export function ConvergenceFigure() {
           y1={top - 16}
           x2={poolX}
           y2={baseline + 13}
-          stroke="var(--moss)"
+          stroke="var(--ink)"
           strokeWidth="1.5"
         />
         <text
           x={poolX}
           y={top - 22}
-          fill="var(--moss)"
+          fill="var(--ink)"
           fontSize="10"
           textAnchor="middle"
           letterSpacing="0.08em"
@@ -124,7 +141,7 @@ export function ConvergenceFigure() {
                   y1={y}
                   x2={Math.max(row.x, poolX)}
                   y2={y}
-                  stroke={row.kind === "pulled" ? "var(--clay)" : "var(--moss)"}
+                  stroke="var(--ink)"
                   strokeWidth="1.4"
                   strokeDasharray={row.kind === "pulled" ? "3 2.5" : undefined}
                 />
@@ -133,16 +150,11 @@ export function ConvergenceFigure() {
                 cx={row.x}
                 cy={y}
                 r={row.kind === "spare" ? 2.5 : 3.3}
-                fill={
-                  row.kind === "spare"
-                    ? "var(--ink-faint)"
-                    : row.kind === "pulled"
-                      ? "var(--clay)"
-                      : "var(--moss)"
-                }
-                opacity={row.kind === "spare" ? 0.6 : 1}
+                fill={row.kind === "spare" ? "none" : "var(--ink)"}
+                stroke="var(--ink)"
+                strokeWidth={row.kind === "spare" ? 1.4 : 0}
               />
-              {joins ? <circle cx={poolX} cy={y} r="2.4" fill="var(--moss)" /> : null}
+              {joins ? <circle cx={poolX} cy={y} r="2.4" fill="var(--petrol)" /> : null}
             </g>
           );
         })}

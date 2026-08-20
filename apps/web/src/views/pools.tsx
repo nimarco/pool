@@ -14,7 +14,7 @@
  * a screen says "yours", the server decided it (AGENTS.md §8). */
 
 import { AppState, MemberView, money, statusCopy } from "../api";
-import { Chip, CoordinatorWait, Empty, IconArrowRight, Meter } from "../ui";
+import { Chip, CoordinatorWait, Empty, IconArrowRight } from "../ui";
 
 export function Pools({
   state,
@@ -92,7 +92,6 @@ export function Pools({
                       · {p.provisional_units}/{p.threshold_units} units · {p.pickup_site}
                       {p.host ? ` · ${p.host.display_name} carrying it` : " · host needed"}
                     </div>
-                    <Meter value={p.provisional_units} max={p.threshold_units} />
                   </div>
                   <div className="row-tail">
                     <div className="fact-value num">{p.savings_pct || "—"}</div>

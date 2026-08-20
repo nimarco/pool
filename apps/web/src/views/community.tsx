@@ -37,7 +37,6 @@ import {
   Figure,
   IconArrowRight,
   LedgerLine,
-  Meter,
   TracePills,
 } from "../ui";
 
@@ -384,7 +383,6 @@ function PoolRow({ pool, onOpen }: { pool: PoolView; onOpen: () => void }) {
           · {pool.provisional_units}/{pool.threshold_units} units · {pool.pickup_site}
           {pool.host ? ` · host ${pool.host.display_name}` : " · host needed"}
         </div>
-        <Meter value={pool.provisional_units} max={pool.threshold_units} />
       </div>
       <div className="row-tail">
         <div className="fact-value num">{pool.savings_pct || "—"}</div>
@@ -431,15 +429,19 @@ export function CommunityView({
 
   return (
     <div className="stack">
-      <header className="row-between">
-        <div>
-          <h1 className="title">Behind Pool</h1>
-          <p className="small muted" style={{ marginTop: 6 }}>
-            {state.community?.name ?? "This community"} — {state.counts.members} members ·{" "}
-            {state.counts.needs} standing needs · {state.counts.standing_hosts} people
-            willing to host · entirely synthetic
-          </p>
-        </div>
+      {/* A bulletin, not a console. An analysis office publishes the written record
+          first and the chart as an enclosure, and that is the order a judge needs: what
+          is being claimed, then the sections that prove it, and the notation last. */}
+      <header className="bulletin">
+        <span className="bulletin-issued">
+          {state.community?.name ?? "This community"} · {state.counts.members} members ·{" "}
+          {state.counts.needs} standing needs · {state.counts.standing_hosts} people
+          willing to host · entirely synthetic
+        </span>
+        <h1 className="bulletin-lede">
+          Everything on this page is a stored record, and each section says what it
+          proves before it shows anything.
+        </h1>
       </header>
 
       {/* The index, first, because somebody who came here came to check something. Each
@@ -448,7 +450,8 @@ export function CommunityView({
           the app to find any of them. */}
       <section className="panel">
         <div className="panel-head">
-          <h2>Start here</h2>
+          <span className="sec-num">§1</span>
+            <h2>Start here</h2>
         </div>
         <div className="panel-pad">
           <div className="proof-index">
@@ -499,7 +502,8 @@ export function CommunityView({
           are sums over stored rows for this Community, and neither is a projection. */}
       <section className="panel">
         <div className="panel-head">
-          <h2>What Pool did on its own</h2>
+          <span className="sec-num">§2</span>
+            <h2>What Pool did on its own</h2>
           <span className="spacer" />
           <ActorTag actor="engine" label="Counted from stored rows" />
         </div>
@@ -535,7 +539,8 @@ export function CommunityView({
 
       <section className="panel">
         <div className="panel-head">
-          <h2>Decisions waiting on a person</h2>
+          <span className="sec-num">§3</span>
+            <h2>Decisions waiting on a person</h2>
           <span className="spacer" />
           <span className="tiny faint">
             {state.decisions.length === 0 ? "empty, as usual" : `${state.decisions.length} waiting`}
@@ -561,7 +566,8 @@ export function CommunityView({
 
       <section className="panel">
         <div className="panel-head">
-          <h2>Every action, and who took it</h2>
+          <span className="sec-num">§4</span>
+            <h2>Every action, and who took it</h2>
           <span className="spacer" />
           <span className="actor-key">
             <span className="actor actor-agent">
@@ -586,6 +592,7 @@ export function CommunityView({
       {proven ? (
         <section className="panel">
           <div className="panel-head">
+            <span className="sec-num">§5</span>
             <h2>What proves it</h2>
             <span className="spacer" />
             <ActorTag actor="engine" label="Read back from storage" />
@@ -687,6 +694,7 @@ export function CommunityView({
       <section className="grid grid-side">
         <div className="panel">
           <div className="panel-head">
+            <span className="sec-num">§6</span>
             <h2>What it produced</h2>
             <span className="spacer" />
             <span className="tiny faint">{m.pools_locked_or_beyond} locked or beyond</span>
@@ -705,12 +713,6 @@ export function CommunityView({
           )}
         </div>
 
-        <div className="panel">
-          <div className="panel-head">
-            <h2>Where everyone is</h2>
-          </div>
-          <CommunityMap map={map} />
-        </div>
       </section>
 
       {/* Same rule the three figures above already follow, which this ledger did not:
@@ -719,7 +721,8 @@ export function CommunityView({
       {m.pools_locked_or_beyond > 0 ? (
       <section className="panel">
         <div className="panel-head">
-          <h2>Where the money went</h2>
+          <span className="sec-num">§7</span>
+            <h2>Where the money went</h2>
           <span className="spacer" />
           <ActorTag actor="engine" label="Every figure computed" />
         </div>
@@ -739,9 +742,23 @@ export function CommunityView({
       </section>
       ) : null}
 
+      {/* Enclosure A. The notation, after the record rather than in front of it — and
+          the one surface in this system where a contour is honest, because these rings
+          are isodistance and the geometry really is geographic. */}
+      <section className="enclosure">
+        <div className="panel-head">
+          <span className="sec-num">Enclosure A</span>
+          <h2>Where everyone is</h2>
+          <span className="spacer" />
+          <ActorTag actor="engine" label="Projected from fixture coordinates" />
+        </div>
+        <CommunityMap map={map} />
+      </section>
+
       {enablement ? (
         <section className="panel">
           <div className="panel-head">
+            <span className="sec-num">§8</span>
             <h2>The community it ran inside</h2>
             <span className="spacer" />
             <Chip>synthetic fixture</Chip>

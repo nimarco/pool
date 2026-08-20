@@ -48,9 +48,9 @@ import {
   IconDot,
   LedgerLine,
   CaseFit,
-  Meter,
   ProofIdentity,
   TracePills,
+  DemandSection,
 } from "../ui";
 import { groupSavingsCaption } from "../labels";
 import { Feed } from "./community";
@@ -365,7 +365,12 @@ function YourOrder({
         {/* The pool-level arithmetic, kept and demoted. It is the reason the price above
             exists, so it sits under it rather than over it. */}
         <div className="your-group">
-          <Meter value={pool.provisional_units} max={pool.threshold_units} />
+          <DemandSection
+            demand={pool.provisional_units}
+            unit={pool.unit}
+            minimum={pool.threshold_units > 0 ? pool.threshold_units : null}
+            caseUnits={pool.economics?.packages?.case_units}
+          />
           <p className="tiny faint">
             {pool.provisional_units} {pool.unit}s together with {pool.buyer_count}{" "}
             {pool.buyer_count === 1 ? "buyer" : "buyers"} — the supplier will not sell
@@ -478,7 +483,7 @@ function OverviewTab({ pool }: { pool: PoolView }) {
                   <div key={c.name} className="row" style={{ paddingInline: 0, gap: 11 }}>
                     <span
                       style={{
-                        color: c.passed ? "var(--ink)" : "var(--stop)",
+                        color: "var(--ink)",
                         display: "flex",
                         marginTop: 2,
                       }}

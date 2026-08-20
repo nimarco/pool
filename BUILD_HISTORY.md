@@ -5928,3 +5928,155 @@ fix is not a wider heuristic — it is the caller saying "I changed the world", 
 `apps/web/src/views/judge.tsx`, `views/judge.test.tsx`, `views/onboarding.tsx`, `App.tsx`,
 `api.ts`, `styles.css`, `tests/test_supplier_import.py`, `tests/test_public_demo.py`,
 `README.md`, `docs/ARCHITECTURE.md`, `docs/HACKATHON_SCORECARD.md`.
+
+### #0053 — [2026-08-20] — Synoptic Hour: the quantity becomes a section, and the world it is drawn in is replaced
+`[FRONTEND]` `[DESIGN]` `[ARTICLE-1]`
+
+**Goal / user intent**
+Replace the incumbent visual identity outright rather than evolving it, from product reasoning
+rather than from what already existed. The standard set was: at first glance the product should
+clearly belong to a new visual world; at second glance that world should make Pool's actual
+mechanism — standing demand measured against a changing external threshold — easier to
+understand than before.
+
+**Starting state**
+`feat/final-experience-rebuild` at `e8941e3`, clean, 980 agent + 75 infra + 119 web green. The
+incumbent world measured, from the running app: 31 tokens, `--paper: #f7f4ef`, Instrument Serif
+display, a moss/graphite/clay actor triad plus a red `--stop`, 8px and 14px radii, three shadow
+levels. Work isolated on `exp/synoptic-hour` before anything was committed.
+
+**How the direction was chosen**
+Product-derived, with the incumbent held out as an anti-reference and not read until after the
+direction was fixed. Seven candidate worlds were derived from the audience's own material — a
+co-op order sheet, a public hand count, a posted notice of determination, a campus notice wall, a
+schematic connection diagram, freight case marking, a synoptic chart — and an external roll
+(`concept-seed`, seed `a27a09ec`) assigned candidate **7**, the one ranked last. That is the point
+of rolling from outside: the top-ranked candidate is what every run would ship.
+
+Synoptic analysis won on product clarity rather than novelty. The notation already solves five
+things this product needs: density as a closed contour rather than a dot per person (privacy
+satisfied by the notation); a threshold as a labelled isoline; a reissued analysis with the prior
+one kept, dated; a quantitative "no" that nobody reads as a failure; and observation / analysis /
+forecaster's amendment as three responsibility classes already distinguished without colour.
+
+**The modification the stress test forced, and why it matters**
+Five high-fidelity comps were built before any application code — judge density, the causal
+lifecycle, the judge path, mobile, and the map. Across them the 2-D demand contour was the
+weakest element in **four of five**: demoted to an enclosure on the proof surface, replaced by a
+time series in the lifecycle, at its legibility floor at 250 px, and beaten outright by a 1-D
+section on a phone. It was unambiguously right on exactly one surface — the map, where the
+geometry is genuinely geographic.
+
+So the direction was modified before implementation, not after: **contours are for geography and
+the emblem; sections are for quantity.** A one-off re-comp of the anchor confirmed it, and
+produced the sharpest version of the argument — the same bar with the tick moving from 12 to 16
+while the extent never changes, with the prior analyses dated beneath on the same axis. The
+contour version could only assert that the demand had not moved; the section shows it.
+
+**What we did**
+*The section.* `DemandSection` draws a fixed unit axis whose extent is the larger of the standing
+demand and the supplier minimum — never padded headroom — with the minimum as a tick at its true
+position, case boundaries only when the case size is actually known from the sheet in force, and
+prior analyses kept beneath in a dashed register. Built from elements and percentages, not SVG:
+a viewBox scales its text with the container, and a label sized to read at 1180 px renders at
+three pixels in a 350 px column. The same component now carries Home's watching rows, the formed
+order and the order detail, so mobile is the same grammar at a narrower width rather than a
+separate design.
+
+*A dimension line where there is no threshold.* State A of the changing-world sequence has no
+supplier, so there is nothing to be full of: the demand is drawn as an extent with end caps. This
+was found by building it the other way first — a full-width flat fill, which reads as a completed
+progress bar, and would have been the interface implying work it had not done.
+
+*Colour means one thing.* A four-step petrol ramp for accumulating demand and nothing else; amber
+only as an advisory fill. **No red anywhere** — a refusal is this product's best behaviour, and
+`--stop` existed to call it a failure. A failed viability check is now ink with its cross glyph,
+which is also what "no meaning by colour alone" asks for.
+
+*Amber is a fill, and what sits on it is `--on-signal`.* A latent bug the audit could not see:
+`--ink` inverts with the scheme, so "ink on amber" silently became light-on-amber in the dark
+counterpart at about 1.9:1. `--on-signal` is a scheme-constant dark ink; measured 5.26:1 light and
+7.92:1 dark. The `needs you` highlight was also never applying at all — the rule keyed the state
+class on the wrong element.
+
+*Bulletin and enclosure.* Behind Pool opens with an issuing line and one sentence of what is
+claimed, then §1–§8, with the map demoted to *Enclosure A* at the foot. A judge needs the
+hierarchy of the proof before the notation.
+
+*Meteogram.* The Showcase gains the quantity's history beside its current shape: funded units
+across the fourteen pinned stages, with the case boundaries as horizontal rules — which is why the
+dip means something, because it crosses one. A 2-unit loss on a 24-unit axis is a small shape
+honestly, so there is a second panel on its own **stated** scale rather than an exaggerated dip.
+
+*Four always-full meters removed.* `Meter(provisional_units, threshold_units)` clamps 24-against-16
+to a full track on Home, Orders, the order detail and Behind Pool — a filled bar that says nothing
+and reads as a task completed. Replaced by the section where there is room, removed where the
+figures are already stated in words. The one surviving `Meter` is the host's pickups of total,
+which is a real completion fraction.
+
+*The mark.* A closed contour around a single centre: concentric isolines are separate people at
+their own distances, the centre is one order. Two rings under 20 px, three above. The favicon and
+both `theme-color` values follow it.
+
+*Typography.* Archivo Variable, weight axis only, latin subset, self-hosted, SIL OFL — 34.1 kB
+against Instrument Serif's 20.5 kB. The width axis would have cost 54 kB more; the direction's own
+thesis is that the type is an instrument label and the drawing is the display face, so tracking
+and weight carry the condensed register instead. `@fontsource/instrument-serif` removed.
+
+**Verification**
+`make qa` green: **980 agent + 75 infra + 119 web = 1,174**. Ruff, tsc, eslint, production build,
+secret scan, `git diff --check` all clean. CSS **34.8 kB / 7.8 kB gzip**, down from 42.2 / 9.0.
+Selector coverage checked mechanically: 290 component classNames used, 290 styled, including the
+interpolated ones a first sweep missed. Contrast measured programmatically over every text node:
+**0 failures at 1280×720 and 375×812, in both schemes**; no touch target under 24 px; no horizontal
+overflow. The changing-world sequence rehearsed **three times from reset** through the same
+endpoints the browser drives — byte-identical after normalising ids and timestamps, with demand
+pinned at 24 units and 7 people through every beat while only the minimum moved (none → 12 → 16).
+Supplier ingestion exercised for real: 1144 bytes / `8e0f4e6e…` / min 12 / case 4 / line 18, then
+713 bytes / min 16 / case 8.
+
+**Failures / dead ends**
+- The first section was an SVG with text inside it. Correct at 1180 px, three pixels at 350. Text
+  cannot live in a scaled viewBox; the rebuild put geometry in percentages and every label back in
+  the type system.
+- A flat full-width fill for "no supplier" read as a completed progress bar — the axis maximum is
+  the demand, so the bar is *always* full. That is what forced the dimension line, which turned out
+  to be the stronger idea: it differentiates state A from B and C at a glance.
+- CSS drew a second box around actor glyphs that were already three distinct SVG shapes.
+- The disabled primary button rendered faint ink on an ink fill — dark on dark — because
+  `:disabled` set a colour without clearing the fill.
+- A first rehearsal harness reported three identical runs while measuring nothing: the need was
+  never created (`max_spend_cents` is required) and `standing_demand` rides on the member payload,
+  not `/api/needs`. A green tick on an empty check is worse than a red one.
+- The mechanical detector flagged nine "side-tab" accent borders. Four were kept and recorded as an
+  intentional deviation — the left rule is the carrier of responsibility and of the one advisory
+  state, both required to be redundantly encoded. The other five were the device being spent on
+  selection, a refused row and an ordinary banner, which is how a signifier becomes wallpaper;
+  those were removed. `.acting-banner` turned out to be defined twice.
+- `--radius`, `--radius-lg` and a fifth field step were declared and consumed by nothing. Removed
+  rather than documented: a value used zero times is not a system rule.
+
+**Two defects found and deliberately not fixed here**
+- **"Fulfiller" appears in consumer copy** on Home, four times, e.g. *"a fulfiller's pay is part of
+  the price"*. `PRODUCT.md` states host is one word only, never "runner" or "fulfiller", in consumer
+  copy. Pre-existing, and a copy change rather than a visual one.
+- **Case boundaries cannot be drawn on a watching row.** `case_units` reaches the member payload
+  only for `case_boundary`, so the section omits them there rather than inventing a case size.
+  Drawing them needs a server payload addition, which is outside a visual replacement.
+
+**What we learned**
+The direction survived because its *notation grammar* was strong, not because its signature image
+was. Stress-testing on the surfaces most likely to break it — before writing application code —
+demoted the one element that would have looked most like a concept and promoted the one that
+actually explains the mechanism. And the two worst defects in this pass were both the interface
+implying completion: a bar that is always full, and a track that fills whenever an order is
+viable. Neither is a lie anybody would notice, which is exactly why the rule had to become a
+system rule rather than a judgement call.
+
+**Relevant commits / files**
+Branch `exp/synoptic-hour`, isolated from `feat/final-experience-rebuild` at `e8941e3` before any
+commit. `apps/web/src/styles.css` (rewritten from scratch against the extracted layout contract),
+`ui.tsx` (`DemandSection`), `brand.tsx`, `products.ts`, `index.html`, `package.json`,
+`views/home.tsx`, `views/community.tsx`, `views/run.tsx` (`Meteogram`), `views/pool.tsx`,
+`views/pools.tsx`, `views/live.tsx`, `views/operations.tsx`, `views/demo-panel.tsx`, `PRODUCT.md`,
+`DESIGN.md`, `.impeccable/design.json`.

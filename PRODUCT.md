@@ -160,9 +160,11 @@ failure. If a screen says "you", the server decided that.
 
 ## Brand Commitments
 
-- **Name:** Pool. The wordmark glyph is a ring of separate people around a single pooled
-  order — the product in one shape, with the centre deliberately reading as a person's
-  order rather than as automation.
+- **Name:** Pool. The mark is a closed contour around a single centre — concentric
+  isolines are separate people at their own distances, and the centre is one order. The
+  product in one shape, with the centre deliberately reading as a person's order rather
+  than as automation. It is the only place a contour appears on a non-geographic surface,
+  because there it is an emblem rather than a quantity.
 - **Voice:** plain, specific, and never stronger than the evidence. Say what is real,
   what is synthetic and what is simulated, in the interface and not only in the docs.
   Never say "deployed", "paid", "captured", "final" or "permission" more strongly than
@@ -172,10 +174,31 @@ failure. If a screen says "you", the server decided that.
 - Implementation nouns stay out of consumer copy: no "workspace", "declaration",
   "coordinator", "run", "scan" or row counts shown to buyers. Those words are correct on
   operator and judge surfaces and a judge needs them there.
-- An incumbent visual system already exists and is not documented here by design (see
-  `/impeccable document`): a token layer in `apps/web/src/styles.css`, a shared primitive
-  set in `apps/web/src/ui.tsx`, brand marks and one explanatory figure in
-  `apps/web/src/brand.tsx`, and Instrument Serif as the only web font dependency.
+- **Visual system: Synoptic Hour.** Many people observe independently at the same hour,
+  nobody coordinates them, and the coherent picture exists only because someone drew an
+  analysis over their separate marks — which is the product's own sentence. What that
+  commits the interface to, and what a future pass may not quietly undo:
+  - **Quantity is a section, not a contour.** A fixed unit axis whose extent is the
+    standing demand, the supplier's threshold as a tick on the same axis, prior analyses
+    dated beneath in the dashed register. A section with **no** threshold is a dimension
+    line, never a fill: a filled bar with nothing to measure against reads as work
+    completed.
+  - **Contours only for the mark and the map's isodistance rings**, where the geometry is
+    genuinely geographic.
+  - **Colour means one thing.** Petrol is accumulating demand. Amber is an advisory in
+    effect, and only ever a fill carrying ink — amber text on stock does not reach AA.
+    There is no red anywhere: a refusal is this product's best behaviour.
+  - **Who acted is encoded three times over** — rule style, glyph shape, and the word —
+    so it survives greyscale.
+  - **Bulletin and enclosure** on judge surfaces: the written record first, the notation
+    last. A **meteogram** for the Showcase's canonical quantity chain, with an honest
+    expanded scale rather than an exaggerated dip.
+  - No card, no shadow, no glow, no corner radius. Rules and rails do the dividing.
+  - One self-hosted web font: **Archivo Variable**, weight axis only, latin subset, SIL
+    OFL. The type is an instrument label; the drawing is the display face.
+  The layers are a token layer in `apps/web/src/styles.css`, a shared primitive set in
+  `apps/web/src/ui.tsx` (including `DemandSection`, the section strip), and the mark plus
+  one explanatory figure in `apps/web/src/brand.tsx`.
 
 ## Evidence on Hand
 

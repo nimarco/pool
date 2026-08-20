@@ -60,6 +60,7 @@ import {
   CoordinatorWait,
   IconArrowRight,
   Meter,
+  DemandSection,
 } from "../ui";
 
 /* ------------------------------------------------------------------ greeting */
@@ -284,7 +285,16 @@ function OpportunityCard({
           </div>
         ) : null}
 
-        <Meter value={pool.provisional_units} max={pool.threshold_units} />
+        {/* The same section grammar as a watching row, because it is the same two
+            numbers: what is standing, and the threshold it is measured against. This was
+            a meter, which clamped 24-against-16 to a full bar and so said nothing at all
+            — a filled track reads as a task completed, and no task was. */}
+        <DemandSection
+          demand={pool.provisional_units}
+          unit={pool.unit}
+          minimum={pool.threshold_units > 0 ? pool.threshold_units : null}
+          caseUnits={pool.economics?.packages?.case_units}
+        />
         {/* "24 of the 16 units this supplier will sell" is arithmetically true and reads
             as a mistake, which is what happens whenever a minimum is described as a
             target. Once the order is over the line the interesting number is the margin;
@@ -496,6 +506,36 @@ function WatchingRow({
             </>
           )}
         </p>
+      )}
+
+      {/* Quantity, drawn as a section on a fixed unit axis. The extent is the standing
+          demand and never moves; the tick is the supplier's minimum and does. That is
+          the changing-world beat as one picture, and it is why the old rendering — a
+          minimum-quantity number at the tail of a sentence, which goes *up* when the
+          better quote lands — read as a regression at the exact moment Pool became able
+          to act.
+
+          A prior row is drawn only where the previous finding truthfully implies there
+          was no threshold at all. The payload carries the earlier reason code, not the
+          earlier minimum, so anything else keeps its dated sentence below rather than
+          being given a tick this screen would have had to invent. */}
+      {filledElsewhere ? null : (
+        <DemandSection
+          demand={together}
+          unit={demand.unit}
+          minimum={
+            demand.has_supplier && demand.minimum_units > 0 ? demand.minimum_units : null
+          }
+          caseUnits={outlook?.detail?.case_units}
+          priors={
+            lastRun &&
+            (lastRun.reasonCode === "no_bulk_offer" ||
+              lastRun.reasonCode === "no_retail_baseline") &&
+            !sameAnswer(lastRun.reasonCode, outlook?.state ?? "")
+              ? [{ at: lastRun.at, minimum: null }]
+              : []
+          }
+        />
       )}
 
       {/* The blocker as its own line, not the tail of a sentence. The whole of the
@@ -873,8 +913,8 @@ export function Home({
       </header>
 
       {forMe.length > 0 ? (
-        <section className="panel" style={{ borderColor: "var(--clay-line)" }}>
-          <div className="panel-head" style={{ background: "var(--clay-soft)", borderColor: "var(--clay-line)" }}>
+        <section className="panel panel-advisory">
+          <div className="panel-head">
             <h2>Pool needs your answer</h2>
             <span className="spacer" />
             <ActorTag actor="human" />

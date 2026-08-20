@@ -513,3 +513,142 @@ export function ExecutionPath({ live }: { live: boolean }) {
     </span>
   );
 }
+
+/* ---------------------------------------------------------- the demand section */
+
+/** A section through the demand field: the one way quantity is drawn on a non-map
+ *  surface.
+ *
+ *  The axis runs 0 to the larger of the standing demand and the supplier's minimum, so
+ *  the strip's full extent is always a real quantity and never padded headroom. Both
+ *  marks share that one scale and can be read against each other without a number being
+ *  parsed.
+ *
+ *  Built out of elements and percentages rather than an SVG on purpose. A viewBox scales
+ *  its text with the container, so a label sized to read at 1180 px renders at three
+ *  pixels in a 350 px column — and the strip has to carry the same notation at both
+ *  widths. Percentages keep every position exact; the type stays in the real type system,
+ *  at the sizes the rest of the interface is set in.
+ *
+ *  Three rules this component exists to keep:
+ *
+ *  - **No threshold means no fill.** With nothing to measure against, the demand is an
+ *    extent — a dimension line with end caps. A filled bar reads as work completed, and
+ *    Pool does not imply work it did not do.
+ *  - **Case boundaries are drawn only when the case size is known**, from the supplier
+ *    sheet in force. Absent, they are omitted rather than guessed.
+ *  - **Prior analyses stay, dated, on the same axis.** That is how a member sees that
+ *    their demand did not move and the world did, and it cannot be said by rewriting
+ *    the present.
+ */
+export function DemandSection({
+  demand,
+  unit,
+  minimum,
+  caseUnits,
+  priors = [],
+}: {
+  demand: number;
+  unit: string;
+  /** The supplier minimum in force, or null when no supplier has been verified. */
+  minimum: number | null;
+  caseUnits?: number;
+  priors?: { at: string; minimum: number | null }[];
+}) {
+  const top = Math.max(demand, minimum ?? 0);
+  if (top <= 0) return null;
+
+  const pct = (n: number) => `${(Math.max(0, Math.min(n, top)) / top) * 100}%`;
+  const units = (n: number) => `${n} ${n === 1 ? unit : `${unit}s`}`;
+  const cleared = minimum !== null && demand >= minimum;
+  const short = minimum !== null ? minimum - demand : 0;
+
+  const caseTicks: React.ReactNode[] = [];
+  if (minimum !== null && caseUnits && caseUnits > 0) {
+    for (let n = caseUnits; n < top; n += caseUnits) {
+      caseTicks.push(<span key={n} className="sect-case" style={{ left: pct(n) }} />);
+    }
+  }
+
+  // The bracket spans the segment the verdict is about: what cleared, or what is missing.
+  const a = short > 0 ? demand : (minimum ?? 0);
+  const b = short > 0 ? top : demand;
+
+  const aria =
+    `A section through the demand field. Its full extent is ${units(demand)} of standing demand. ` +
+    (minimum === null
+      ? "No supplier minimum has been verified, so no threshold is marked."
+      : cleared
+        ? `The supplier minimum of ${minimum} is marked at its true position, cleared by ${demand - minimum}.`
+        : `The supplier minimum of ${minimum} is marked at its true position, and the demand is ${short} short of it.`) +
+    (caseTicks.length ? ` Case boundaries every ${caseUnits} units.` : "") +
+    (priors.length
+      ? ` Beneath it, ${priors.length === 1 ? "the previous analysis" : "the previous analyses"} on the same axis.`
+      : "");
+
+  return (
+    <div className="sect" role="img" aria-label={aria}>
+      <div className="sect-head">
+        {minimum === null ? (
+          <span className="sect-nomin">No supplier minimum on file</span>
+        ) : (
+          <span
+            className="sect-minlabel"
+            style={
+              (minimum ?? 0) / top > 0.66
+                ? { right: `calc(100% - ${pct(minimum)} - 7px)` }
+                : { left: `calc(${pct(minimum)} + 7px)` }
+            }
+          >
+            Min {minimum} · supplier minimum
+          </span>
+        )}
+      </div>
+
+      {minimum === null ? (
+        <div className="sect-extent">
+          <span className="sect-extent-band" />
+          <span className="sect-extent-line" />
+          <span className="sect-cap" style={{ left: 0 }} />
+          <span className="sect-cap" style={{ right: 0 }} />
+        </div>
+      ) : (
+        <div className="sect-bar">
+          <span className="sect-under" style={{ width: pct(Math.min(demand, minimum)) }} />
+          {demand > minimum ? (
+            <span className="sect-over" style={{ width: pct(demand - minimum) }} />
+          ) : null}
+          {caseTicks}
+          <span className="sect-tick" style={{ left: pct(minimum) }} />
+        </div>
+      )}
+
+      {minimum === null ? null : (
+        <div
+          className="sect-bracket"
+          style={{ marginLeft: pct(a), width: `calc(${pct(b)} - ${pct(a)})` }}
+        >
+          <span>{short > 0 ? `${short} short` : `Cleared by ${demand - minimum}`}</span>
+        </div>
+      )}
+
+      {priors.map((prior, i) => (
+        <div className="sect-prior" key={`${prior.at}-${i}`}>
+          <div className="sect-prior-bar">
+            {prior.minimum !== null && prior.minimum <= top ? (
+              <span className="sect-prior-tick" style={{ left: pct(prior.minimum) }} />
+            ) : null}
+          </div>
+          <span className="sect-prior-label">
+            {prior.at} · {prior.minimum === null ? "no minimum" : `min ${prior.minimum}`}
+          </span>
+        </div>
+      ))}
+
+      <div className="sect-axis">
+        <span>0</span>
+        <span>{units(demand)} standing</span>
+      </div>
+    </div>
+  );
+}

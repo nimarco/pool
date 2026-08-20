@@ -91,7 +91,7 @@ function SupplierQuotes({ onRecorded }: { onRecorded: () => void }) {
           is the deterministic outlook, because the world moved.
         </p>
 
-        {error ? <p className="small" style={{ color: "var(--stop)" }}>{error}</p> : null}
+        {error ? <p className="small" style={{ color: "var(--signal-deep)" }}>{error}</p> : null}
 
         <div className="rows">
           {data.quotes.map((q) => (
@@ -249,7 +249,7 @@ function QuoteSheetImport({
         </label>
 
         {error ? (
-          <p className="small" style={{ color: "var(--stop)" }}>
+          <p className="small" style={{ color: "var(--signal-deep)" }}>
             {error}
           </p>
         ) : null}
@@ -302,7 +302,7 @@ function QuoteSheetImport({
               </table>
             ) : null}
             {result.rejections.length > 0 ? (
-              <ul className="tiny" style={{ color: "var(--stop)" }}>
+              <ul className="tiny" style={{ color: "var(--signal-deep)" }}>
                 {result.rejections.map((r) => (
                   <li key={`${r.line}-${r.reason}`}>
                     line {r.line}: {r.reason}

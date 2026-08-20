@@ -1,241 +1,325 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-20T01:48:31Z",
+  "generatedAt": "2026-08-20T00:00:00Z",
   "title": "Design System: Pool",
   "extensions": {
     "colorMeta": {
-      "paper": {
+      "stock": {
         "role": "neutral",
-        "displayName": "Warm Paper",
-        "canonical": "oklch(96.8% 0.007 80.7)",
+        "displayName": "Chart Stock",
+        "canonical": "#dbe3e1",
+        "darkCounterpart": "#0f1719",
         "tonalRamp": [
-          "oklch(15.0% 0.007 80.7)",
-          "oklch(26.0% 0.007 80.7)",
-          "oklch(37.0% 0.007 80.7)",
-          "oklch(48.0% 0.007 80.7)",
-          "oklch(60.0% 0.007 80.7)",
-          "oklch(72.0% 0.007 80.7)",
-          "oklch(84.0% 0.007 80.7)",
-          "oklch(95.0% 0.007 80.7)"
+          "#0a1113",
+          "#0f1719",
+          "#162023",
+          "#2b3a38",
+          "#5b706c",
+          "#8fa5a1",
+          "#c3d0cd",
+          "#eef2f1"
+        ]
+      },
+      "stock-raised": {
+        "role": "neutral",
+        "displayName": "Stock Raised",
+        "canonical": "#e4eae9",
+        "darkCounterpart": "#162023",
+        "tonalRamp": [
+          "#0d1415",
+          "#18211f",
+          "#2c3a37",
+          "#4a5c58",
+          "#748782",
+          "#a3b3af",
+          "#cfd8d6",
+          "#eff3f2"
+        ]
+      },
+      "stock-sunken": {
+        "role": "neutral",
+        "displayName": "Stock Sunken",
+        "canonical": "#d0dad8",
+        "darkCounterpart": "#0a1113",
+        "tonalRamp": [
+          "#0a1010",
+          "#15201e",
+          "#28352f",
+          "#465550",
+          "#6f807b",
+          "#9daaa6",
+          "#c7d1cf",
+          "#eaefee"
+        ]
+      },
+      "stock-deep": {
+        "role": "neutral",
+        "displayName": "Stock Deep",
+        "canonical": "#c3d0cd",
+        "darkCounterpart": "#060c0d",
+        "tonalRamp": [
+          "#080e0e",
+          "#131c1b",
+          "#25302e",
+          "#41504d",
+          "#697a76",
+          "#96a5a1",
+          "#c3d0cd",
+          "#e7ecea"
         ]
       },
       "ink": {
         "role": "neutral",
-        "displayName": "Warm Ink",
-        "canonical": "oklch(19.6% 0.012 91.8)",
+        "displayName": "Graphite Ink",
+        "canonical": "#101a1c",
+        "darkCounterpart": "#e6eeec",
         "tonalRamp": [
-          "oklch(15.0% 0.012 91.8)",
-          "oklch(26.0% 0.012 91.8)",
-          "oklch(37.0% 0.012 91.8)",
-          "oklch(48.0% 0.012 91.8)",
-          "oklch(60.0% 0.012 91.8)",
-          "oklch(72.0% 0.012 91.8)",
-          "oklch(84.0% 0.012 91.8)",
-          "oklch(95.0% 0.012 91.8)"
+          "#080d0e",
+          "#101a1c",
+          "#1c2c2f",
+          "#2e4448",
+          "#4a6469",
+          "#78959a",
+          "#adc4c7",
+          "#e0e9ea"
         ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "rgba(16, 26, 28, 0.74)",
+        "darkCounterpart": "rgba(230, 238, 236, 0.74)",
+        "note": "Measured above 4.5:1 on stock; used for small text."
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Faint Ink",
+        "canonical": "rgba(16, 26, 28, 0.68)",
+        "darkCounterpart": "rgba(230, 238, 236, 0.66)",
+        "note": "Measured above 4.5:1 on stock; used for station labels."
       },
       "rule": {
         "role": "neutral",
         "displayName": "Hairline Rule",
-        "canonical": "oklch(88.1% 0.020 84.6)",
-        "tonalRamp": [
-          "oklch(15.0% 0.020 84.6)",
-          "oklch(26.0% 0.020 84.6)",
-          "oklch(37.0% 0.020 84.6)",
-          "oklch(48.0% 0.020 84.6)",
-          "oklch(60.0% 0.020 84.6)",
-          "oklch(72.0% 0.020 84.6)",
-          "oklch(84.0% 0.020 84.6)",
-          "oklch(95.0% 0.020 84.6)"
-        ]
+        "canonical": "rgba(16, 26, 28, 0.2)",
+        "darkCounterpart": "rgba(230, 238, 236, 0.22)"
       },
-      "moss": {
+      "rule-strong": {
+        "role": "neutral",
+        "displayName": "Region Rule",
+        "canonical": "rgba(16, 26, 28, 0.34)",
+        "darkCounterpart": "rgba(230, 238, 236, 0.36)"
+      },
+      "petrol": {
         "role": "primary",
-        "displayName": "Agent Moss",
-        "canonical": "oklch(48.5% 0.071 153.5)",
+        "displayName": "Petrol",
+        "canonical": "#0e4c50",
+        "darkCounterpart": "#9ac7c0",
         "tonalRamp": [
-          "oklch(15.0% 0.071 153.5)",
-          "oklch(26.0% 0.071 153.5)",
-          "oklch(37.0% 0.071 153.5)",
-          "oklch(48.0% 0.071 153.5)",
-          "oklch(60.0% 0.071 153.5)",
-          "oklch(72.0% 0.071 153.5)",
-          "oklch(84.0% 0.071 153.5)",
-          "oklch(95.0% 0.071 153.5)"
+          "#06282b",
+          "#0a3a3d",
+          "#0e4c50",
+          "#1c6b6d",
+          "#387b78",
+          "#6c9e99",
+          "#6c9e99",
+          "#c6d6d3"
         ]
       },
-      "graphite": {
+      "field-1": {
+        "role": "primary",
+        "displayName": "Field 1 \u2014 axis ground",
+        "canonical": "#c6d6d3",
+        "darkCounterpart": "#1d3033"
+      },
+      "field-2": {
+        "role": "primary",
+        "displayName": "Field 2 \u2014 declared, unused",
+        "canonical": "#6c9e99",
+        "darkCounterpart": "#2b4c4e"
+      },
+      "field-3": {
+        "role": "primary",
+        "displayName": "Field 3 \u2014 under threshold",
+        "canonical": "#6c9e99",
+        "darkCounterpart": "#43706f"
+      },
+      "field-4": {
+        "role": "primary",
+        "displayName": "Field 5 \u2014 over threshold",
+        "canonical": "#0e4c50",
+        "darkCounterpart": "#9ac7c0"
+      },
+      "petrol-soft": {
+        "role": "primary",
+        "displayName": "Petrol Soft",
+        "canonical": "#cbdad8",
+        "darkCounterpart": "#1b2c2e"
+      },
+      "signal": {
         "role": "secondary",
-        "displayName": "Engine Graphite",
-        "canonical": "oklch(40.5% 0.040 248.8)",
+        "displayName": "Signal Amber",
+        "canonical": "#c87a0a",
+        "darkCounterpart": "#e2a13c",
         "tonalRamp": [
-          "oklch(15.0% 0.040 248.8)",
-          "oklch(26.0% 0.040 248.8)",
-          "oklch(37.0% 0.040 248.8)",
-          "oklch(48.0% 0.040 248.8)",
-          "oklch(60.0% 0.040 248.8)",
-          "oklch(72.0% 0.040 248.8)",
-          "oklch(84.0% 0.040 248.8)",
-          "oklch(95.0% 0.040 248.8)"
+          "#2a1a02",
+          "#4a2d03",
+          "#7a4705",
+          "#a86208",
+          "#c87a0a",
+          "#e2a13c",
+          "#eec380",
+          "#f0e0c6"
         ]
       },
-      "clay": {
-        "role": "tertiary",
-        "displayName": "Human Clay",
-        "canonical": "oklch(52.4% 0.117 45.2)",
-        "tonalRamp": [
-          "oklch(15.0% 0.117 45.2)",
-          "oklch(26.0% 0.117 45.2)",
-          "oklch(37.0% 0.117 45.2)",
-          "oklch(48.0% 0.117 45.2)",
-          "oklch(60.0% 0.117 45.2)",
-          "oklch(72.0% 0.117 45.2)",
-          "oklch(84.0% 0.117 45.2)",
-          "oklch(95.0% 0.117 45.2)"
-        ]
+      "signal-deep": {
+        "role": "secondary",
+        "displayName": "Signal Deep",
+        "canonical": "#7a4705",
+        "darkCounterpart": "#f0c078"
       },
-      "stop": {
-        "role": "error",
-        "displayName": "Stop Red",
-        "canonical": "oklch(44.2% 0.128 32.2)",
-        "tonalRamp": [
-          "oklch(15.0% 0.128 32.2)",
-          "oklch(26.0% 0.128 32.2)",
-          "oklch(37.0% 0.128 32.2)",
-          "oklch(48.0% 0.128 32.2)",
-          "oklch(60.0% 0.128 32.2)",
-          "oklch(72.0% 0.128 32.2)",
-          "oklch(84.0% 0.128 32.2)",
-          "oklch(95.0% 0.128 32.2)"
-        ]
+      "signal-soft": {
+        "role": "secondary",
+        "displayName": "Signal Soft",
+        "canonical": "#f0e0c6",
+        "darkCounterpart": "#2a2013"
+      },
+      "on-signal": {
+        "role": "secondary",
+        "displayName": "On-Signal Ink",
+        "canonical": "#101a1c",
+        "note": "Constant in both schemes. Measured 5.26:1 on amber in light, 7.92:1 in dark. --ink inverts and would measure ~1.9:1 here."
       }
     },
     "typographyMeta": {
-      "hero": {
-        "displayName": "Hero",
-        "purpose": "The product's opening claim. Once per surface, text-wrap balanced."
-      },
       "display": {
         "displayName": "Display",
-        "purpose": "Page and section titles."
+        "purpose": "Primary heading of a surface."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The watched item's name in a station row \u2014 the first viewport's anchor."
       },
       "figure": {
         "displayName": "Figure",
-        "purpose": "A single headline number: a total, a saving, a percentage. Always tabular."
+        "purpose": "A single standing quantity set at display scale."
       },
       "title": {
         "displayName": "Title",
-        "purpose": "The name of a thing in a list \u2014 an item, a product, a person."
+        "purpose": "Judge step titles, panel headings, h1-h4."
+      },
+      "lede": {
+        "displayName": "Lede",
+        "purpose": "The sentence under a masthead. Max 62ch."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "All prose. Never the serif."
+        "purpose": "Station prose. Tabular numerals. .prose caps at 68ch."
       },
-      "value": {
-        "displayName": "Value",
-        "purpose": "A fact's value beside its label. Tabular."
+      "small": {
+        "displayName": "Small",
+        "purpose": "Metadata and captions."
+      },
+      "tiny": {
+        "displayName": "Tiny",
+        "purpose": "Notes and attributions."
       },
       "label": {
-        "displayName": "Label",
-        "purpose": "Uppercase state words, actor tags and eyebrows."
+        "displayName": "Station Label",
+        "purpose": "Anything that names rather than states. Uppercase, tracked. Chart-scale variants drop to 10px at 0.12-0.13em."
       },
-      "caption": {
-        "displayName": "Caption",
-        "purpose": "Figure labels and secondary notes, in ink-faint."
-      },
-      "mono": {
-        "displayName": "Mono",
-        "purpose": "Identifiers only \u2014 run ids, pool ids, digests, ARNs. Never a price."
+      "notation": {
+        "displayName": "Notation",
+        "purpose": "Receipts, hashes, paths, step indices, meteogram axis marks."
       }
     },
     "shadows": [
       {
-        "name": "shadow-sm",
-        "value": "0 1px 2px rgba(23, 21, 15, 0.05)",
-        "purpose": "A panel at rest. The default, and usually the only shadow on screen. Dark theme: 0 1px 2px rgba(0,0,0,0.4)."
+        "name": "none",
+        "value": "none",
+        "purpose": "The system has no elevation. Depth is tonal (four stock tones) and linear (two rule weights)."
       },
       {
-        "name": "shadow-md",
-        "value": "0 4px 14px -6px rgba(23, 21, 15, 0.18), 0 1px 3px rgba(23, 21, 15, 0.05)",
-        "purpose": "Hover on the primary action, and small floating surfaces. Dark theme re-tunes to pure black at 0.6/0.4."
+        "name": "control-focus-ring",
+        "value": "inset 0 0 0 1px var(--ink)",
+        "purpose": "Thickens a focused input's border. Not elevation."
       },
       {
-        "name": "shadow-lg",
-        "value": "0 18px 46px -22px rgba(23, 21, 15, 0.4), 0 2px 6px rgba(23, 21, 15, 0.06)",
-        "purpose": "Drawers and overlays only. Dark theme re-tunes to pure black at 0.8/0.4."
+        "name": "option-active-bar",
+        "value": "inset 3px 0 0 var(--ink)",
+        "purpose": "Keyboard-active combobox option, visible without hover."
+      },
+      {
+        "name": "own-unit-hairline",
+        "value": "inset 0 0 0 1px var(--stock)",
+        "purpose": "Separates the reader's own units inside a purchased case."
+      },
+      {
+        "name": "scrim",
+        "value": "rgba(16, 26, 28, 0.42)",
+        "purpose": "The drawer's scrim \u2014 the one true overlay."
       }
     ],
     "motion": [
       {
-        "name": "ease-expo-out",
-        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
-        "purpose": "The only easing in the system. Every transform, entrance and meter fill uses it."
+        "name": "state-moved",
+        "value": "state-moved 0.9s ease-out (inset 0 -3px 0 var(--petrol) fading to transparent)",
+        "purpose": "One beat under a status word when the state actually changes. Cancelled under prefers-reduced-motion."
       },
       {
-        "name": "duration-state",
-        "value": "130ms",
-        "purpose": "Standard state change: background, colour, border on hover and selection."
+        "name": "sheet-in",
+        "value": "sheet-in 0.16s ease-out (translateX(14px) to 0)",
+        "purpose": "The drawer's slide. Cancelled under prefers-reduced-motion."
       },
       {
-        "name": "duration-press",
-        "value": "80ms",
-        "purpose": "Active press displacement on a button (translateY 1px)."
+        "name": "spin",
+        "value": "spin 0.9s linear infinite",
+        "purpose": "A spinner during a real wait. Frozen to a static ring under prefers-reduced-motion."
       },
       {
-        "name": "duration-fade",
-        "value": "200ms",
-        "purpose": "Opacity-only appearance of a small overlay."
-      },
-      {
-        "name": "duration-enter",
-        "value": "280ms",
-        "purpose": "Slide-in of a drawer or panel that genuinely arrived."
-      },
-      {
-        "name": "duration-reveal",
-        "value": "420ms",
-        "purpose": "Reveal of a narrative block. Legitimate in Showcase; not on consumer surfaces."
-      },
-      {
-        "name": "duration-meter",
-        "value": "600ms",
-        "purpose": "A meter filling via scaleX. The longest motion in the system, because it is the one carrying arithmetic."
-      },
-      {
-        "name": "pulse-live",
-        "value": "2s ease-in-out infinite, opacity 1 -> 0.35",
-        "purpose": "The single continuous animation. Marks a genuinely live connection and nothing else."
-      },
-      {
-        "name": "reduced-motion",
-        "value": "animation-duration: 0.01ms !important; transition-duration: 0.01ms !important",
-        "purpose": "Global kill under prefers-reduced-motion, plus scroll-behavior auto. Information must survive it."
+        "name": "reveal",
+        "value": "reveal 0.18s ease-out (translateY(7px), opacity 0 to 1)",
+        "purpose": "Entry beat on newly revealed content. Cancelled under prefers-reduced-motion. Not part of the stated three-item budget."
       }
     ],
     "breakpoints": [
       {
-        "name": "phone",
-        "value": "560px"
+        "name": "collapse",
+        "value": "1000px"
       },
       {
-        "name": "phone-wide",
-        "value": "640px"
+        "name": "narrow",
+        "value": "620px"
       },
       {
-        "name": "tablet",
-        "value": "700px"
-      },
+        "name": "measure",
+        "value": "1180px"
+      }
+    ],
+    "accessibilityFloor": {
+      "contrast": "0 failures at 1280x720 and 375x812, in both light and dark schemes, measured programmatically over every text node.",
+      "amberAdvisory": "ink on amber measures 5.26:1 light, 7.92:1 dark.",
+      "touchTargets": "No touch target under 24px.",
+      "overflow": "No horizontal overflow at 375 or 1280.",
+      "focus": "2px solid var(--ink) outline at 2px offset, radius 0; inset ring on inputs.",
+      "reducedMotion": "Every animation in the system has a prefers-reduced-motion escape."
+    },
+    "budget": {
+      "css": "34.8 kB (7.8 kB gzip), down from the incumbent's 42.2 kB (9.0 kB gzip).",
+      "font": "Archivo Variable, weight axis only, latin subset, 34.1 kB, self-hosted, SIL OFL 1.1 \u2014 replacing Instrument Serif's 20.5 kB. No external font host, no CDN.",
+      "qa": "980 agent + 75 infra + 119 web tests passing; ruff, tsc, eslint, production build and secret scan clean."
+    },
+    "knownDeviations": [
       {
-        "name": "tablet-up",
-        "value": "760px"
-      },
-      {
-        "name": "desktop-narrow",
-        "value": "940px"
-      },
-      {
-        "name": "container-max",
-        "value": "1160px"
+        "name": "side-tab warning, 4 remaining instances",
+        "detector": "mechanical side-tab pattern check",
+        "instances": [
+          ".bar-agent",
+          ".bar-engine",
+          ".bar-human",
+          ".panel-advisory"
+        ],
+        "reason": "The left accent rule is the visual carrier of responsibility and of the one advisory state, and is confined to exactly those two jobs. Accepted, not fixed. If the count rises above 4, the new instance is the bug."
       }
     ]
   },
@@ -244,190 +328,235 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The one action a screen wants. Ink on paper, never a brand hue and never an actor hue \u2014 the semantic colours are spoken for by attribution.",
-      "html": "<button class=\"ds-btn ds-btn-primary\">Ask Pool to check now</button>",
-      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 15px; border-radius: 8px; border: 1px solid var(--rule-strong, #c6bdab); background: var(--paper-raised, #fffdfa); color: var(--ink, #17150f); font-family: inherit; font-size: 14px; font-weight: 550; cursor: pointer; transition: background 130ms ease, border-color 130ms ease, transform 80ms ease, box-shadow 130ms ease; } .ds-btn-primary { background: var(--ink, #17150f); border-color: var(--ink, #17150f); color: var(--paper, #f7f4ef); box-shadow: 0 1px 2px rgba(23,21,15,0.05); } .ds-btn-primary:hover { background: color-mix(in srgb, var(--ink, #17150f) 88%, #000); border-color: color-mix(in srgb, var(--ink, #17150f) 88%, #000); box-shadow: 0 4px 14px -6px rgba(23,21,15,0.18), 0 1px 3px rgba(23,21,15,0.05); } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 2px solid var(--ink, #17150f); outline-offset: 2px; }"
+      "description": "The main instrument control. Ink ground, stock label, square; hover swaps to petrol.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Start a pool</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 10px 17px; background: transparent; color: var(--ink, #101a1c); border: 2px solid var(--ink, #101a1c); border-radius: 0; font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; } .ds-btn-primary { background: var(--ink, #101a1c); color: var(--stock, #dbe3e1); } .ds-btn-primary:hover { background: var(--petrol, #0e4c50); border-color: var(--petrol, #0e4c50); } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 2px solid var(--ink, #101a1c); outline-offset: 2px; }"
     },
     {
-      "name": "Secondary Button",
-      "kind": "button",
-      "refersTo": "button",
-      "description": "The ordinary control. A real edge on raised paper \u2014 quiet, but not a ghost.",
-      "html": "<button class=\"ds-btn2\">View the run report</button>",
-      "css": ".ds-btn2 { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 15px; border-radius: 8px; border: 1px solid var(--rule-strong, #c6bdab); background: var(--paper-raised, #fffdfa); color: var(--ink, #17150f); font-family: inherit; font-size: 14px; font-weight: 550; cursor: pointer; transition: background 130ms ease, border-color 130ms ease, transform 80ms ease; } .ds-btn2:hover { background: var(--paper-sunken, #efeae1); border-color: var(--ink-faint, #6f6759); } .ds-btn2:active { transform: translateY(1px); } .ds-btn2:focus-visible { outline: 2px solid var(--ink, #17150f); outline-offset: 2px; }"
-    },
-    {
-      "name": "Accept Button",
+      "name": "Accept Button (advisory)",
       "kind": "button",
       "refersTo": "button-accept",
-      "description": "The affirmative control a person presses. Clay because a human is the actor \u2014 not moss, which would attribute the decision to the agent.",
-      "html": "<button class=\"ds-btn-accept\">Approve $17.53</button>",
-      "css": ".ds-btn-accept { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 15px; border-radius: 8px; border: 1px solid var(--clay, #a0512a); background: var(--clay, #a0512a); color: var(--paper-raised, #fffdfa); font-family: inherit; font-size: 14px; font-weight: 550; cursor: pointer; transition: background 130ms ease, transform 80ms ease; } .ds-btn-accept:hover { background: color-mix(in srgb, var(--clay, #a0512a) 88%, #000); } .ds-btn-accept:active { transform: translateY(1px); } .ds-btn-accept:focus-visible { outline: 2px solid var(--ink, #17150f); outline-offset: 2px; }"
+      "description": "The one control that answers an advisory. Amber ground carrying constant dark ink.",
+      "html": "<button class=\"ds-btn ds-btn-accept\">Authorise</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 10px 17px; border-radius: 0; font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; } .ds-btn-accept { background: var(--signal, #c87a0a); border: 2px solid var(--ink, #101a1c); color: var(--on-signal, #101a1c); } .ds-btn-accept:hover { background: var(--signal-deep, #7a4705); color: var(--stock, #dbe3e1); } .ds-btn-accept:focus-visible { outline: 2px solid var(--ink, #101a1c); outline-offset: 2px; }"
     },
     {
-      "name": "Text Input",
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "A secondary control. Rule-weight border, muted label; hover promotes both to ink.",
+      "html": "<button class=\"ds-btn ds-btn-ghost\">Show every figure</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 10px 17px; background: transparent; border-radius: 0; font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; } .ds-btn-ghost { border: 2px solid var(--rule-strong, rgba(16,26,28,0.34)); color: var(--ink-muted, rgba(16,26,28,0.74)); } .ds-btn-ghost:hover { border-color: var(--ink, #101a1c); color: var(--ink, #101a1c); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--ink, #101a1c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Field Control",
       "kind": "input",
-      "refersTo": "input",
-      "description": "38px minimum height is functional, not aesthetic: iOS zooms the page when focused text is under 16px.",
-      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"What do you buy?\" />",
-      "css": ".ds-input { width: 100%; box-sizing: border-box; padding: 9px 11px; min-height: 38px; border-radius: 8px; border: 1px solid var(--rule-strong, #c6bdab); background: var(--paper-raised, #fffdfa); color: var(--ink, #17150f); font-family: inherit; font-size: 14px; transition: border-color 130ms ease; } .ds-input::placeholder { color: var(--ink-faint, #6f6759); } .ds-input:focus-visible { outline: 2px solid var(--ink, #17150f); outline-offset: 1px; border-color: var(--ink, #17150f); }"
-    },
-    {
-      "name": "Panel",
-      "kind": "card",
-      "refersTo": "panel",
-      "description": "Raised paper inside a hairline rule, at a 14px radius. Clips its children so a full-bleed child cannot square the corner.",
-      "html": "<div class=\"ds-panel\"><div class=\"ds-panel-body\"><h3 class=\"ds-panel-title\">Jasmine rice, 5 lb</h3><p class=\"ds-panel-note\">7 people near you buy this \u2014 24 bags standing, 2 of them yours.</p></div></div>",
-      "css": ".ds-panel { background: var(--paper-raised, #fffdfa); border: 1px solid var(--rule, #ded7c9); border-radius: 14px; box-shadow: 0 1px 2px rgba(23,21,15,0.05); overflow: hidden; } .ds-panel-body { padding: 16px 18px; } .ds-panel-title { margin: 0; font-family: 'Instrument Serif', 'Iowan Old Style', Georgia, serif; font-weight: 400; font-size: 19px; line-height: 1.2; color: var(--ink, #17150f); } .ds-panel-note { margin: 6px 0 0; font-size: 14px; line-height: 1.55; color: var(--ink-muted, #575145); }"
-    },
-    {
-      "name": "Navigation",
-      "kind": "nav",
-      "refersTo": "nav-item",
-      "description": "Text buttons; the current page is a solid ink pill rather than an underline, so it survives a horizontally scrolling rail on a phone.",
-      "html": "<nav class=\"ds-nav\"><button class=\"ds-nav-item\" aria-current=\"page\">Home</button><button class=\"ds-nav-item\">Orders</button><button class=\"ds-nav-item\">What you buy</button></nav>",
-      "css": ".ds-nav { display: flex; gap: 2px; align-items: center; } .ds-nav-item { background: none; border: none; cursor: pointer; min-height: 30px; padding: 6px 11px; border-radius: 7px; color: var(--ink-muted, #575145); font-family: inherit; font-size: 13.5px; font-weight: 500; white-space: nowrap; transition: background 130ms ease, color 130ms ease; } .ds-nav-item:hover { background: var(--paper-sunken, #efeae1); color: var(--ink, #17150f); } .ds-nav-item[aria-current='page'] { background: var(--ink, #17150f); color: var(--paper, #f7f4ef); } .ds-nav-item:focus-visible { outline: 2px solid var(--ink, #17150f); outline-offset: -2px; }"
+      "refersTo": "control",
+      "description": "A ruled input on raised stock. Focus goes to an ink border plus an inset ink ring.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Units per restock</span><input class=\"ds-control\" value=\"3\" /></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; } .ds-field-label { font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-faint, rgba(16,26,28,0.68)); } .ds-control { width: 100%; min-height: 38px; padding: 9px 11px; background: var(--stock-raised, #e4eae9); border: 1.5px solid var(--rule-strong, rgba(16,26,28,0.34)); border-radius: 0; color: var(--ink, #101a1c); font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 15px; font-variant-numeric: tabular-nums; } .ds-control:focus { border-color: var(--ink, #101a1c); outline: none; box-shadow: inset 0 0 0 1px var(--ink, #101a1c); }"
     },
     {
       "name": "Chip",
       "kind": "chip",
       "refersTo": "chip",
-      "description": "A pill for a small qualifier. The live variant\u2019s pulsing dot is the system\u2019s only continuous animation and marks a genuinely live connection; it stays ink, because a live runtime is neither a person nor a decision.",
-      "html": "<span class=\"ds-chip\">synthetic</span> <span class=\"ds-chip ds-chip-live\">AgentCore live</span>",
-      "css": ".ds-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule-strong, #c6bdab); background: var(--paper-sunken, #efeae1); color: var(--ink-muted, #575145); font-family: inherit; font-size: 11.5px; font-weight: 600; white-space: nowrap; } .ds-chip-live { color: var(--ink, #17150f); border-color: var(--rule-strong, #c6bdab); background: var(--paper-sunken, #efeae1); } .ds-chip-live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: ds-pulse 2s ease-in-out infinite; } @keyframes ds-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } } @media (prefers-reduced-motion: reduce) { .ds-chip-live::before { animation-duration: 0.01ms; } }"
+      "description": "A ruled station tag. The live variant prefixes a petrol square.",
+      "html": "<span class=\"ds-chip ds-chip-live\">Live</span> <span class=\"ds-chip ds-chip-ok\">Verified</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--rule-strong, rgba(16,26,28,0.34)); border-radius: 0; color: var(--ink-muted, rgba(16,26,28,0.74)); font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; } .ds-chip-ok { border-color: var(--ink, #101a1c); color: var(--ink, #101a1c); } .ds-chip-live::before { content: \"\"; width: 6px; height: 6px; background: var(--petrol, #0e4c50); }"
     },
     {
-      "name": "Attribution Tag",
-      "kind": "custom",
-      "refersTo": null,
-      "description": "The signature component. Every action is attributable to exactly one of three parties, and the whole technical argument of the project is which. Hue plus shape, so it survives greyscale and video re-encoding.",
-      "html": "<div class=\"ds-actors\"><span class=\"ds-actor ds-actor-agent\"><svg class=\"ds-actor-glyph\" viewBox=\"0 0 10 10\" aria-hidden=\"true\" fill=\"currentColor\"><path d=\"M5 0 10 5 5 10 0 5Z\"/></svg>Agent decided</span><span class=\"ds-actor ds-actor-engine\"><svg class=\"ds-actor-glyph\" viewBox=\"0 0 10 10\" aria-hidden=\"true\" fill=\"currentColor\"><rect x=\"0.6\" y=\"0.6\" width=\"8.8\" height=\"8.8\" rx=\"1.2\"/></svg>Computed</span><span class=\"ds-actor ds-actor-human\"><svg class=\"ds-actor-glyph\" viewBox=\"0 0 10 10\" aria-hidden=\"true\" fill=\"currentColor\"><circle cx=\"5\" cy=\"5\" r=\"4.6\"/></svg>Person asked</span></div>",
-      "css": ".ds-actors { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; } .ds-actor { display: inline-flex; align-items: center; gap: 7px; font-family: inherit; font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; } .ds-actor-glyph { width: 9px; height: 9px; flex: none; } .ds-actor-agent { color: var(--moss, #3d6b4c); } .ds-actor-engine { color: var(--graphite, #384b5e); } .ds-actor-human { color: var(--clay, #a0512a); }"
+      "name": "Masthead Nav",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "The analysis masthead: sticky, stock ground, 2px ink bottom rule. Items are station labels with a transparent 2px underline that promotes to ink when current.",
+      "html": "<div class=\"ds-topbar\"><span class=\"ds-brand\"><svg class=\"ds-mark\" viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><circle cx=\"12\" cy=\"12\" r=\"7.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\"/><circle cx=\"12\" cy=\"12\" r=\"4.1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.1\"/><circle cx=\"12\" cy=\"12\" r=\"1.9\" fill=\"#0e4c50\"/></svg><span class=\"ds-brand-name\">Pool</span></span><nav class=\"ds-nav\"><button aria-current=\"page\">Watching</button><button>Community</button><button>Behind Pool</button></nav></div>",
+      "css": ".ds-topbar { display: flex; align-items: center; gap: 18px; min-height: 58px; background: var(--stock, #dbe3e1); border-bottom: 2px solid var(--ink, #101a1c); color: var(--ink, #101a1c); } .ds-brand { display: inline-flex; align-items: center; gap: 9px; color: var(--ink, #101a1c); } .ds-brand-name { font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 21px; font-weight: 700; letter-spacing: 0.005em; line-height: 1; } .ds-nav { display: flex; gap: 1px; } .ds-nav button { min-height: 30px; padding: 5px 12px; background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--ink-muted, rgba(16,26,28,0.74)); font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; white-space: nowrap; cursor: pointer; } .ds-nav button:hover { color: var(--ink, #101a1c); } .ds-nav button[aria-current=\"page\"] { color: var(--ink, #101a1c); border-bottom-color: var(--ink, #101a1c); } .ds-nav button:focus-visible { outline: 2px solid var(--ink, #101a1c); outline-offset: -2px; }"
     },
     {
-      "name": "Consumer State Chip",
+      "name": "Section Strip (with threshold)",
       "kind": "custom",
-      "refersTo": null,
-      "description": "One of exactly five state words with its deterministic reason underneath. Clay only on \"needs you\", where a person must act; the other four are neutral, because \"the system is working\" is not one party. Below 560px it becomes a line under the name instead of a column beside it.",
-      "html": "<div class=\"ds-status is-needs-you\"><span class=\"ds-status-word\">Needs you</span><span class=\"ds-status-reason\">Approve $17.53</span></div>",
-      "css": ".ds-status { display: inline-flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 1px; min-width: 0; } .ds-status-word { font-family: inherit; font-size: 11.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-faint, #6f6759); } .ds-status-reason { font-family: inherit; font-size: 12.5px; color: var(--ink-muted, #575145); } .ds-status.is-needs-you .ds-status-word { color: var(--clay, #a0512a); } .ds-status.is-coordinating .ds-status-word, .ds-status.is-ready .ds-status-word, .ds-status.is-done .ds-status-word { color: var(--ink, #17150f); } @media (max-width: 560px) { .ds-status { align-items: flex-start; text-align: left; } }"
+      "refersTo": "panel",
+      "description": "Quantity as a section: fixed unit axis, extent = max(demand, minimum), the minimum as the one major tick, case boundaries as minor ticks, a bracket over the segment the verdict is about.",
+      "html": "<div class=\"ds-sect\" role=\"img\" aria-label=\"A section through the demand field. Its full extent is 24 units of standing demand. The supplier minimum of 18 is marked at its true position, cleared by 6. Case boundaries every 6 units.\"><div class=\"ds-sect-head\"><span class=\"ds-sect-minlabel\">Min 18 &middot; supplier minimum</span></div><div class=\"ds-sect-bar\"><span class=\"ds-sect-under\" style=\"width:75%\"></span><span class=\"ds-sect-over\" style=\"width:25%\"></span><span class=\"ds-sect-case\" style=\"left:25%\"></span><span class=\"ds-sect-case\" style=\"left:50%\"></span><span class=\"ds-sect-tick\" style=\"left:75%\"></span></div><div class=\"ds-sect-bracket\" style=\"margin-left:75%;width:25%\"><span>Cleared by 6</span></div><div class=\"ds-sect-axis\"><span>0</span><span>24 units standing</span></div></div>",
+      "css": ".ds-sect { margin-top: 14px; font-family: \"Archivo Variable\", system-ui, sans-serif; } .ds-sect-head { position: relative; height: 15px; } .ds-sect-minlabel { position: absolute; bottom: 0; left: calc(75% + 7px); white-space: nowrap; font-size: 10px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink, #101a1c); } .ds-sect-bar { position: relative; display: flex; height: 26px; background: var(--field-1, #c6d6d3); } .ds-sect-under { height: 100%; background: var(--field-3, #6c9e99); } .ds-sect-over { height: 100%; background: var(--field-4, #0e4c50); } .ds-sect-case { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--stock, #dbe3e1); } .ds-sect-tick { position: absolute; top: -6px; bottom: -6px; width: 3px; margin-left: -1.5px; background: var(--ink, #101a1c); } .ds-sect-bracket { position: relative; height: 22px; padding-top: 5px; } .ds-sect-bracket::before { content: \"\"; position: absolute; left: 0; right: 0; top: 0; height: 5px; border: 1px solid var(--ink, #101a1c); border-top: 0; } .ds-sect-bracket > span { display: block; text-align: center; padding-top: 5px; white-space: nowrap; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink, #101a1c); } .ds-sect-axis { display: flex; justify-content: space-between; gap: 14px; margin-top: 7px; font-size: 10px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-faint, rgba(16,26,28,0.68)); }"
     },
     {
-      "name": "Meter",
+      "name": "Section Strip (no threshold)",
       "kind": "custom",
-      "refersTo": "meter-track",
-      "description": "A 6px pill carrying arithmetic. Ink fill, dropping to ink-muted when short of a threshold: a meter reports magnitude, not who acted, so it takes no actor hue. Animated with scaleX rather than width, because a width transition is a layout animation and these sit inside lists that are still settling.",
-      "html": "<div class=\"ds-meter\"><div class=\"ds-meter-fill\" style=\"transform: scaleX(0.92)\"></div></div>",
-      "css": ".ds-meter { position: relative; height: 6px; border-radius: 999px; background: var(--paper-deep, #e7e1d5); overflow: hidden; } .ds-meter-fill { height: 100%; width: 100%; background: var(--ink, #17150f); border-radius: 999px; transform-origin: left center; transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-meter-fill.is-short { background: var(--ink-muted, #575145); } @media (prefers-reduced-motion: reduce) { .ds-meter-fill { transition-duration: 0.01ms; } }"
+      "refersTo": "panel",
+      "description": "With no verified supplier minimum, the section is a dimension line with end caps. Never a fill.",
+      "html": "<div class=\"ds-sect\" role=\"img\" aria-label=\"A section through the demand field. Its full extent is 11 units of standing demand. No supplier minimum has been verified, so no threshold is marked.\"><div class=\"ds-sect-head\"><span class=\"ds-sect-nomin\">No supplier minimum on file</span></div><div class=\"ds-sect-extent\"><span class=\"ds-sect-extent-band\"></span><span class=\"ds-sect-extent-line\"></span><span class=\"ds-sect-cap\" style=\"left:0\"></span><span class=\"ds-sect-cap\" style=\"right:0\"></span></div><div class=\"ds-sect-axis\"><span>0</span><span>11 units standing</span></div></div>",
+      "css": ".ds-sect { margin-top: 14px; font-family: \"Archivo Variable\", system-ui, sans-serif; } .ds-sect-head { position: relative; height: 15px; } .ds-sect-nomin { position: absolute; bottom: 0; left: 0; white-space: nowrap; font-size: 10px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink, #101a1c); } .ds-sect-extent { position: relative; height: 26px; } .ds-sect-extent-band { position: absolute; left: 1px; right: 1px; top: 50%; height: 6px; margin-top: -3px; background: var(--field-3, #6c9e99); opacity: 0.34; } .ds-sect-extent-line { position: absolute; left: 1px; right: 1px; top: 50%; height: 2px; margin-top: -1px; background: var(--ink, #101a1c); } .ds-sect-cap { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--ink, #101a1c); } .ds-sect-axis { display: flex; justify-content: space-between; gap: 14px; margin-top: 7px; font-size: 10px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-faint, rgba(16,26,28,0.68)); }"
     },
     {
-      "name": "Case-Fit Diagram",
+      "name": "Actor Key",
       "kind": "custom",
-      "refersTo": null,
-      "description": "Signature. Replaces three sentences of case-fitting arithmetic with a picture in which the no-speculative-surplus invariant is visible at a glance. Solid box = a whole case Pool bought; dashed box = the remainder it did not, because a solid box around a partial case would imply a purchase that never happened. The reader\u2019s own units are ink rather than an actor hue: ownership is emphasis, not attribution.",
-      "html": "<div class=\"ds-casefit\"><div class=\"ds-casefit-row\"><span class=\"ds-casefit-case\"><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit is-mine\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i></span><span class=\"ds-casefit-case\"><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i></span><span class=\"ds-casefit-total\">12 / 12 filled</span></div><div class=\"ds-casefit-row\"><span class=\"ds-casefit-case is-left\"><i class=\"ds-unit is-standing\"></i><i class=\"ds-unit is-standing\"></i></span><span class=\"ds-casefit-note\">still on your list</span></div></div>",
-      "css": ".ds-casefit { display: flex; flex-direction: column; gap: 8px; } .ds-casefit-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; } .ds-casefit-case { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--rule-strong, #c6bdab); border-radius: 4px; background: var(--paper-sunken, #efeae1); } .ds-casefit-case.is-left { border-style: dashed; background: transparent; } .ds-unit { width: 9px; height: 15px; border-radius: 2px; background: var(--rule-strong, #c6bdab); } .ds-unit.is-mine { background: var(--ink, #17150f); } .ds-unit.is-standing { background: transparent; border: 1px dashed var(--rule-strong, #c6bdab); } .ds-casefit-total, .ds-casefit-note { font-family: inherit; font-size: 12px; color: var(--ink-muted, #575145); font-variant-numeric: tabular-nums; }"
+      "refersTo": "chip",
+      "description": "Responsibility encoded three times over \u2014 rule style, glyph shape, and the word \u2014 so it survives greyscale.",
+      "html": "<div class=\"ds-actor-key\"><span class=\"ds-actor ds-actor-agent\"><svg class=\"ds-glyph\" viewBox=\"0 0 10 10\" aria-hidden=\"true\" fill=\"currentColor\"><path d=\"M5 0 10 5 5 10 0 5Z\"/></svg>The agent chose to do this</span><span class=\"ds-actor ds-actor-engine\"><svg class=\"ds-glyph\" viewBox=\"0 0 10 10\" aria-hidden=\"true\" fill=\"currentColor\"><rect x=\"0.6\" y=\"0.6\" width=\"8.8\" height=\"8.8\" rx=\"1.2\"/></svg>Deterministic code computed it</span><span class=\"ds-actor ds-actor-human\"><svg class=\"ds-glyph\" viewBox=\"0 0 10 10\" aria-hidden=\"true\" fill=\"currentColor\"><circle cx=\"5\" cy=\"5\" r=\"4.6\"/></svg>A person was asked</span></div><div class=\"ds-bar ds-bar-agent\">Pool chose the supplier sheet in force.</div><div class=\"ds-bar ds-bar-engine\">Computed: 24 units against a minimum of 18.</div><div class=\"ds-bar ds-bar-human\">A person was asked to authorise an early purchase.</div>",
+      "css": ".ds-actor-key { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; } .ds-actor { display: inline-flex; align-items: center; gap: 7px; color: var(--ink-muted, rgba(16,26,28,0.74)); font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; } .ds-glyph { width: 9px; height: 9px; flex: none; } .ds-actor-agent .ds-glyph, .ds-actor-engine .ds-glyph { color: var(--ink, #101a1c); } .ds-actor-human .ds-glyph { color: var(--signal-deep, #7a4705); } .ds-bar { padding-left: 15px; margin-bottom: 10px; font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 15px; color: var(--ink, #101a1c); } .ds-bar-agent { border-left: 3px dashed var(--ink, #101a1c); } .ds-bar-engine { border-left: 3px solid var(--ink, #101a1c); } .ds-bar-human { border-left: 3px solid var(--signal, #c87a0a); }"
+    },
+    {
+      "name": "Advisory Panel",
+      "kind": "card",
+      "refersTo": "panel-advisory",
+      "description": "Not a card \u2014 a ruled region with an amber left rule and an amber-washed head. The one place on a member's screen that is waiting on them.",
+      "html": "<section class=\"ds-panel-advisory\"><div class=\"ds-panel-head\"><span class=\"ds-label\">Waiting on you</span></div><p class=\"ds-body\">An early purchase would close the gap to twenty-four exactly. Nothing is bought until you answer.</p></section>",
+      "css": ".ds-panel-advisory { border-top: 2px solid var(--ink, #101a1c); border-left: 4px solid var(--signal, #c87a0a); border-radius: 0; padding: 20px 0 22px 15px; color: var(--ink, #101a1c); } .ds-panel-advisory .ds-panel-head { background: var(--signal-soft, #f0e0c6); margin: 0 -15px 13px; padding: 9px 15px; } .ds-label { font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink, #101a1c); } .ds-body { margin: 0; max-width: 68ch; font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 15px; line-height: 1.55; color: var(--ink-muted, rgba(16,26,28,0.74)); }"
+    },
+    {
+      "name": "Station Row",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "One watched item: state word, headline at display scale, the demand sentence, the section, the reason. The first-viewport unit.",
+      "html": "<article class=\"ds-watch-row\"><div class=\"ds-watch-head\"><span class=\"ds-watch-name\">Whey protein, 2 kg</span><span class=\"ds-status\"><span class=\"ds-status-word ds-needs-you\">Needs you</span><span class=\"ds-status-reason\">An early purchase would close the gap</span></span></div><p class=\"ds-watch-demand\">Seven households already buy this. <b>24 units</b> standing.</p><p class=\"ds-watch-blocker\">The supplier minimum in force is eighteen. It cleared six days ago and has not moved since.</p></article>",
+      "css": ".ds-watch-row { padding: 20px 0 22px; border-top: 2px solid var(--ink, #101a1c); font-family: \"Archivo Variable\", system-ui, sans-serif; color: var(--ink, #101a1c); } .ds-watch-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; } .ds-watch-name { font-size: clamp(26px, 2.7vw, 34px); font-weight: 700; letter-spacing: -0.024em; line-height: 1.04; } .ds-status { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 1px; } .ds-status-word { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink, #101a1c); } .ds-status-word.ds-needs-you { background: var(--signal, #c87a0a); color: var(--on-signal, #101a1c); padding: 3px 9px; } .ds-status-reason { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-muted, rgba(16,26,28,0.74)); } .ds-watch-demand { margin: 11px 0 0; font-size: 16.5px; } .ds-watch-blocker { margin: 10px 0 0; max-width: 80ch; font-size: 14.5px; color: var(--ink-muted, rgba(16,26,28,0.74)); }"
+    },
+    {
+      "name": "Banners",
+      "kind": "custom",
+      "refersTo": "banner",
+      "description": "A refusal is a result: ink on sunken stock, no colour and no alarm. Only an advisory gets the amber edge.",
+      "html": "<div class=\"ds-banner ds-banner-stop\">There is enough demand and it still would not be cheaper. Nothing was ordered.</div><div class=\"ds-banner ds-banner-warn\">An authorisation is waiting on a person.</div>",
+      "css": ".ds-banner { display: flex; gap: 10px; align-items: flex-start; padding: 13px 15px; border: 1.5px solid var(--rule-strong, rgba(16,26,28,0.34)); border-radius: 0; margin-bottom: 12px; font-family: \"Archivo Variable\", system-ui, sans-serif; font-size: 15px; line-height: 1.55; color: var(--ink, #101a1c); } .ds-banner-stop { border-color: var(--ink, #101a1c); background: var(--stock-sunken, #d0dad8); } .ds-banner-warn { border-color: var(--ink, #101a1c); border-left: 4px solid var(--signal, #c87a0a); background: var(--signal-soft, #f0e0c6); }"
     }
   ],
   "narrative": {
-    "northStar": "The Field Ledger",
-    "overview": "Pool looks like a ledger somebody keeps by hand and can hand to an auditor. Warm paper (#f7f4ef), dark ink, hairline rules doing the structural work, figures set in tabular numerals so columns of money line up, and a serif display face for the numbers and names that matter. A ledger's authority does not come from decoration; it comes from being inspectable line by line. That is exactly the claim this product makes about an autonomous agent, so the interface makes the claim in its own material rather than asserting it in copy.\n\nThe density is low and the surfaces are quiet. Colour is scarce and strictly semantic: three hues that mean who was responsible \u2014 moss for the agent, graphite for deterministic code, clay for a person \u2014 and one red that means something broke. Nothing else gets to be coloured. Success, ownership, progress and magnitude are all neutral, and when a screen has no attribution to make, it is paper, ink, and rule. The reward for that restraint is that the moment colour appears, it means something, and a viewer learns the grammar in one screen without a legend.\n\nThe system is deliberately unlike four neighbours. It is not an operations console, not AI product chrome, not a consumer savings app, and not an enterprise procurement tool. The first is a lived failure rather than a taste: an earlier build put the same information on screen three times in dense counter grids, and a correct system read as an admin dashboard.",
+    "northStar": "Synoptic Hour",
+    "overview": "Many people observe independently at the same hour, nobody coordinates them, and the coherent picture exists only because someone drew an analysis over their separate marks. That is a synoptic chart, and it is also the product's one sentence: nobody organised the group, Pool noticed. Every surface is therefore drawn, not decorated \u2014 an analysis sheet with a masthead naming its source and the hour it was drawn, station rows beneath it, and notation demoted to an enclosure at the foot.\n\nThe material is cold chart stock, never warm paper. Ink is graphite, and graphite carries every analysis line and every refusal, because a refusal here is a result and gets set in the same voice as a finding. Colour is rationed to two jobs and no others: a five-step petrol field scale for accumulating demand, and amber as an advisory in effect. There is no red anywhere on any surface.\n\nThe density is high and the dividing is done by rules and rails. No card, no shadow, no glow, and every corner is square. Quantity is drawn as a section \u2014 a fixed unit axis with the supplier's threshold as a tick on it \u2014 never as a contour and never as a progress bar. Contours survive in exactly two places, the mark and the map's isodistance rings, where the geometry is genuinely geographic. The system explicitly refuses both the agent-dashboard card grid and its cream-editorial opposite.",
     "keyCharacteristics": [
-      "Warm paper and ink; four paper tones carry depth instead of shadow.",
-      "Instrument Serif for names, headlines and figures; system sans for everything read in sentences; monospace only for identifiers.",
-      "Colour is attribution, never emphasis. Three semantic hues, one failure red, and no fourth accent. Success, ownership and magnitude are neutral.",
-      "Tabular numerals wherever a number could be compared to another number.",
-      "Hairline rules (1px) as the primary structural device.",
-      "Full dark mode, token-for-token, at the same semantic meanings.",
-      "Attribution is redundantly encoded as shape \u2014 diamond, square, circle \u2014 so it survives greyscale, colour-blindness and video re-encoding."
+      "Cold chart stock (#dbe3e1 light / #0f1719 dark) with graphite ink, both schemes first-class",
+      "Zero radius, zero shadow; hairline and 2px rules divide everything",
+      "One self-hosted variable font (Archivo Variable, weight axis, latin subset, 34.1 kB, SIL OFL)",
+      "Petrol means accumulating demand; amber means an advisory waiting on a person; nothing else is coloured",
+      "Responsibility encoded three times over: rule style, glyph shape, and the word",
+      "Measured 0 contrast failures at 1280x720 and 375x812 in both schemes"
     ],
     "rules": [
       {
-        "name": "The Attribution Rule",
-        "body": "The three hues mean who was responsible and nothing else. Moss is the agent, graphite is deterministic code, clay is a human. They are never spent on hierarchy, emphasis, decoration, mood, success, ownership or magnitude, and no fourth accent may be introduced. A new colour may only be a tone inside an existing role. Colour is the cheapest proof the interface has of the product's central claim; spending it on emphasis destroys the proof.",
+        "name": "The One Meaning Rule",
+        "body": "A hue carries exactly one meaning system-wide. Petrol is accumulating demand. Amber is an advisory in effect. A colour never doubles as decoration, category, sentiment, or emphasis.",
         "section": "colors"
       },
       {
-        "name": "The Neutral-Unless-Attributed Rule",
-        "body": "If a mark does not name which party acted, it is neutral. Progress, totals, completion, ownership and chrome are ink, ink-muted, ink-faint or a paper tone, distinguished by tone, weight and type rather than hue. When such a mark does need attribution, add the attribution tag beside it \u2014 never tint the mark itself.",
+        "name": "The Amber-Is-A-Fill Rule",
+        "body": "Amber is only ever a fill, and what sits on it is always --on-signal (measured 5.26:1 light, 7.92:1 dark). Amber as text on stock is prohibited: it does not reach AA at any size worth setting. --signal-deep is the only amber permitted as ink.",
         "section": "colors"
       },
       {
-        "name": "The Stop Means Broken Rule",
-        "body": "`stop` says a thing failed: a card declined, a row rejected, a run that did not complete. It never says no. Pool declining to coordinate is a computed result and renders in the neutral field with its reason attached.",
+        "name": "The No Red Rule",
+        "body": "There is no red anywhere in this system. A refusal is the product's best behaviour, and it is set in ink on stock like every other finding. Refused rows are marked by a rule and the word \"refused\", never by colour.",
         "section": "colors"
       },
       {
-        "name": "The Colour Is Never Alone Rule",
-        "body": "Every state distinguished by colour is also distinguished by a word, and attribution is also distinguished by shape. A state must be readable in greyscale, because the demo is watched as re-encoded video.",
+        "name": "The Inverting-Ramp Rule",
+        "body": "In the dark scheme the field scale inverts so accumulating demand still reads as further along the ramp, and amber brightens so it can keep carrying dark ink. Any new colour must be declared in both :root blocks.",
         "section": "colors"
       },
       {
-        "name": "The Serif Means Consequence Rule",
-        "body": "Instrument Serif is reserved for names, headlines and figures. It never sets prose, never sets a label, and never sets a control. If it appears, the thing it sets is one a reader is meant to remember.",
+        "name": "The Instrument-Label Rule",
+        "body": "Anything that names rather than states is set in the station-label register: 11px, 700, 0.14em, uppercase. One register, applied by every label class. Do not invent a second label style.",
         "section": "typography"
       },
       {
         "name": "The Tabular Rule",
-        "body": "Any number a reader could compare to another number is font-variant-numeric: tabular-nums. Money, units, counts, percentages, elapsed time. Non-negotiable: a ledger whose columns do not align is not a ledger.",
+        "body": "Tabular numerals are set on body and re-asserted on every value, table and ledger. Numbers in this system are read in columns and must not shift. Because tabular numerals do not shrink, long values wrap rather than overflow.",
         "section": "typography"
       },
       {
-        "name": "The Mono Is For Machines Rule",
-        "body": "Monospace marks a value a human is meant to copy or verify, not a value a human is meant to understand. Identifiers, digests, hashes. A price is never mono.",
+        "name": "The Drawing-Is-The-Display-Face Rule",
+        "body": "No decorative type. If a surface needs presence, it gets a section, a meteogram, or the figure register \u2014 not a larger, looser typeface.",
         "section": "typography"
       },
       {
-        "name": "The One Frame Rule",
-        "body": "On a demo-critical screen, the thing that changed and the reason it changed are visible together without scrolling. A scroll that falls between a number and the sentence explaining it is a defect.",
+        "name": "The First-Viewport Rule",
+        "body": "At 1280x720 the masthead, one full station row and the primary call to action are all above the fold. Nothing decorative may be inserted above the first station row.",
         "section": "layout"
       },
       {
-        "name": "The Never Zoom Out Rule",
-        "body": "Density is solved by removing repetition, never by shrinking type or asking the viewer to zoom. Everything is designed at 100% zoom at 1280x720, 1440x900 and 390x844.",
+        "name": "The Rails-Scroll Rule",
+        "body": "Navigation rails scroll rather than wrap. A nav item broken across three lines is not a narrower nav, it is a broken one.",
         "section": "layout"
       },
       {
-        "name": "The Shadow Earns Its Place Rule",
-        "body": "A shadow means this is above the page or this responded to you. It never means this is important. Importance is tone, rule and type.",
+        "name": "The Flat-Sheet Rule",
+        "body": "Nothing floats. If a surface needs to read as separate, change its stock tone or rule it \u2014 never lift it.",
         "section": "elevation"
       },
       {
-        "name": "The Dashed Outline Rule",
-        "body": "Dashed edges mean unbought, unfilled, or still standing. Never use a dashed border for style.",
+        "name": "The Contour Confinement Rule",
+        "body": "Contours are permitted in exactly two places: the mark (an emblem) and the map's isodistance rings (genuinely geographic). Everywhere else, quantity is a section.",
         "section": "shapes"
+      },
+      {
+        "name": "The Section Rule",
+        "body": "Quantity on any non-map surface is a section: fixed unit axis, extent = max(standing demand, supplier minimum), threshold as a tick on the same axis. Never padded headroom, never a contour, never a progress bar.",
+        "section": "components"
+      },
+      {
+        "name": "The Dimension-Line Rule",
+        "body": "A section with no threshold is a dimension line with end caps, never a fill. A filled bar with nothing to measure against reads as work completed, and this product does not imply work it did not do.",
+        "section": "components"
+      },
+      {
+        "name": "The Known-Case Rule",
+        "body": "Case boundaries are drawn only when the case size is known from the supplier sheet in force. A guessed interval is not drawn.",
+        "section": "components"
+      },
+      {
+        "name": "The Standing-Record Rule",
+        "body": "Prior analyses stay, dated, on the same axis in the dashed register. The present is never rewritten to agree with itself.",
+        "section": "components"
+      },
+      {
+        "name": "The Honest-Scale Rule",
+        "body": "A secondary plot states its own range in the label. Exaggerating a dip by cropping the axis silently is prohibited.",
+        "section": "components"
+      },
+      {
+        "name": "The Triple-Encoding Rule",
+        "body": "Never carry responsibility on colour alone. Rule style, glyph shape and the word must all agree, and any one of the three must be sufficient.",
+        "section": "components"
+      },
+      {
+        "name": "The Reserved-Accent Rule",
+        "body": "The left accent rule is reserved for responsibility and for the advisory. It is deliberately not used for selection, refused rows, or ordinary banners.",
+        "section": "components"
+      },
+      {
+        "name": "The No-Implied-Progress Rule",
+        "body": "Nothing animates to suggest work in flight. The meter never animates and never fills to imply completion; the wait screen shows real elapsed time in mono, because the clock is the only thing that is true.",
+        "section": "components"
       }
     ],
     "dos": [
-      "Do encode attribution with both hue and shape, and let the legend appear once.",
-      "Do keep the focus ring ink, and keep generic chrome neutral. An actor hue on a focus ring, a banner or a heading attributes an action that nothing performed.",
-      "Do reach for ink, ink-muted or a paper tone for success, completion, ownership and progress, and add an attribution tag when the actor genuinely matters.",
-      "Do set every comparable number in tabular numerals.",
-      "Do reach for a paper tone and a 1px rule before reaching for a shadow.",
-      "Do keep Instrument Serif for names, headlines and figures only.",
-      "Do animate transform and opacity. The one easing is cubic-bezier(0.16, 1, 0.3, 1); state changes are 0.13s, entrances 0.28\u20130.42s, and the meter is 0.6s.",
-      "Do let motion report a change that actually happened. On consumer surfaces an element may animate only when its own state changed \u2014 nothing on first paint, nothing on scroll. Showcase is a narrative reader, so sequenced reveal of already-computed facts is legitimate there.",
-      "Do honour prefers-reduced-motion, and make sure the information survives with motion off. Motion explains a change; it is never the only thing carrying it.",
-      "Do draw the arithmetic when a diagram replaces a paragraph \u2014 cases, thresholds, distances, recoveries.",
-      "Do give a refusal the same typographic dignity as a success.",
-      "Do keep contrast at WCAG 2.2 AA, and keep small text at ink-faint or darker."
+      "Do draw any non-map quantity as a section: fixed unit axis, extent max(demand, minimum), threshold as a tick on the same axis.",
+      "Do draw a threshold-less section as a dimension line with 3px end caps and no fill.",
+      "Do keep prior analyses on the same axis, dated, in the dashed register.",
+      "Do declare every new colour in both :root and the prefers-color-scheme: dark block, and keep the field ramp inverting so more demand reads as further along it.",
+      "Do put --on-signal on every amber fill \u2014 it is a constant in both schemes for a measured reason (5.26:1 light, 7.92:1 dark).",
+      "Do encode responsibility three times: rule style, glyph shape, and the word.",
+      "Do divide with rules and stock tones: 1px var(--rule) between peers, 1px var(--rule-strong) to open a region, 2px solid var(--ink) for a boundary that matters.",
+      "Do set anything that names rather than states in the station-label register (11px / 700 / 0.14em / uppercase).",
+      "Do keep tabular numerals on every value and let long values wrap rather than overflow.",
+      "Do hold the floor: 0 contrast failures at 1280x720 and 375x812 in both schemes, no touch target under 24px, no horizontal overflow at 375 or 1280.",
+      "Do state a secondary plot's range in its label.",
+      "Do open judge surfaces as a bulletin \u2014 written record and numbered sections first, notation as an enclosure at the foot.",
+      "Do keep the font self-hosted: one family, weight axis only, latin subset, no external host and no CDN."
     ],
     "donts": [
-      "Don't spend moss, graphite or clay on emphasis, hierarchy, mood, success, ownership or magnitude, and don't add a fourth accent. Colour is attribution.",
-      "Don't use moss as a success or done colour. Moss means the agent decided something; a green tick on a step nobody chose is a false claim about who acted.",
-      "Don't use graphite for the focus ring or for generic chrome. Generic focus is ink.",
-      "Don't use stop red for Pool declining to coordinate. That is a correct answer, not an error. Stop is for a thing that broke.",
-      "Don't animate anything that implies work in progress the system is not doing \u2014 no fabricated thinking, no fake tool progress, no spinner on a step the browser cannot observe. A pulsing dot means a live connection; nothing else may borrow it.",
-      "Don't dim a disabled control to a 45% ghost. Flatten it and keep the label legible.",
-      "Don't animate width, height, top or left.",
-      "Don't solve density by shrinking type or expecting a zoom-out.",
-      "Don't put a dashed border on anything that is not literally unbought or unfilled.",
-      "Don't set a price, a total or a name in monospace. Mono is for identifiers.",
-      "Don't let this become an operations console: no dense counter grids, no metric walls, no sidebar-and-table chrome, and never the same fact in three sections of one screen.",
-      "Don't let this become AI product chrome: no purple-blue gradients, no sparkle or wand iconography, no glowing thinking state, no typewriter text.",
-      "Don't let this become a consumer savings app: no confetti on a saving, no trophy percentage, no cartoon illustration, no mint-and-white rounded card deck.",
-      "Don't let this become an enterprise procurement tool: no grey-on-grey field walls, no tabbed record view standing in for hierarchy.",
-      "Don't use emoji. Icons are one stroke weight on one grid, inline SVG."
+      "Don't use red. A refusal is set in ink on stock, with a rule and the word, because it is the product's best behaviour.",
+      "Don't set amber as text on stock. Amber is a fill; --signal-deep is the only amber permitted as ink.",
+      "Don't spend petrol on anything except accumulating demand \u2014 not on progress, success, links, or emphasis.",
+      "Don't add a card, a shadow, a glow, or a corner radius. --radius is 0 and stays 0.",
+      "Don't pad a section's axis for headroom, or draw case boundaries the supplier sheet in force does not establish.",
+      "Don't rewrite a prior analysis to agree with the present.",
+      "Don't use the left accent rule for selection, refused rows, or ordinary banners \u2014 it is reserved for responsibility and advisory.",
+      "Don't draw a contour anywhere except the mark and the map's isodistance rings.",
+      "Don't animate anything that implies work in flight, and don't ship motion that has no prefers-reduced-motion escape.",
+      "Don't let a nav or act rail wrap; rails scroll.",
+      "Don't add a second label register, a decorative typeface, or a second font request.",
+      "Don't crop a chart's axis to make a movement look larger than it is."
     ]
   }
 }

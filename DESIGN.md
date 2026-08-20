@@ -1,598 +1,500 @@
 ---
 name: Pool
-description: A field ledger for an agent that only coordinates a purchase when the numbers actually work.
+description: A synoptic analysis of latent demand — chart stock, graphite ink, one petrol scale for accumulating demand.
 colors:
-  paper: "#f7f4ef"
-  paper-raised: "#fffdfa"
-  paper-sunken: "#efeae1"
-  paper-deep: "#e7e1d5"
-  ink: "#17150f"
-  ink-muted: "#575145"
-  ink-faint: "#6f6759"
-  rule: "#ded7c9"
-  rule-strong: "#c6bdab"
-  moss: "#3d6b4c"
-  moss-bright: "#4f875f"
-  moss-soft: "#e4ede4"
-  moss-line: "#b2cbb7"
-  graphite: "#384b5e"
-  graphite-soft: "#e5ebf1"
-  graphite-line: "#b6c4d2"
-  clay: "#a0512a"
-  clay-soft: "#f6e9df"
-  clay-line: "#e0bda1"
-  stop: "#8c3020"
-  stop-soft: "#f6e2dd"
+  stock: "#dbe3e1"
+  stock-raised: "#e4eae9"
+  stock-sunken: "#d0dad8"
+  stock-deep: "#c3d0cd"
+  ink: "#101a1c"
+  ink-muted: "rgba(16, 26, 28, 0.74)"
+  ink-faint: "rgba(16, 26, 28, 0.68)"
+  rule: "rgba(16, 26, 28, 0.2)"
+  rule-strong: "rgba(16, 26, 28, 0.34)"
+  field-1: "#c6d6d3"
+  field-2: "#6c9e99"
+  field-3: "#387b78"
+  field-4: "#0e4c50"
+  petrol: "#0e4c50"
+  petrol-soft: "#cbdad8"
+  signal: "#c87a0a"
+  signal-deep: "#7a4705"
+  signal-soft: "#f0e0c6"
+  on-signal: "#101a1c"
 typography:
-  hero:
-    fontFamily: "Instrument Serif, Iowan Old Style, Georgia, serif"
-    fontSize: "clamp(40px, 6.2vw, 76px)"
-    fontWeight: 400
-    lineHeight: 0.98
-    letterSpacing: "-0.03em"
   display:
-    fontFamily: "Instrument Serif, Iowan Old Style, Georgia, serif"
-    fontSize: "clamp(28px, 3.4vw, 40px)"
-    fontWeight: 400
-    lineHeight: 1.08
-    letterSpacing: "-0.018em"
+    fontFamily: "Archivo Variable, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
+    fontSize: "clamp(27px, 3.3vw, 39px)"
+    fontWeight: 700
+    lineHeight: 1.03
+    letterSpacing: "-0.024em"
+  headline:
+    fontFamily: "{typography.display.fontFamily}"
+    fontSize: "clamp(26px, 2.7vw, 34px)"
+    fontWeight: 700
+    lineHeight: 1.04
+    letterSpacing: "-0.024em"
   figure:
-    fontFamily: "Instrument Serif, Iowan Old Style, Georgia, serif"
-    fontSize: "34px"
-    fontWeight: 400
+    fontFamily: "{typography.display.fontFamily}"
+    fontSize: "clamp(23px, 2.4vw, 31px)"
+    fontWeight: 700
     lineHeight: 1.05
-    letterSpacing: "-0.02em"
-    fontFeature: "tabular-nums"
+    letterSpacing: "-0.024em"
   title:
-    fontFamily: "Instrument Serif, Iowan Old Style, Georgia, serif"
-    fontSize: "19px"
+    fontFamily: "{typography.display.fontFamily}"
+    fontSize: "17px"
+    fontWeight: 700
+    lineHeight: 1.12
+    letterSpacing: "-0.017em"
+  lede:
+    fontFamily: "{typography.display.fontFamily}"
+    fontSize: "17px"
     fontWeight: 400
-    lineHeight: 1.2
+    lineHeight: 1.55
+    letterSpacing: "normal"
   body:
-    fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
+    fontFamily: "{typography.display.fontFamily}"
     fontSize: "15px"
     fontWeight: 400
     lineHeight: 1.55
-  value:
-    fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
-    fontSize: "14px"
-    fontWeight: 600
-    fontFeature: "tabular-nums"
-  label:
-    fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
-    fontSize: "11.5px"
-    fontWeight: 600
-    letterSpacing: "0.05em"
-  caption:
-    fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
-    fontSize: "12px"
-    fontWeight: 550
-  mono:
-    fontFamily: "ui-monospace, SF Mono, JetBrains Mono, Menlo, Consolas, monospace"
-    fontSize: "12.5px"
+    letterSpacing: "normal"
+    fontVariant: "tabular-nums"
+  small:
+    fontFamily: "{typography.display.fontFamily}"
+    fontSize: "13.5px"
     fontWeight: 400
+    lineHeight: 1.55
+  tiny:
+    fontFamily: "{typography.display.fontFamily}"
+    fontSize: "12px"
+    fontWeight: 400
+    lineHeight: 1.5
+  label:
+    fontFamily: "{typography.display.fontFamily}"
+    fontSize: "11px"
+    fontWeight: 700
+    lineHeight: 1.35
+    letterSpacing: "0.14em"
+  notation:
+    fontFamily: "ui-monospace, SF Mono, JetBrains Mono, Menlo, Consolas, monospace"
+    fontSize: "12px"
+    fontWeight: 400
+    letterSpacing: "0"
 rounded:
-  xs: "2px"
-  focus: "3px"
-  sm: "4px"
-  control-sm: "7px"
-  md: "8px"
-  control-lg: "10px"
-  lg: "14px"
-  pill: "999px"
+  none: "0"
 spacing:
   hairline: "1px"
   xs: "6px"
   sm: "14px"
-  grid: "22px"
-  gutter: "32px"
-  section: "34px"
-  page-top: "34px"
-  page-bottom: "96px"
-  max-width: "1160px"
+  md: "22px"
+  lg: "34px"
+  gutter: "34px"
+  gutter-narrow: "20px"
 components:
   button:
-    backgroundColor: "{colors.paper-raised}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
-    padding: "9px 15px"
-  button-hover:
-    backgroundColor: "{colors.paper-sunken}"
-    textColor: "{colors.ink}"
-  button-primary:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.paper}"
-    rounded: "{rounded.md}"
-    padding: "9px 15px"
-  button-primary-disabled:
-    backgroundColor: "color-mix(in srgb, #17150f 62%, #f7f4ef)"
-    textColor: "{colors.paper-raised}"
-  button-accept:
-    backgroundColor: "{colors.clay}"
-    textColor: "{colors.paper-raised}"
-    rounded: "{rounded.md}"
-    padding: "9px 15px"
-  button-ghost:
     backgroundColor: "transparent"
     textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
-    padding: "9px 15px"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: "10px 17px"
+    height: "40px"
+  button-hover:
+    backgroundColor: "{colors.stock-deep}"
+  button-primary:
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.stock}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: "10px 17px"
+    height: "40px"
+  button-primary-hover:
+    backgroundColor: "{colors.petrol}"
+    textColor: "{colors.stock}"
+  button-accept:
+    backgroundColor: "{colors.signal}"
+    textColor: "{colors.on-signal}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: "10px 17px"
+    height: "40px"
+  button-accept-hover:
+    backgroundColor: "{colors.signal-deep}"
+    textColor: "{colors.stock}"
+  button-ghost:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink-muted}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: "10px 17px"
+    height: "40px"
+  button-disabled:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink-faint}"
   button-sm:
-    rounded: "{rounded.control-sm}"
+    typography: "{typography.label}"
     padding: "6px 11px"
     height: "32px"
   button-lg:
-    rounded: "{rounded.control-lg}"
-    padding: "13px 22px"
-  panel:
-    backgroundColor: "{colors.paper-raised}"
+    padding: "14px 22px"
+    height: "48px"
+  control:
+    backgroundColor: "{colors.stock-raised}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.lg}"
-  chip:
-    backgroundColor: "{colors.paper-sunken}"
-    textColor: "{colors.ink-muted}"
-    typography: "{typography.label}"
-    rounded: "{rounded.pill}"
-    padding: "2px 8px"
-  input:
-    backgroundColor: "{colors.paper-raised}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
+    typography: "{typography.body}"
+    rounded: "{rounded.none}"
     padding: "9px 11px"
     height: "38px"
+    width: "100%"
+  chip:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink-muted}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: "3px 8px"
+  chip-ok:
+    textColor: "{colors.ink}"
+  token:
+    backgroundColor: "{colors.stock-sunken}"
+    textColor: "{colors.ink}"
+    typography: "{typography.notation}"
+    rounded: "{rounded.none}"
+    padding: "2px 6px"
   nav-item:
     backgroundColor: "transparent"
     textColor: "{colors.ink-muted}"
-    rounded: "{rounded.control-sm}"
-    padding: "6px 11px"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: "5px 12px"
     height: "30px"
   nav-item-current:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.paper}"
-  tab:
-    backgroundColor: "transparent"
-    textColor: "{colors.ink-muted}"
-    padding: "9px 13px"
-    height: "38px"
-  tab-current:
     textColor: "{colors.ink}"
-  meter-track:
-    backgroundColor: "{colors.paper-deep}"
-    rounded: "{rounded.pill}"
-    height: "6px"
-  meter-fill:
-    backgroundColor: "{colors.ink}"
-    rounded: "{rounded.pill}"
-    height: "6px"
-  meter-fill-short:
-    backgroundColor: "{colors.ink-muted}"
+  panel:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.none}"
+    padding: "20px 0 22px"
+  panel-advisory:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.none}"
+    padding: "20px 0 22px"
+  banner:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.none}"
+    padding: "13px 15px"
+  banner-warn:
+    backgroundColor: "{colors.signal-soft}"
+    textColor: "{colors.ink}"
+  banner-stop:
+    backgroundColor: "{colors.stock-sunken}"
+    textColor: "{colors.ink}"
+  status-word-needs-you:
+    backgroundColor: "{colors.signal}"
+    textColor: "{colors.on-signal}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: "3px 9px"
+  drawer:
+    backgroundColor: "{colors.stock}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.none}"
+    padding: "20px 24px 26px"
+    width: "min(420px, 100vw)"
 ---
 
 # Design System: Pool
 
 ## Overview
 
-**Creative North Star: "The Field Ledger"**
+**Creative North Star: "Synoptic Hour"**
 
-Pool looks like a ledger somebody keeps by hand and can hand to an auditor. Warm paper
-(`#f7f4ef`), dark ink, hairline rules doing the structural work, figures set in tabular
-numerals so columns of money line up, and a serif display face for the numbers and names
-that matter. A ledger's authority does not come from decoration; it comes from being
-inspectable line by line. That is exactly the claim this product makes about an autonomous
-agent, so the interface makes the claim in its own material rather than asserting it in
-copy.
+Many people observe independently at the same hour, nobody coordinates them, and the
+coherent picture exists only because someone drew an analysis over their separate marks.
+That is a synoptic chart, and it is also the product's one sentence: nobody organised the
+group, Pool noticed. Every surface is therefore drawn, not decorated — an analysis sheet
+with a masthead naming its source and the hour it was drawn, station rows beneath it, and
+notation demoted to an enclosure at the foot.
 
-The density is low and the surfaces are quiet. Colour is scarce and strictly semantic:
-three hues that mean *who was responsible* — moss for the agent, graphite for
-deterministic code, clay for a person — and one red that means something broke. Nothing
-else gets to be coloured. Success, ownership, progress and magnitude are all neutral, and
-when a screen has no attribution to make, it is paper, ink, and rule. The reward for that
-restraint is that the moment colour appears, it means something, and a viewer learns the
-grammar in one screen without a legend.
+The material is cold chart stock, never warm paper. Ink is graphite, and graphite carries
+every analysis line and every refusal, because a refusal here is a result and gets set in
+the same voice as a finding. Colour is rationed to two jobs and no others: a five-step
+petrol field scale for accumulating demand, and amber as an advisory in effect. There is
+no red anywhere on any surface.
 
-The system is deliberately unlike four neighbours. It is not an operations console, not AI
-product chrome, not a consumer savings app, and not an enterprise procurement tool. The
-first is a lived failure rather than a taste: an earlier build put the same information on
-screen three times in dense counter grids, and a correct system read as an admin dashboard.
+The density is high and the dividing is done by rules and rails. No card, no shadow, no
+glow, and every corner is square. Quantity is drawn as a **section** —
+a fixed unit axis with the supplier's threshold as a tick on it — never as a contour and
+never as a progress bar. Contours survive in exactly two places, the mark and the map's
+isodistance rings, where the geometry is genuinely geographic. The system explicitly
+refuses both the agent-dashboard card grid and its cream-editorial opposite.
 
 **Key Characteristics:**
-
-- Warm paper and ink; four paper tones carry depth instead of shadow.
-- Instrument Serif for names, headlines and figures; system sans for everything read in
-  sentences; monospace only for identifiers.
-- Colour is attribution, never emphasis. Three semantic hues, one failure red, and no
-  fourth accent. Success, ownership and magnitude are neutral.
-- Tabular numerals wherever a number could be compared to another number.
-- Hairline rules (1px) as the primary structural device.
-- Full dark mode, token-for-token, at the same semantic meanings.
-- Attribution is redundantly encoded as shape — diamond, square, circle — so it survives
-  greyscale, colour-blindness and video re-encoding.
+- Cold chart stock (`#dbe3e1` light / `#0f1719` dark) with graphite ink, both schemes first-class
+- Zero radius, zero shadow; hairline and 2px rules divide everything
+- One self-hosted variable font (Archivo Variable, weight axis, latin subset, 34.1 kB, SIL OFL)
+- Petrol means accumulating demand; amber means an advisory waiting on a person; nothing else is coloured
+- Responsibility encoded three times over: rule style, glyph shape, and the word
+- Measured 0 contrast failures at 1280×720 and 375×812 in both schemes
 
 ## Colors
 
-A warm paper-and-ink neutral field, punctuated by exactly three attribution hues and one
-failure red. Values are in the frontmatter; this section says what each one is *for*.
-
-**The three hues are the actor triad, and they attribute an action or a fact to one party.
-They are not available for any other job.** Anything that is not an attribution — success,
-completion, ownership, progress, magnitude, emphasis, chrome — is neutral. This document
-defines **no exception** to that, deliberately: a single carve-out is how a semantic palette
-becomes a decorative one.
+A cold analytical palette: one cool grey-green stock, one graphite ink, one petrol ramp
+for quantity, one amber for advisories.
 
 ### Primary
+- **Petrol** (`#0e4c50` light / `#9ac7c0` dark): accumulating demand and nothing else. The deep end of the field ramp, the mark's centre, the meteogram trace, the live/environment dots, the closed-case border, the reader's own units inside a purchased case. In dark it inverts to the light end so "more demand" still reads as further along the ramp.
+- **The field scale** (`--field-1` … `--field-4`): the four-step ramp a section is drawn in, and every step carries a surface. Step 1 is the unfilled axis ground, step 2 the portion under the threshold, step 4 the portion over it; step 3 fills case-unit cells, the meter track and map pooled markers. A fifth step was declared during the build and consumed by nothing, so it was removed rather than documented — a value used zero times is not a system rule.
 
-- **Ink** — the near-black text colour, and the fill of the primary action. Pool's primary
-  button is ink on paper, not a brand colour, precisely because the brand's own hues are
-  spoken for by attribution. Its hover stays inside the neutral family: the ink deepens and
-  the shadow lifts. Ink is also what carries any neutral emphasis an actor hue is not
-  allowed to carry — a filled meter, the reader's own units, a completed step.
-- **Moss** — *the agent decided this.* The green of the Strands loop's own choices: a tool
-  the coordinator selected, an opportunity it chose to investigate, an escalation it decided
-  to raise. Nothing else. Moss is not a success colour.
-- **Graphite** — *deterministic code computed this, and it could not have been otherwise.*
-  A figure a tool returned, a viability verdict, a threshold that mathematically passed.
-  Graphite is **not** used for generic chrome or for the focus ring; generic focus is ink.
-- **Clay** — *a person is responsible for this.* A question waiting on a human, an answer a
-  human gave, an action only a human can take. Clay carries the **needs you** consumer state
-  and the affirmative control a person presses to accept something. The centre of the
-  wordmark is clay because the thing at the middle of a pool is a person's order, not
-  automation.
+### Secondary
+- **Signal Amber** (`#c87a0a` light / `#e2a13c` dark): an advisory in effect — something actually waiting on a person. Only ever a **fill**: the advisory panel's left rule and head wash, the `needs-you` status word, the accept control, the human actor's rule. Never amber text on stock.
+- **Signal Deep** (`#7a4705` light / `#f0c078` dark): the human actor glyph and form-error text, where amber must sit on stock as ink rather than as a fill.
+- **Signal Soft** (`#f0e0c6` light / `#2a2013` dark): the advisory wash behind a head or banner.
+- **On-Signal** (`#101a1c`, constant in both schemes): the ink that sits on amber. It does not invert with the scheme, because `--ink` does, and light ink on amber measures about 1.9:1 in the dark counterpart.
 
 ### Neutral
-
-- **Paper** (base), **Paper Raised** (panels and controls, the lightest tone),
-  **Paper Sunken** (recessed wells, chips, hover), **Paper Deep** (meter tracks, the
-  deepest recess). Four tones, and depth is built from them.
-- **Ink Muted** — secondary prose and inactive controls.
-- **Ink Faint** — small text: labels, table headers, captions, state words. Set at ≥4.5:1
-  against paper deliberately, rather than at whatever looked quiet.
-- **Rule** — hairline dividers and panel borders. **Rule Strong** — control borders and
-  anything that must read as an edge at video scale.
-
-### Failure
-
-- **Stop** with **Stop Soft** — something broke: a declined card, a malformed or refused
-  import row, a form error, a run that did not complete. Stop is not a fourth actor hue; it
-  attributes nothing, and it says only that a thing failed.
-
-  **Stop is never used for Pool declining to coordinate.** That is a correct, computed
-  outcome — the product working — and it stays in the neutral field with its reason
-  attached. A declined *card* is stop; a declined *pool* is not.
+- **Chart Stock** (`#dbe3e1` / dark `#0f1719`): the page. Cold and deliberately not paper.
+- **Stock Raised** (`#e4eae9` / `#162023`): row hover, input field ground, map ground, active combobox option.
+- **Stock Sunken** (`#d0dad8` / `#0a1113`): the muted panel, the stop banner, mono token chips.
+- **Stock Deep** (`#c3d0cd` / `#060c0d`): the button hover ground and empty photograph frames.
+- **Ink** (`#101a1c` / `#e6eeec`): body text, every analysis line, every refusal, the 2px masthead and footer rules, the focus outline.
+- **Ink Muted** (74% ink, both schemes) and **Ink Faint** (68% light / 66% dark): secondary prose and station labels. Both are set above 4.5:1 on stock by measurement, because both are used for small text somewhere.
+- **Rule** (20%/22% ink) and **Rule Strong** (34%/36% ink): the hairline between rows and the heavier hairline that opens a region.
 
 ### Named Rules
+**The One Meaning Rule.** A hue carries exactly one meaning system-wide. Petrol is accumulating demand. Amber is an advisory in effect. A colour never doubles as decoration, category, sentiment, or emphasis.
 
-**The Attribution Rule.** The three hues mean who was responsible and nothing else. Moss is
-the agent, graphite is deterministic code, clay is a human. They are never spent on
-hierarchy, emphasis, decoration, mood, success, ownership or magnitude, and no fourth accent
-may be introduced. A new colour may only be a tone inside an existing role. Colour is the
-cheapest proof the interface has of the product's central claim; spending it on emphasis
-destroys the proof.
+**The Amber-Is-A-Fill Rule.** Amber is only ever a fill, and what sits on it is always `--on-signal` (measured 5.26:1 light, 7.92:1 dark). Amber as text on stock is prohibited: it does not reach AA at any size worth setting. `--signal-deep` is the only amber permitted as ink.
 
-**The Neutral-Unless-Attributed Rule.** If a mark does not name which party acted, it is
-neutral. Progress, totals, completion, ownership and chrome are ink, ink-muted, ink-faint or
-a paper tone, distinguished by tone, weight and type rather than hue. When such a mark does
-need attribution, add the attribution tag beside it — never tint the mark itself.
+**The No Red Rule.** There is no red anywhere in this system. A refusal — "there is enough demand and it still would not be cheaper" — is the product's best behaviour, and it is set in ink on stock like every other finding. Refused rows are marked by a rule and the word "refused", never by colour.
 
-**The Stop Means Broken Rule.** `stop` says a thing failed: a card declined, a row rejected,
-a run that did not complete. It never says no. Pool declining to coordinate is a computed
-result and renders in the neutral field with its reason attached.
-
-**The Colour Is Never Alone Rule.** Every state distinguished by colour is also
-distinguished by a word, and attribution is also distinguished by shape. A state must be
-readable in greyscale, because the demo is watched as re-encoded video.
-
-### How the doctrine is enforced
-
-The rules above are normative **and the implementation now follows them**. Every actor hue
-left in `apps/web/src/styles.css` is an attribution: the accept button (a person
-affirming), the three `.actor-*` tags, `.path` (the engine is the subject), the `needs you`
-state word, the timeline nodes' agent/engine/human variants, and the acting-as banner.
-Nothing else carries one.
-
-The drift this replaced was real and worth recording, because it is the failure mode to
-watch for. Moss had spread across roughly thirty selectors as a general affirmative —
-done ticks, "ok" chips, sourceable products, ownership marks, ledger gains, map rings,
-an emphasised hero word, and the environment dot on every screen — while graphite drew
-the global focus ring and ordinary banner chrome. On the Showcase that was self-refuting:
-the page asserted in its own legend that a green diamond means *the agent decided*, and
-then painted thirteen read-progress segments and five engine-computed figures the same
-green. The fixes: success and completion → `ink`; ownership and magnitude → `ink`;
-caution and chrome → `ink-muted`; genuine breakage → `stop`; generic focus → `ink`.
-
-Verified rather than asserted: **0 contrast failures across 444 distinct
-foreground/background pairs**, light and dark, over Home, What you buy, Orders, the order
-record with every section open, Behind Pool, Operations, Showcase and About. Worst pair
-4.66:1 against the 4.5 floor.
-
-One deliberate carve-out, for the reason DESIGN.md gives above rather than for
-convenience: `.path` keeps graphite because the deterministic execution path is genuinely
-what that component is about. Graphite for computed *magnitude* — a meter, a threshold
-bar — was considered and rejected: a data display is not an attribution, and one
-exception would license the rest.
+**The Inverting-Ramp Rule.** In the dark scheme the field scale inverts so accumulating demand still reads as further along the ramp, and amber brightens so it can keep carrying dark ink. Any new colour must be declared in both `:root` blocks.
 
 ## Typography
 
-**Display Font:** Instrument Serif (with Iowan Old Style, Georgia, serif)
-**Body Font:** system sans stack (`ui-sans-serif`, `system-ui`, `-apple-system`, …)
-**Mono Font:** system mono stack (`ui-monospace`, SF Mono, JetBrains Mono, Menlo)
+**Display Font:** Archivo Variable (`--display` aliases `--sans`; falls back to ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif)
+**Body Font:** the same family — one face, one weight axis, latin subset, self-hosted from `@fontsource-variable/archivo`
+**Label/Mono Font:** system monospace stack (`--mono`: ui-monospace, SF Mono, JetBrains Mono, Menlo, Consolas) for notation, receipts, step indices and paths
 
-**Character:** A single high-contrast serif at 400 weight against a plain system sans. The
-serif is used for the things a ledger would write large — a name, a headline, a total — and
-never for prose. Because it is the only typeface with personality in the system, anything
-set in it reads as consequential; that scarcity is the hierarchy.
+The font is the only web font in the project: Archivo Variable, weight axis only, latin
+subset, 34.1 kB, self-hosted from `@fontsource-variable/archivo` under SIL OFL 1.1, with
+`font-display: swap` and an explicit `unicode-range`. No external font host, no CDN. The
+shipped stylesheet is 34.8 kB (7.8 kB gzip).
+
+**Character:** An instrument label, not a display face. The type stays out of the way so the drawing can be the display element; condensation is carried by tracking and weight rather than by a width axis (which exists in this family and costs 54 kB more).
 
 ### Hierarchy
-
-- **Hero** (Instrument Serif 400, `clamp(40px, 6.2vw, 76px)`, line-height 0.98,
-  letter-spacing −0.03em): the product's opening claim, once per surface, balanced with
-  `text-wrap: balance`.
-- **Display** (Instrument Serif 400, `clamp(28px, 3.4vw, 40px)`, 1.08, −0.018em): page and
-  section titles.
-- **Figure** (Instrument Serif 400, 34px, 1.05, −0.02em, tabular): a single headline number
-  — a total, a saving, a percentage. Ledger totals are set at 27px.
-- **Title** (Instrument Serif 400, 19px, 1.2): the name of a thing in a list — the item on
-  a watch row, a product, a person.
-- **Body** (system sans 400, 15px, 1.55): all prose. Drops to 15px base at ≤560px with the
-  gutter, never below.
-- **Value** (system sans 600, 14px, tabular): a fact's value beside its label.
-- **Label** (system sans 600, 11.5px, letter-spacing 0.05em, uppercase): state words,
-  actor tags, and eyebrows. Actor tags sit at 0.04em.
-- **Caption** (system sans 550, 12px, ink-faint): figure labels and secondary notes.
-- **Mono** (system mono, 12.5px): identifiers only — run ids, pool ids, digests, ARNs.
-  Never used for emphasis or for prose.
+- **Display / section titles** (700, `clamp(27px, 3.3vw, 39px)`, 1.03, −0.024em): the primary heading of a surface.
+- **Headline** (700, `clamp(26px, 2.7vw, 34px)`, 1.04): the watched-item name in a station row — the item at display scale, which is the first viewport's anchor.
+- **Figure** (700, `clamp(23px, 2.4vw, 31px)`, 1.05): a single standing quantity set as a figure. Also the "yours" value at `clamp(25px, 2.6vw, 33px)` and the bulletin lede at `clamp(21px, 2.3vw, 28px)`.
+- **Title** (700, 17px, 1.12, −0.017em): judge step titles and panel headings; `h1`–`h4` all inherit 700/1.12/−0.017em with balanced wrapping.
+- **Lede** (17px, 1.55, ink-muted, max 62ch): the sentence under a masthead.
+- **Body** (15px, 1.55, tabular numerals globally): station prose. `.prose` caps at 68ch.
+- **Small** (13.5px) / **Tiny** (12px, 1.5): metadata, captions, notes.
+- **Station label** (700, 11px, 0.14em, uppercase, 1.35): the single most-used register in the system — every label, section title, chip, actor tag, status word, legend item and axis mark. Chart-scale variants drop to 10px at 0.12–0.13em.
+- **Notation** (mono, 11–12.5px, no tracking): receipts, hashes, paths, step indices, judge step numbers, meteogram axis marks.
 
 ### Named Rules
+**The Instrument-Label Rule.** Anything that *names* rather than *states* is set in the station-label register: 11px, 700, 0.14em, uppercase. One register, applied by every label class. Do not invent a second label style.
 
-**The Serif Means Consequence Rule.** Instrument Serif is reserved for names, headlines and
-figures. It never sets prose, never sets a label, and never sets a control. If it appears,
-the thing it sets is one a reader is meant to remember.
+**The Tabular Rule.** `font-variant-numeric: tabular-nums` is set on `body` and re-asserted on every value, table and ledger. Numbers in this system are read in columns and must not shift. Because tabular numerals do not shrink, long values wrap (`overflow-wrap: anywhere`) rather than overflow.
 
-**The Tabular Rule.** Any number a reader could compare to another number is
-`font-variant-numeric: tabular-nums`. Money, units, counts, percentages, elapsed time.
-Non-negotiable: a ledger whose columns do not align is not a ledger.
-
-**The Mono Is For Machines Rule.** Monospace marks a value a human is meant to copy or
-verify, not a value a human is meant to understand. Identifiers, digests, hashes. A price
-is never mono.
+**The Drawing-Is-The-Display-Face Rule.** No decorative type. If a surface needs presence, it gets a section, a meteogram, or the figure register — not a larger, looser typeface.
 
 ## Layout
 
-A single centred column: `max-width: 1160px` with a `32px` gutter, dropping to `18px` at
-≤560px. Page content sits in a vertical stack with a `34px` rhythm between sections, `14px`
-inside a group, and `6px` between a label and its value. Multi-column groups use a `22px`
-grid gap. The page breathes `34px` above the content and `96px` below it, so the last
-section never touches the footer.
+A single centred measure: `--max: 1180px` with `--gutter: 34px`, dropping to 20px below
+620px. The shell is a column with a sticky masthead, a `flex: 1` main padded `30px 0 72px`,
+and a footer opened by a 2px ink rule.
 
-Spacing is a hand-tuned continuous scale rather than a strict 4/8 grid, and there is no
-spacing token scale in `:root` beyond the gutter and the max width — component padding is
-set per component (`9px 15px` on a button, `9px 11px` on an input, `2px 8px` on a chip).
-Treat the frontmatter's named steps as the real scale and leave the per-component values
-alone unless a component is being rebuilt.
+Vertical rhythm runs on a 6 / 14 / 22 / 34px stack (`.stack-xs`, `.stack-sm`, `.grid`,
+`.stack`), with `.stack` compressing to 26px below 620px. Grids are explicit and few:
+2-up, 3-up, a 1.65fr/1fr side split, and a 0.6fr/1fr lede split. Every multi-column grid
+collapses to one column at 1000px; the showcase runsheet's 150px act rail becomes a
+horizontally scrolling row at the same breakpoint.
 
-Breakpoints, in the order they fire: **940px** (wide two-column groups collapse), **760px**
-(min-width, where a few enhancements switch on), **700px**, **640px**, and **560px** — the
-real phone breakpoint, where the gutter narrows, base type settles at 15px, section rhythm
-tightens to 26px, and horizontal rails begin to scroll.
+Breakpoints: 1000px (columns collapse, sticky rails unstick) and 620px (gutter narrows,
+nav becomes a nowrap scroll strip, small buttons grow to 38px, facts reflow to 104px
+minimum tracks). The reference viewports are 1280×720 and 375×812.
 
-**Density target for demo-critical screens.** Cause, current state, and result belong in one
-frame. Home's ordinary case fits within roughly one viewport height at 1280×720 and does not
-grow when a run completes; primary purpose, state and action stay above the fold. Long proof
-destinations — Behind Pool, Showcase — may legitimately scroll, because they exist to be
-read rather than acted on.
+**The First-Viewport Rule.** At 1280×720 the masthead (source, analysis time, synthetic status), one full station row (state word, headline, item at display scale, demand sentence, section, reason) and the primary call to action are all above the fold. Nothing decorative may be inserted above the first station row.
 
-### Named Rules
-
-**The One Frame Rule.** On a demo-critical screen, the thing that changed and the reason it
-changed are visible together without scrolling. A scroll that falls between a number and the
-sentence explaining it is a defect.
-
-**The Never Zoom Out Rule.** Density is solved by removing repetition, never by shrinking
-type or asking the viewer to zoom. Everything is designed at 100% zoom at 1280×720,
-1440×900 and 390×844.
+**The Rails-Scroll Rule.** Navigation rails scroll rather than wrap: `.nav button`, `.acts a` and `.spine-meta` are `white-space: nowrap` with the scrollbar hidden. A nav item broken across three lines is not a narrower nav, it is a broken one.
 
 ## Elevation & Depth
 
-**Depth is tonal, not cast.** Four paper tones and a 1px rule do nearly all the work: a
-panel is `paper-raised` on `paper` with a `rule` border, a well is `paper-sunken`, a meter
-track is `paper-deep`. Panels carry only `shadow-sm` at rest — enough to separate a card
-from the page at video scale, not enough to float.
+There are no shadows in this system. No card, no shadow, no glow. Depth is entirely
+tonal and linear: four stock tones (deep, sunken, base, raised) layer surfaces, and two
+rule weights plus two rule strengths do all the dividing. A hairline (`1px var(--rule)`)
+separates peers; a heavier hairline (`1px var(--rule-strong)`) opens a region; a `2px
+solid var(--ink)` rule marks a boundary that matters — the masthead, the footer, the
+lead panel, the first watch row, the drawer edge, the enclosure.
 
-Shadow is reserved for two jobs: things that genuinely sit above the page (drawers,
-overlays, the primary action) and response to state (`shadow-md` on primary hover). The
-dark theme re-tunes every shadow to pure black at higher alpha rather than reusing the warm
-ink shadows, because a warm shadow on a near-black paper reads as a smudge.
+The only `box-shadow` declarations in the entire stylesheet are non-decorative: an inset
+1px ring that thickens a focused input's border, an inset 3px left bar on the keyboard-
+active combobox option, an inset 1px hairline separating the reader's own units inside a
+case, and the inset rule that animates once when a state changes. None of them read as
+elevation. The drawer's scrim (`rgba(16,26,28,0.42)`) is the one true overlay.
 
-### Shadow Vocabulary
-
-- **shadow-sm** (`0 1px 2px rgba(23, 21, 15, 0.05)`): a panel at rest. The default, and
-  usually the only one on screen.
-- **shadow-md** (`0 4px 14px -6px rgba(23, 21, 15, 0.18), 0 1px 3px rgba(23, 21, 15, 0.05)`):
-  hover on the primary action, and small floating surfaces.
-- **shadow-lg** (`0 18px 46px -22px rgba(23, 21, 15, 0.4), 0 2px 6px rgba(23, 21, 15, 0.06)`):
-  drawers and overlays only.
-
-### Named Rules
-
-**The Shadow Earns Its Place Rule.** A shadow means *this is above the page* or *this
-responded to you*. It never means *this is important*. Importance is tone, rule and type.
+**The Flat-Sheet Rule.** Nothing floats. If a surface needs to read as separate, change its stock tone or rule it — never lift it.
 
 ## Shapes
 
-A calm rectilinear language on a small radius scale: `8px` on controls and buttons, `14px`
-on panels, `7px` on small controls and nav items, `10px` on large buttons, and `999px` on
-chips and meters only. Corners are noticeably tighter than the current app-design default,
-which is what keeps the surface reading as a ruled sheet rather than a card deck.
+Every corner is square. There is no radius token at all — `--radius` and `--radius-lg`
+were declared during the build, referenced by nothing, and removed; squareness is a
+property of the system rather than a value anything opts into. The focus outline
+explicitly re-asserts `border-radius: 0`. Form language is orthogonal: rectangles, hairlines, ticks, caps and
+brackets — the vocabulary of a drawing instrument.
 
-Borders are the signature. Almost every surface is defined by a 1px line — `rule` for
-dividers and panels, `rule-strong` for anything that must hold an edge at recording scale.
+The exceptions are geometric, not stylistic. Circles appear as the human actor glyph, the
+member swatch, the map member dot, and the mark's rings. The mark is a closed contour
+around a single centre (three rings above 20px, two below, stroke weight increasing
+inward like a contour interval, petrol centre). Rings also appear as the map's isodistance
+contours. The actor's engine glyph is a square with a 1.2-unit corner at a 10-unit viewBox
+— a drafted glyph, not a rounded surface.
 
-**Dashed means "not yet, or not this".** A dashed border is load-bearing semantics, not
-decoration: in the case-fit diagram a solid box is a whole case Pool actually bought and a
-dashed box is the remainder it did not, because a solid box around a partial case would
-imply a purchase that never happened.
-
-The three attribution glyphs are the system's geometric signature: **diamond** (agent),
-**square** (engine), **circle** (human), at 9–10px, filled with `currentColor`.
-
-### Named Rules
-
-**The Dashed Outline Rule.** Dashed edges mean unbought, unfilled, or still standing. Never
-use a dashed border for style.
+**The Contour Confinement Rule.** Contours are permitted in exactly two places: the mark (an emblem) and the map's isodistance rings (genuinely geographic). Everywhere else, quantity is a section.
 
 ## Components
 
 ### Buttons
-
-- **Shape:** small radius (8px; 7px small, 10px large), 1px `rule-strong` border, 8px gap
-  between icon and label, weight 550 at 14px.
-- **Default:** `paper-raised` on a 1px strong rule — a quiet, real control.
-- **Primary:** ink fill, paper label, `shadow-sm`. Hover deepens the ink within the neutral
-  family and lifts to `shadow-md` — no actor hue enters the primary action.
-- **Accept:** clay fill with a paper-raised label (5.58:1) — the affirmative control a
-  *person* presses, which is why it is clay and not moss. In dark mode the label goes
-  near-black against the lighter clay, matching the existing inversion pattern.
-- **Ghost:** no border, no fill; for tertiary and destructive-adjacent actions.
-- **Hover / Active:** background and border shift over 0.13s; active presses down 1px over
-  0.08s.
-- **Disabled is a state, not a dimmed copy.** A flat unlit surface with a legible label. A
-  45%-opacity ghost of the label failed at both legibility and meaning, worst of all on a
-  recorded screen. The primary action keeps its exact shape while running and loses only its
-  charge, because that is the button a demo is watching.
-
-### Cards / Containers
-
-- **Corner:** 14px. **Background:** `paper-raised`. **Border:** 1px `rule`.
-- **Shadow:** `shadow-sm` at rest, and nothing more (see Elevation).
-- `overflow: hidden`, so a full-bleed child clips to the corner instead of squaring it.
-
-### Inputs / Fields
-
-- 1px `rule-strong` on `paper-raised`, 8px radius, `9px 11px` padding, 14px text.
-- **`min-height: 38px` is a functional floor, not a taste.** iOS zooms the page when a
-  focused control's text is under 16px, which reads as the layout breaking; the height and
-  size are tuned together to prevent it.
-- **Focus:** 2px ink outline, offset 1px, with the border going ink at the same time.
-
-**The focus ring is ink, everywhere.** Focus is generic interface state, not an attribution,
-so it takes no actor hue — the input's treatment above is the system-wide model. Ink gives
-16.64:1 against paper, comfortably past AA, and it costs the palette nothing.
+An instrument control: square, ruled, its label set like a switch legend.
+- **Shape:** square (0 radius), `2px solid` border, 40px minimum height, `10px 17px`
+- **Default:** transparent ground, ink border and label; hover fills `--stock-deep`; active nudges down 1px
+- **Primary:** ink ground, stock label; hover swaps ground and border to petrol
+- **Accept (advisory):** amber ground, ink border, `--on-signal` label; hover deepens to `--signal-deep` with stock label
+- **Ghost:** `--rule-strong` border, muted label; hover promotes both to ink
+- **Disabled:** fills are cleared back to transparent with a faint label and `--rule-strong` border — faint ink on an ink fill would be dark-on-dark
+- **Sizes:** `sm` 32px / 10px label / 1.5px border (grows to 38px below 620px); `lg` 48px / 12px label
+- **Focus:** the global `2px solid var(--ink)` outline at 2px offset
 
 ### Chips
+- **Style:** 11px station label, `3px 8px`, `1px solid var(--rule-strong)`, muted ink, square
+- **States:** `ok` promotes border and text to ink; `live` prefixes a 6px petrol square. A mono `token` chip drops the tracking and sits on `--stock-sunken`.
 
-- Pill (999px), `paper-sunken`, 1px `rule-strong`, 11.5px/600 in `ink-muted`, `2px 8px`.
-- A live chip carries a 6px dot pulsing on a 2s ease-in-out cycle — the one continuous
-  animation in the system, and it marks a genuinely live connection. It stays **ink**: a
-  live runtime is not a person and not a decision, so it gets no actor hue. The pulse and
-  the label carry the meaning.
+### Panels (there are no cards)
+- **Corner Style:** square
+- **Background:** transparent by default; `--stock-sunken` for the muted variant (which bleeds to the gutter edge)
+- **Border:** a `1px var(--rule-strong)` hairline on top, or `2px solid var(--ink)` for a lead panel
+- **Internal Padding:** `20px 0 22px` — vertical only, so content stays on the page measure
+- **Shadow Strategy:** none. See Elevation & Depth.
+
+### Inputs / Fields
+- **Style:** `--stock-raised` ground, `1.5px solid var(--rule-strong)`, square, 38px minimum, `9px 11px`, tabular numerals
+- **Focus:** border goes to ink plus an inset 1px ink ring; the native outline is suppressed because the ring replaces it
+- **Error:** `--signal-deep` at 13px/700 — amber as ink, never amber as text on a fill
+- **Label:** 11px station label in `--ink-faint`; search controls use 16px to prevent iOS zoom
 
 ### Navigation
+The masthead is the analysis's masthead: what it is, where it came from, when it was
+drawn. Sticky, stock ground, `2px solid var(--ink)` bottom rule, 58px minimum. Items are
+11px station labels in muted ink with a transparent 2px bottom border; hover promotes to
+ink, and `aria-current="page"` promotes both label and bottom border to ink. Below 620px
+the nav drops to its own full-width row and scrolls horizontally without wrapping.
 
-- Text buttons at 13.5px/500 in `ink-muted`, 7px radius, 30px tall, colour and background
-  crossfading over 0.13s.
-- **Current page is an ink pill with paper text** — a solid mark, not an underline, so it
-  survives a scrolling rail. On a phone the nav becomes a horizontally scrolling row with
-  the trailing edge faded, the cheapest honest signal that there is more to the right.
-- Focus rings inside scrolling rails are drawn *inside* the control (`outline-offset: -2px`)
-  because an offset ring gets clipped by the scroll container.
+### The Section Strip (signature)
+`DemandSection` draws quantity on every non-map surface. This is the system's core
+component and its rules are normative.
 
-### Tabs
+- **Axis:** a fixed unit axis whose extent is `max(demand, minimum)`. There is never padded headroom.
+- **With a threshold:** a 26px stepped measure on `--field-1`; the portion under the minimum in `--field-2`, the portion over it in `--field-4`; the minimum as the one major tick (3px ink, overhanging 6px top and bottom) at its true position; case boundaries as 1.5px stock minor ticks; a bracket under the segment the verdict is about, labelled "N short" or "Cleared by N".
+- **Without a threshold:** a dimension line — a 2px ink rule with 3px end caps over a 34%-opacity `--field-3` band, and the label "No supplier minimum on file". **No fill.**
+- **Case boundaries:** drawn only when the case size is actually known from the supplier sheet in force. Otherwise omitted.
+- **Priors:** each prior analysis is a 12px dashed-outline bar on the same axis, its own dated minimum ticked in ink at 70% opacity, labelled with its date and minimum.
+- **Axis labels:** `0` on the left, "N units standing" on the right, 10px station register.
+- **Geometry in percentages**, so positions are true at any width and labels stay in the real type system.
+- **Accessibility:** the whole strip is `role="img"` with a sentence-form `aria-label` stating the extent, the threshold and its verdict, the case interval, and the presence of priors.
 
-- 13.5px/550, 38px tall, a 2px bottom border that is transparent until selected, pulled down
-  1px to sit on the container's rule.
-- Roving tabindex: one tab stop for the strip, arrows between tabs, Home/End to the ends, and
-  the selected tab scrolls itself into view.
+**The Section Rule.** Quantity on any non-map surface is a section: fixed unit axis, extent = max(standing demand, supplier minimum), threshold as a tick on the same axis. Never padded headroom, never a contour, never a progress bar.
 
-### Attribution Tag (signature)
+**The Dimension-Line Rule.** A section with no threshold is a dimension line with end caps, never a fill. A filled bar with nothing to measure against reads as work completed, and this product does not imply work it did not do.
 
-The system's defining component. A 9px glyph plus an uppercase 11.5px label at 0.04em, in
-the actor's hue: **diamond + moss** for "Agent decided", **square + graphite** for
-"Computed", **circle + clay** for "Person asked". The legend appears once per surface that
-uses the grammar and never twice. This is how the product's entire AI-versus-deterministic
-argument is made without prose.
+**The Known-Case Rule.** Case boundaries are drawn only when the case size is known from the supplier sheet in force. A guessed interval is not drawn.
 
-### Case-Fit Diagram (signature)
+**The Standing-Record Rule.** Prior analyses stay, dated, on the same axis in the dashed register. The present is never rewritten to agree with itself.
 
-Whole cases drawn as bordered boxes of 9×15px units on `paper-sunken`; the reader's own units
-filled **ink**; other buyers' units in `rule-strong`; still-standing units as dashed outlines;
-the remainder in a dashed, transparent box outside the cases. Ownership is emphasis, not
-attribution, so it is carried by tone rather than by an actor hue. It replaces three sentences
-of case-fitting arithmetic, and it makes the no-speculative-surplus invariant visible at a
-glance.
+### The Meteogram (signature)
+One quantity traced through the recorded stages of a run, on the Showcase surface.
+- 1000×150 viewBox, `preserveAspectRatio="none"`, stroked with `vectorEffect="non-scaling-stroke"` so weights stay true at any width
+- The trace is a 3.4px petrol step path; case boundaries are horizontal ink rules at 45% opacity, so a dip means something because it crosses one
+- The shortfall span is a 45°-hatched rect with a 1px ink outline, spanning the stages the quantity sat below a whole case
+- A 34px mono gutter carries the axis marks; the lowest mark is bottom-anchored inside its own box so it cannot overhang
+- The dip is restated in words below the plot ("N units short of a whole case, for two stages")
+- The secondary plot is a labelled expanded scale ("Expanded · target−4 to target units") at 60px, **not** an unlabelled zoom
 
-### Meter (signature)
+**The Honest-Scale Rule.** A secondary plot states its own range in the label. Exaggerating a dip by cropping the axis silently is prohibited.
 
-A 6px pill track in `paper-deep` with an **ink** fill (14.02:1), dropping to `ink-muted`
-when short of a threshold. A meter reports magnitude, not who acted, so it takes no actor
-hue; the figure beside it names the shortfall. **Animated with `transform: scaleX()`, never
-width** — a width transition is a layout animation, and these sit inside lists that are
-still settling. At 6px tall the end cap's distortion under scaleX is not perceivable. 0.6s
-on the expo-out curve.
+### The Actor Grammar (signature)
+Responsibility is encoded three times over, so it survives greyscale, colour blindness
+and video re-encoding.
 
-### Consumer State Chip (signature)
+| Actor | Rule style | Glyph | The word |
+|---|---|---|---|
+| agent | `3px dashed` ink left rule (`.bar-agent`) | hollow diamond | "The agent chose to do this" / "Agent decided" |
+| deterministic code | `3px solid` ink left rule (`.bar-engine`) | square | "Deterministic code computed it" / "Computed" |
+| human | `3px solid` amber left rule (`.bar-human`) | circle in `--signal-deep` | "A person was asked" / "Person asked" |
 
-A right-aligned two-line stack: an uppercase 11.5px/0.05em state word over a 12.5px reason in
-`ink-muted`. The word is one of exactly five — *needs you, coordinating, ready to collect,
-watching, done*.
+The glyph is a 9px SVG at a 10-unit viewBox filled with `currentColor`. The legend
+(`ActorKey`) appears once per surface that uses the grammar, never twice.
 
-Only one of the five names an actor. **Needs you** is clay, because a person is the one who
-has to act. The other four are neutral — `ink` for the three active states, `ink-faint` for
-watching — because "the system is working" is not one party: coordinating spans the agent's
-choices, the engine's arithmetic and a host's acceptance, and tinting it moss would claim the
-agent did work the engine and a human did. Where a specific state genuinely needs
-attribution, put the attribution tag on the row rather than colouring the word.
+**The Triple-Encoding Rule.** Never carry responsibility on colour alone. Rule style, glyph shape and the word must all agree, and any one of the three must be sufficient.
 
-Below 560px it stops being a column at the end of the row and becomes a line under the name,
-because two stacked columns in 300px is neither.
+**The Reserved-Accent Rule.** The left accent rule is reserved for responsibility and for the advisory. It is deliberately not used for selection, refused rows, or ordinary banners.
+
+**Known deviation, recorded deliberately.** A mechanical detector flags the left accent rule as a "side-tab" pattern in 4 remaining instances (`.bar-agent`, `.bar-engine`, `.bar-human`, `.panel-advisory`). Those 4 are the system, not a defect: the left rule is the visual carrier of responsibility and of the one advisory state, and it is confined to exactly those two jobs. The warning is accepted, not fixed. If the count rises above 4, the new instance is the bug.
+
+### Banners and states
+- **Banner (default):** `1.5px solid var(--rule-strong)`, transparent — a plain result
+- **Banner stop:** ink border, `--stock-sunken` ground, no colour. A refusal is set like every other finding.
+- **Banner warn / advisory panel:** ink border with a `4px solid var(--signal)` left rule and a `--signal-soft` wash. The advisory panel's head carries the wash and bleeds 15px either side.
+- **Status word:** 11px station label at 0.16em in ink. The single `needs-you` state — the one thing waiting on a person — gets the amber fill with `--on-signal` at `3px 9px`.
+- **Refused trace step:** the summary is promoted from muted to full ink. The word "refused" already sits in the summary; no colour is added.
+
+### The Bulletin and Enclosure (judge surfaces)
+Judge-facing surfaces open the way a forecast office opens a written analysis: an issuing
+line in the station register, one sentence of what is claimed set at
+`clamp(21px, 2.3vw, 28px)`, then numbered sections (`§1`…`§8`) with mono section numbers.
+The chart is an **enclosure** at the foot, opened by a `2px solid var(--ink)` rule and
+labelled "Enclosure A" — a judge needs the hierarchy of the proof before the notation.
+Collapsible record sections are 44px-minimum summaries with a rotating caret at a fixed
+left inset.
+
+### Motion
+The whole budget, in three items: one 0.9s beat under a status word when the state
+actually changes (`.status-chip.just-changed`, an inset petrol rule fading out), the
+drawer's 0.16s slide-in, and a 0.9s spinner during a real wait. All three are cancelled
+under `prefers-reduced-motion: reduce`, which also disables smooth scrolling and freezes
+the spinner to a static ring.
+
+**The No-Implied-Progress Rule.** Nothing animates to suggest work in flight. The meter never animates and never fills to imply completion; the wait screen shows real elapsed time in mono, because the clock is the only thing that is true.
 
 ## Do's and Don'ts
 
 ### Do:
-
-- **Do** encode attribution with both hue and shape, and let the legend appear once.
-- **Do** keep the focus ring ink, and keep generic chrome neutral. An actor hue on a focus
-  ring, a banner or a heading attributes an action that nothing performed.
-- **Do** reach for ink, ink-muted or a paper tone for success, completion, ownership and
-  progress, and add an attribution tag when the actor genuinely matters.
-- **Do** set every comparable number in tabular numerals.
-- **Do** reach for a paper tone and a 1px rule before reaching for a shadow.
-- **Do** keep Instrument Serif for names, headlines and figures only.
-- **Do** animate `transform` and `opacity`. The one easing is
-  `cubic-bezier(0.16, 1, 0.3, 1)`; state changes are 0.13s, entrances 0.28–0.42s, and the
-  meter is 0.6s.
-- **Do** let motion report a change that actually happened. On consumer surfaces an element
-  may animate only when its own state changed — nothing on first paint, nothing on scroll.
-  Showcase is a narrative reader, so sequenced reveal of already-computed facts is legitimate
-  there.
-- **Do** honour `prefers-reduced-motion`, and make sure the information survives with motion
-  off. Motion explains a change; it is never the only thing carrying it.
-- **Do** draw the arithmetic when a diagram replaces a paragraph — cases, thresholds,
-  distances, recoveries.
-- **Do** give a refusal the same typographic dignity as a success.
-- **Do** keep contrast at WCAG 2.2 AA, and keep small text at `ink-faint` or darker.
+- **Do** draw any non-map quantity as a section: fixed unit axis, extent `max(demand, minimum)`, threshold as a tick on the same axis.
+- **Do** draw a threshold-less section as a dimension line with 3px end caps and no fill.
+- **Do** keep prior analyses on the same axis, dated, in the dashed register.
+- **Do** declare every new colour in both `:root` and the `prefers-color-scheme: dark` block, and keep the field ramp inverting so more demand reads as further along it.
+- **Do** put `--on-signal` on every amber fill — it is a constant in both schemes for a measured reason (5.26:1 light, 7.92:1 dark).
+- **Do** encode responsibility three times: rule style, glyph shape, and the word.
+- **Do** divide with rules and stock tones: `1px var(--rule)` between peers, `1px var(--rule-strong)` to open a region, `2px solid var(--ink)` for a boundary that matters.
+- **Do** set anything that names rather than states in the station-label register (11px / 700 / 0.14em / uppercase).
+- **Do** keep tabular numerals on every value and let long values wrap rather than overflow.
+- **Do** hold the floor: 0 contrast failures at 1280×720 and 375×812 in both schemes, no touch target under 24px, no horizontal overflow at 375 or 1280.
+- **Do** state a secondary plot's range in its label.
+- **Do** open judge surfaces as a bulletin — written record and numbered sections first, notation as an enclosure at the foot.
+- **Do** keep the font self-hosted: one family, weight axis only, latin subset, no external host and no CDN.
 
 ### Don't:
-
-- **Don't** spend moss, graphite or clay on emphasis, hierarchy, mood, success, ownership or
-  magnitude, and don't add a fourth accent. Colour is attribution.
-- **Don't** use moss as a success or done colour. Moss means the agent decided something; a
-  green tick on a step nobody chose is a false claim about who acted.
-- **Don't** use graphite for the focus ring or for generic chrome. Generic focus is ink.
-- **Don't** use `stop` red for Pool declining to coordinate. That is a correct answer, not an
-  error. Stop is for a thing that broke.
-- **Don't** animate anything that implies work in progress the system is not doing — no
-  fabricated thinking, no fake tool progress, no spinner on a step the browser cannot
-  observe. A pulsing dot means a live connection; nothing else may borrow it.
-- **Don't** dim a disabled control to a 45% ghost. Flatten it and keep the label legible.
-- **Don't** animate `width`, `height`, `top` or `left`.
-- **Don't** solve density by shrinking type or expecting a zoom-out.
-- **Don't** put a dashed border on anything that is not literally unbought or unfilled.
-- **Don't** set a price, a total or a name in monospace. Mono is for identifiers.
-- **Don't** let this become an operations console: no dense counter grids, no metric walls,
-  no sidebar-and-table chrome, and never the same fact in three sections of one screen.
-- **Don't** let this become AI product chrome: no purple-blue gradients, no sparkle or wand
-  iconography, no glowing thinking state, no typewriter text.
-- **Don't** let this become a consumer savings app: no confetti on a saving, no trophy
-  percentage, no cartoon illustration, no mint-and-white rounded card deck.
-- **Don't** let this become an enterprise procurement tool: no grey-on-grey field walls, no
-  tabbed record view standing in for hierarchy.
-- **Don't** use emoji. Icons are one stroke weight on one grid, inline SVG.
+- **Don't** use red. A refusal is set in ink on stock, with a rule and the word, because it is the product's best behaviour.
+- **Don't** set amber as text on stock. Amber is a fill; `--signal-deep` is the only amber permitted as ink.
+- **Don't** spend petrol on anything except accumulating demand — not on progress, success, links, or emphasis.
+- **Don't** add a card, a shadow, a glow, or a corner radius. There is no radius token to reach for, and reintroducing one is the change this line exists to refuse.
+- **Don't** pad a section's axis for headroom, or draw case boundaries the supplier sheet in force does not establish.
+- **Don't** rewrite a prior analysis to agree with the present.
+- **Don't** use the left accent rule for selection, refused rows, or ordinary banners — it is reserved for responsibility and advisory.
+- **Don't** draw a contour anywhere except the mark and the map's isodistance rings.
+- **Don't** animate anything that implies work in flight, and don't ship motion that has no `prefers-reduced-motion` escape.
+- **Don't** let a nav or act rail wrap; rails scroll.
+- **Don't** add a second label register, a decorative typeface, or a second font request.
+- **Don't** crop a chart's axis to make a movement look larger than it is.

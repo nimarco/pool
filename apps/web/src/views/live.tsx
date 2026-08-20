@@ -135,7 +135,7 @@ function ToolCatalogue({
             </div>
             <div className="row-tail">
               {picks.length > 0 ? (
-                <span className="mono" style={{ color: "var(--moss)", fontSize: 12 }}>
+                <span className="mono" style={{ fontSize: 12 }}>
                   called {picks.map((p) => `#${p}`).join(", ")}
                 </span>
               ) : chosen.length > 0 ? (

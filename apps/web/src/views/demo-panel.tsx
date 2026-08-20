@@ -301,7 +301,7 @@ export function DemoPanel({
                 ))}
             </select>
             {actingAs ? (
-              <p className="tiny" style={{ marginTop: 8, color: "var(--clay)" }}>
+              <p className="tiny" style={{ marginTop: 8, color: "var(--signal-deep)" }}>
                 <strong>You are acting as {actingAs.display_name}.</strong> Their screens,
                 their decisions — not yours. Choose <em>You</em> to come back.
               </p>
@@ -343,7 +343,7 @@ export function DemoPanel({
                       role="status"
                       style={{
                         marginTop: 4,
-                        color: outcome.ok ? "var(--ink)" : "var(--stop)",
+                        color: outcome.ok ? "var(--ink)" : "var(--signal-deep)",
                       }}
                     >
                       {outcome.ok ? <IconCheck size={12} /> : <IconCross size={12} />}{" "}

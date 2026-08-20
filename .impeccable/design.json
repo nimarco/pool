@@ -125,7 +125,7 @@
       },
       "title": {
         "displayName": "Title",
-        "purpose": "The name of a thing in a list — an item, a product, a person."
+        "purpose": "The name of a thing in a list \u2014 an item, a product, a person."
       },
       "body": {
         "displayName": "Body",
@@ -145,7 +145,7 @@
       },
       "mono": {
         "displayName": "Mono",
-        "purpose": "Identifiers only — run ids, pool ids, digests, ARNs. Never a price."
+        "purpose": "Identifiers only \u2014 run ids, pool ids, digests, ARNs. Never a price."
       }
     },
     "shadows": [
@@ -244,7 +244,7 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The one action a screen wants. Ink on paper, never a brand hue and never an actor hue — the semantic colours are spoken for by attribution.",
+      "description": "The one action a screen wants. Ink on paper, never a brand hue and never an actor hue \u2014 the semantic colours are spoken for by attribution.",
       "html": "<button class=\"ds-btn ds-btn-primary\">Ask Pool to check now</button>",
       "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 15px; border-radius: 8px; border: 1px solid var(--rule-strong, #c6bdab); background: var(--paper-raised, #fffdfa); color: var(--ink, #17150f); font-family: inherit; font-size: 14px; font-weight: 550; cursor: pointer; transition: background 130ms ease, border-color 130ms ease, transform 80ms ease, box-shadow 130ms ease; } .ds-btn-primary { background: var(--ink, #17150f); border-color: var(--ink, #17150f); color: var(--paper, #f7f4ef); box-shadow: 0 1px 2px rgba(23,21,15,0.05); } .ds-btn-primary:hover { background: color-mix(in srgb, var(--ink, #17150f) 88%, #000); border-color: color-mix(in srgb, var(--ink, #17150f) 88%, #000); box-shadow: 0 4px 14px -6px rgba(23,21,15,0.18), 0 1px 3px rgba(23,21,15,0.05); } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 2px solid var(--ink, #17150f); outline-offset: 2px; }"
     },
@@ -252,7 +252,7 @@
       "name": "Secondary Button",
       "kind": "button",
       "refersTo": "button",
-      "description": "The ordinary control. A real edge on raised paper — quiet, but not a ghost.",
+      "description": "The ordinary control. A real edge on raised paper \u2014 quiet, but not a ghost.",
       "html": "<button class=\"ds-btn2\">View the run report</button>",
       "css": ".ds-btn2 { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 15px; border-radius: 8px; border: 1px solid var(--rule-strong, #c6bdab); background: var(--paper-raised, #fffdfa); color: var(--ink, #17150f); font-family: inherit; font-size: 14px; font-weight: 550; cursor: pointer; transition: background 130ms ease, border-color 130ms ease, transform 80ms ease; } .ds-btn2:hover { background: var(--paper-sunken, #efeae1); border-color: var(--ink-faint, #6f6759); } .ds-btn2:active { transform: translateY(1px); } .ds-btn2:focus-visible { outline: 2px solid var(--ink, #17150f); outline-offset: 2px; }"
     },
@@ -260,7 +260,7 @@
       "name": "Accept Button",
       "kind": "button",
       "refersTo": "button-accept",
-      "description": "The affirmative control a person presses. Clay because a human is the actor — not moss, which would attribute the decision to the agent.",
+      "description": "The affirmative control a person presses. Clay because a human is the actor \u2014 not moss, which would attribute the decision to the agent.",
       "html": "<button class=\"ds-btn-accept\">Approve $17.53</button>",
       "css": ".ds-btn-accept { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 15px; border-radius: 8px; border: 1px solid var(--clay, #a0512a); background: var(--clay, #a0512a); color: var(--paper-raised, #fffdfa); font-family: inherit; font-size: 14px; font-weight: 550; cursor: pointer; transition: background 130ms ease, transform 80ms ease; } .ds-btn-accept:hover { background: color-mix(in srgb, var(--clay, #a0512a) 88%, #000); } .ds-btn-accept:active { transform: translateY(1px); } .ds-btn-accept:focus-visible { outline: 2px solid var(--ink, #17150f); outline-offset: 2px; }"
     },
@@ -277,7 +277,7 @@
       "kind": "card",
       "refersTo": "panel",
       "description": "Raised paper inside a hairline rule, at a 14px radius. Clips its children so a full-bleed child cannot square the corner.",
-      "html": "<div class=\"ds-panel\"><div class=\"ds-panel-body\"><h3 class=\"ds-panel-title\">Jasmine rice, 5 lb</h3><p class=\"ds-panel-note\">7 people near you buy this — 24 bags standing, 2 of them yours.</p></div></div>",
+      "html": "<div class=\"ds-panel\"><div class=\"ds-panel-body\"><h3 class=\"ds-panel-title\">Jasmine rice, 5 lb</h3><p class=\"ds-panel-note\">7 people near you buy this \u2014 24 bags standing, 2 of them yours.</p></div></div>",
       "css": ".ds-panel { background: var(--paper-raised, #fffdfa); border: 1px solid var(--rule, #ded7c9); border-radius: 14px; box-shadow: 0 1px 2px rgba(23,21,15,0.05); overflow: hidden; } .ds-panel-body { padding: 16px 18px; } .ds-panel-title { margin: 0; font-family: 'Instrument Serif', 'Iowan Old Style', Georgia, serif; font-weight: 400; font-size: 19px; line-height: 1.2; color: var(--ink, #17150f); } .ds-panel-note { margin: 6px 0 0; font-size: 14px; line-height: 1.55; color: var(--ink-muted, #575145); }"
     },
     {
@@ -292,7 +292,7 @@
       "name": "Chip",
       "kind": "chip",
       "refersTo": "chip",
-      "description": "A pill for a small qualifier. The live variant’s pulsing dot is the system’s only continuous animation and marks a genuinely live connection; it stays ink, because a live runtime is neither a person nor a decision.",
+      "description": "A pill for a small qualifier. The live variant\u2019s pulsing dot is the system\u2019s only continuous animation and marks a genuinely live connection; it stays ink, because a live runtime is neither a person nor a decision.",
       "html": "<span class=\"ds-chip\">synthetic</span> <span class=\"ds-chip ds-chip-live\">AgentCore live</span>",
       "css": ".ds-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule-strong, #c6bdab); background: var(--paper-sunken, #efeae1); color: var(--ink-muted, #575145); font-family: inherit; font-size: 11.5px; font-weight: 600; white-space: nowrap; } .ds-chip-live { color: var(--ink, #17150f); border-color: var(--rule-strong, #c6bdab); background: var(--paper-sunken, #efeae1); } .ds-chip-live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: ds-pulse 2s ease-in-out infinite; } @keyframes ds-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } } @media (prefers-reduced-motion: reduce) { .ds-chip-live::before { animation-duration: 0.01ms; } }"
     },
@@ -324,14 +324,14 @@
       "name": "Case-Fit Diagram",
       "kind": "custom",
       "refersTo": null,
-      "description": "Signature. Replaces three sentences of case-fitting arithmetic with a picture in which the no-speculative-surplus invariant is visible at a glance. Solid box = a whole case Pool bought; dashed box = the remainder it did not, because a solid box around a partial case would imply a purchase that never happened. The reader’s own units are ink rather than an actor hue: ownership is emphasis, not attribution.",
+      "description": "Signature. Replaces three sentences of case-fitting arithmetic with a picture in which the no-speculative-surplus invariant is visible at a glance. Solid box = a whole case Pool bought; dashed box = the remainder it did not, because a solid box around a partial case would imply a purchase that never happened. The reader\u2019s own units are ink rather than an actor hue: ownership is emphasis, not attribution.",
       "html": "<div class=\"ds-casefit\"><div class=\"ds-casefit-row\"><span class=\"ds-casefit-case\"><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit is-mine\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i></span><span class=\"ds-casefit-case\"><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i><i class=\"ds-unit\"></i></span><span class=\"ds-casefit-total\">12 / 12 filled</span></div><div class=\"ds-casefit-row\"><span class=\"ds-casefit-case is-left\"><i class=\"ds-unit is-standing\"></i><i class=\"ds-unit is-standing\"></i></span><span class=\"ds-casefit-note\">still on your list</span></div></div>",
       "css": ".ds-casefit { display: flex; flex-direction: column; gap: 8px; } .ds-casefit-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; } .ds-casefit-case { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--rule-strong, #c6bdab); border-radius: 4px; background: var(--paper-sunken, #efeae1); } .ds-casefit-case.is-left { border-style: dashed; background: transparent; } .ds-unit { width: 9px; height: 15px; border-radius: 2px; background: var(--rule-strong, #c6bdab); } .ds-unit.is-mine { background: var(--ink, #17150f); } .ds-unit.is-standing { background: transparent; border: 1px dashed var(--rule-strong, #c6bdab); } .ds-casefit-total, .ds-casefit-note { font-family: inherit; font-size: 12px; color: var(--ink-muted, #575145); font-variant-numeric: tabular-nums; }"
     }
   ],
   "narrative": {
     "northStar": "The Field Ledger",
-    "overview": "Pool looks like a ledger somebody keeps by hand and can hand to an auditor. Warm paper (#f7f4ef), dark ink, hairline rules doing the structural work, figures set in tabular numerals so columns of money line up, and a serif display face for the numbers and names that matter. A ledger's authority does not come from decoration; it comes from being inspectable line by line. That is exactly the claim this product makes about an autonomous agent, so the interface makes the claim in its own material rather than asserting it in copy.\n\nThe density is low and the surfaces are quiet. Colour is scarce and strictly semantic: three hues that mean who was responsible — moss for the agent, graphite for deterministic code, clay for a person — and one red that means something broke. Nothing else gets to be coloured. Success, ownership, progress and magnitude are all neutral, and when a screen has no attribution to make, it is paper, ink, and rule. The reward for that restraint is that the moment colour appears, it means something, and a viewer learns the grammar in one screen without a legend.\n\nThe system is deliberately unlike four neighbours. It is not an operations console, not AI product chrome, not a consumer savings app, and not an enterprise procurement tool. The first is a lived failure rather than a taste: an earlier build put the same information on screen three times in dense counter grids, and a correct system read as an admin dashboard.",
+    "overview": "Pool looks like a ledger somebody keeps by hand and can hand to an auditor. Warm paper (#f7f4ef), dark ink, hairline rules doing the structural work, figures set in tabular numerals so columns of money line up, and a serif display face for the numbers and names that matter. A ledger's authority does not come from decoration; it comes from being inspectable line by line. That is exactly the claim this product makes about an autonomous agent, so the interface makes the claim in its own material rather than asserting it in copy.\n\nThe density is low and the surfaces are quiet. Colour is scarce and strictly semantic: three hues that mean who was responsible \u2014 moss for the agent, graphite for deterministic code, clay for a person \u2014 and one red that means something broke. Nothing else gets to be coloured. Success, ownership, progress and magnitude are all neutral, and when a screen has no attribution to make, it is paper, ink, and rule. The reward for that restraint is that the moment colour appears, it means something, and a viewer learns the grammar in one screen without a legend.\n\nThe system is deliberately unlike four neighbours. It is not an operations console, not AI product chrome, not a consumer savings app, and not an enterprise procurement tool. The first is a lived failure rather than a taste: an earlier build put the same information on screen three times in dense counter grids, and a correct system read as an admin dashboard.",
     "keyCharacteristics": [
       "Warm paper and ink; four paper tones carry depth instead of shadow.",
       "Instrument Serif for names, headlines and figures; system sans for everything read in sentences; monospace only for identifiers.",
@@ -339,7 +339,7 @@
       "Tabular numerals wherever a number could be compared to another number.",
       "Hairline rules (1px) as the primary structural device.",
       "Full dark mode, token-for-token, at the same semantic meanings.",
-      "Attribution is redundantly encoded as shape — diamond, square, circle — so it survives greyscale, colour-blindness and video re-encoding."
+      "Attribution is redundantly encoded as shape \u2014 diamond, square, circle \u2014 so it survives greyscale, colour-blindness and video re-encoding."
     ],
     "rules": [
       {
@@ -349,7 +349,7 @@
       },
       {
         "name": "The Neutral-Unless-Attributed Rule",
-        "body": "If a mark does not name which party acted, it is neutral. Progress, totals, completion, ownership and chrome are ink, ink-muted, ink-faint or a paper tone, distinguished by tone, weight and type rather than hue. When such a mark does need attribution, add the attribution tag beside it — never tint the mark itself.",
+        "body": "If a mark does not name which party acted, it is neutral. Progress, totals, completion, ownership and chrome are ink, ink-muted, ink-faint or a paper tone, distinguished by tone, weight and type rather than hue. When such a mark does need attribution, add the attribution tag beside it \u2014 never tint the mark itself.",
         "section": "colors"
       },
       {
@@ -405,10 +405,10 @@
       "Do set every comparable number in tabular numerals.",
       "Do reach for a paper tone and a 1px rule before reaching for a shadow.",
       "Do keep Instrument Serif for names, headlines and figures only.",
-      "Do animate transform and opacity. The one easing is cubic-bezier(0.16, 1, 0.3, 1); state changes are 0.13s, entrances 0.28–0.42s, and the meter is 0.6s.",
-      "Do let motion report a change that actually happened. On consumer surfaces an element may animate only when its own state changed — nothing on first paint, nothing on scroll. Showcase is a narrative reader, so sequenced reveal of already-computed facts is legitimate there.",
+      "Do animate transform and opacity. The one easing is cubic-bezier(0.16, 1, 0.3, 1); state changes are 0.13s, entrances 0.28\u20130.42s, and the meter is 0.6s.",
+      "Do let motion report a change that actually happened. On consumer surfaces an element may animate only when its own state changed \u2014 nothing on first paint, nothing on scroll. Showcase is a narrative reader, so sequenced reveal of already-computed facts is legitimate there.",
       "Do honour prefers-reduced-motion, and make sure the information survives with motion off. Motion explains a change; it is never the only thing carrying it.",
-      "Do draw the arithmetic when a diagram replaces a paragraph — cases, thresholds, distances, recoveries.",
+      "Do draw the arithmetic when a diagram replaces a paragraph \u2014 cases, thresholds, distances, recoveries.",
       "Do give a refusal the same typographic dignity as a success.",
       "Do keep contrast at WCAG 2.2 AA, and keep small text at ink-faint or darker."
     ],
@@ -417,7 +417,7 @@
       "Don't use moss as a success or done colour. Moss means the agent decided something; a green tick on a step nobody chose is a false claim about who acted.",
       "Don't use graphite for the focus ring or for generic chrome. Generic focus is ink.",
       "Don't use stop red for Pool declining to coordinate. That is a correct answer, not an error. Stop is for a thing that broke.",
-      "Don't animate anything that implies work in progress the system is not doing — no fabricated thinking, no fake tool progress, no spinner on a step the browser cannot observe. A pulsing dot means a live connection; nothing else may borrow it.",
+      "Don't animate anything that implies work in progress the system is not doing \u2014 no fabricated thinking, no fake tool progress, no spinner on a step the browser cannot observe. A pulsing dot means a live connection; nothing else may borrow it.",
       "Don't dim a disabled control to a 45% ghost. Flatten it and keep the label legible.",
       "Don't animate width, height, top or left.",
       "Don't solve density by shrinking type or expecting a zoom-out.",

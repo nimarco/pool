@@ -331,7 +331,7 @@ the one approval question · `created_by_run` proof.
 **Optional if time.** The paper-towels second refusal · the map's walking rings · the case
 drawing on an excluded declaration · the money ledger in Behind Pool.
 
-**Do not show in the primary video.** The Showcase's thirteen stages — it is a regression
+**Do not show in the primary video.** The Showcase's fourteen stages — it is a regression
 proof, and walking it costs ninety seconds to restate a claim the live sequence already made.
 The community aggregates. The viability checklist's eleven checks. The Orders list when it
 holds one row. Every one of those is real, and each one asks the viewer to hold a second
@@ -393,9 +393,12 @@ drift from the product without a test failing.
 
 ## The Showcase, if it is asked for
 
-Thirteen recorded stages in **its own copy of Demo University**, which means it **does not
-touch the account you set up** in the recording — a separate partition, reseeded every time
-it runs. It is the one place the whole lifecycle appears, including the parts the live
+Fourteen recorded stages on **one page**, in **its own copy of Demo University**, which
+means it **does not touch the account you set up** in the recording — a separate partition,
+reseeded every time it runs. It is no longer a paginated reader: a sticky unit track draws
+the quantity through the whole story (24 funded, two lost to a declined card, two restored
+by a replacement, closing into two whole cases), the twelve acts are labelled destinations,
+and every stage is on screen at once with its figures one click away. It is the one place the whole lifecycle appears, including the parts the live
 sequence cannot reach in four minutes: an authorisation that fails, the quantity falling to
 22, a compatible replacement restoring exactly 24, purchase, ten pickups, and
 reconciliation.

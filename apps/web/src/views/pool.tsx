@@ -1,19 +1,24 @@
 /* One pool, as a persistent product record.
  *
- * Five tabs, in the order somebody actually asks about them: what is it, who is in it,
- * what does it cost, how do I get it, and — for anyone who wants to audit the thing —
- * what happened and what did the agent do.
+ * Two halves, and the order between them is the whole design. First the five questions a
+ * member actually has — what do I get, what do I pay, where and when do I collect it,
+ * what happens next, does Pool need anything from me. Then the record: who is in it, what
+ * it costs line by line, the host and every deterministic check, collection, and the
+ * technical proof. All of it shut.
  *
- * The technical evidence a judge needs lives on the last tab rather than in the
- * navigation: the coordinator's tool sequence, the deployed AgentCore run, and the
- * step-by-step lifecycle reader. It strengthens the record instead of replacing it.
+ * It used to be a five-tab strip whose first tab put `Units 24 / 16`, `0 units
+ * authorized` and `View all 11 deterministic checks` in front of a member who wanted to
+ * know what they were paying — while Home, one click earlier, had already said "Your 2
+ * bags · about $17.53 instead of $22.98 buying alone". The record was less use to its own
+ * reader than the summary that linked to it. Nothing was removed: a deep link still opens
+ * exactly one section, which is how "see it run on AWS" lands on the evidence.
  *
  * Everything numeric is read from the pool payload. `buyer_count` and `member_count` are
  * both server-computed and both shown, because after a declined card they differ and
  * that difference is a fact about the pool rather than a rounding error.
  */
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityEvent,
   Checklist,
@@ -54,13 +59,6 @@ import { RunView } from "./run";
 
 type Tab = "overview" | "people" | "economics" | "fulfilment" | "activity";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "people", label: "People" },
-  { id: "economics", label: "Economics" },
-  { id: "fulfilment", label: "Fulfilment" },
-  { id: "activity", label: "Activity" },
-];
 
 export function PoolRecord({
   pool,
@@ -106,35 +104,14 @@ export function PoolRecord({
    *  member to "start the community over" from inside their own order. */
   onRunScenario?: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>((entry?.tab as Tab) ?? "overview");
-  const tablist = useRef<HTMLElement | null>(null);
   const s = statusCopy(pool.status);
   const declined = pool.member_count - pool.buyer_count;
-
-  /* The tab strip scrolls on a phone, and the record can be entered directly on
-     Activity — so the selected tab has to bring itself into view or it is simply not
-     there. */
-  useEffect(() => {
-    const selected = tablist.current?.querySelector<HTMLElement>('[aria-selected="true"]');
-    // Guarded: not every rendering environment implements it, and a tab strip that
-    // cannot self-scroll should still show its tabs.
-    selected?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-  }, [tab]);
-
-  /* Roving tab order: one stop for the whole strip, arrows between the tabs. */
-  const onTabKey = (event: KeyboardEvent) => {
-    const at = TABS.findIndex((t) => t.id === tab);
-    const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-    let next = -1;
-    if (step !== 0) next = (at + step + TABS.length) % TABS.length;
-    if (event.key === "Home") next = 0;
-    if (event.key === "End") next = TABS.length - 1;
-    if (next < 0) return;
-    event.preventDefault();
-    setTab(TABS[next].id);
-    const buttons = tablist.current?.querySelectorAll<HTMLElement>('[role="tab"]');
-    buttons?.[next]?.focus();
-  };
+  /** Which record section a deep link asked for. Opens that disclosure; everything else
+   *  stays shut, which is the whole point of the region. */
+  const opened = (entry?.tab as Tab) ?? null;
+  const myUnits = mine
+    ? ((pool.members ?? []).find((m) => m.household_id === identity.id)?.units ?? 0)
+    : 0;
 
   return (
     <div className="stack">
@@ -148,12 +125,12 @@ export function PoolRecord({
         <div className="row-between">
           <div>
             <h1 className="title">{pool.product_name}</h1>
+            {/* Supplier only. The pickup point and the window used to be repeated here
+                and again under "Where you collect it" two inches below — the same fact,
+                twice, in one frame. */}
             <p className="small muted" style={{ marginTop: 6 }}>
               {pool.brand ? `${pool.brand} · ` : ""}
-              {pool.supplier} · collect from {pool.pickup_site}
-              {pool.timing?.distribution_starts_at
-                ? ` · ${shortTime(pool.timing.distribution_starts_at)}`
-                : ""}
+              {pool.supplier}
             </p>
           </div>
           <div className="stack-xs" style={{ alignItems: "flex-end" }}>
@@ -177,95 +154,255 @@ export function PoolRecord({
         </div>
       ) : null}
 
-      <section className="grid grid-3">
-        <Figure
-          label="Units"
-          value={`${pool.provisional_units} / ${pool.threshold_units}`}
-          sub={`${pool.funded_units} units authorized · the supplier will not sell fewer than ${pool.threshold_units}`}
-        />
-        <Figure
-          label="Buyers"
-          value={String(pool.buyer_count)}
-          sub={
-            declined > 0
-              ? `${pool.member_count} memberships on the record — ${declined} declined and kept`
-              : "everyone still in"
+      <YourOrder pool={pool} mine={mine} myUnits={myUnits} />
+
+      {/* The record. Five questions get answered above; everything else is here, shut,
+          because a member asking "what am I paying" should not have to walk past eleven
+          deterministic checks to find out. A judge arriving on a deep link gets the one
+          section they asked for already open, and can open the rest without navigating.
+          This replaced a five-tab strip in which the consumer's first screen carried
+          `View all 11 deterministic checks`. */}
+      <section className="stack-sm record">
+        <h2 className="section-title">Everything recorded about this order</h2>
+        <RecordSection
+          id="people"
+          title="Who is in it"
+          hint={`${pool.buyer_count} ${pool.buyer_count === 1 ? "buyer" : "buyers"}${declined > 0 ? ` · ${declined} declined and kept on the record` : ""}`}
+          open={opened === "people"}
+        >
+          <PeopleTab pool={pool} identity={identity} onRefresh={onRefresh} />
+        </RecordSection>
+        <RecordSection
+          id="economics"
+          title="What it costs, line by line"
+          hint="merchandise, host pay, card processing and Pool's fee"
+          open={opened === "economics"}
+        >
+          <EconomicsTab pool={pool} myUnits={myUnits} />
+        </RecordSection>
+        <RecordSection
+          id="overview"
+          title="The host, the pickup point, and every check Pool ran"
+          hint={
+            pool.viability
+              ? `${pool.viability.checks.length} deterministic checks · ${pool.viability.viable ? "all passing" : `${pool.viability.failed.length} blocking`}`
+              : "host selection and collection"
           }
-        />
-        <Figure
-          label={pool.is_estimate ? "Estimated saving" : "Saving against retail"}
-          value={pool.savings_pct || "—"}
-          accent={!pool.is_estimate}
-          sub={groupSavingsCaption(pool)}
-        />
+          open={opened === "overview"}
+        >
+          <OverviewTab pool={pool} />
+        </RecordSection>
+        <RecordSection
+          id="fulfilment"
+          title="Collection"
+          hint="one-time credentials, and the handoff checklist"
+          open={opened === "fulfilment"}
+        >
+          <FulfilmentTab pool={pool} identity={identity} onRefresh={onRefresh} />
+        </RecordSection>
+        <RecordSection
+          id="activity"
+          title="Activity and technical proof"
+          hint="the run that formed it, its tool sequence, and the AgentCore identifiers"
+          open={opened === "activity"}
+        >
+          <ActivityTab
+            pool={pool}
+            entryDeep={entry?.deep}
+            runs={runs}
+            activity={activity}
+            scenario={scenario}
+            scenarioMs={scenarioMs}
+            running={running}
+            health={health}
+            demoConfig={demoConfig}
+            live={live}
+            liveBusy={liveBusy}
+            onRunLive={onRunLive}
+            onRunScenario={onRunScenario}
+          />
+        </RecordSection>
       </section>
-
-      <Meter value={pool.provisional_units} max={pool.threshold_units} />
-
-      <nav
-        className="tabs"
-        role="tablist"
-        aria-label="Pool sections"
-        ref={tablist}
-        onKeyDown={onTabKey}
-      >
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            id={`pooltab-${t.id}`}
-            role="tab"
-            aria-selected={tab === t.id}
-            aria-controls={`poolpanel-${t.id}`}
-            tabIndex={tab === t.id ? 0 : -1}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
-
-      <div
-        role="tabpanel"
-        id={`poolpanel-${tab}`}
-        aria-labelledby={`pooltab-${tab}`}
-        className="stack"
-      >
-      {tab === "overview" ? <OverviewTab pool={pool} /> : null}
-      {tab === "people" ? (
-        <PeopleTab pool={pool} identity={identity} onRefresh={onRefresh} />
-      ) : null}
-      {tab === "economics" ? (
-        <EconomicsTab
-          pool={pool}
-          myUnits={
-            mine
-              ? (pool.members ?? []).find((m) => m.household_id === identity.id)?.units ?? 0
-              : 0
-          }
-        />
-      ) : null}
-      {tab === "fulfilment" ? (
-        <FulfilmentTab pool={pool} identity={identity} onRefresh={onRefresh} />
-      ) : null}
-      {tab === "activity" ? (
-        <ActivityTab
-          pool={pool}
-          entryDeep={entry?.deep}
-          runs={runs}
-          activity={activity}
-          scenario={scenario}
-          scenarioMs={scenarioMs}
-          running={running}
-          health={health}
-          demoConfig={demoConfig}
-          live={live}
-          liveBusy={liveBusy}
-          onRunLive={onRunLive}
-          onRunScenario={onRunScenario}
-        />
-      ) : null}
-      </div>
     </div>
+  );
+}
+
+/* --------------------------------------------------------------- your order */
+
+/** What happens next, in the member's terms, keyed off the deterministic status.
+ *
+ *  One sentence per lifecycle state, and each one says who is holding it — because
+ *  "finding a host" is Pool working and "needs your approval" is the member holding it,
+ *  and a member cannot act on the difference unless the screen states it. */
+function nextStep(pool: PoolView): { next: string; needsYou: string } {
+  const host = pool.host?.display_name;
+  switch (pool.status) {
+    case "forming":
+      return {
+        next: "Pool is still gathering compatible demand near you. Nothing is committed.",
+        needsYou: "Nothing yet — Pool will ask if this becomes worth doing.",
+      };
+    case "host_recruiting":
+    case "host_selected":
+      return {
+        next: "Pool ranked the people willing to carry it and offered the job to the best fit. A host has to accept before the price is exact.",
+        needsYou: "Nothing right now. The amount above can still move, so Pool has not asked you to commit.",
+      };
+    case "final_offer":
+    case "funding":
+    case "recovering":
+      return {
+        next: `${host ? `${host} accepted the job, so ` : ""}the exact amount is settled and Pool needs your approval before anything is charged.`,
+        needsYou: "Yes — approve the exact amount. Pool asks because you chose “ask me first”.",
+      };
+    case "locked":
+    case "purchase_ready":
+      return {
+        next: "Every check passed and your card is authorized for the exact amount. Pool is placing one bulk order.",
+        needsYou: "Nothing — Pool has what it needs.",
+      };
+    case "purchased":
+      return {
+        next: `The order is placed. ${host ? `${host} collects it` : "Your host collects it"} and opens the pickup window.`,
+        needsYou: "Nothing yet — you will get a one-time code when collection opens.",
+      };
+    case "distributing":
+      return {
+        next: "Collection is open. Show your one-time code at the pickup point.",
+        needsYou: "Yes — collect your order inside the window.",
+      };
+    case "completed":
+      return {
+        next: "Collected and reconciled. Nothing is outstanding.",
+        needsYou: "Nothing. This one is done.",
+      };
+    default:
+      return {
+        next: "This order is not moving forward.",
+        needsYou: "Nothing — your declaration stays standing and Pool keeps watching.",
+      };
+  }
+}
+
+/** The five questions a member actually has, answered before anything else.
+ *
+ *  What am I getting · what am I paying · where and when do I collect · what happens
+ *  next · does Pool need anything from me. Home already answered them in this voice
+ *  ("Your 2 bags · about $17.53 instead of $22.98 buying alone") and the record it
+ *  linked to opened on `Units 24 / 16`, `0 units authorized` and an em dash where the
+ *  price belongs. The pool-level arithmetic is still here — it moved one line down,
+ *  underneath the answer it supports. */
+function YourOrder({
+  pool,
+  mine,
+  myUnits,
+}: {
+  pool: PoolView;
+  mine: boolean | null;
+  myUnits: number;
+}) {
+  const me = mine
+    ? (pool.members ?? []).find((m) => m.units === myUnits && m.state !== "withdrawn")
+    : undefined;
+  const cost = me?.final_cost_display || me?.estimated_cost_display || "";
+  const provisional = Boolean(cost) && !me?.final_cost_display;
+  const alone = me?.baseline_display || "";
+  const step = nextStep(pool);
+  const startsAt = pool.timing?.distribution_starts_at ?? "";
+  const unit = myUnits === 1 ? pool.unit : `${pool.unit}s`;
+
+  return (
+    <section className="panel your-order">
+      <div className="panel-pad stack-sm">
+        <div className="your-grid">
+          <div>
+            <span className="figure-label">
+              {mine === false ? "The order" : "What you get"}
+            </span>
+            <p className="your-value">
+              {mine === false
+                ? `${pool.provisional_units} ${pool.unit}s`
+                : `${myUnits} ${unit}`}
+            </p>
+            {mine === false ? (
+              <p className="tiny faint">
+                Your own units are still standing — this one filled without them.
+              </p>
+            ) : null}
+          </div>
+          <div>
+            <span className="figure-label">
+              {provisional ? "What you pay, about" : "What you pay"}
+            </span>
+            <p className="your-value">{cost || "not settled yet"}</p>
+            {alone && cost ? (
+              <p className="tiny faint">
+                instead of {alone} buying alone
+                {me?.savings_pct ? ` · ${me.savings_pct} less` : ""}
+              </p>
+            ) : (
+              <p className="tiny faint">{groupSavingsCaption(pool)}</p>
+            )}
+          </div>
+          <div>
+            <span className="figure-label">Where you collect it</span>
+            <p className="your-value your-value-sm">{pool.pickup_site}</p>
+            <p className="tiny faint">
+              {startsAt ? shortTime(startsAt) : "window opens once the order is placed"}
+            </p>
+          </div>
+        </div>
+
+        <div className="your-next">
+          <p className="small">
+            <strong>What happens next.</strong> {step.next}
+          </p>
+          <p className="small muted">
+            <strong>Does Pool need anything from you?</strong> {step.needsYou}
+          </p>
+        </div>
+
+        {/* The pool-level arithmetic, kept and demoted. It is the reason the price above
+            exists, so it sits under it rather than over it. */}
+        <div className="your-group">
+          <Meter value={pool.provisional_units} max={pool.threshold_units} />
+          <p className="tiny faint">
+            {pool.provisional_units} {pool.unit}s together with {pool.buyer_count}{" "}
+            {pool.buyer_count === 1 ? "buyer" : "buyers"} — the supplier will not sell
+            fewer than {pool.threshold_units}.
+            {pool.funded_units > 0
+              ? ` ${pool.funded_units} authorized so far.`
+              : " Nothing is authorized yet."}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** One shut section of the record. `<details>` rather than a tab, so a deep link can
+ *  open exactly one and a keyboard reaches all five without arrow-key convention. */
+function RecordSection({
+  id,
+  title,
+  hint,
+  open,
+  children,
+}: {
+  id: string;
+  title: string;
+  hint: string;
+  open: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="record-section" id={`record-${id}`} open={open}>
+      <summary>
+        <span className="record-title">{title}</span>
+        <span className="record-hint">{hint}</span>
+      </summary>
+      <div className="record-body stack">{children}</div>
+    </details>
   );
 }
 
@@ -341,7 +478,7 @@ function OverviewTab({ pool }: { pool: PoolView }) {
                   <div key={c.name} className="row" style={{ paddingInline: 0, gap: 11 }}>
                     <span
                       style={{
-                        color: c.passed ? "var(--moss)" : "var(--clay)",
+                        color: c.passed ? "var(--ink)" : "var(--stop)",
                         display: "flex",
                         marginTop: 2,
                       }}
@@ -528,7 +665,7 @@ function PeopleTab({
             {pool.host_candidates.map((c) => (
               <div key={c.household_id} className="row">
                 <span
-                  style={{ color: c.eligible ? "var(--moss)" : "var(--clay)", display: "flex" }}
+                  style={{ color: c.eligible ? "var(--ink)" : "var(--ink-faint)", display: "flex" }}
                 >
                   {c.eligible ? <IconCheck /> : <IconCross />}
                 </span>
@@ -544,7 +681,7 @@ function PeopleTab({
                     {c.supplier_distance_km} km · {c.estimated_reward_display}
                   </div>
                   {c.ineligible_reasons.length > 0 ? (
-                    <div className="tiny" style={{ color: "var(--clay)" }}>
+                    <div className="tiny" style={{ color: "var(--ink-faint)" }}>
                       {c.ineligible_reasons.join(" · ")}
                     </div>
                   ) : (
@@ -728,17 +865,16 @@ function FulfilmentTab({
   return (
     <div className="stack">
       {checklist ? (
-        <section className="grid grid-3">
+        <section className="grid grid-2">
           <Figure
             label="Collected"
             value={`${checklist.picked_up} / ${checklist.total}`}
             accent={checklist.picked_up === checklist.total}
             sub={`${checklist.units_total} units in total`}
           />
-          <Figure
-            label="The host earns"
-            value={String((checklist.earnings as Record<string, string>).total_display ?? "—")}
-          />
+          {/* Host pay is stated once on this page, under "The host, the pickup point,
+              and every check Pool ran". These were separate tabs and could not collide;
+              on one page they would print the same figure twice in one frame. */}
           <Figure
             label="Window"
             value={shortTime(checklist.distribution_starts_at)}
@@ -827,7 +963,7 @@ function FulfilmentTab({
               <div key={o.household_id} className="row">
                 <span
                   style={{
-                    color: o.state === "picked_up" ? "var(--moss)" : "var(--ink-faint)",
+                    color: o.state === "picked_up" ? "var(--ink)" : "var(--ink-faint)",
                     display: "flex",
                   }}
                 >

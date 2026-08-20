@@ -38,6 +38,7 @@ import {
   IconArrowRight,
   LedgerLine,
   Meter,
+  TracePills,
 } from "../ui";
 
 /* --------------------------------------------------------------------- map */
@@ -421,6 +422,11 @@ export function CommunityView({
 }) {
   const m = state.metrics;
   const enablement = state.community?.enablement;
+  /* The order a judge can actually check, and the proof stored beside it. First pool
+     with a stored execution proof, or the first pool at all — never fabricated, and the
+     whole section is absent when no run has formed anything yet. */
+  const proven = state.pools.find((pool) => pool.execution_proof) ?? state.pools[0] ?? null;
+  const proof = proven?.execution_proof ?? null;
 
 
   return (
@@ -442,7 +448,7 @@ export function CommunityView({
           the app to find any of them. */}
       <section className="panel">
         <div className="panel-head">
-          <h2>What you can inspect</h2>
+          <h2>Start here</h2>
         </div>
         <div className="panel-pad">
           <div className="proof-index">
@@ -488,42 +494,12 @@ export function CommunityView({
         </div>
       </section>
 
-      {/* The money, once there is any. Three $0.00 figures above the fold on a page whose
-          job is to be inspected says "nothing here" about a page that is full of things —
-          and the honest version of "no money has moved" is one sentence, not a ledger of
-          zeroes. Both readings are true; only one of them is useful. */}
-      {m.pools_locked_or_beyond > 0 ? (
-      <section className="grid grid-3">
-        <Figure
-          label="If everyone bought alone"
-          value={money(m.estimated_retail_spend_cents)}
-          sub="recorded retail baseline"
-        />
-        <Figure
-          label="All-in through Pool"
-          value={money(m.pool_spend_cents)}
-          sub="merchandise + host + processing + Pool fee"
-        />
-        <Figure
-          label="Kept in the community"
-          value={money(m.collective_savings_cents)}
-          accent
-          sub={`${money(m.average_buyer_savings_cents)} average after every buyer-funded cost`}
-        />
-      </section>
-      ) : (
-        <p className="small muted">
-          No money has moved in this community yet. Every figure below is a sum over
-          stored rows, so they read zero until an order locks.
-        </p>
-      )}
-
       {/* The second currency. Money saved is half the argument; the other half is that
           organising this cost nobody an evening, and that half has a number too. Both
           are sums over stored rows for this Community, and neither is a projection. */}
       <section className="panel">
         <div className="panel-head">
-          <h2>What it cost anyone in attention</h2>
+          <h2>What Pool did on its own</h2>
           <span className="spacer" />
           <ActorTag actor="engine" label="Counted from stored rows" />
         </div>
@@ -557,10 +533,216 @@ export function CommunityView({
         </div>
       </section>
 
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Decisions waiting on a person</h2>
+          <span className="spacer" />
+          <span className="tiny faint">
+            {state.decisions.length === 0 ? "empty, as usual" : `${state.decisions.length} waiting`}
+          </span>
+        </div>
+        {state.decisions.length === 0 ? (
+          <Empty>
+            Nobody is waiting. Pool asks only when a person's stored rule does not pass.
+          </Empty>
+        ) : (
+          <div className="rows">
+            {state.decisions.map((d) => (
+              <DecisionCard
+                key={d.decision_id}
+                decision={d}
+                busy={busyDecision === d.decision_id}
+                onRespond={onRespond}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Every action, and who took it</h2>
+          <span className="spacer" />
+          <span className="actor-key">
+            <span className="actor actor-agent">
+              <ActorGlyph actor="agent" />
+              Pool acted
+            </span>
+            <span className="actor actor-human">
+              <ActorGlyph actor="human" />A person was involved
+            </span>
+          </span>
+        </div>
+        <Feed events={state.activity} limit={14} />
+      </section>
+
+      {/* The four questions a judge has after "did it really do that", answered here
+          rather than only behind a link: what deterministic code established, what the
+          agent chose, what survived the process, and where it ran. Every value is read
+          off the pool the run actually created — `execution_proof` is assembled
+          server-side and re-read from the same workspace, so nothing here is inferred
+          from the pool list. Absent until a run has formed something, because before
+          that there is genuinely nothing to prove. */}
+      {proven ? (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>What proves it</h2>
+            <span className="spacer" />
+            <ActorTag actor="engine" label="Read back from storage" />
+          </div>
+          <div className="panel-pad stack-sm">
+            <div className="grid grid-2">
+              <div className="proof-claim">
+                <span className="section-title">Deterministic code established</span>
+                <p className="small" style={{ marginTop: 6 }}>
+                  {/* Only what this payload actually carries. `viability` and the case
+                      breakdown are detail-only fields, absent until a final offer
+                      exists, and inventing either of them here would be exactly the
+                      kind of number this section exists to disprove. */}
+                  {proven.provisional_units} compatible units against a{" "}
+                  {proven.threshold_units}-unit supplier minimum, from{" "}
+                  {proven.buyer_count} {proven.buyer_count === 1 ? "buyer" : "buyers"}
+                  {proven.economics
+                    ? ` — ${proven.economics.packages.cases} whole ${proven.economics.packages.cases === 1 ? "case" : "cases"} of ${proven.economics.packages.case_units}, ${proven.economics.packages.surplus_units} surplus.`
+                    : ". The case fit and the full check list are on the order itself."}
+                </p>
+                <p className="tiny faint" style={{ marginTop: 6 }}>
+                  Money, quantities and thresholds are computed here and never by the
+                  model.
+                </p>
+              </div>
+              <div className="proof-claim">
+                <span className="section-title">The agent chose</span>
+                <p className="small" style={{ marginTop: 6 }}>
+                  {proof?.run.tool_calls.length ?? 0} tool{" "}
+                  {(proof?.run.tool_calls.length ?? 0) === 1 ? "call" : "calls"} over{" "}
+                  {proof?.run.iterations ?? 0} iterations, ending{" "}
+                  {(proof?.run.termination_reason ?? "").replace(/_/g, " ") || "cleanly"}.
+                </p>
+                {proof ? <TracePills names={proof.run.tool_calls} ordered /> : null}
+              </div>
+              <div className="proof-claim">
+                <span className="section-title">What persisted</span>
+                <p className="small" style={{ marginTop: 6 }}>
+                  The order carries <code>created_by_run</code>{" "}
+                  {proof && proof.created_by_run === proof.run_id
+                    ? "equal to the run that made it"
+                    : "from the run that made it"}
+                  , and both rows read back from this same workspace.
+                </p>
+                <p className="tiny faint" style={{ marginTop: 6 }}>
+                  <code>{proof?.created_by_run ?? ""}</code>
+                </p>
+              </div>
+              <div className="proof-claim">
+                <span className="section-title">Where it ran, and on whose terms</span>
+                <p className="small" style={{ marginTop: 6 }}>
+                  {proof?.execution.service ?? "the deployed coordinator"}
+                  {proof?.execution.region ? ` · ${proof.execution.region}` : ""} ·{" "}
+                  {proof?.run.model_provider ?? ""}{" "}
+                  {proof?.run.model_id ? `(${proof.run.model_id})` : ""}
+                </p>
+                <p className="tiny faint" style={{ marginTop: 6 }}>
+                  Supplier terms came from {proven.supplier}, stored as{" "}
+                  {proven.offer_source || "synthetic"} — operator-imported from a
+                  committed sheet, never scraped and never negotiated. Riverbend
+                  Wholesale does not exist.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {/* The money, once there is any. Three $0.00 figures above the fold on a page whose
+          job is to be inspected says "nothing here" about a page that is full of things —
+          and the honest version of "no money has moved" is one sentence, not a ledger of
+          zeroes. Both readings are true; only one of them is useful. */}
+      {m.pools_locked_or_beyond > 0 ? (
+      <section className="grid grid-3">
+        <Figure
+          label="If everyone bought alone"
+          value={money(m.estimated_retail_spend_cents)}
+          sub="recorded retail baseline"
+        />
+        <Figure
+          label="All-in through Pool"
+          value={money(m.pool_spend_cents)}
+          sub="merchandise + host + processing + Pool fee"
+        />
+        <Figure
+          label="Kept in the community"
+          value={money(m.collective_savings_cents)}
+          accent
+          sub={`${money(m.average_buyer_savings_cents)} average after every buyer-funded cost`}
+        />
+      </section>
+      ) : (
+        <p className="small muted">
+          No money has moved in this community yet. Every figure below is a sum over
+          stored rows, so they read zero until an order locks.
+        </p>
+      )}
+
+      <section className="grid grid-side">
+        <div className="panel">
+          <div className="panel-head">
+            <h2>What it produced</h2>
+            <span className="spacer" />
+            <span className="tiny faint">{m.pools_locked_or_beyond} locked or beyond</span>
+          </div>
+          {state.pools.length === 0 ? (
+            <Empty>
+              No order yet. Use <strong>Ask Pool to check now</strong> on Home to scan the
+              community's standing needs.
+            </Empty>
+          ) : (
+            <div className="rows">
+              {state.pools.map((p) => (
+                <PoolRow key={p.pool_id} pool={p} onOpen={() => onOpenPool(p.pool_id)} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Where everyone is</h2>
+          </div>
+          <CommunityMap map={map} />
+        </div>
+      </section>
+
+      {/* Same rule the three figures above already follow, which this ledger did not:
+          before an order locks every one of these rows is $0.00, and five zeroes in a
+          column on a page built to be inspected reads as broken rather than as empty. */}
+      {m.pools_locked_or_beyond > 0 ? (
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Where the money went</h2>
+          <span className="spacer" />
+          <ActorTag actor="engine" label="Every figure computed" />
+        </div>
+        <div className="panel-pad">
+          <div className="ledger">
+            <LedgerLine label="Merchandise to the supplier" value={money(m.merchandise_cents)} />
+            <LedgerLine label="Compensation to hosts" value={money(m.host_compensation_cents)} />
+            <LedgerLine label="Card processing" value={money(m.payment_processing_cents)} />
+            <LedgerLine label="Pool's share of the saving" value={money(m.platform_fee_cents)} />
+            <LedgerLine
+              label="Recorded all-in buyer cost"
+              value={money(m.pool_spend_cents)}
+              kind="total"
+            />
+          </div>
+        </div>
+      </section>
+      ) : null}
+
       {enablement ? (
         <section className="panel">
           <div className="panel-head">
-            <h2>How this Community enables Pool</h2>
+            <h2>The community it ran inside</h2>
             <span className="spacer" />
             <Chip>synthetic fixture</Chip>
           </div>
@@ -620,100 +802,6 @@ export function CommunityView({
           </div>
         </section>
       ) : null}
-
-      <section className="grid grid-side">
-        <div className="panel">
-          <div className="panel-head">
-            <h2>Pools</h2>
-            <span className="spacer" />
-            <span className="tiny faint">{m.pools_locked_or_beyond} locked or beyond</span>
-          </div>
-          {state.pools.length === 0 ? (
-            <Empty>
-              No order yet. Use <strong>Ask Pool to check now</strong> on Home to scan the
-              community's standing needs.
-            </Empty>
-          ) : (
-            <div className="rows">
-              {state.pools.map((p) => (
-                <PoolRow key={p.pool_id} pool={p} onOpen={() => onOpenPool(p.pool_id)} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="panel">
-          <div className="panel-head">
-            <h2>Where everyone is</h2>
-          </div>
-          <CommunityMap map={map} />
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Decisions waiting on a person</h2>
-          <span className="spacer" />
-          <span className="tiny faint">
-            {state.decisions.length === 0 ? "empty, as usual" : `${state.decisions.length} waiting`}
-          </span>
-        </div>
-        {state.decisions.length === 0 ? (
-          <Empty>
-            Nobody is waiting. Pool asks only when a person's stored rule does not pass.
-          </Empty>
-        ) : (
-          <div className="rows">
-            {state.decisions.map((d) => (
-              <DecisionCard
-                key={d.decision_id}
-                decision={d}
-                busy={busyDecision === d.decision_id}
-                onRespond={onRespond}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Where the money went</h2>
-          <span className="spacer" />
-          <ActorTag actor="engine" label="Every figure computed" />
-        </div>
-        <div className="panel-pad">
-          <div className="ledger">
-            <LedgerLine label="Merchandise to the supplier" value={money(m.merchandise_cents)} />
-            <LedgerLine label="Compensation to hosts" value={money(m.host_compensation_cents)} />
-            <LedgerLine label="Card processing" value={money(m.payment_processing_cents)} />
-            <LedgerLine label="Pool's share of the saving" value={money(m.platform_fee_cents)} />
-            <LedgerLine
-              label="Recorded all-in buyer cost"
-              value={money(m.pool_spend_cents)}
-              kind="total"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
-          <h2>What Pool did</h2>
-          <span className="spacer" />
-          <span className="actor-key">
-            <span className="actor actor-agent">
-              <ActorGlyph actor="agent" />
-              Pool acted
-            </span>
-            <span className="actor actor-human">
-              <ActorGlyph actor="human" />A person was involved
-            </span>
-          </span>
-        </div>
-        <Feed events={state.activity} limit={14} />
-      </section>
-
     </div>
   );
 }

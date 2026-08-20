@@ -1,12 +1,17 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ScenarioResult } from "../api";
 import { RunView } from "./run";
 
+/* The steps a successful run actually emits, in order, as asserted by
+   `services/agent/tests/test_demo_scenario.py::test_the_whole_lifecycle_completes`.
+   This list was thirteen long and omitted `member_declared_need` — the step that begins
+   the scenario — which is how the reader shipped with fourteen steps and thirteen
+   authored chapters. Keep the two in step. */
 const STAGES = [
   "seed",
+  "member_declared_need",
   "latent_demand_discovered",
   "host_candidates_evaluated",
   "host_accepted",
@@ -29,45 +34,85 @@ const SCENARIO: ScenarioResult = {
   steps: STAGES.map((name) => ({
     name,
     detail: `Recorded ${name.replace(/_/g, " ")}`,
-    facts: {},
+    facts:
+      name === "latent_demand_discovered"
+        ? { threshold_units: 24, provisional_units: 24 }
+        : name === "payment_failure"
+          ? { units_lost: 2, threshold_units: 24, funded_units: 22 }
+          : name === "recovery"
+            ? { recovered: 2, funded_units_now: 24 }
+            : name === "purchase"
+              ? { units: 24, cases: 2 }
+              : {},
   })),
 };
 
+function renderSheet() {
+  render(
+    <RunView
+      scenario={SCENARIO}
+      roundTripMs={42}
+      running={false}
+      onRun={() => {}}
+      onOpenPool={() => {}}
+      onLive={() => {}}
+    />,
+  );
+}
+
 afterEach(cleanup);
 
-describe("13-stage lifecycle reader", () => {
-  it("keeps every stage, its recorded summary, and disclosed explanation navigable", async () => {
-    render(
-      <RunView
-        scenario={SCENARIO}
-        roundTripMs={42}
-        running={false}
-        onRun={() => {}}
-        onOpenPool={() => {}}
-        onLive={() => {}}
-      />,
-    );
+describe("the lifecycle sheet", () => {
+  it("puts every recorded step on one page, so the causal chain is co-visible", () => {
+    renderSheet();
 
-    const ruler = screen.getByRole("navigation", { name: "Lifecycle steps" });
-    expect(within(ruler).getAllByRole("button")).toHaveLength(13);
-    expect(screen.getByText("01 / 13")).toBeTruthy();
-    expect(screen.getByText("whole run: 42 ms")).toBeTruthy();
-    expect(screen.getByText("Recorded seed.")).toBeTruthy();
+    /* The point of the sheet. The reader used to paginate, and the arithmetic that makes
+       this a real coordinator — 24 funded, two lost to a declined card, two restored by
+       a replacement — was spread over three pages that could not be seen together. Two
+       of those pages printed the identical figure while one claimed a repair. */
+    for (const name of STAGES) {
+      expect(screen.getByText(`Recorded ${name.replace(/_/g, " ")}.`)).toBeTruthy();
+    }
+    expect(screen.getByText(/14 steps · 42 ms/)).toBeTruthy();
+  });
 
-    const firstNote = screen.getByText("Why this matters").closest("details") as HTMLDetailsElement;
-    expect(firstNote.open).toBe(false);
+  it("authors every step it renders, including the one that begins the run", () => {
+    renderSheet();
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "Step 8: Replace exactly what was lost" }),
-    );
-    expect(screen.getByText("08 / 13")).toBeTruthy();
-    expect(screen.getByText("Recorded recovery.")).toBeTruthy();
-    expect(screen.getByText("Recovery and count reconciliation")).toBeTruthy();
+    // `member_declared_need` had no chapter, so it fell through to a fallback that cut a
+    // headline out of the server's sentence and attributed a person's act to the engine.
+    expect(screen.getByText("One person said what she buys")).toBeTruthy();
+    expect(screen.queryByText(/has no authored chapter yet/)).toBeNull();
+    expect(screen.queryByText("member declared need")).toBeNull();
+  });
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "Step 13: What the week actually cost" }),
-    );
-    expect(screen.getByText("13 / 13")).toBeTruthy();
-    expect(screen.getByText("Recorded impact.")).toBeTruthy();
+  it("names the acts as destinations rather than unlabelled segments", () => {
+    renderSheet();
+
+    const acts = screen.getByRole("navigation", { name: "Acts" });
+    const labels = within(acts)
+      .getAllByRole("link")
+      .map((a) => a.textContent);
+    expect(labels).toContain("A member declares");
+    expect(labels).toContain("Failure");
+    expect(labels).toContain("Recovery");
+    // Consecutive steps in one act collapse to a single destination.
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+
+  it("says in words whatever the spine draws, so the drawing is never the only carrier", () => {
+    renderSheet();
+
+    const caption = document.querySelector(".spine-caption");
+    expect(caption?.getAttribute("aria-live")).toBe("polite");
+    expect((caption?.textContent ?? "").length).toBeGreaterThan(0);
+  });
+
+  it("closes on the claim rather than on a collapsed disclosure", () => {
+    renderSheet();
+
+    const close = screen.getByText(/Nobody created a group/);
+    expect(close.closest("details")).toBeNull();
+    expect(screen.getByRole("button", { name: /Now run it live on AWS/ })).toBeTruthy();
   });
 });

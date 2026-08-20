@@ -5691,3 +5691,149 @@ Branch `feat/final-experience-rebuild`: `90837ba` `ca4ed6e` `686c596` `49859d8` 
 `api/public_demo.py`, `demo-data/`, `views/home.tsx`, `views/community.tsx`, `views/pools.tsx`,
 `views/pool.tsx`, `views/onboarding.tsx`, `views/operations.tsx`, `product-search.tsx`, `chosen.ts`,
 `ui.tsx`, `styles.css`, `docs/FINAL_EXPERIENCE_PLAN.md`.
+
+### #0051 — [2026-08-19] — The Showcase stops being a log, and colour goes back to meaning one thing
+`[FRONTEND]` `[DEMO]` `[ARTICLE-2]` `[ARTICLE-3]`
+
+**Goal / user intent**
+Finish the experience: make the canonical lifecycle read as one causal story, give Behind Pool a
+hierarchy built for a judge rather than one inherited from the old Community tab, make the order
+record answer a member's questions before an operator's, and use motion only where it explains
+something. No product architecture reopened.
+
+**Starting state**
+`feat/final-experience-rebuild` at `1188edf`, clean. Measured in a real browser at 1280×720,
+1440×900 and 390×844 before anything changed — 18 surfaces, full-page, zero console errors, zero
+failed requests. Two Impeccable `critique` sub-agents reviewed the Showcase independently (design
+review; detector plus browser evidence) and their findings decided most of what follows.
+
+**What the baseline actually showed**
+
+1. **The Showcase paginated a causal chain.** One step per page, thirteen `Continue` clicks, and a
+   fourteen-segment ruler of unlabelled 15×32 px hairlines — under WCAG 2.5.8's 24×24 minimum, at
+   **1.56:1** against the paper, and sixteen tab stops ahead of the primary control. The centrepiece
+   was invisible: page 07 said "2 units stopped counting", page 08 said `24 / 24`, page 09 said
+   `24 / 24` again captioned "whole again". Two pages printed the identical figure while one claimed
+   a repair, and nothing on screen ever fell. `CaseFit` — a component this design system invented
+   for exactly this argument — was never called, on the surface that asserts "still exactly two
+   cases".
+
+2. **The 14-step/13-chapter mismatch was worse than a count.** `member_declared_need` fires on every
+   successful run and had no authored chapter, so it fell through a fallback that cut a headline out
+   of the server's sentence at its first comma — *"You told Pool she buys 100% whey protein"* — printed
+   eight raw identifiers including `declared_by: scenario`, and tagged a person's act `COMPUTED`.
+   Second page of fourteen, on the surface whose entire thesis is attribution. Meanwhile the one
+   authored chapter with no matching step, `lock_blocked`, is reachable only on failure.
+
+3. **The order record was less use to a member than the summary that linked to it.** Home said
+   "Your 2 bags · about $17.53 instead of $22.98 buying alone"; one click later the record opened on
+   `Units 24 / 16`, `0 units authorized`, an em dash under "Estimated saving", and
+   `View all 11 deterministic checks` — with the member's own quantity absent entirely.
+
+4. **Behind Pool ignored its own index.** It opened with "what you can inspect" and then ran
+   attention → inherited Community enablement → map → an actionable host decision → a money ledger of
+   **five $0.00 rows** → the activity feed. The feed is the best evidence for the autonomy claim and
+   it was last. A test already forbade printing three zero figures for precisely this reason; the
+   five-row ledger below them had never been held to it.
+
+**What we did**
+
+*The Showcase became one sheet.* No pagination. A sticky spine draws the quantity as case-fit cells
+and follows the reader's position — never a clock, because the run finished ~40 ms before the first
+frame. Twelve labelled acts replaced fourteen hairlines. Every step is present, with the figures of
+the three that *are* the causal chain open by default. The closing claim came out of a collapsed
+`<details>` and became a panel with two real buttons. `member_declared_need` got an authored chapter,
+`["human"]`, and a body in consumer language with the identifiers behind a disclosure; the fallback
+no longer derives a headline from prose, so no future unmapped step can be cut mid-clause.
+
+*The order record answers five questions first* — what you get, what you pay, where you collect it,
+what happens next, whether Pool needs anything from you — in the voice Home already used. The
+five-tab strip became five `<details>` sections, all shut, deep-linkable, so `see it run on AWS`
+still lands on the evidence. The pool arithmetic is kept and demoted one line.
+
+*Behind Pool got a spine:* the autonomy counts, then the one question it had to ask, then every
+action with its actor, then a new **What proves it** section — deterministic result, the agent's
+stored tool sequence, `created_by_run` read back from the same workspace, the runtime and model, and
+supplier provenance naming Riverbend Wholesale as synthetic — then what it produced, then the
+community it ran inside. The ledger of zeroes is suppressed until money moves.
+
+*Colour went back to meaning one thing.* Moss had spread across ~30 selectors as a general
+affirmative — done ticks, ok chips, ownership marks, ledger gains, map rings, an emphasised hero
+word, and the environment dot on every screen — while graphite drew the global focus ring and
+ordinary banner chrome. On the Showcase that was self-refuting: the legend says a green diamond
+means *the agent decided*, three inches above thirteen green read-progress segments and five
+engine-computed figures. Success and ownership → `ink`; caution and chrome → `ink-muted`; genuine
+breakage → `stop`; generic focus → `ink`. Every actor hue that survives is an attribution.
+
+*Motion, twice, both reporting a change that happened.* The spine's cells transition as the reader
+moves between acts, and a consumer row's state word and reason lift for one beat when the reason code
+actually changes — never on first paint, never on scroll. A test pins the first-paint rule.
+
+**Verification**
+`make qa` green: ruff, eslint, tsc, **975 agent + 75 infra + 112 web = 1,162**, production build,
+secret scan, `git diff --check`. Impeccable detector: **0 findings** over `apps/web/src`.
+**0 contrast failures across 444 distinct foreground/background pairs**, light and dark, over eight
+surfaces including the order record fully expanded — worst 4.66:1 against a 4.5 floor; one genuine
+pre-existing failure was found and fixed (`.prov-label` at 4.28:1 in dark). No horizontal overflow at
+any of the three viewports. On the three rebuilt surfaces: **0 focus stops without a ring** and **0
+targets under 24×24** at both desktop and mobile, where the Showcase previously had none at all
+reaching 44×44 and fourteen at 15×32. `prefers-reduced-motion` collapses every animation to 1e-05s.
+Showcase isolation re-proved in the browser: the visitor's pools, needs and name are byte-identical
+before and after running the scripted lifecycle. **Three rehearsals from reset through the real
+interface** — including the supplier sheets going through the console's real file input — produced 17
+beats each, byte-identical after normalising the wall clock and ids, with 0 console errors. No AWS
+deploy, no AgentCore invocation, no Bedrock call, no live payment: the local API runs
+`model_provider: offline`.
+
+**Failures / dead ends**
+- Line-range surgery on `community.tsx` cut a JSX ternary in half twice. Splitting the return by
+  *start anchors* and slicing between consecutive ones worked first time and is the technique to
+  reuse: every block's end is the next block's beginning, so nothing has to be balanced by hand.
+- `.sheet` was already the demo drawer's class — `position: fixed; width: min(420px, 100vw)` — so the
+  new run sheet rendered 419 px wide inside a 1280 px page with six nested overflows. Renamed to
+  `.runsheet`. A grep for the class name before choosing it would have cost five seconds.
+- The disclosure marker was a flex item, then a grid cell. As a flex item it broke onto its own row
+  when a title wrapped; as a grid cell it forced the hint onto a second row at every width and cost
+  0.15 vh. Positioned out of flow, both layouts hold.
+- Two "moss drift" sites turned out to be **correct** and were nearly destroyed: clay on "You are
+  acting as X" is a person, and moss on `called #1, #2` is the agent's own tool choices. Checking the
+  three ambiguous ones individually was worth more than the batch that would have flattened them.
+- The first rehearsal harness sent `trigger: "member_requested"`, which is not in the server's
+  allowlist, so every run silently fell through to the community-wide scan and formed Energy Drink
+  pools for a member who had declared rice. It looked exactly like a product defect for twenty
+  minutes. The allowlisted name is `member_scan`.
+
+**Two things the pass found rather than introduced**
+- `.prov-label` measured 4.28:1 in the dark theme — a real AA failure, pre-existing, invisible without
+  sweeping every rendered pair.
+- Behind Pool's five-row `$0.00` ledger, sitting directly beneath a test that forbids exactly that
+  pattern three figures higher up. The rule was written down and the section below it had never been
+  checked against it.
+- Stale copy: "Run all **13** server stages" in the reader's empty state and "All **13** stages" in the
+  drawer, both against a real fourteen. `run.tsx`'s "All thirteen checks" is **correct** — 11
+  unconditional viability checks plus two more under `if final:` — and was left alone.
+
+**What we learned**
+A design system's colour rule is only worth what the implementation spends it on. The doctrine said
+moss means *the agent decided*; thirty selectors said moss means *good*, and the surface that
+displays the legend was the worst offender. Nothing detects that — the detector returned zero
+findings on this repository both before and after — because every individual use looked reasonable.
+It took writing the rule down as normative, then grepping the palette against it, to see that the
+cheapest proof the product had was being spent on progress bars.
+
+**Article fodder**
+Article 2 — a paginated reader is a data structure choice masquerading as a UI choice; the fourteen
+steps were a list, and the story was a quantity surviving a shock. Article 3 — attribution as a
+visual primitive, and how it decays: the mechanism by which a semantic palette becomes a decorative
+one is not a decision, it is thirty individually-reasonable ones.
+
+**Evidence worth preserving**
+The matched contact sheet, 19 surfaces, before and after at identical viewports. The spine at the
+decline beat, two cells dashed in `stop` under the caption "Still 22 of 24". The three rehearsal
+transcripts. The 444-pair contrast sweep.
+
+**Relevant commits / files**
+`apps/web/src/views/run.tsx`, `views/pool.tsx`, `views/community.tsx`, `views/home.tsx`,
+`views/operations.tsx`, `views/demo-panel.tsx`, `styles.css`, `views/run.test.tsx`,
+`views/community.test.tsx`, `views/home.test.tsx`, `PRODUCT.md`, `DESIGN.md`,
+`.impeccable/design.json`, `docs/DEMO_SCRIPT.md`, `docs/IMPECCABLE_HANDOFF.md`.

@@ -343,7 +343,7 @@ export function DemoPanel({
                       role="status"
                       style={{
                         marginTop: 4,
-                        color: outcome.ok ? "var(--moss)" : "var(--clay)",
+                        color: outcome.ok ? "var(--ink)" : "var(--stop)",
                       }}
                     >
                       {outcome.ok ? <IconCheck size={12} /> : <IconCross size={12} />}{" "}
@@ -464,7 +464,7 @@ export function DemoPanel({
                   How a pool happens, stage by stage
                 </button>
                 <p className="tiny faint" style={{ marginTop: 4 }}>
-                  All 13 stages and figures; runs the server lifecycle first if needed.
+                  Every recorded stage on one page; runs the server lifecycle first if needed.
                   {" "}It is a scripted rehearsal, not something the coordinator does on
                   its own, and it runs in the showcase&apos;s own copy of Demo University
                   — starting that community over from scratch each time. Your account,

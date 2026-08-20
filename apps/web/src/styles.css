@@ -144,13 +144,12 @@ a {
 }
 
 :focus-visible {
-  outline: 2px solid var(--graphite);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
   border-radius: 3px;
 }
 /* Controls that live inside a horizontally scrolling rail would have an offset ring
    clipped by the scroll container, so theirs is drawn inside the control instead. */
-.tabs button:focus-visible,
 .nav button:focus-visible {
   outline-offset: -2px;
 }
@@ -405,7 +404,7 @@ a {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--moss);
+  background: var(--ink-faint);
   flex: none;
 }
 
@@ -476,8 +475,8 @@ a {
   box-shadow: var(--shadow-sm);
 }
 .btn-primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ink) 88%, var(--moss));
-  border-color: color-mix(in srgb, var(--ink) 88%, var(--moss));
+  background: color-mix(in srgb, var(--ink) 86%, #000);
+  border-color: color-mix(in srgb, var(--ink) 86%, #000);
   box-shadow: var(--shadow-md);
 }
 /* The primary action keeps its shape while it is running — this is the button a demo
@@ -488,22 +487,24 @@ a {
   color: var(--paper-raised);
   box-shadow: none;
 }
+/* A person affirming something. Clay because the actor is human — moss here attributed
+   the member's own decision to the agent. */
 .btn-accept {
-  background: var(--moss);
-  border-color: var(--moss);
+  background: var(--clay);
+  border-color: var(--clay);
   color: var(--paper-raised);
 }
 @media (prefers-color-scheme: dark) {
   .btn-accept {
-    color: #10170f;
+    color: #1a120c;
   }
 }
 .btn-accept:hover:not(:disabled) {
-  background: var(--moss-bright);
-  border-color: var(--moss-bright);
+  background: color-mix(in srgb, var(--clay) 88%, #000);
+  border-color: color-mix(in srgb, var(--clay) 88%, #000);
 }
 .btn-accept:disabled {
-  background: color-mix(in srgb, var(--moss) 55%, var(--paper));
+  background: color-mix(in srgb, var(--clay) 55%, var(--paper));
   border-color: transparent;
   color: var(--paper-raised);
 }
@@ -694,18 +695,18 @@ details > summary.panel-head:hover {
 }
 .chip-ok {
   background: var(--moss-soft);
-  border-color: var(--moss-line);
-  color: var(--moss);
+  border-color: var(--rule-strong);
+  color: var(--ink);
 }
 .chip-warn {
   background: var(--clay-soft);
-  border-color: var(--clay-line);
-  color: var(--clay);
+  border-color: var(--rule-strong);
+  color: var(--ink-muted);
 }
 .chip-info {
   background: var(--graphite-soft);
   border-color: var(--graphite-line);
-  color: var(--graphite);
+  color: var(--ink-muted);
 }
 .chip-stop {
   background: var(--stop-soft);
@@ -713,8 +714,8 @@ details > summary.panel-head:hover {
   color: var(--stop);
 }
 .chip-live {
-  background: var(--clay);
-  border-color: var(--clay);
+  background: var(--paper-sunken);
+  border-color: var(--rule-strong);
   color: var(--paper-raised);
 }
 @media (prefers-color-scheme: dark) {
@@ -767,8 +768,12 @@ details > summary.panel-head:hover {
 .figure-value.sm {
   font-size: 25px;
 }
+/* Emphasis, not attribution. This was moss, which claims the agent decided a magnitude
+   it merely computed — and on the Showcase it painted five engine-computed figures the
+   same green as the legend's "AGENT DECIDED" diamond three inches above them. */
 .figure-accent {
-  color: var(--moss);
+  color: var(--ink);
+  font-weight: 600;
 }
 /* A figure set against the end of a wrapping row. It stops being a tail once the row
    wraps on a phone, so it stops pretending to be right-aligned there. */
@@ -838,9 +843,11 @@ details > summary.panel-head:hover {
 .prov-row:last-child {
   border-bottom: none;
 }
+/* Proof labels sit on tinted and nested surfaces where ink-faint measured 4.28:1 in the
+   dark theme — under the 4.5 floor. ink-muted is stronger in both themes. */
 .prov-label {
   font-size: 12.5px;
-  color: var(--ink-faint);
+  color: var(--ink-muted);
   font-weight: 550;
 }
 .prov-value {
@@ -862,7 +869,7 @@ details > summary.panel-head:hover {
   border-bottom-color: var(--moss-line);
 }
 .prov-row.linked .prov-value {
-  color: var(--moss);
+  color: var(--ink);
 }
 .prov-verdict {
   display: flex;
@@ -874,7 +881,7 @@ details > summary.panel-head:hover {
   background: var(--paper-raised);
 }
 .prov-verdict .ok {
-  color: var(--moss);
+  color: var(--ink);
   display: flex;
 }
 .prov-verdict .bad {
@@ -911,13 +918,13 @@ details > summary.panel-head:hover {
 .meter-fill {
   height: 100%;
   width: 100%;
-  background: var(--moss);
+  background: var(--ink);
   border-radius: 999px;
   transform-origin: left center;
   transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .meter-fill.short {
-  background: var(--clay);
+  background: var(--ink-muted);
 }
 
 /* ================================================================== lists */
@@ -1137,10 +1144,12 @@ table.data th.r {
 .status-chip.is-needs-you .status-word {
   color: var(--clay);
 }
+/* "The system is working" is not one party: coordinating spans the agent's choices, the
+   engine's arithmetic and a host's acceptance. Only `needs you` names an actor. */
 .status-chip.is-coordinating .status-word,
 .status-chip.is-ready-to-collect .status-word,
 .status-chip.is-done .status-word {
-  color: var(--moss);
+  color: var(--ink);
 }
 /* Under about 560px the chip stops being a column at the end of the row and becomes a
  * line under the name, because two stacked columns in 300px is neither. */
@@ -1273,14 +1282,14 @@ table.data th.r {
 /* The payoff line. It is the reason the table exists, so it is set as the loudest
    thing in it rather than as one more row that happens to be green. */
 .ledger-line.gain {
-  border-top: 1.5px solid var(--moss);
+  border-top: 1.5px solid var(--ink);
   border-bottom: none;
   margin-top: 4px;
   padding-top: 11px;
 }
 .ledger-line.gain .value,
 .ledger-line.gain .label {
-  color: var(--moss);
+  color: var(--ink);
 }
 .ledger-line.gain .label {
   font-weight: 600;
@@ -1451,14 +1460,14 @@ table.data th.r {
   padding: 11px 15px;
   border-radius: var(--radius);
   background: var(--graphite-soft);
-  color: var(--graphite);
+  color: var(--ink-muted);
   font-size: 13px;
   border: 1px solid var(--graphite-line);
 }
 .banner-warn {
   background: var(--clay-soft);
-  color: var(--clay);
-  border-color: var(--clay-line);
+  color: var(--ink-muted);
+  border-color: var(--rule-strong);
 }
 .banner-stop {
   background: var(--stop-soft);
@@ -1513,7 +1522,7 @@ table.data th.r {
   display: flex;
   align-items: center;
   gap: 9px;
-  color: var(--graphite);
+  color: var(--ink-muted);
   font-size: 14px;
 }
 .wait-head strong {
@@ -1539,10 +1548,10 @@ table.data th.r {
   color: var(--ink-faint);
 }
 .wait-step.done {
-  color: var(--moss);
+  color: var(--ink);
 }
 .wait-step.pending {
-  color: var(--graphite);
+  color: var(--ink-muted);
   font-family: var(--mono);
   font-size: 12.5px;
 }
@@ -1608,7 +1617,7 @@ table.data th.r {
 }
 .hero h1 em {
   font-style: italic;
-  color: var(--moss);
+  color: var(--ink);
 }
 .hero-lede {
   font-size: clamp(16px, 1.35vw, 18px);
@@ -1659,112 +1668,6 @@ table.data th.r {
 }
 
 /* ================================================================== run stage */
-
-.stage {
-  background: var(--paper-raised);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  overflow: hidden;
-}
-.stage-bar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 22px;
-  border-bottom: 1px solid var(--rule);
-  background: var(--paper-sunken);
-  flex-wrap: wrap;
-}
-.stage-count {
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.stage-body {
-  padding: clamp(22px, 3.2vw, 38px);
-  min-height: 380px;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-.stage-foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 13px 22px;
-  border-top: 1px solid var(--rule);
-  background: var(--paper-sunken);
-  flex-wrap: wrap;
-}
-
-.stage-act {
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-.stage-headline {
-  font-family: var(--display);
-  font-weight: 400;
-  font-size: clamp(28px, 3.6vw, 42px);
-  line-height: 1.06;
-  letter-spacing: -0.022em;
-  max-width: 20ch;
-  margin-top: 7px;
-}
-.stage-detail {
-  font-size: 15.5px;
-  line-height: 1.55;
-  color: var(--ink-muted);
-  max-width: 62ch;
-  margin-top: 12px;
-}
-
-/* The step ruler: every act at a glance, and clickable. */
-.ruler {
-  display: flex;
-  gap: 3px;
-  flex: 1;
-  min-width: 160px;
-}
-.ruler button {
-  flex: 1;
-  height: 26px;
-  min-width: 14px;
-  padding: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-  position: relative;
-}
-/* Colour animates; the size step is instant. Transitioning height and inset on
-   thirteen elements at once is a layout animation for no perceptible gain. */
-.ruler button::after {
-  content: "";
-  position: absolute;
-  inset: 11px 0 auto 0;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--rule-strong);
-  transition: background 0.2s ease;
-}
-.ruler button:hover::after {
-  background: var(--ink-faint);
-}
-.ruler button.seen::after {
-  background: var(--moss);
-}
-.ruler button.current::after {
-  background: var(--ink);
-  height: 7px;
-  inset: 9px 0 auto 0;
-  border-radius: 3px;
-}
 
 /* ================================================================== live */
 
@@ -1828,10 +1731,10 @@ table.data th.r {
   color: var(--ink);
 }
 .hop.done .hop-mark {
-  color: var(--moss);
+  color: var(--ink);
 }
 .hop.active .hop-mark {
-  color: var(--clay);
+  color: var(--ink-muted);
 }
 
 .spinner {
@@ -1947,38 +1850,6 @@ table.data th.r {
 }
 
 /* ================================================================== tabs */
-
-.tabs {
-  display: flex;
-  gap: 2px;
-  border-bottom: 1px solid var(--rule-strong);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.tabs::-webkit-scrollbar {
-  display: none;
-}
-.tabs button {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  min-height: 38px;
-  padding: 9px 13px;
-  margin-bottom: -1px;
-  color: var(--ink-muted);
-  font-size: 13.5px;
-  font-weight: 550;
-  white-space: nowrap;
-  transition: color 0.13s ease, border-color 0.13s ease;
-}
-.tabs button:hover {
-  color: var(--ink);
-}
-.tabs button[aria-selected="true"] {
-  color: var(--ink);
-  border-bottom-color: var(--ink);
-}
 
 /* ================================================================== reveal */
 
@@ -2178,15 +2049,6 @@ select.control {
     min-height: 38px;
     padding-inline: 13px;
   }
-  .ruler button {
-    height: 32px;
-  }
-  .ruler button::after {
-    inset: 14px 0 auto 0;
-  }
-  .ruler button.current::after {
-    inset: 12px 0 auto 0;
-  }
   .prov-row,
   .prov-verdict {
     padding-inline: 14px;
@@ -2205,14 +2067,6 @@ select.control {
   .sheet-body,
   .sheet-head {
     padding-inline: 16px;
-  }
-  .stage-bar,
-  .stage-foot {
-    padding-inline: 16px;
-  }
-  .stage-body {
-    padding: 20px 16px;
-    min-height: 0;
   }
   .figure-value {
     font-size: 29px;
@@ -2423,7 +2277,7 @@ select.control {
   margin-top: 3px;
   font-size: 11.5px;
   letter-spacing: 0.02em;
-  color: var(--moss);
+  color: var(--ink);
 }
 .product-sourceable::before {
   content: "";
@@ -2572,7 +2426,7 @@ select.control {
   font-weight: 600;
 }
 .onboard-steps li.is-done {
-  color: var(--moss);
+  color: var(--ink);
 }
 .onboard-step-dot {
   width: 20px;
@@ -2593,7 +2447,7 @@ select.control {
 .is-done .onboard-step-dot {
   border-color: var(--moss-line);
   background: var(--moss-soft);
-  color: var(--moss);
+  color: var(--ink);
 }
 
 .onboard-added {
@@ -2614,7 +2468,7 @@ select.control {
   border: 1px solid var(--moss-line);
 }
 .onboard-added-tick {
-  color: var(--moss);
+  color: var(--ink);
   display: flex;
   flex: 0 0 auto;
 }
@@ -2789,8 +2643,9 @@ select.control {
   border-radius: 2px;
   background: var(--rule-strong);
 }
+/* Ownership is emphasis, not attribution: ink, not an actor hue (DESIGN.md). */
 .casefit-unit.is-mine {
-  background: var(--moss);
+  background: var(--ink);
 }
 .casefit-unit.is-standing {
   background: transparent;
@@ -2815,7 +2670,7 @@ select.control {
   white-space: nowrap;
 }
 .scope-mine {
-  color: var(--moss);
+  color: var(--ink);
 }
 .scope-theirs {
   color: var(--ink-faint);
@@ -2879,7 +2734,7 @@ select.control {
  * reader measures against rather than a thing in its own right — and the overlap between
  * two rings is exactly where a member could be served by either pickup point. */
 .map-ring {
-  fill: var(--moss);
+  fill: var(--ink-faint);
   fill-opacity: 0.055;
   stroke: var(--moss-line);
   stroke-width: 0.35;
@@ -2890,7 +2745,7 @@ select.control {
   fill-opacity: 0.55;
 }
 .map-member.is-pooled {
-  fill: var(--moss);
+  fill: var(--ink);
   fill-opacity: 1;
 }
 .map-site {
@@ -2912,7 +2767,7 @@ select.control {
   padding-left: 18px;
 }
 .legend-swatch.swatch-pooled {
-  background: var(--moss);
+  background: var(--ink);
 }
 .legend-swatch.swatch-member {
   background: var(--ink-faint);
@@ -2923,7 +2778,7 @@ select.control {
   border-radius: 0;
 }
 .legend-swatch.swatch-ring {
-  background: var(--moss);
+  background: var(--ink-faint);
   opacity: 0.12;
   border: 1px dashed var(--moss-line);
   border-radius: 50%;
@@ -2966,4 +2821,509 @@ select.control {
   margin: 0;
   padding-left: 20px;
   line-height: 1.7;
+}
+
+/* ============================================================== your order
+ *
+ * The five questions a member has, answered above the record rather than inside it.
+ * This replaced `Units 24 / 16`, `0 units authorized` and an em dash under
+ * "Estimated saving" — pool arithmetic in the three slots a member reads first.
+ */
+
+.your-order {
+  border-color: var(--rule-strong);
+}
+.your-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+}
+/* The answer, in the display face, because these three are what the member came for.
+   Tabular so a price and a quantity in adjacent columns share a baseline grid. */
+.your-value {
+  font-family: var(--display);
+  font-size: 31px;
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin: 3px 0 4px;
+}
+.your-value-sm {
+  font-size: 24px;
+  line-height: 1.14;
+}
+/* Separated by a rule rather than a card: nesting a card inside the panel to hold two
+   sentences is the kind of container that makes a simple answer look procedural. */
+.your-next {
+  border-top: 1px solid var(--rule);
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.your-group {
+  border-top: 1px solid var(--rule);
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 700px) {
+  .your-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  /* Collection is the one that wraps worst in a half column, so it takes the full row
+     rather than hyphenating a pickup point's name. */
+  .your-grid > div:last-child {
+    grid-column: 1 / -1;
+  }
+  .your-value {
+    font-size: 27px;
+  }
+}
+@media (max-width: 430px) {
+  .your-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .your-grid > div:last-child {
+    grid-column: auto;
+  }
+}
+
+/* ================================================================== record */
+
+.record > .section-title {
+  margin-bottom: 2px;
+}
+.record-section {
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+/* The marker is positioned rather than laid out: as a flex item it broke onto a row of
+   its own the moment the title wrapped to two lines, and as a grid cell it forced the
+   hint onto a second row on every width. Out of flow, both layouts hold. */
+.record-section > summary {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 13px 18px 13px 36px;
+  cursor: pointer;
+  min-height: 44px;
+  box-sizing: border-box;
+  list-style: none;
+  transition: background 0.13s ease;
+}
+.record-section > summary::-webkit-details-marker {
+  display: none;
+}
+.record-section > summary:hover {
+  background: var(--paper-sunken);
+}
+.record-section > summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+/* The disclosure triangle, drawn rather than borrowed from the platform, so it matches
+   the icon set's stroke and rotates with the section. */
+.record-section > summary::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 20px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--ink-faint);
+  border-bottom: 1.5px solid var(--ink-faint);
+  transform: rotate(-45deg);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.record-section[open] > summary::before {
+  transform: rotate(45deg);
+}
+@media (max-width: 560px) {
+  .record-section > summary {
+    padding: 12px 14px 12px 32px;
+  }
+  .record-section > summary::before {
+    left: 14px;
+    top: 19px;
+  }
+}
+.record-title {
+  font-weight: 600;
+  font-size: 14.5px;
+}
+.record-hint {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.record-body {
+  padding: 4px 18px 18px;
+  border-top: 1px solid var(--rule);
+}
+/* A panel opened inside the record is already inside a panel, so it drops its own
+   frame instead of drawing a card in a card. */
+.record-body .panel {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+}
+.record-body .panel + .panel {
+  border-top: 1px solid var(--rule);
+}
+.record-body .panel-pad {
+  padding-inline: 0;
+}
+.record-body .panel-head {
+  padding-inline: 0;
+}
+
+@media (max-width: 560px) {
+  .record-body {
+    padding: 4px 14px 14px;
+  }
+}
+
+/* The judge's four questions, side by side. A claim and its evidence per cell, separated
+   by rules rather than by four more cards inside a panel. */
+.proof-claim {
+  padding: 14px 0 0;
+  border-top: 1px solid var(--rule);
+}
+.proof-claim .section-title {
+  display: block;
+}
+.proof-claim code {
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* ============================================================ the run sheet
+ *
+ * The lifecycle as one page. Replaced a paginated reader whose fourteen-segment ruler
+ * was fourteen unlabelled 15x32 buttons — under the 24px minimum target, at 1.56:1
+ * against the paper, and sixteen tab stops ahead of the primary control.
+ */
+
+.runsheet-wrap {
+  gap: 0;
+}
+
+/* --- the spine ------------------------------------------------------------ */
+
+.spine {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule-strong);
+  padding: 14px 0 11px;
+  margin-bottom: 8px;
+}
+.spine-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.spine-caption {
+  margin: 9px 0 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.spine-meta {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/* The unit track: the case-fit vocabulary, carrying the whole causal chain. */
+.track {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.track-case {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+/* Only once the purchase closes them: a box drawn before the order is placed would
+   claim a case Pool had not bought. */
+.track-case.is-closed {
+  border-color: var(--rule-strong);
+  background: var(--paper-sunken);
+}
+.track-cell {
+  width: 9px;
+  height: 15px;
+  border-radius: 2px;
+  background: var(--rule-strong);
+  transition: background 0.13s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.13s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.13s ease;
+}
+.track-cell.is-held {
+  background: var(--ink);
+}
+/* Funded, then not. `stop` is licensed here and nowhere else on this surface: a card
+   genuinely failed. */
+.track-cell.is-declined {
+  background: transparent;
+  border: 1px dashed var(--stop);
+}
+/* The replacement's units, distinguished from the ones that never moved so the repair
+   is visible rather than asserted. */
+.track-cell.is-refilled {
+  background: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--paper-raised);
+}
+.track-cell.is-empty {
+  background: transparent;
+  border: 1px dashed var(--rule-strong);
+}
+
+/* --- the sheet ------------------------------------------------------------ */
+
+.runsheet {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 34px;
+  align-items: start;
+}
+.acts {
+  position: sticky;
+  top: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 6px;
+}
+.acts a {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border-left: 1px solid var(--rule);
+  transition: color 0.13s ease, background 0.13s ease;
+}
+.acts a:hover {
+  color: var(--ink);
+  background: var(--paper-sunken);
+}
+.acts a.is-current {
+  color: var(--ink);
+  font-weight: 600;
+  border-left-color: var(--ink);
+}
+.acts a:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.entry {
+  padding: 22px 0 24px;
+  border-top: 1px solid var(--rule);
+}
+.entries > .actor-key {
+  padding-bottom: 16px;
+}
+.entry-act {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 8px;
+}
+.entry-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 18px;
+  flex-wrap: wrap;
+}
+.entry-headline {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 23px;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  margin: 0;
+  max-width: 30ch;
+}
+.entry-actors {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.entry-detail {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--ink-muted);
+  max-width: 68ch;
+}
+.entry-body {
+  margin-top: 14px;
+}
+.entry-body:empty {
+  margin-top: 0;
+}
+/* The entry the spine is currently describing. A rule, not a fill: the sheet stays a
+   sheet rather than becoming a list of selected cards. */
+.entry.is-active {
+  border-top-color: var(--ink);
+}
+
+.close-panel {
+  margin-top: 30px;
+}
+
+@media (max-width: 860px) {
+  .runsheet {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  /* The acts become a scrolling rail above the sheet, the same pattern the nav uses. */
+  .acts {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 2px;
+    padding-bottom: 4px;
+    -webkit-mask-image: linear-gradient(to right, #000 88%, transparent);
+    mask-image: linear-gradient(to right, #000 88%, transparent);
+  }
+  .acts::-webkit-scrollbar {
+    display: none;
+  }
+  .acts a {
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    white-space: nowrap;
+    min-height: 34px;
+    display: flex;
+    align-items: center;
+  }
+  .acts a.is-current {
+    border-bottom-color: var(--ink);
+  }
+}
+
+@media (max-width: 560px) {
+  .spine {
+    padding: 11px 0 9px;
+  }
+  .track {
+    gap: 5px;
+  }
+  .track-cell {
+    width: 7px;
+    height: 13px;
+  }
+  .entry-headline {
+    font-size: 20px;
+  }
+  .spine-meta {
+    margin-left: 0;
+  }
+}
+
+.entries-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-bottom: 16px;
+}
+.entry-evidence {
+  margin-top: 12px;
+}
+.entry-evidence > summary {
+  cursor: pointer;
+  color: var(--ink-faint);
+  list-style: none;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: color 0.13s ease;
+}
+.entry-evidence > summary::-webkit-details-marker {
+  display: none;
+}
+.entry-evidence > summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.entry-evidence[open] > summary::before {
+  transform: rotate(45deg);
+}
+.entry-evidence > summary:hover {
+  color: var(--ink);
+}
+.entry-evidence > summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+/* Open by default on the chain steps, so the summary is redundant there. */
+.entry-evidence[open] > summary {
+  margin-bottom: 4px;
+}
+
+/* The changing-world beat, reported rather than decorated.
+ *
+ * The row's own state genuinely changed — a supplier fact arrived and the deterministic
+ * layer recomputed — so the state word and its reason are briefly lifted. It fires only
+ * on a real change, never on first paint, never on scroll; the class is applied for one
+ * beat and removed. Under prefers-reduced-motion the global 0.01ms rule collapses it and
+ * the words remain, which is where the fact actually lives.
+ */
+@keyframes state-changed {
+  0% {
+    opacity: 0.35;
+    transform: translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.status-chip.just-changed .status-word,
+.status-chip.just-changed .status-reason {
+  animation: state-changed 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.status-chip.just-changed .status-reason {
+  animation-delay: 0.06s;
 }

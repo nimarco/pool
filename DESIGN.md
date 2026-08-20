@@ -281,30 +281,34 @@ result and renders in the neutral field with its reason attached.
 distinguished by a word, and attribution is also distinguished by shape. A state must be
 readable in greyscale, because the demo is watched as re-encoded video.
 
-### Known deviations in the implementation
+### How the doctrine is enforced
 
-The rules above are normative. `apps/web/src/styles.css` does not yet obey all of them, and
-the gap is recorded here rather than described as doctrine, so no later pass mistakes the
-current CSS for the standard. Moss has drifted furthest: it is spent across roughly thirty
-selectors as a general affirmative, which is exactly the drift The Attribution Rule exists
-to stop.
+The rules above are normative **and the implementation now follows them**. Every actor hue
+left in `apps/web/src/styles.css` is an attribution: the accept button (a person
+affirming), the three `.actor-*` tags, `.path` (the engine is the subject), the `needs you`
+state word, the timeline nodes' agent/engine/human variants, and the acting-as banner.
+Nothing else carries one.
 
-| Where | Today | Should be |
-| --- | --- | --- |
-| `.btn-primary:hover` | ink mixed 12% toward moss | ink deepened within the neutral family |
-| `.btn-accept` | moss fill | clay fill — a person is affirming (5.58:1 with paper-raised) |
-| `.status-chip.is-coordinating`, `.is-ready-to-collect`, `.is-done` | moss word | ink; clay stays on `.is-needs-you`, ink-faint on watching |
-| `:focus-visible` (global) | 2px graphite | 2px ink, as `.control:focus-visible` already does |
-| `.meter-fill` / `.meter-fill.short` | moss / clay | ink / ink-muted — a meter is magnitude, not attribution |
-| `.casefit-unit.is-mine` | moss | ink — ownership is not an action |
-| `.chip-live` | clay | ink with the pulsing dot; a live runtime is not a person |
-| `.chip-ok`, `.wait-step.done`, `.onboard-*.is-done`, `.hop.done`, `.prov-verdict .ok`, `.product-sourceable`, `.scope-mine`, `.figure-accent`, `.ledger-line.gain`, `.hero h1 em`, `.ruler button.seen`, `.map-*`, `.legend-swatch.*`, `.env-dot` | moss as success / present / mine / emphasis / chrome | ink or a paper tone; moss only where the agent is the actor |
-| `.banner`, `.wait-head`, `.wait-step.pending`, `.path` | graphite as chrome | ink-muted, except `.path` where the engine genuinely is the subject |
-| `.chip-warn`, `.banner-warn`, `.hop.active` | clay as caution | ink-muted, unless a person is the one being waited on |
+The drift this replaced was real and worth recording, because it is the failure mode to
+watch for. Moss had spread across roughly thirty selectors as a general affirmative —
+done ticks, "ok" chips, sourceable products, ownership marks, ledger gains, map rings,
+an emphasised hero word, and the environment dot on every screen — while graphite drew
+the global focus ring and ordinary banner chrome. On the Showcase that was self-refuting:
+the page asserted in its own legend that a green diamond means *the agent decided*, and
+then painted thirteen read-progress segments and five engine-computed figures the same
+green. The fixes: success and completion → `ink`; ownership and magnitude → `ink`;
+caution and chrome → `ink-muted`; genuine breakage → `stop`; generic focus → `ink`.
 
-Graphite for computed magnitude — a meter, a threshold bar — was considered and rejected in
-favour of neutral, so that a future pass does not reopen it: a data display is not an
-attribution, and one exception would license the rest.
+Verified rather than asserted: **0 contrast failures across 444 distinct
+foreground/background pairs**, light and dark, over Home, What you buy, Orders, the order
+record with every section open, Behind Pool, Operations, Showcase and About. Worst pair
+4.66:1 against the 4.5 floor.
+
+One deliberate carve-out, for the reason DESIGN.md gives above rather than for
+convenience: `.path` keeps graphite because the deterministic execution path is genuinely
+what that component is about. Graphite for computed *magnitude* — a meter, a threshold
+bar — was considered and rejected: a data display is not an attribution, and one
+exception would license the rest.
 
 ## Typography
 

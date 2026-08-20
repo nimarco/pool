@@ -1,10 +1,20 @@
-/* The run — one complete purchase, step by step.
+/* The run — one complete purchase, as one sheet.
  *
  * The server executes the entire lifecycle in one call (about 40 ms) and returns a
  * structured transcript of what happened. This screen is a *reader* for that
  * transcript, not a progress animation: the run is already over before the first frame
- * is drawn, and the stage bar says so with the measured round trip. Nothing here is on
+ * is drawn, and the spine says so with the measured round trip. Nothing here is on
  * a timer pretending to be work (AGENTS.md §8).
+ *
+ * It used to paginate: one step per page, thirteen Continue clicks, a fourteen-segment
+ * ruler of unlabelled hairlines. That destroyed the one thing the surface exists to
+ * show. The story is a *causal chain* — 24 units of demand, minus 2 to a declined card,
+ * plus 2 from a compatible replacement, closing into two whole cases with nothing left
+ * over — and every page was a claim whose evidence sat on a page you could no longer
+ * see. Pages 08 and 09 printed the identical figure while 09 claimed a repair.
+ *
+ * So: one scrolling sheet, every step present, and a sticky spine that draws the
+ * quantity. The spine follows the reader's position, never a clock.
  *
  * Every value shown is read out of the step's `facts` exactly as the server computed
  * it. This file selects, labels and sets those values; it never derives one. The only
@@ -12,7 +22,7 @@
  * which of the three actors was responsible.
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ScenarioResult, ScenarioStep } from "../api";
 import {
   Actor,
@@ -23,8 +33,6 @@ import {
   Empty,
   Fact,
   Figure,
-  IconArrowLeft,
-  IconArrowRight,
   IconCheck,
   IconCloud,
   IconCross,
@@ -72,6 +80,17 @@ const CHAPTERS: Record<string, Chapter> = {
     act: "The community",
     headline: "Nobody here organised anything",
     actors: ["engine"],
+  },
+  /* This step fires on every successful run and had no entry, so it fell through to the
+     generic fallback: an eyebrow reading MEMBER DECLARED NEED, a headline cut out of the
+     server's sentence at its first comma ("You told Pool she buys 100% whey protein"),
+     eight raw identifiers, and an actor tag of COMPUTED on the one step where a *person*
+     is the actor. Second page of fourteen, on the surface whose whole thesis is
+     attribution. */
+  member_declared_need: {
+    act: "A member declares",
+    headline: "One person said what she buys",
+    actors: ["human"],
   },
   latent_demand_discovered: {
     act: "Discovery",
@@ -141,10 +160,15 @@ const CHAPTERS: Record<string, Chapter> = {
 };
 
 function chapterFor(step: ScenarioStep): Chapter {
+  /* No headline is derived from the detail sentence any more. Splitting on the first
+     comma produced "You told Pool she buys 100% whey protein" — a truncation that read
+     as a grammatical error and then repeated the rest of the sentence directly beneath
+     itself. An unmapped step now says plainly that it is unmapped, which is a bug report
+     rather than a bad sentence. */
   return (
     CHAPTERS[step.name] ?? {
       act: step.name.replace(/_/g, " "),
-      headline: step.detail.split(/[.,—]/)[0],
+      headline: "This step has no authored chapter yet",
       actors: ["engine"],
     }
   );
@@ -295,7 +319,7 @@ function HostCandidatesBody({ f }: { f: Facts }) {
         {candidates.map((c) => (
           <div key={c.household_id} className="row" style={{ paddingInline: 0 }}>
             <span
-              style={{ color: c.eligible ? "var(--moss)" : "var(--clay)", display: "flex" }}
+              style={{ color: c.eligible ? "var(--ink)" : "var(--ink-faint)", display: "flex" }}
             >
               {c.eligible ? <IconCheck /> : <IconCross />}
             </span>
@@ -693,8 +717,35 @@ function GenericBody({ f }: { f: Facts }) {
   );
 }
 
+function DeclarationBody({ f }: { f: Facts; sub: SubLevel }) {
+  const qty = n(f, "quantity");
+  const cadence = n(f, "cadence_days");
+  const flex = n(f, "flexibility_days");
+  return (
+    <div className="stack-sm">
+      <div className="facts">
+        <Fact label="What she buys" value={s(f, "product_name") || s(f, "product_id")} />
+        <Fact label="How much, how often" value={`${qty} every ${cadence} days`} />
+        <Fact
+          label="How early Pool may buy it"
+          value={flex > 0 ? `up to ${flex} days` : "only when it is due"}
+        />
+      </div>
+      <StageNote label="What this row does and does not authorise">
+        <p className="small muted prose">
+          One standing declaration, written through the same validated service the form
+          uses. It permits Pool to <em>investigate</em>, and it permits buying up to{" "}
+          {flex} days early. It authorises no spending: a commitment still needs this
+          member to answer a question, and the amount has to be exact before Pool asks.
+        </p>
+      </StageNote>
+    </div>
+  );
+}
+
 const BODIES: Record<string, (props: { f: Facts; sub: SubLevel }) => JSX.Element | null> = {
   seed: SeedBody,
+  member_declared_need: DeclarationBody,
   latent_demand_discovered: DiscoveryBody,
   host_candidates_evaluated: HostCandidatesBody,
   host_accepted: HostAcceptedBody,
@@ -708,6 +759,124 @@ const BODIES: Record<string, (props: { f: Facts; sub: SubLevel }) => JSX.Element
   pickup: PickupBody,
   impact: ImpactBody,
 };
+
+/* ------------------------------------------------------------------- the spine */
+
+/** The lifecycle as one quantity surviving a shock.
+ *
+ *  This is the drawing the surface was missing. The reader used to *assert* the
+ *  centrepiece — "2 units stopped counting", then `24 / 24`, then `24 / 24` again
+ *  captioned "whole again" — three claims on three pages, with a number that never
+ *  visibly moved. The story is 24 units, minus 2, plus 2, closing into whole cases, and
+ *  it is drawable in the vocabulary the design system already invented for case fitting.
+ *
+ *  Every number comes off the server's own step facts. Nothing here is derived.
+ */
+function UnitTrack({
+  target,
+  filled,
+  declined,
+  refilled,
+  caseUnits,
+  cases,
+}: {
+  target: number;
+  filled: number;
+  declined: number;
+  refilled: number;
+  caseUnits: number;
+  cases: number;
+}) {
+  /* Cells are grouped into whole cases when the case size is known, so "nothing left
+     over" is a shape rather than a sentence. */
+  const groups: number[][] = [];
+  const size = caseUnits > 0 && cases > 0 ? caseUnits : target;
+  for (let i = 0; i < target; i += size) {
+    groups.push(Array.from({ length: Math.min(size, target - i) }, (_, k) => i + k));
+  }
+  const state = (i: number): string => {
+    if (i >= filled) return "empty";
+    if (i >= filled - declined) return "declined";
+    if (i >= filled - declined - refilled) return "refilled";
+    return "held";
+  };
+  return (
+    <div className="track" aria-hidden="true">
+      {groups.map((g, gi) => (
+        <span className={`track-case${cases > 0 ? " is-closed" : ""}`} key={gi}>
+          {g.map((i) => (
+            <i key={i} className={`track-cell is-${state(i)}`} />
+          ))}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** What the spine shows, per act. Derived once from the transcript. */
+interface SpineState {
+  caption: string;
+  filled: number;
+  declined: number;
+  refilled: number;
+  cases: number;
+}
+
+function spineFor(name: string, facts: Record<string, Facts>, target: number): SpineState {
+  const at = (k: string) => facts[k] ?? {};
+  const fail = at("payment_failure");
+  const rec = at("recovery");
+  const buy = at("purchase");
+  const lost = n(fail, "units_lost");
+  const base: SpineState = { caption: "", filled: 0, declined: 0, refilled: 0, cases: 0 };
+  switch (name) {
+    case "seed":
+    case "member_declared_need":
+      return { ...base, caption: "Nothing pooled yet — separate people, separate dates." };
+    case "latent_demand_discovered":
+    case "host_candidates_evaluated":
+    case "host_accepted":
+    case "final_offer":
+      return {
+        ...base,
+        filled: target,
+        caption: `${target} units of compatible demand, exactly the supplier's minimum.`,
+      };
+    case "payment_failure":
+      return {
+        ...base,
+        filled: target,
+        declined: lost,
+        caption: `A card declined. ${lost} units stopped counting — ${target - lost} of ${target}, short of the minimum.`,
+      };
+    case "decision_inbox":
+      return {
+        ...base,
+        filled: target,
+        declined: lost,
+        caption: `Still ${target - lost} of ${target}. Only the people who had to be asked were asked.`,
+      };
+    case "recovery":
+      return {
+        ...base,
+        filled: n(rec, "funded_units_now") || target,
+        refilled: n(rec, "recovered") || lost,
+        caption: `A compatible replacement restored exactly ${n(rec, "recovered") || lost}. Back to ${n(rec, "funded_units_now") || target}.`,
+      };
+    default:
+      return {
+        ...base,
+        filled: target,
+        cases: n(buy, "cases"),
+        caption: `${n(buy, "units") || target} units in ${n(buy, "cases")} whole cases, nothing left over.`,
+      };
+  }
+}
+
+/** The steps whose recorded figures *are* the causal chain, so their evidence is open
+ *  without being asked for: the quantity falling, the quantity restored, and the whole
+ *  cases it closed into. */
+const CHAIN = new Set(["payment_failure", "recovery", "purchase"]);
 
 /* --------------------------------------------------------------------- view */
 
@@ -733,40 +902,33 @@ export function RunView({
    *  carries the title and the context, so the reader drops its own heading. */
   embedded?: boolean;
 }) {
-  const [index, setIndex] = useState(0);
-  const [seen, setSeen] = useState(0);
-
   const steps = scenario?.steps ?? [];
   const total = steps.length;
+  const [active, setActive] = useState(0);
+  const [showAll, setShowAll] = useState(false);
+  const entries = useRef<(HTMLElement | null)[]>([]);
 
-  // A fresh run starts at the beginning; the previous position would be meaningless.
-  useEffect(() => {
-    setIndex(0);
-    setSeen(0);
-  }, [scenario]);
-
-  const go = useCallback(
-    (next: number) => {
-      const clamped = Math.max(0, Math.min(total - 1, next));
-      setIndex(clamped);
-      setSeen((was) => Math.max(was, clamped));
-    },
-    [total],
-  );
-
-  // Arrow keys, because the whole point of this screen is that somebody can walk
-  // through it on camera without hunting for a button.
+  /* Which entry the reader is looking at. The spine follows the sheet rather than a
+     timer: the run finished before the first frame was drawn, and a spine that advanced
+     on its own would be exactly the fabricated progress AGENTS.md §8 forbids. */
   useEffect(() => {
     if (total === 0) return undefined;
-    const onKey = (ev: KeyboardEvent) => {
-      const tag = (ev.target as HTMLElement | null)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
-      if (ev.key === "ArrowRight") go(index + 1);
-      if (ev.key === "ArrowLeft") go(index - 1);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [go, index, total]);
+    const nodes = entries.current.filter(Boolean) as HTMLElement[];
+    if (!nodes.length || typeof IntersectionObserver === "undefined") return undefined;
+    const io = new IntersectionObserver(
+      (records) => {
+        const visible = records
+          .filter((r) => r.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (!visible) return;
+        const i = nodes.indexOf(visible.target as HTMLElement);
+        if (i >= 0) setActive(i);
+      },
+      { rootMargin: "-45% 0px -45% 0px", threshold: 0 },
+    );
+    nodes.forEach((nd) => io.observe(nd));
+    return () => io.disconnect();
+  }, [total, scenario]);
 
   if (!scenario) {
     return (
@@ -774,8 +936,9 @@ export function RunView({
         <header className="stack-sm">
           <h1 className="title">One purchase, from nobody asking for it to somebody carrying it home</h1>
           <p className="lede">
-            Run all 13 server stages in one call, then inspect the recorded discovery,
-            pricing, decline, repair, lock and handover.
+            One call runs the whole lifecycle on the server. What comes back is a
+            transcript: discovery, pricing, a declined card, the repair, the lock and the
+            handover, all of it already finished.
           </p>
         </header>
         <div className="panel panel-pad stack-sm">
@@ -797,20 +960,37 @@ export function RunView({
     );
   }
 
-  const step = steps[index];
-  const chapter = chapterFor(step);
-  const Body = BODIES[step.name] ?? GenericBody;
-  const last = index === total - 1;
   /* Showcase renders the reader as its own page; a pool record renders it under the
      record's own title. The whole outline moves together. */
   const Title = embedded ? "h2" : "h1";
   const StageHead = embedded ? "h3" : "h2";
   const sub: SubLevel = embedded ? "h4" : "h3";
 
+  const factsByName: Record<string, Facts> = {};
+  for (const st of steps) factsByName[st.name] = st.facts;
+  const target =
+    n(factsByName.latent_demand_discovered ?? {}, "threshold_units") ||
+    n(factsByName.payment_failure ?? {}, "threshold_units") ||
+    0;
+  const caseUnits = n(factsByName.purchase ?? {}, "units")
+    ? Math.round(n(factsByName.purchase, "units") / Math.max(1, n(factsByName.purchase, "cases")))
+    : 0;
+  const spine = spineFor(steps[active]?.name ?? "seed", factsByName, target);
+
+  /* The acts, in server order, each one a real destination instead of an unlabelled
+     hairline. The ruler used to be fourteen 15x32px buttons carrying no text — under the
+     24px minimum target size, at 1.56:1 against the paper, and sixteen tab stops ahead
+     of the primary control. */
+  const acts: { act: string; at: number }[] = [];
+  steps.forEach((st, i) => {
+    const a = chapterFor(st).act;
+    if (!acts.length || acts[acts.length - 1].act !== a) acts.push({ act: a, at: i });
+  });
+
   return (
-    <div className="stack">
+    <div className="stack runsheet-wrap">
       <header className="row-between">
-        <Title className="title" style={{ maxWidth: "20ch", fontSize: embedded ? 26 : undefined }}>
+        <Title className="title" style={{ maxWidth: "22ch", fontSize: embedded ? 26 : undefined }}>
           {embedded ? "How this pool happened" : "One purchase, end to end"}
         </Title>
         <div className="btn-row">
@@ -820,7 +1000,7 @@ export function RunView({
             </button>
           ) : null}
           {onRun ? (
-            <button className="btn btn-sm" onClick={onRun} disabled={running}>
+            <button className="btn btn-sm btn-ghost" onClick={onRun} disabled={running}>
               <IconReplay />
               {running ? "Running…" : "Run it again"}
             </button>
@@ -837,108 +1017,128 @@ export function RunView({
         </div>
       ) : null}
 
-      <div className="stage">
-        <div className="stage-bar">
-          <span className="stage-count">
-            {String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
-          </span>
-          <nav className="ruler" aria-label="Lifecycle steps">
-            {steps.map((st, i) => {
-              const chapterHere = chapterFor(st);
-              return (
-                <button
-                  key={`${st.name}-${i}`}
-                  className={i === index ? "current" : i <= seen ? "seen" : ""}
-                  aria-label={`Step ${i + 1}: ${chapterHere.headline}`}
-                  /* A mouse can hover the ruler; rehearsing from it is easier when the
-                     segments say which act they are. */
-                  title={`${i + 1} of ${total} · ${chapterHere.act} — ${chapterHere.headline}`}
-                  aria-current={i === index ? "step" : undefined}
-                  onClick={() => go(i)}
-                />
-              );
-            })}
-          </nav>
-          <span className="stage-count nowrap">
-            {roundTripMs !== null ? `whole run: ${roundTripMs} ms` : "already executed"}
+      {/* The spine. Sticky, so the quantity stays on screen while its story is read. */}
+      <div className="spine">
+        <div className="spine-row">
+          <UnitTrack
+            target={target}
+            filled={spine.filled}
+            declined={spine.declined}
+            refilled={spine.refilled}
+            caseUnits={caseUnits}
+            cases={spine.cases}
+          />
+          <span className="spine-meta">
+            {total} steps · {roundTripMs !== null ? `${roundTripMs} ms` : "already executed"}
           </span>
         </div>
+        {/* The caption is the same fact in words, so the drawing is never the only
+            carrier — which is what makes it survive reduced motion and a screen reader. */}
+        <p className="spine-caption" aria-live="polite">
+          {spine.caption}
+        </p>
+      </div>
 
-        <div className="stage-body reveal" key={`${scenario.pool_id}-${index}`}>
-          <div>
-            <div className="row-between" style={{ alignItems: "center" }}>
-              <span className="stage-act">{chapter.act}</span>
-              <span className="btn-row" style={{ gap: 14 }}>
-                {chapter.actors.map((a) => (
-                  <ActorTag key={a} actor={a} />
-                ))}
-              </span>
-            </div>
-            <StageHead className="stage-headline">{chapter.headline}</StageHead>
-            <p className="stage-detail">{step.detail}.</p>
-          </div>
+      <div className="runsheet">
+        <nav className="acts" aria-label="Acts">
+          {acts.map((a, i) => (
+            <a
+              key={a.act}
+              href={`#act-${a.at}`}
+              className={
+                active >= a.at && (i + 1 === acts.length || active < acts[i + 1].at)
+                  ? "is-current"
+                  : ""
+              }
+              aria-current={
+                active >= a.at && (i + 1 === acts.length || active < acts[i + 1].at)
+                  ? "true"
+                  : undefined
+              }
+            >
+              {a.act}
+            </a>
+          ))}
+        </nav>
 
-          <Body f={step.facts} sub={sub} />
-        </div>
-
-        <div className="stage-foot">
-          <button className="btn btn-sm" onClick={() => go(index - 1)} disabled={index === 0}>
-            <IconArrowLeft />
-            Back
-          </button>
-          {last ? (
-            <>
-              <button className="btn btn-primary btn-sm" onClick={onLive}>
-                <IconCloud />
-                Now run it live on AWS
-              </button>
-              <button className="btn btn-sm" onClick={() => go(0)}>
-                Start again
-              </button>
-            </>
-          ) : (
-            <button className="btn btn-primary btn-sm" onClick={() => go(index + 1)}>
-              Continue
-              <IconArrowRight />
+        <div className="entries">
+          <div className="entries-head">
+            <ActorKey />
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={() => setShowAll((was) => !was)}
+              aria-pressed={showAll}
+            >
+              {showAll ? "Collapse the figures" : "Show every figure"}
             </button>
-          )}
-          <span className="tiny faint" style={{ marginLeft: "auto" }}>
-            Arrow keys work too
-          </span>
+          </div>
+          {steps.map((st, i) => {
+            const chapter = chapterFor(st);
+            const Body = BODIES[st.name] ?? GenericBody;
+            const newAct = i === 0 || chapterFor(steps[i - 1]).act !== chapter.act;
+            return (
+              <article
+                key={`${st.name}-${i}`}
+                id={`act-${i}`}
+                className={`entry${i === active ? " is-active" : ""}`}
+                ref={(el) => {
+                  entries.current[i] = el;
+                }}
+              >
+                {newAct ? <span className="entry-act">{chapter.act}</span> : null}
+                <div className="entry-head">
+                  <StageHead className="entry-headline">{chapter.headline}</StageHead>
+                  <span className="entry-actors">
+                    {chapter.actors.map((a) => (
+                      <ActorTag key={a} actor={a} />
+                    ))}
+                  </span>
+                </div>
+                <p className="entry-detail">{st.detail}.</p>
+                {/* Every step's evidence, on the same page rather than paginated. Open by
+                    default only where the figures are the story itself. */}
+                <details className="entry-evidence" open={showAll || CHAIN.has(st.name)}>
+                  <summary className="small">Figures this step recorded</summary>
+                  <div className="entry-body">
+                    <Body f={st.facts} sub={sub} />
+                  </div>
+                </details>
+              </article>
+            );
+          })}
         </div>
       </div>
 
-      {last && scenario.ok ? (
-        <details className="block reveal">
-          <summary className="section-title">
-            What just happened
-          </summary>
-          <p className="small muted prose" style={{ marginTop: 12 }}>
-            Nobody in that community created a group, and nobody organised anything. An
-            agent decided there was an opportunity worth investigating and which actions
-            to take; deterministic code decided every price, every eligibility, every
-            state transition and whether the lock was allowed at all. A payment failed
-            and the order was repaired without disturbing anyone who had already
-            committed. Ten people had lower recorded costs than buying alone, host
-            compensation was recorded for the person doing the work, and the whole thing ran in{" "}
-            {roundTripMs !== null ? `${roundTripMs} ms` : "one call"} on a synthetic
-            community where no money moved.
-          </p>
-          <div className="btn-row" style={{ marginTop: 14 }}>
-            <button className="btn" onClick={onLive}>
-              <IconCloud />
-              See the same agent running on AWS
-            </button>
-            {scenario.pool_id ? (
-              <button className="btn" onClick={() => onOpenPool(scenario.pool_id)}>
-                Inspect the pool record
+      {scenario.ok ? (
+        <section className="panel close-panel">
+          <div className="panel-pad stack-sm">
+            <StageHead className="display" style={{ fontSize: 27, lineHeight: 1.1 }}>
+              Nobody created a group. Nobody organised anything.
+            </StageHead>
+            <p className="small muted prose">
+              An agent decided there was an opportunity worth investigating and which
+              actions to take; deterministic code decided every price, every eligibility,
+              every state transition and whether the lock was allowed at all. A payment
+              failed and the order was repaired without disturbing anyone who had already
+              committed. Ten people had lower recorded costs than buying alone, host
+              compensation was recorded for the person doing the work, and the whole thing
+              ran in {roundTripMs !== null ? `${roundTripMs} ms` : "one call"} on a
+              synthetic community where no money moved.
+            </p>
+            <div className="btn-row" style={{ marginTop: 6 }}>
+              <button className="btn btn-primary" onClick={onLive}>
+                <IconCloud />
+                Now run it live on AWS
               </button>
-            ) : null}
+              {scenario.pool_id ? (
+                <button className="btn" onClick={() => onOpenPool(scenario.pool_id)}>
+                  Inspect the pool record
+                </button>
+              ) : null}
+            </div>
           </div>
-        </details>
+        </section>
       ) : null}
-
-      <ActorKey />
     </div>
   );
 }

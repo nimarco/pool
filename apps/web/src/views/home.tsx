@@ -29,7 +29,7 @@
  * which is one question answered twice, in two tenses, on two screens.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AppState,
   Decision,
@@ -572,7 +572,36 @@ function WatchingRow({
 }
 
 /** The status word, and the reason beside it. */
+/** True for one beat after `key` actually changes — and never on first render.
+ *
+ *  This is the whole of the motion budget on a consumer surface. The changing-world beat
+ *  is the strongest argument the product makes: the same declaration, the same 24 bags,
+ *  answered three different ways as supplier facts arrive. Before this, all three answers
+ *  swapped in silently, and a viewer watching a recording could miss the moment the
+ *  answer changed. Animating the arrival would be a lie (nothing arrived — a row was
+ *  re-read); animating the *change* is a report of something that happened.
+ *
+ *  `prefers-reduced-motion` is honoured globally, and the word and its reason are always
+ *  present as text, so nothing here is the only carrier of the fact. */
+function useChanged(key: string): boolean {
+  const previous = useRef<string | null>(null);
+  const [changed, setChanged] = useState(false);
+  useEffect(() => {
+    const was = previous.current;
+    previous.current = key;
+    if (was === null || was === key) return undefined;
+    setChanged(true);
+    const t = window.setTimeout(() => setChanged(false), 460);
+    return () => window.clearTimeout(t);
+  }, [key]);
+  return changed;
+}
+
 function StatusChip({ status, label }: { status: ConsumerStatus; label: string }) {
+  /* Keyed on the sentence as well as the state word: "supplier found — not cheaper" and
+     "worth doing" are both `watching`, and the whole point of the beat is that the
+     *reason* moved while the state word did not. */
+  const moved = useChanged(`${status}|${label}`);
   const word: Record<ConsumerStatus, string> = {
     needs_you: "Needs you",
     coordinating: "Coordinating",
@@ -581,7 +610,9 @@ function StatusChip({ status, label }: { status: ConsumerStatus; label: string }
     done: "Done",
   };
   return (
-    <span className={`status-chip is-${status.replace(/_/g, "-")}`}>
+    <span
+      className={`status-chip is-${status.replace(/_/g, "-")}${moved ? " just-changed" : ""}`}
+    >
       <span className="status-word">{word[status]}</span>
       <span className="status-reason">{label}</span>
     </span>

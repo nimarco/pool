@@ -91,7 +91,7 @@ function SupplierQuotes({ onRecorded }: { onRecorded: () => void }) {
           is the deterministic outlook, because the world moved.
         </p>
 
-        {error ? <p className="small" style={{ color: "var(--clay)" }}>{error}</p> : null}
+        {error ? <p className="small" style={{ color: "var(--stop)" }}>{error}</p> : null}
 
         <div className="rows">
           {data.quotes.map((q) => (
@@ -249,7 +249,7 @@ function QuoteSheetImport({
         </label>
 
         {error ? (
-          <p className="small" style={{ color: "var(--clay)" }}>
+          <p className="small" style={{ color: "var(--stop)" }}>
             {error}
           </p>
         ) : null}
@@ -302,7 +302,7 @@ function QuoteSheetImport({
               </table>
             ) : null}
             {result.rejections.length > 0 ? (
-              <ul className="tiny" style={{ color: "var(--clay)" }}>
+              <ul className="tiny" style={{ color: "var(--stop)" }}>
                 {result.rejections.map((r) => (
                   <li key={`${r.line}-${r.reason}`}>
                     line {r.line}: {r.reason}
@@ -438,7 +438,7 @@ function HostConsole({ poolId }: { poolId: string | null }) {
       <div className="rows">
         {checklist.orders.map((o) => (
           <div key={o.household_id} className="row">
-            <span style={{ color: o.state === "picked_up" ? "var(--moss)" : "var(--ink-faint)", display: "flex" }}>
+            <span style={{ color: o.state === "picked_up" ? "var(--ink)" : "var(--ink-faint)", display: "flex" }}>
               {o.state === "picked_up" ? <IconCheck /> : <IconDot />}
             </span>
             <div className="row-body">

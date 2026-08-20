@@ -96,7 +96,7 @@ describe("Community enablement", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "How this Community enables Pool" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "The community it ran inside" })).toBeTruthy();
     expect(screen.getByText(/20 of 20 fixture memberships verified/i)).toBeTruthy();
     expect(screen.getByText(/13 members declared needs separately/i)).toBeTruthy();
     expect(screen.getByText("Community enables", { selector: "strong" })).toBeTruthy();
@@ -126,7 +126,7 @@ describe("Community leads with both currencies", () => {
     );
   }
 
-  it("puts money created and coordination avoided above the model that explains them", () => {
+  it("answers the autonomy question before the setting, and proves it in between", () => {
     renderCommunity({
       estimated_retail_spend_cents: 112776,
       pool_spend_cents: 86144,
@@ -146,15 +146,25 @@ describe("Community leads with both currencies", () => {
       document.querySelectorAll("h1, h2"),
     ).map((h) => h.textContent?.trim() ?? "");
 
-    const attention = headings.indexOf("What it cost anyone in attention");
-    const enablement = headings.indexOf("How this Community enables Pool");
+    const index = headings.indexOf("Start here");
+    const autonomy = headings.indexOf("What Pool did on its own");
+    const waiting = headings.indexOf("Decisions waiting on a person");
+    const actions = headings.indexOf("Every action, and who took it");
     const money = headings.indexOf("Where the money went");
+    const setting = headings.indexOf("The community it ran inside");
 
-    // The two things a Good Neighbor judge is scoring come before the responsibility
-    // model that explains how they were produced, and before the operator ledger.
-    expect(attention).toBeGreaterThan(-1);
-    expect(attention).toBeLessThan(enablement);
-    expect(enablement).toBeLessThan(money);
+    /* The deliberate order, and the reason for it. A judge is scoring autonomy, so the
+       counts answer that first; the one pending question is the same fact at instance
+       scale; the feed is the evidence for both. The money it moved follows, and the
+       fixture that hosted it comes last — it used to sit third while the activity feed
+       that substantiates the whole claim sat at the very bottom of the page. */
+    // Index 0 is the page's own h1, so "Start here" is the first section on the page.
+    expect(index).toBe(1);
+    expect(autonomy).toBeGreaterThan(index);
+    expect(waiting).toBeGreaterThan(autonomy);
+    expect(actions).toBeGreaterThan(waiting);
+    expect(money).toBeGreaterThan(actions);
+    expect(setting).toBeGreaterThan(money);
 
     // Both currencies, both sums over stored rows.
     expect(screen.getByText("$266.32")).toBeTruthy();
@@ -172,9 +182,14 @@ describe("Community leads with both currencies", () => {
 
     expect(screen.getByText(/No money has moved in this community yet/i)).toBeTruthy();
     expect(screen.queryByText("If everyone bought alone")).toBeNull();
+    /* And not the operator ledger either, which printed the same zero five more times
+       directly underneath. The rule was already written down here; the ledger below it
+       had simply never been held to it. */
+    expect(screen.queryByText("Where the money went")).toBeNull();
+    expect(screen.queryByText("Recorded all-in buyer cost")).toBeNull();
     // The attention ledger still shows, because that is where zero is the interesting
     // number: nobody has been asked anything.
-    expect(screen.getByText(/What it cost anyone in attention/i)).toBeTruthy();
+    expect(screen.getByText(/What Pool did on its own/i)).toBeTruthy();
   });
 
   it("does not describe coordination it has not done", () => {

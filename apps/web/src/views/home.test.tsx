@@ -941,3 +941,62 @@ describe("an order that filled without this member", () => {
     expect(screen.queryByText(/Nobody else near you buys this yet/)).toBeNull();
   });
 });
+
+describe("motion reports a change and never an arrival", () => {
+  /* The whole consumer motion budget, and the rule that makes it honest. The
+     changing-world beat is the product's strongest argument — one declaration answered
+     three ways as supplier facts arrive — so the moment the answer changes is worth
+     marking. Marking the *arrival* of a row would be marking something that did not
+     happen: nothing arrived, a row was re-read. */
+  const COFFEE: apiModule.StandingDemand = {
+    need_id: "need_rosa_coffee",
+    product_id: "prod_coffee_beans",
+    product_name: "Pike Place Medium Roast",
+    unit: "bag",
+    my_units: 2,
+    compatible_members: 6,
+    compatible_units: 6,
+    minimum_units: 18,
+    has_supplier: false,
+    sourceable_product_id: "",
+    sourceable_product_name: "",
+  };
+
+  const watching = () =>
+    renderHome([], {
+      member: memberView({
+        opportunity: null,
+        standing: [COFFEE],
+        outlook: [
+          {
+            need_id: "need_rosa_coffee",
+            product_id: "prod_coffee_beans",
+            product_name: "Pike Place Medium Roast",
+            state: "no_supply",
+            reason: "No verified supplier yet.",
+            blocker: "No supplier Pool has verified sells this in bulk yet.",
+            pool_id: "",
+            units_needed: 18,
+            units_available: 6,
+            status: "watching",
+            headline: "No verified supplier yet",
+          },
+        ],
+      }),
+    });
+
+  it("does not animate a state on first paint", async () => {
+    watching();
+    await screen.findByText(/What Pool is watching/);
+    expect(document.querySelector(".status-chip")).toBeTruthy();
+    expect(document.querySelector(".status-chip.just-changed")).toBeNull();
+  });
+
+  it("keeps the state and its reason readable as text, so motion is never the carrier", async () => {
+    watching();
+    await screen.findByText(/What Pool is watching/);
+    const chip = document.querySelector(".status-chip");
+    expect((chip?.querySelector(".status-word")?.textContent ?? "").length).toBeGreaterThan(0);
+    expect((chip?.querySelector(".status-reason")?.textContent ?? "").length).toBeGreaterThan(0);
+  });
+});

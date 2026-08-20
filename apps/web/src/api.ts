@@ -315,6 +315,10 @@ export interface MapData {
   }[];
   suppliers: { id: string; name: string; lat: number; lon: number }[];
   position_precision_m: number;
+  /** How far the matcher will actually let somebody walk to a pickup point. Read from
+   *  `coordination.WALKABLE_PICKUP_KM` rather than restated, so the ring the map draws is
+   *  the constraint the engine applies. */
+  walkable_km: number;
   note: string;
 }
 

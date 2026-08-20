@@ -63,6 +63,11 @@ async function pastName(name = "Jordan") {
   await userEvent.click(screen.getByRole("button", { name: /continue/i }));
 }
 
+/** Through the location step. Named after the consequence, like the button is. */
+async function pastWhere() {
+  await userEvent.click(screen.getByRole("button", { name: /join demo university/i }));
+}
+
 describe("setting up an account", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -129,7 +134,7 @@ describe("setting up an account", () => {
     renderOnboarding();
     await pastName();
 
-    expect(screen.getByRole("heading", { name: /where are you/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /works street by street/i })).toBeTruthy();
     expect(geo).not.toHaveBeenCalled();
   });
 
@@ -140,21 +145,28 @@ describe("setting up an account", () => {
     const text = (document.body.textContent ?? "").replace(/\s+/g, " ");
     expect(text).toMatch(/Demo University/);
     expect(text).toMatch(/24 members/);
-    expect(text).toMatch(/this community is invented/i);
+    expect(text).toMatch(/Demo University is invented/i);
     // Why a synthetic area exists at all — without it, "invented" reads as a limitation
     // rather than as the thing that makes the demo reproducible.
     expect(text).toMatch(/behave the same way wherever it is opened/i);
     // And the sentence that makes this work for a judge in any city on earth.
-    expect(text).toMatch(/has not asked your browser for your location/i);
-    // The step has no input, so the button is where the choice happens; it should name
-    // the place rather than read as clicking past a screen.
-    expect(screen.getByRole("button", { name: /continue in demo university/i })).toBeTruthy();
+    expect(text).toMatch(/has not asked your browser where you are/i);
+    // No institution is implied, which is the other thing a synthetic campus could be
+    // read as claiming.
+    expect(text).toMatch(/not a real institution/i);
+
+    /* Shown as the shape the real product has: a list you were found near and choose
+       from. The previous version named the community and offered no interaction, which
+       was honest and taught nothing — a reader could not tell whether Pool asks you,
+       guesses, or has exactly one community in the world. */
+    expect(text).toMatch(/Communities near you/i);
+    expect(screen.getByRole("button", { name: /join demo university/i })).toBeTruthy();
   });
 
   it("reuses the real catalogue search rather than a setup-only picker", async () => {
     renderOnboarding();
     await pastName();
-    await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+    await pastWhere();
 
     await userEvent.type(screen.getByLabelText(/what do you buy/i), "vanilla whey");
     const option = await screen.findByRole("option", { name: /100% Whey Protein/i });
@@ -165,7 +177,7 @@ describe("setting up an account", () => {
   it("declares through the real need path and will not continue empty-handed", async () => {
     renderOnboarding();
     await pastName();
-    await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+    await pastWhere();
 
     expect(screen.getByRole("button", { name: /add one to continue/i })).toHaveProperty(
       "disabled",
@@ -187,7 +199,7 @@ describe("setting up an account", () => {
   it("offers both autonomy modes in a member's words, with no rule slugs", async () => {
     renderOnboarding();
     await pastName();
-    await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+    await pastWhere();
     await userEvent.type(screen.getByLabelText(/what do you buy/i), "vanilla whey");
     await userEvent.click(await screen.findByRole("option", { name: /100% Whey Protein/i }));
     await userEvent.click(screen.getByRole("button", { name: /add this/i }));
@@ -203,7 +215,7 @@ describe("setting up an account", () => {
   it("marks the payment method as simulated and takes no card details", async () => {
     renderOnboarding();
     await pastName();
-    await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+    await pastWhere();
     await userEvent.type(screen.getByLabelText(/what do you buy/i), "vanilla whey");
     await userEvent.click(await screen.findByRole("option", { name: /100% Whey Protein/i }));
     await userEvent.click(screen.getByRole("button", { name: /add this/i }));
@@ -222,7 +234,7 @@ describe("setting up an account", () => {
     const onDone = vi.fn();
     renderOnboarding(onDone);
     await pastName("Priya");
-    await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+    await pastWhere();
     await userEvent.type(screen.getByLabelText(/what do you buy/i), "vanilla whey");
     await userEvent.click(await screen.findByRole("option", { name: /100% Whey Protein/i }));
     await userEvent.click(screen.getByRole("button", { name: /add this/i }));
@@ -257,7 +269,7 @@ describe("setting up an account", () => {
 
     renderOnboarding();
     await pastName();
-    await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+    await pastWhere();
     await userEvent.type(screen.getByLabelText(/what do you buy/i), "vanilla whey");
     await userEvent.click(await screen.findByRole("option", { name: /100% Whey Protein/i }));
     await userEvent.click(screen.getByRole("button", { name: /add this/i }));
@@ -281,7 +293,7 @@ describe("setting up an account", () => {
     const onDone = vi.fn();
     renderOnboarding(onDone);
     await pastName();
-    await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+    await pastWhere();
     await userEvent.type(screen.getByLabelText(/what do you buy/i), "vanilla whey");
     await userEvent.click(await screen.findByRole("option", { name: /100% Whey Protein/i }));
     await userEvent.click(screen.getByRole("button", { name: /add this/i }));
@@ -338,7 +350,7 @@ describe("setting up an account", () => {
 
     renderOnboarding();
     await pastName();
-    await userEvent.click(screen.getByRole("button", { name: /continue in/i }));
+    await pastWhere();
 
     // Their earlier declaration is shown, and they are not stuck behind it.
     expect(await screen.findByText(/100% Whey Protein/i)).toBeTruthy();

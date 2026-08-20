@@ -42,62 +42,172 @@ import {
 
 /* --------------------------------------------------------------------- map */
 
+/** Where the people are, and whether they could actually share a pickup point.
+ *
+ * The previous version was dots on a grey rectangle with `preserveAspectRatio="none"`,
+ * which stretched the geography to fill the box — so the one thing a map is for, how far
+ * apart things are, was the thing it got wrong. And it answered no question: a reader
+ * could see that there were dots and learn nothing from them.
+ *
+ * This draws the constraint the matcher applies. `haversine_km(household, site) <=
+ * radius` is what decides whether somebody can be in an order, and the ring around each
+ * pickup point is that number — read from the server, which reads it from
+ * `coordination.WALKABLE_PICKUP_KM`, so the picture cannot drift from the rule. The
+ * question it answers is the one the demo keeps asserting: *these people are close
+ * enough to collect from one place.*
+ *
+ * **No tile service, no key, no new dependency, and that is a decision rather than a
+ * shortcut.** Demo University does not exist. Putting invented households on a real
+ * street map of a real city would be a more convincing lie, not a better map — and it
+ * would add a network request, a third-party dependency and a CSP surface for the
+ * privilege. The coordinates here are the fixtures' own, projected honestly.
+ *
+ * Privacy: the server rounds positions to roughly 110 m before they leave it and sends no
+ * address, so what is plotted is a neighbourhood rather than a doorstep. This component
+ * makes nothing more precise than what it was given.
+ */
+/** A pickup point's name, short enough to sit on a drawing.
+ *
+ *  Trims the qualifier after a dash and the words that are true of every site here.
+ *  "Student Union — north entrance" is the right name on an order, where somebody has to
+ *  find the door; on a map of four points it is a label that overlaps the next one. */
+function shortSite(name: string): string {
+  return name
+    .replace(/\s+—.*$/, "")
+    .replace(/\s+(common room|lobby|pavilion)$/i, "")
+    .trim();
+}
+
 function CommunityMap({ map }: { map: MapData | null }) {
   if (!map || map.members.length === 0) return <Empty>No community data yet.</Empty>;
 
   const points = [...map.members, ...map.sites];
   const lats = points.map((p) => p.lat);
   const lons = points.map((p) => p.lon);
-  const pad = 0.002;
+  const pad = 0.0016;
   const minLat = Math.min(...lats) - pad;
   const maxLat = Math.max(...lats) + pad;
   const minLon = Math.min(...lons) - pad;
   const maxLon = Math.max(...lons) + pad;
-  const x = (lon: number) => ((lon - minLon) / (maxLon - minLon || 1)) * 100;
-  const y = (lat: number) => (1 - (lat - minLat) / (maxLat - minLat || 1)) * 100;
+
+  /* An equirectangular projection with the longitude scale corrected for latitude, so a
+     kilometre north and a kilometre east are the same length on screen. Without the
+     cos(lat) term — and without a fixed aspect ratio — every distance the ring is meant
+     to communicate is wrong by about 22% at this latitude. */
+  const midLat = (minLat + maxLat) / 2;
+  const cos = Math.cos((midLat * Math.PI) / 180);
+  const spanLat = maxLat - minLat || 1;
+  const spanLon = (maxLon - minLon || 1) * cos;
+  const KM_PER_DEG_LAT = 110.574;
+
+  const H = 100;
+  const W = Math.max(60, Math.min(220, (spanLon / spanLat) * H));
+  const x = (lon: number) => (((lon - minLon) * cos) / spanLon) * W;
+  const y = (lat: number) => (1 - (lat - minLat) / spanLat) * H;
+  /** The walkable radius, in the same units the projection uses. */
+  const ring = ((map.walkable_km ?? 0) / (spanLat * KM_PER_DEG_LAT)) * H;
+
+  const inPool = map.members.filter((m) => m.in_pool).length;
 
   return (
     <div className="map-wrap">
-      <svg viewBox="0 0 100 70" preserveAspectRatio="none" role="img" aria-label="Community map">
-        {map.sites.map((s) => (
-          <rect
-            key={s.id}
-            x={x(s.lon) - 1.1}
-            y={(y(s.lat) * 70) / 100 - 1.1}
-            width="2.2"
-            height="2.2"
-            fill="var(--graphite)"
-          />
-        ))}
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="map-svg"
+        role="img"
+        aria-label={
+          `${map.members.length} members across ${
+            new Set(map.members.map((m) => m.zone)).size
+          } zones, ` +
+          `${map.sites.length} pickup points, each within ${map.walkable_km} km walking ` +
+          `of the members around it. ${inPool} currently in an order.`
+        }
+      >
+        {/* Walking range first, underneath everything, because it is context rather than
+            a thing on the map. One ring per pickup point: the overlap is exactly where a
+            member could be served by either. */}
+        {ring > 0
+          ? map.sites.map((s) => (
+              <circle
+                key={`ring-${s.id}`}
+                className="map-ring"
+                cx={x(s.lon)}
+                cy={y(s.lat)}
+                r={ring}
+              />
+            ))
+          : null}
+
         {map.members.map((m) => (
           <circle
             key={m.id}
+            className={`map-member${m.in_pool ? " is-pooled" : ""}`}
             cx={x(m.lon)}
-            cy={(y(m.lat) * 70) / 100}
-            r={m.in_pool ? 1.1 : 0.7}
-            fill={m.in_pool ? "var(--moss)" : "var(--ink-faint)"}
-            opacity={m.in_pool ? 1 : 0.5}
+            cy={y(m.lat)}
+            r={m.in_pool ? 1.5 : 1.1}
           />
         ))}
+
+        {map.sites.map((s) => {
+          /* Labels flip to the inside when a marker sits in the right-hand third,
+             because a name running off the edge of the drawing is worse than no name
+             and this is a fixed-width box rather than a pannable canvas. */
+          const cx = x(s.lon);
+          const flip = cx > W * 0.62;
+          return (
+            <g key={s.id}>
+              <rect className="map-site" x={cx - 1.4} y={y(s.lat) - 1.4} width="2.8" height="2.8" />
+              {/* Named, because "a pickup point somewhere here" is not the same claim as
+                  "North Hall lobby", and the second one is the one Pool makes. */}
+              <text
+                className="map-label"
+                x={flip ? cx - 2.6 : cx + 2.6}
+                y={y(s.lat) + 1.1}
+                textAnchor={flip ? "end" : "start"}
+              >
+                {shortSite(s.name)}
+              </text>
+            </g>
+          );
+        })}
       </svg>
+
       <div className="map-legend">
         <span className="legend-item">
-          <span className="legend-swatch" style={{ background: "var(--moss)" }} /> in a pool
+          <span className="legend-swatch swatch-pooled" /> in an order
         </span>
         <span className="legend-item">
-          <span className="legend-swatch" style={{ background: "var(--ink-faint)" }} /> declared a
-          need
+          <span className="legend-swatch swatch-member" /> declared something
         </span>
         <span className="legend-item">
-          <span
-            className="legend-swatch"
-            style={{ background: "var(--graphite)", borderRadius: 0 }}
-          />{" "}
-          pickup site
+          <span className="legend-swatch swatch-site" /> pickup point
+        </span>
+        <span className="legend-item">
+          <span className="legend-swatch swatch-ring" /> {map.walkable_km} km walk
         </span>
       </div>
+
+      {/* The list is the map, for anybody the map is not for. Same numbers, no SVG. */}
+      <details className="map-fallback">
+        <summary className="tiny muted">Read this as a list</summary>
+        <ul className="tiny muted">
+          {[...new Set(map.members.map((m) => m.zone))].sort().map((zone) => (
+            <li key={zone}>
+              {zone}: {map.members.filter((m) => m.zone === zone).length} members
+            </li>
+          ))}
+          {map.sites.map((s) => (
+            <li key={s.id}>
+              {s.name} — pickup point, permission: {s.permission}
+            </li>
+          ))}
+        </ul>
+      </details>
+
       <p className="tiny muted" style={{ padding: "0 14px 12px" }}>
-        {map.note}
+        {map.note} Positions are rounded to about {map.position_precision_m} m before they
+        leave the server. The ring is the distance the matcher actually allows, so a
+        member outside every ring is one no order at these sites can include.
       </p>
     </div>
   );

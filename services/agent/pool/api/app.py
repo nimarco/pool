@@ -780,6 +780,12 @@ def get_map(workspace: str = Query("demo")) -> dict[str, Any]:
             for s in r.list_suppliers(ws)
         ],
         "position_precision_m": 110,
+        # The constraint the matcher actually applies, so the map can draw the question
+        # it answers — "could these people reach one pickup point" — rather than
+        # scattering dots on a grey rectangle. Read from `coordination`, not restated
+        # here, because a map showing a radius the matcher does not use would be worse
+        # than a map showing none.
+        "walkable_km": coord.WALKABLE_PICKUP_KM,
         "note": "Member positions are approximate by design and contain no address.",
     }
 

@@ -157,45 +157,57 @@ function WhereStep({
 }) {
   return (
     <div className="stack-sm">
-      <h1 className="display onboard-title">Where are you?</h1>
+      <h1 className="display onboard-title">Pool works street by street.</h1>
       <p className="lede">
-        Pool only works locally — the people it finds for you have to be close enough to
-        collect from the same place. In the real product this comes from your device.
+        The people it finds for you have to be close enough to collect from the same
+        place, so the one thing it needs first is which local network you are in.
       </p>
 
-      {/* The card is the *answer*, and it is labelled as one. Without this the screen
-          poses a question and then offers no input, which reads as an unfinished form
-          rather than as Pool telling you where it will be looking. */}
+      {/* Presented as what it is in the real product — a list you were found near and
+          choose from — rather than as a single fact stated at you. The previous version
+          named Demo University and offered no interaction, which was honest and taught
+          nothing: a reader could not tell whether Pool works by asking you, by guessing,
+          or by having exactly one community in the world.
+
+          The list has one entry here, and saying so is better than hiding the shape. */}
       <div className="inset stack-sm">
-        <div className="row-between" style={{ alignItems: "flex-start", gap: 12 }}>
-          <div>
-            <div className="section-title" style={{ marginBottom: 4 }}>
-              Pool will look here
-            </div>
-            <div className="row-title">{place?.community_name ?? "Demo University"}</div>
-            <p className="small muted" style={{ marginTop: 4 }}>
-              {place ? `${place.member_count} members` : "—"}
-              {place ? ` · ${place.pickup_site_count} pickup spots` : ""}
-            </p>
-          </div>
-          {place?.synthetic ? <span className="chip">demo</span> : null}
+        <div className="row-between" style={{ alignItems: "baseline" }}>
+          <span className="section-title">Communities near you</span>
+          <span className="tiny faint">1 found</span>
         </div>
+
+        <button className="community-choice" onClick={onNext}>
+          <span className="community-choice-body">
+            <span className="row-title">
+              {place?.community_name ?? "Demo University"}
+              {place?.synthetic ? <span className="chip">demo</span> : null}
+            </span>
+            <span className="small muted">
+              {place ? `${place.member_count} members` : "—"}
+              {place ? ` · ${place.pickup_site_count} pickup points` : ""}
+              {place ? " · everyone within a short walk of one of them" : ""}
+            </span>
+          </span>
+          <IconArrowRight />
+        </button>
+
         {/* The truth boundary, stated where the decision is made rather than buried in a
             policy page. It is what lets this screen work identically for a judge in
             another hemisphere. */}
         <p className="small muted prose">
-          This community is invented, and so is everyone in it — which is what lets the
-          demo behave the same way wherever it is opened. Pool has not asked your browser
-          for your location and has not tried to guess it.
+          In the real product this list comes from your device. It does not here: Pool has
+          not asked your browser where you are and has not guessed. Demo University is
+          invented and so is everyone in it, which is what makes the demo behave the same
+          way wherever it is opened — and it is not a real institution, so nothing here
+          implies a partnership with one.
         </p>
       </div>
 
       <div className="btn-row">
-        {/* Named rather than "Continue": this step has no input, so the button is where
-            the choice actually happens, and it should read as entering somewhere on
-            purpose rather than as clicking past a screen. */}
+        {/* Named after the consequence. "Continue" would make the row above decorative,
+            and joining a community is the thing this screen is for. */}
         <button className="btn btn-primary btn-lg" onClick={onNext}>
-          Continue in {place?.community_name ?? "the demo community"}
+          Join {place?.community_name ?? "the demo community"}
           <IconArrowRight />
         </button>
         <button className="btn" onClick={onBack}>

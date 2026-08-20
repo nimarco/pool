@@ -2863,3 +2863,99 @@ select.control {
   border-top: 1px solid var(--rule);
   font-variant-numeric: tabular-nums;
 }
+
+/* The community map. Styled here rather than inline so the whole thing reads as one
+ * drawing, and so dark mode is one place rather than eight fill attributes. */
+.map-svg {
+  /* A hard cap, because a wide community would otherwise make a letterbox nobody can
+     read. The projection keeps the aspect ratio honest inside it. */
+  max-height: 360px;
+  margin: 0 auto;
+}
+/* The distance the matcher allows. Underneath everything, because it is the context a
+ * reader measures against rather than a thing in its own right — and the overlap between
+ * two rings is exactly where a member could be served by either pickup point. */
+.map-ring {
+  fill: var(--moss);
+  fill-opacity: 0.055;
+  stroke: var(--moss-line);
+  stroke-width: 0.35;
+  stroke-dasharray: 1.6 1.4;
+}
+.map-member {
+  fill: var(--ink-faint);
+  fill-opacity: 0.55;
+}
+.map-member.is-pooled {
+  fill: var(--moss);
+  fill-opacity: 1;
+}
+.map-site {
+  fill: var(--graphite, var(--ink));
+}
+.map-label {
+  font-size: 3px;
+  fill: var(--ink-muted);
+  font-family: inherit;
+}
+.map-fallback {
+  padding: 0 14px 8px;
+}
+.map-fallback summary {
+  cursor: pointer;
+}
+.map-fallback ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.legend-swatch.swatch-pooled {
+  background: var(--moss);
+}
+.legend-swatch.swatch-member {
+  background: var(--ink-faint);
+  opacity: 0.55;
+}
+.legend-swatch.swatch-site {
+  background: var(--graphite, var(--ink));
+  border-radius: 0;
+}
+.legend-swatch.swatch-ring {
+  background: var(--moss);
+  opacity: 0.12;
+  border: 1px dashed var(--moss-line);
+  border-radius: 50%;
+}
+
+/* One community, in the list shape the real product uses. A row you choose rather than a
+ * fact stated at you: the previous version named the community and offered no
+ * interaction, which was honest and taught nothing about how Pool finds one. */
+.community-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.community-choice:hover {
+  border-color: var(--ink);
+}
+.community-choice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.community-choice .row-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}

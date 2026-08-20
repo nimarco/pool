@@ -38,14 +38,28 @@ from pool.api import app as api
 from pool.services import coordination as coord
 from pool.services import supplier_import as si
 
-FIXTURE = os.path.join(si.DEMO_DATA_DIR, "supplier_quotes.csv")
+#: In the order the sequence uses them. The split-case sheet clears the supplier minimum
+#: and is still refused, and that refusal is what makes the sequence evidence rather than
+#: a switch — so a demo that imported the better sheet first would prove less.
+SPLIT = "riverbend-split-case.csv"
+PROGRAMME = "riverbend-case-programme.csv"
 RICE = "prod_rice_jasmine"
+
+
+def _read(name: str) -> bytes:
+    with open(os.path.join(si.DEMO_DATA_DIR, name), "rb") as handle:
+        return handle.read()
 
 
 @pytest.fixture
 def committed() -> bytes:
-    with open(FIXTURE, "rb") as handle:
-        return handle.read()
+    """The first sheet — the one that clears the minimum and is refused anyway."""
+    return _read(SPLIT)
+
+
+@pytest.fixture
+def programme() -> bytes:
+    return _read(PROGRAMME)
 
 
 @pytest.fixture
@@ -56,7 +70,7 @@ def client() -> TestClient:
     return c
 
 
-def _upload(client: TestClient, data: bytes, name: str = "supplier_quotes.csv"):
+def _upload(client: TestClient, data: bytes, name: str = SPLIT):
     return client.post(
         "/api/demo/supplier-import",
         files={"file": (name, data, "text/csv")},
@@ -69,11 +83,13 @@ def _upload(client: TestClient, data: bytes, name: str = "supplier_quotes.csv"):
 def test_the_committed_fixture_is_the_one_the_manifest_names(committed):
     """A judge downloads this file and uploads it. If the digest has drifted, the demo
     refuses its own fixture — so the digest is checked in, not computed at start-up."""
-    entry = si.manifest().get("supplier_quotes.csv")
+    entry = si.manifest().get(SPLIT)
     assert entry is not None, "the fixture is not in demo-data/MANIFEST.json"
     assert entry["sha256"] == si.digest(committed)
     assert entry["bytes"] == len(committed)
-    assert si.allowlisted(committed) == "supplier_quotes.csv"
+    assert si.allowlisted(committed) == SPLIT
+    # And the order the demo depends on is stated rather than assumed from the filenames.
+    assert si.fixture_order() == [SPLIT, PROGRAMME]
 
 
 def test_the_fixture_says_what_it_is(committed):
@@ -91,26 +107,31 @@ def test_the_fixture_says_what_it_is(committed):
 def test_editing_one_price_changes_the_digest(committed):
     """The property the public gate rests on. Not a filename check — a filename is what
     an uploader chooses and a digest is what the bytes are."""
-    tampered = committed.replace(b"625", b"1")
+    tampered = committed.replace(b"975", b"1")
     assert tampered != committed
     assert si.allowlisted(tampered) == ""
     # Still perfectly parseable, which is the point: it is refused for authority, not
     # for being unreadable.
-    assert len(si.parse(tampered).rows) == 2
+    assert len(si.parse(tampered).rows) == 1
 
 
 # ------------------------------------------------------------------ the parser
 
 
-def test_the_committed_quotes_parse_to_the_terms_they_state(committed):
-    result = si.parse(committed, "supplier_quotes.csv")
-    assert result.rejected == []
-    assert [(r.unit_price_cents, r.case_units, r.min_units) for r in result.rows] == [
-        (975, 4, 12),
-        (625, 8, 16),
+def test_the_committed_quotes_parse_to_the_terms_they_state(committed, programme):
+    """One quote per sheet, and the two shapes a wholesaler actually quotes a staple in:
+    a smaller commitment with the handling priced in, and a better rate for a full case."""
+    split = si.parse(committed, SPLIT)
+    prog = si.parse(programme, PROGRAMME)
+    assert split.rejected == [] and prog.rejected == []
+    assert [(r.unit_price_cents, r.case_units, r.min_units) for r in split.rows] == [
+        (975, 4, 12)
     ]
-    assert {r.product_id for r in result.rows} == {RICE}
-    assert all(r.to_dict()["synthetic"] is True for r in result.rows)
+    assert [(r.unit_price_cents, r.case_units, r.min_units) for r in prog.rows] == [
+        (625, 8, 16)
+    ]
+    assert {r.product_id for r in [*split.rows, *prog.rows]} == {RICE}
+    assert all(r.to_dict()["synthetic"] is True for r in split.rows)
 
 
 def test_a_malformed_row_fails_and_names_its_line():
@@ -156,12 +177,14 @@ def test_an_enormous_file_is_refused_before_it_is_parsed():
     assert "limit" in str(exc.value)
 
 
-def test_re_importing_the_same_sheet_refreshes_rather_than_accumulating(committed):
+def test_re_importing_the_same_sheet_refreshes_rather_than_accumulating(committed, programme):
     """Two imports of one quote must not leave Pool believing it has two tiers, which
-    would double the supply the evaluator thinks exists."""
-    rows = si.parse(committed).rows
-    assert len({r.offer_id for r in rows}) == 2
-    assert si.parse(committed).rows[0].offer_id == rows[0].offer_id
+    would double the supply the evaluator thinks exists. And the two sheets must not
+    collide with each other, which is what the supplier's own reference is for."""
+    once = si.parse(committed).rows
+    twice = si.parse(committed).rows
+    assert [r.offer_id for r in once] == [r.offer_id for r in twice]
+    assert {r.offer_id for r in once}.isdisjoint({r.offer_id for r in si.parse(programme).rows})
 
 
 # ---------------------------------------------------- what the workspace can hold
@@ -203,17 +226,17 @@ def test_uploading_the_committed_sheet_records_ordinary_offers(client, committed
     # The file, as read. Not a canned summary: the byte count and digest are the
     # uploaded bytes'.
     assert body["recorded"] is True
-    assert body["allowlisted_as"] == "supplier_quotes.csv"
-    assert body["filename"] == "supplier_quotes.csv"
+    assert body["allowlisted_as"] == SPLIT
+    assert body["filename"] == SPLIT
     assert body["bytes"] == len(committed)
     assert body["sha256"] == si.digest(committed)
-    assert (body["rows_found"], body["valid"], body["rejected"]) == (2, 2, 0)
+    assert (body["rows_found"], body["valid"], body["rejected"]) == (1, 1, 0)
     assert all(o["source"] == "synthetic" for o in body["offers"])
 
     # Ordinary bulk offers, visible to the same `offers_for` every price comes from.
     ctx = api.ctx_for("demo")
     _, bulk = coord.offers_for(ctx, RICE)
-    assert {o.supplier_reference for o in bulk} == {"QUOTE-RICE-SPLIT", "QUOTE-RICE-CASE"}
+    assert {o.supplier_reference for o in bulk} == {"QUOTE-RICE-SPLIT"}
 
 
 def test_a_file_with_bad_rows_writes_the_good_ones_and_reports_the_rest(client):
@@ -312,6 +335,42 @@ def test_the_file_is_what_changes_the_answer(client, committed):
     assert client.get("/api/needs").json()["needs"] == needs_before
 
 
+def test_the_two_sheets_produce_a_refusal_before_a_yes(client, committed, programme):
+    """The half of the sequence that makes it evidence rather than a switch.
+
+    A single sheet that turns a no into a yes is the version of this that looks like an
+    answer key. The split-case programme clears the supplier minimum, fills whole cases,
+    and is *still* refused — removing an obstacle does not buy a yes — and only the
+    programme rate is worth doing. Nothing is deleted to get there: both quotes stay on
+    file and the evaluator picks between them.
+
+    The demand does not move once in this test. Every difference is a file arriving.
+    """
+    household, need_id = _declare_rice(client)
+    counts = client.get("/api/state").json()["counts"]
+    needs = client.get("/api/needs").json()["needs"]
+
+    assert _outlook(client, household, need_id)["state"] == "no_supply"
+
+    assert _upload(client, committed, SPLIT).json()["recorded"] is True
+    middle = _outlook(client, household, need_id)
+    assert middle["state"] == "not_worth_it", middle
+    assert middle["headline"] == "Supplier found — not cheaper"
+
+    assert _upload(client, programme, PROGRAMME).json()["recorded"] is True
+    end = _outlook(client, household, need_id)
+    assert end["state"] == "ready", end
+
+    # Both quotes are still on file. The better one won; the other was not removed.
+    ctx = api.ctx_for("demo")
+    _, bulk = coord.offers_for(ctx, RICE)
+    assert {o.supplier_reference for o in bulk} == {"QUOTE-RICE-SPLIT", "QUOTE-RICE-CASE"}
+
+    # And nobody was recruited between those three answers.
+    assert client.get("/api/state").json()["counts"] == counts
+    assert client.get("/api/needs").json()["needs"] == needs
+
+
 def test_importing_the_file_runs_no_agent(client, committed):
     """One offer row, and nothing that costs money or invents a verdict."""
     before = len(client.get("/api/state").json()["runs"])
@@ -363,7 +422,7 @@ def public_api(monkeypatch):
 PUBLIC_WS = "wjudge0000001"
 
 
-def _public_upload(module, data: bytes, name: str = "supplier_quotes.csv"):
+def _public_upload(module, data: bytes, name: str = SPLIT):
     client = TestClient(module.app)
     client.get(f"/api/state?workspace={PUBLIC_WS}")
     return client.post(
@@ -375,7 +434,7 @@ def _public_upload(module, data: bytes, name: str = "supplier_quotes.csv"):
 def test_a_public_deployment_refuses_bytes_it_cannot_audit(public_api, committed):
     """A judge who edits a price is told that is what was detected — and still sees what
     their file contained, because "rejected" and "unreadable" are different facts."""
-    tampered = committed.replace(b"625", b"1")
+    tampered = committed.replace(b"975", b"1")
     response = _public_upload(public_api, tampered)
     assert response.status_code == 200, response.text
     body = response.json()
@@ -384,8 +443,8 @@ def test_a_public_deployment_refuses_bytes_it_cannot_audit(public_api, committed
     assert body["refused"] == "not_allowlisted"
     assert body["offers"] == []
     # The parse still happened, and says so.
-    assert body["valid"] == 2
-    assert body["records"][1]["unit_price_cents"] == 1
+    assert body["valid"] == 1
+    assert body["records"][0]["unit_price_cents"] == 1
     assert "cannot become an offer" in body["reason"]
 
     # And nothing was written.
@@ -402,8 +461,8 @@ def test_a_public_deployment_still_accepts_the_committed_sheet(public_api, commi
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["recorded"] is True
-    assert body["allowlisted_as"] == "supplier_quotes.csv"
-    assert len(body["offers"]) == 2
+    assert body["allowlisted_as"] == SPLIT
+    assert len(body["offers"]) == 1
 
 
 def test_a_missing_manifest_fails_closed(monkeypatch, committed):
@@ -421,6 +480,8 @@ def test_the_manifest_is_valid_json_and_names_only_files_that_exist():
     assert payload["files"]
     for name in payload["files"]:
         assert os.path.isfile(os.path.join(si.DEMO_DATA_DIR, name)), name
+    # Both sheets, in the order the sequence uses them.
+    assert payload["order"] == [SPLIT, PROGRAMME]
 
 
 def test_the_metadata_endpoint_is_not_on_the_public_allowlist(public_api):
@@ -432,7 +493,8 @@ def test_the_metadata_endpoint_is_not_on_the_public_allowlist(public_api):
 
 def test_the_operator_screen_can_name_the_file_it_expects(client):
     body = client.get("/api/demo/supplier-file").json()
-    assert body["path"] == "demo-data/supplier_quotes.csv"
+    assert body["path"] == "demo-data/"
     assert "unit_price_cents" in body["columns"]
-    assert body["allowlisted"][0]["filename"] == "supplier_quotes.csv"
+    # Listed in sequence order, because which sheet arrives first is the point.
+    assert [f["filename"] for f in body["allowlisted"]] == [SPLIT, PROGRAMME]
     assert body["synthetic"] is True

@@ -2959,3 +2959,8 @@ select.control {
   gap: 8px;
   flex-wrap: wrap;
 }
+.import-sheets {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.7;
+}

@@ -6,9 +6,15 @@ demonstrable, and how it arrives decides whether a judge believes it.
 
 Two hardcoded ``Record quote`` buttons made the mechanism honest and the *presentation*
 indistinguishable from a switch. So the same terms now arrive the way supplier terms
-actually arrive: as a file somebody sends you. ``demo-data/supplier_quotes.csv`` is
-committed, readable on GitHub, and parsed here — really parsed, by
-:mod:`csv`, with a schema, with rows that can and do fail.
+actually arrive: as a file somebody sends you. Two sheets under ``demo-data/`` are
+committed, readable on GitHub, and parsed here — really parsed, by :mod:`csv`, with a
+schema, with rows that can and do fail.
+
+Two rather than one, because the order matters. The split-case sheet clears the supplier
+minimum and fills whole cases and is *still* refused once a fulfiller's pay, processing
+and Pool's fee are counted; the programme sheet is the one that works. A single file
+containing both would land them together and skip the refusal, which is the half of the
+sequence that makes it evidence rather than a switch.
 
 The claim this supports is exactly: **real ingestion pipeline, synthetic dataset.** Not
 "real supplier data". Riverbend Wholesale does not exist.
@@ -190,6 +196,24 @@ def manifest() -> dict[str, dict[str, Any]]:
             return dict(json.load(handle).get("files", {}))
     except (OSError, ValueError):
         return {}
+
+
+def fixture_order() -> list[str]:
+    """The sheets in the order the demo uses them, or alphabetical if unstated.
+
+    Which sheet arrives first is load-bearing: the split-case programme clears the
+    supplier minimum and is *still* refused, and that refusal is what makes the sequence
+    evidence rather than a switch. A demo that imported the better sheet first would
+    demonstrate only that Pool can say yes.
+    """
+    try:
+        with open(MANIFEST_PATH, encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, ValueError):
+        return []
+    stated = [str(n) for n in payload.get("order", [])]
+    files = sorted(payload.get("files", {}))
+    return stated + [f for f in files if f not in stated]
 
 
 def allowlisted(data: bytes) -> str:

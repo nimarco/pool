@@ -213,14 +213,26 @@ function QuoteSheetImport({
           <span className="mono">
             {(info?.columns ?? ["product_id", "supplier_id", "unit_price_cents", "case_units", "min_units", "supplier_reference"]).join(", ")}
           </span>
-          <br />
-          Committed sheet: <span className="mono">{info?.path ?? "demo-data/supplier_quotes.csv"}</span>
-          {info?.allowlisted?.[0] ? (
-            <>
-              {" "}· sha256 <span className="mono">{info.allowlisted[0].sha256.slice(0, 16)}…</span>
-            </>
-          ) : null}
         </p>
+
+        {/* Named in sequence order, because which sheet arrives first is the point: the
+            split-case programme clears the supplier minimum and is still refused. A
+            single sheet that turned a no into a yes would look like an answer key. */}
+        {info?.allowlisted?.length ? (
+          <ol className="tiny faint import-sheets">
+            {info.allowlisted.map((f, i) => (
+              <li key={f.filename}>
+                <span className="mono">
+                  {info.path}
+                  {f.filename}
+                </span>{" "}
+                · {f.bytes} bytes · sha256{" "}
+                <span className="mono">{f.sha256.slice(0, 16)}…</span>
+                {i === 0 ? " — clears the minimum, still not worth doing" : " — the one that works"}
+              </li>
+            ))}
+          </ol>
+        ) : null}
 
         <label className="btn btn-sm import-pick">
           {busy ? "Reading…" : "Choose a CSV file"}

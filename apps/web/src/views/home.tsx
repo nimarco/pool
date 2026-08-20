@@ -285,11 +285,16 @@ function OpportunityCard({
         ) : null}
 
         <Meter value={pool.provisional_units} max={pool.threshold_units} />
+        {/* "24 of the 16 units this supplier will sell" is arithmetically true and reads
+            as a mistake, which is what happens whenever a minimum is described as a
+            target. Once the order is over the line the interesting number is the margin;
+            below it, it is the gap. */}
         <p className="small muted">
-          {pool.provisional_units} of the {pool.threshold_units} units this supplier will
-          sell.
+          {pool.provisional_units >= pool.threshold_units
+            ? `${pool.provisional_units} units — past the supplier's ${pool.threshold_units}-unit minimum.`
+            : `${pool.provisional_units} units of the ${pool.threshold_units} this supplier will sell.`}
           {pool.funded_units > 0
-            ? ` ${pool.funded_units} units have exact-amount authorizations.`
+            ? ` ${pool.funded_units} have a payment authorised for the exact amount.`
             : ""}
         </p>
 

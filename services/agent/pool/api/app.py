@@ -1795,11 +1795,15 @@ def supplier_file() -> dict[str, Any]:
     """
     entries = supplier_import.manifest()
     return {
-        "path": "demo-data/supplier_quotes.csv",
+        "path": "demo-data/",
         "columns": list(supplier_import.REQUIRED_COLUMNS),
+        # In the order the sequence uses them, because which sheet arrives first is the
+        # whole point: the split-case programme clears the supplier minimum and is still
+        # refused, and a demo that imported the good one first would look like a switch.
         "allowlisted": [
             {"filename": name, **{k: v for k, v in entry.items()}}
-            for name, entry in sorted(entries.items())
+            for name in supplier_import.fixture_order()
+            if (entry := entries.get(name))
         ],
         # True where any file is accepted, which is only ever a local process.
         "accepts_any_file": not _public.enabled,

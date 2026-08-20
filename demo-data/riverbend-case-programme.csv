@@ -1,0 +1,12 @@
+# Riverbend Wholesale — standing case programme, jasmine rice
+#
+# SYNTHETIC. Riverbend Wholesale does not exist. Nobody negotiated these terms, no
+# wholesaler relationship stands behind them, and Pool stores them as synthetic rather
+# than as verified quotes.
+#
+# The second of two sheets. Riverbend's programme rate asks for more — eight bags to a
+# case, sixteen minimum — and prices better for it. Both sheets stay on file after this
+# one is imported, and the evaluator picks between them; nothing is deleted to make an
+# order work.
+product_id,supplier_id,unit_price_cents,case_units,min_units,supplier_reference,quoted_at
+prod_rice_jasmine,sup_riverbend,625,8,16,QUOTE-RICE-CASE,2026-08-19T14:31:00Z

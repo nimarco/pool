@@ -1,10 +1,18 @@
 {
-  "note": "Digests of the supplier-quote fixtures the public demo will accept. The parser always runs on the bytes it is given; this decides whose bytes may become offer rows on a deployment strangers can reach.",
+  "note": "Digests of the supplier-quote sheets the public demo will accept. The parser always runs on whatever bytes it is given; this decides whose bytes may become offer rows on a deployment strangers can reach. Two sheets rather than one, because the sequence they demonstrate is that removing an obstacle does not buy a yes -- the first clears the supplier minimum and is still refused.",
   "algorithm": "sha256",
+  "order": [
+    "riverbend-split-case.csv",
+    "riverbend-case-programme.csv"
+  ],
   "files": {
-    "supplier_quotes.csv": {
-      "sha256": "b391207520aaccf161e029726c3250a0f8f1197eb9149a18e0bc8690753bd876",
-      "bytes": 1067
+    "riverbend-case-programme.csv": {
+      "sha256": "f8bd6a6a4b78b2306950a36a37c2f08bda7a3dd4651a407f9d2e7c05b57314d7",
+      "bytes": 713
+    },
+    "riverbend-split-case.csv": {
+      "sha256": "8e0f4e6e049d14b1fdbddaa87dea4384a5b2dcb61b8a06111fe73170b2adaa8a",
+      "bytes": 1144
     }
   }
 }

@@ -1,0 +1,18 @@
+# Riverbend Wholesale — split-case programme, jasmine rice
+#
+# SYNTHETIC. Riverbend Wholesale does not exist. Nobody negotiated these terms, no
+# wholesaler relationship stands behind them, and Pool stores them as synthetic rather
+# than as verified quotes. They are here so the demo can show what Pool does when a
+# supplier fact arrives that did not exist before, and that does not need the numbers to
+# be real.
+#
+# This is the first of two sheets, and the interesting one. Riverbend will break cases —
+# a smaller commitment, with the handling priced into the unit rate. It clears the
+# minimum, it fills whole cases, and it is still not worth doing once a fulfiller's pay,
+# card processing and Pool's fee are counted. Removing an obstacle does not buy a yes.
+#
+# Nothing in this format can say that. There is no column for a verdict, a saving or a
+# viability flag: these are terms, and what they are worth is the evaluator's answer,
+# computed when somebody asks.
+product_id,supplier_id,unit_price_cents,case_units,min_units,supplier_reference,quoted_at
+prod_rice_jasmine,sup_riverbend,975,4,12,QUOTE-RICE-SPLIT,2026-08-19T14:02:00Z

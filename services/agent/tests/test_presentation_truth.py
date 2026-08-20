@@ -44,8 +44,11 @@ def test_the_rehearsal_bounds_its_live_invocations_and_reads_stored_proof():
     script = _read("docs/DEMO_SCRIPT.md")
     flat = " ".join(script.split())
 
-    assert "Click `Run Pool now` exactly once" in script
-    assert "Technical proof for this run" in script
+    assert "Click `Ask Pool to check now` exactly once" in script
+    # Reached from Behind Pool now, which is the one destination judge proof lives at
+    # rather than the five labels that used to lead here from three different drawers.
+    assert "Behind Pool" in script
+    assert "Take **Technical proof**" in script
     # The bound, stated as a continuity rule rather than left implicit.
     assert "two** live AgentCore invocations and no more" in flat
     # And the proof is read back, never re-run to produce it.
@@ -77,7 +80,10 @@ def test_the_rehearsal_opens_on_the_person_not_a_dashboard():
     # could not yet surface what Pool can source — typing the category was a dead end.
     # The instruction is gone, and the script names the *category* path instead.
     assert "Type a category" in flat
-    assert "Pool can source this" in flat
+    # The family is the first result, and the individual bags stay available. A category
+    # that resolved only to one brand is what fragmented the demand in the first place.
+    assert "any of 13 — Pool buys whichever works out cheapest" in flat
+    assert "equally declarable" in flat
     for magic in ("Type `vanilla whey`", "type `vanilla whey`"):
         assert magic not in flat, "the rehearsal still depends on a memorised phrase"
     # The quotes are the demonstration, so they may not be arranged beforehand.
@@ -101,7 +107,7 @@ def test_the_rehearsal_shows_a_refusal_as_well_as_a_result():
     """
     flat = " ".join(_read("docs/DEMO_SCRIPT.md").split())
     assert "both answers are no" in flat
-    assert "the supplier will not sell fewer than" in flat
+    assert "will not sell fewer than 48" in flat
     # And the report may never be described as weighing something it did not evaluate.
     assert 'Never say Pool "considered" something the report does not list' in flat
 
@@ -117,6 +123,8 @@ def test_the_rehearsal_keeps_the_refusal_that_makes_the_sequence_evidence():
     flat = " ".join(_read("docs/DEMO_SCRIPT.md").split())
     assert "Do **not** cut the split-case quote" in flat
     assert "looks like an answer key" in flat
+    # And the sheets are imported in a stated order, because the order is the argument.
+    assert "Import the sheets in order" in flat
     # The mechanism is stated as one offer row, and as changing nothing about demand.
     assert "one supplier offer row was written" in flat
     assert "no agent ran" in flat
@@ -138,28 +146,28 @@ def test_readme_describes_the_product_run_as_its_own_proof():
     assert "No second live invocation is needed" in readme
     assert "`created_by_run`" in readme
     assert "zero EventBridge rules" in readme
-    assert "31 allowlisted API paths" in readme
+    assert "32 allowlisted API paths" in readme
 
 
 def test_the_rehearsal_quotes_figures_the_screen_will_actually_show():
     """Every number in the script is one the presenter will read off the page.
 
     The script's own continuity rule is "never say a number not visible on screen", and a
-    stale pair does not look wrong — it looks like the presenter took a wrong turn. The
-    detergent line broke it once by quoting the arithmetic of a *four*-unit declaration
-    while step 6 tells the presenter to keep the form's default of two.
+    stale pair does not look wrong — it looks like the presenter took a wrong turn.
 
     So the whole changing-world sequence is driven here, through the same endpoints the
-    browser calls, on the same defaults the form ships (``apps/web/src/views/needs.tsx``).
-    Every sentence the script puts in a blockquote has to come back out of a real
-    response. Nothing is asserted; it is all computed and then looked for.
+    browser calls, on the same defaults the form ships — including the two committed CSV
+    sheets, uploaded in the order the script tells the presenter to upload them. Every
+    sentence the script puts in a blockquote has to come back out of a real response.
+    Nothing is asserted; it is all computed and then looked for.
     """
+    import os
     from datetime import date, timedelta
 
     from fastapi.testclient import TestClient
 
     from pool.api import app as api
-    from pool.services import supplier_updates as su
+    from pool.services import supplier_import as si
 
     # Blockquote markers dropped, not just collapsed: sentences are quoted across two
     # lines, so a plain whitespace join leaves a ">" in the middle of one.
@@ -171,19 +179,18 @@ def test_the_rehearsal_quotes_figures_the_screen_will_actually_show():
     api._repo.reset("demo")
     client = TestClient(api.app)
     client.get("/api/state")
-    client.post(
-        "/api/onboarding", json={"display_name": "Marco", "autonomy_mode": "ask_me_first"}
-    )
+    client.post("/api/onboarding", json={"display_name": "Marco", "autonomy_mode": "ask_me"})
     client.post("/api/onboarding/payment-method")
     household = client.get("/api/state").json()["consumer"]["household_id"]
 
-    def declare(product_id: str) -> None:
-        # `blankDraft` in the Needs form: two units, every 30 days, needed in 14.
+    def declare(group: str) -> None:
+        # `blankDraft` in the form: two units, every 30 days, needed in 14. A *family*,
+        # which is what the script tells the presenter to pick.
         response = client.post(
             "/api/needs",
             json={
                 "household_id": household,
-                "product_id": product_id,
+                "group": group,
                 "quantity": 2,
                 "cadence_days": 30,
                 "expected_next_need_date": (date.today() + timedelta(days=14)).isoformat(),
@@ -191,7 +198,6 @@ def test_the_rehearsal_quotes_figures_the_screen_will_actually_show():
                 "routine_lead_days": 7,
                 "min_savings_pct": 15,
                 "max_spend_cents": 12000,
-                "substitution": "exact_only",
             },
         )
         assert response.status_code == 200, response.text
@@ -199,51 +205,78 @@ def test_the_rehearsal_quotes_figures_the_screen_will_actually_show():
     def me() -> dict:
         return client.get(f"/api/members/{household}").json()
 
+    def rice_outlook() -> dict:
+        return next(o for o in me()["needs_outlook"] if o["product_name"] == "Rice")
+
     def run_results() -> dict[str, dict]:
         run = client.post("/api/agent/run", json={"trigger": "member_scan"}).json()
         report = client.get(
             f"/api/runs/{run['run_id']}/report", params={"household_id": household}
         ).json()
-        return {r["product_id"]: r for r in report["results"]}
+        return {r["product_name"]: r for r in report["results"]}
 
-    declare(su.PRODUCT_ID)
-    declare("prod_paper_towels")
+    def upload(name: str) -> dict:
+        with open(os.path.join(si.DEMO_DATA_DIR, name), "rb") as handle:
+            data = handle.read()
+        body = client.post(
+            "/api/demo/supplier-import", files={"file": (name, data, "text/csv")}
+        ).json()
+        assert body["recorded"] is True, body
+        return body
 
-    # --- the pre-run screen: demand that accumulated with no supplier behind it.
-    standing = next(d for d in me()["standing_demand"] if d["product_id"] == su.PRODUCT_ID)
+    declare("rice")
+    declare("paper_towels")
+
+    # --- the family is what the member declared, and the screen says so.
+    quoted("**Rice** — WATCHING · No verified supplier yet", "watching row")
+
+    # --- the pre-run row: demand that accumulated with no supplier behind it.
+    standing = next(d for d in me()["standing_demand"] if d["product_name"] == "Rice")
+    together = standing["compatible_units"] + standing["my_units"]
     quoted(
-        f"{standing['compatible_members']} other members have independently declared "
-        f"something this could be bought for — {standing['compatible_units']} bags. "
-        f"With yours, {standing['compatible_units'] + standing['my_units']}.",
+        f"**{standing['compatible_members'] + 1} people near you** buy this — "
+        f"{together} bags standing, {standing['my_units']} of them yours",
         "standing demand",
     )
     assert standing["has_supplier"] is False
-    assert standing["minimum_units"] == 0
+    quoted(rice_outlook()["blocker"], "no-supplier blocker")
 
     # --- the first run: two refusals, for two different reasons.
     first = run_results()
-    quoted(first[su.PRODUCT_ID]["headline"], "no-supplier refusal")
-    quoted(first["prod_paper_towels"]["headline"], "supplier-minimum refusal")
+    quoted(first["Jasmine rice, 5 lb"]["headline"], "no-supplier refusal")
+    quoted(first["Paper towels, 6 rolls"]["headline"], "supplier-minimum refusal")
 
-    # --- the split-case quote, and the blocker it moves to. No run in between.
-    split = su.QUOTES["rice_split_case"]
-    client.post("/api/demo/supplier-updates", json={"quote": split.key})
-    outlook = next(o for o in me()["needs_outlook"] if o["product_id"] == su.PRODUCT_ID)
-    quoted(outlook["reason"], "outlook after the split-case quote")
-
-    # --- the case-programme quote, and the minimum the screen then shows.
-    program = su.QUOTES["rice_case_program"]
-    client.post("/api/demo/supplier-updates", json={"quote": program.key})
-    standing = next(d for d in me()["standing_demand"] if d["product_id"] == su.PRODUCT_ID)
+    # --- the split-case sheet, and the blocker it moves to. No run in between.
+    split = upload("riverbend-split-case.csv")
+    quoted(f"riverbend-split-case.csv · {split['bytes']} bytes", "the file as read")
+    quoted(f"sha256 {split['sha256'][:16]}", "the digest the screen shows")
     quoted(
-        f"The supplier's best price starts at {standing['minimum_units']}.",
-        "supplier minimum after the case-programme quote",
+        f"{split['rows_found']} record found · {split['valid']} valid · "
+        f"{split['rejected']} rejected",
+        "the row counts",
     )
+    # The line number is the *file's*, which is only interesting because the fixture
+    # explains itself in comments first.
+    assert split["records"][0]["line"] == 18, split["records"]
+    quoted("line number in the table is line 18", "the real line number")
+
+    after_split = rice_outlook()
+    assert after_split["state"] == "not_worth_it", after_split
+    quoted(f"**{after_split['headline']}**", "the not-cheaper status")
+    quoted(after_split["blocker"], "the not-cheaper blocker")
+
+    # --- the case-programme sheet, and the third answer.
+    upload("riverbend-case-programme.csv")
+    after_programme = rice_outlook()
+    assert after_programme["state"] == "ready", after_programme
+    quoted(f"**{after_programme['headline']}**", "the worth-doing status")
 
     # --- the second run, on the changed world.
     second = run_results()
-    result = second[su.PRODUCT_ID]
+    result = second["Jasmine rice, 5 lb"]
     assert result["result"] == "formed_included", result
+    # Towels are unchanged, which is the "the world changed for one product" line.
+    assert second["Paper towels, 6 rolls"]["result"] == "declined"
 
     # The script quotes four of the six "why this worked" lines and says so — reading all
     # of them out loud is worse television. What it may never do is quote a line the run
@@ -258,18 +291,3 @@ def test_the_rehearsal_quotes_figures_the_screen_will_actually_show():
         assert fact in result["facts"], (
             f"the rehearsal quotes a line this run did not produce: {fact}"
         )
-
-    detail = client.get(f"/api/pools/{result['pool_id']}").json()
-    mine = next(m for m in detail["members"] if m["household_id"] == household)
-    quoted(
-        f"Your {mine['units']} bags · about {mine['estimated_cost_display']} instead of "
-        f"{mine['baseline_display']} buying alone.",
-        "member's own line on the order card",
-    )
-
-    # --- and the quote terms the operator panel prints.
-    for quote, price in ((split, "$9.75"), (program, "$6.25")):
-        assert f"{price} a bag" in flat, quote.key
-        assert f"minimum {quote.min_units} bags" in flat or (
-            f"{quote.min_units} minimum" in flat
-        ), quote.key

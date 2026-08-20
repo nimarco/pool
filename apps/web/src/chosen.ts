@@ -64,4 +64,3 @@ export function asChosen(picked: Picked): ChosenItem {
     draft: { product_id: p.product_id, substitution: "exact_only" },
   };
 }
-

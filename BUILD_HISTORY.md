@@ -5518,3 +5518,176 @@ Branch `feat/changing-world-demo`: `55b495c` `70d7ba9` `e20dcc5` `88c2d83` `0348
 `services/relevance.py`, `services/run_report.py`, `data/seed.py`, `api/app.py`,
 `api/public_demo.py`, `views/operations.tsx`, `views/home.tsx`, `App.tsx`,
 `tests/test_supplier_updates.py`, `docs/DEMO_SCRIPT.md`.
+
+---
+
+### #0050 — [2026-08-19] — The product says less, and the engine says more
+`[FRONTEND]` `[DEMO]` `[DOMAIN]` `[SECURITY]` `[ARTICLE-1]` `[ARTICLE-3]`
+
+**Goal / user intent**
+The system was semantically correct and the *product* was not readable. Turn the deepest build so
+far into the simplest expression of it, without weakening anything underneath: the interface should
+get simpler by representing the engine better, never by hiding what it does.
+
+**Starting state**
+`feat/changing-world-demo` at `26ad326`, clean, 927 agent + 75 infra + 97 web green. Everything
+below was measured in a real browser at 1280×720 and 390×844, 100% zoom, before any code changed —
+because the shape of the problem was not visible from the source.
+
+**The three findings that decided the whole pass**
+
+1. **Home said the same thing three times.** After a run with two items it listed each declaration
+   under `POOL CHECKED` with a verdict, again under `Still standing` with demand and a blocker, and a
+   third time under `What you buy anyway` with a cadence — which was also, field for field, the whole
+   of the Needs page. Two items made six rows and 2.17 viewport-heights, the primary button sat below
+   the fold, and the scroll fell between the demand and the blocker that explained it.
+
+2. **The centrepiece beat was one number, moving the wrong way.** The changing-world sequence is the
+   strongest argument this build makes. On Home the entire visible difference between "no supplier",
+   "supplier found, still not worth it" and "viable" was the tail of a sentence: `With yours, 24.`
+   → `…The supplier's best price starts at 12.` → `…starts at 16.` The good quote makes the number go
+   **up**, because the case-programme minimum is higher. The actual verdict — *there is enough demand
+   and it still would not be cheaper* — rendered only on **Needs**, on a different screen. Captured
+   from the baseline worktree for the atlas, the two screens are byte-identical at 1539 px except
+   `12` becoming `16`.
+
+3. **Thirty-six units of coffee demand produced nothing.** Run against the real engine: twelve
+   members, three units each, all buying some coffee, supplier minimum eighteen. Nine of the twelve
+   were discarded at `domain/substitution.py:61-62` as "member accepts the exact product only" before
+   timing or geography was consulted, because each had named a different brand. `below_minimum`, nine
+   matched units against eighteen. The product whose thesis is *Pool notices overlapping demand* was
+   configured so that overlapping demand did not overlap.
+
+**What we did**
+
+*Domain — a member can now say what they buy.* `SubstitutionPolicy.GROUP_DECLARED`, and it is
+deliberately **not** a substitution rule: the others answer "I named this product, what else may
+serve it", and this one says "I named a family". That distinction is why `CompatibilityVerdict` now
+separates `is_exact` — a fact about two product ids, stored on the membership, which has to keep
+meaning what it says — from `requires_disclosure`, a fact about what the member expected. Being
+handed Pike Place is a substitution only if you asked for something else, and Smart Join no longer
+asks anybody to approve their own declaration. The catalogue emits its 20 curated families with
+labels and exemplars; the pool still buys one exact product. Nothing was loosened — exact-only is
+untouched, the empty-group gate still fails closed (and `test_catalog.py`'s parametrisation over
+`list(SubstitutionPolicy)` covered the new member automatically, which is the most valuable existing
+guardrail in the repo).
+
+*A consumer grammar.* Five words — needs you, coordinating, ready to collect, watching, done — with
+the specific fact as the reason underneath, decided in `services/relevance.py` so no screen can
+re-derive it and disagree with another screen. The deterministic `state` field is untouched; these
+are a reading of it. `case_boundary` split out of `not_matched`, because those were opposite news
+wearing one word: a matcher rejection means nothing near you can serve this, a case boundary means
+the order happened and was full. "Nothing nearby fits this one" was the most misleading sentence
+Pool had, and it was shown to the person whose neighbours had just bought the thing they wanted.
+
+*Home.* One row per thing you buy, and the row evolves. State, then how many people near you buy it,
+then what is stopping it, then what the last run found — dated, and shown only when the answer has
+actually changed, compared on reason codes rather than prose. 2.17 → 1.08 vh, and it no longer grows
+when a run happens. The community counters, the activity feed, the second copy of the member's own
+list and the four-clause caveat all left; every clause of that caveat is now a reason on the row it
+applies to.
+
+*Information architecture.* Community could not finish "this page exists so a member can ___" — 3.45
+vh of eight sections in which nearly every figure read `$0.00` — so it left the nav and became
+**Behind Pool**, one door from the footer, opening with an index of what can be inspected. Five
+different labels used to lead to the technical proof from three different drawers. `Pools` → `Orders`
+for the collision the vocabulary audit found; `Needs` → `What you buy`, the question onboarding
+already asks; `Run Pool now` → `Ask Pool to check now` everywhere.
+
+*Whose order is this.* Home was already careful — "your units were not in this one" — and one click
+later the list said `6 buyers · 18/18` with no marker and the record said `everyone still in`. Both
+surfaces state it now, either way, from `relevance` and never inferred. And the case boundary is
+**drawn**: full cases as boxes, the reader's units inside, the remainder dashed outside. Three
+sentences of arithmetic became a picture in which "no speculative surplus" is visible.
+
+*Ingestion.* Two committed sheets under `demo-data/`, really parsed by `csv`, with rows that fail
+and name their line. The conflict is the interesting part: this build refuses client-submitted
+economics on purpose, and an open upload endpoint hands that authority straight back. So one question
+became two — *is the pipeline real* (always, everywhere, before permission is consulted) and *whose
+numbers may become offer rows* (on a public deployment, only bytes whose digest is committed). A
+judge downloads the file, uploads it, watches it parse; edit one price and it is refused with the
+reason named while still being shown what the file contained.
+
+*The map.* It was dots on grey with `preserveAspectRatio="none"`, so the one thing a map is for — how
+far apart things are — was the thing it got wrong. It now draws `WALKABLE_PICKUP_KM` as a ring around
+each pickup point, read from the server which reads it from `coordination`, with longitude corrected
+for latitude. No tile service: Demo University does not exist, and putting invented households on a
+real street map would be a more convincing lie rather than a better map.
+
+**Verification**
+`make qa` green: **975 agent + 75 infra + 106 web = 1,156**, from 1,099. Ruff, tsc, eslint, production
+build, secret scan clean. Bundle 350.37 kB JS / 42.24 kB CSS gzipped to 103.61 / 8.96 — **no new
+runtime dependency was added**. Sixteen matched before/after pairs captured from a git worktree at
+`26ad326` running its own API on its own port, at identical viewports and device pixel ratio.
+Rehearsed three times end to end from a fresh workspace: twelve recorded beats each, byte-identical
+after normalising the greeting and the wall clock, setup within ten milliseconds across runs. No AWS
+deploy, no AgentCore invocation, no Bedrock call, no live payment.
+
+**Failures / dead ends**
+- Flipping the default to `STRUCTURED_CATEGORY_MATCH` produces the right pools and the wrong
+  sentences: every member gets told "a substitute for the Pike Place you declared" when they never
+  asked for Pike Place, and it silently widens authority on declarations already stored. A default
+  that makes the app apologise for doing what somebody wanted is the wrong default.
+- One CSV containing both quotes lands them together and skips the refusal, which is the half of the
+  sequence that makes it evidence rather than a switch. Two sheets, and the manifest states the order
+  rather than leaving it to filename sorting.
+- Removing Home's run-report section made a `formed_excluded` declaration vanish from the screen: the
+  result carries the pool id of the order that filled *without* those units, and the standing filter
+  read that as served. An unrelated card announced an order existed elsewhere while the thing the
+  member asked Pool to watch was nowhere. Found in a browser, not in a test.
+- The same row then told that member "nobody else near you buys this yet", because
+  `compatible_members` excludes households already in a live pool — the right number for how much
+  demand is available, and the exact misreading the demand line exists to prevent.
+- Two endpoints and two public allowlist entries pushed `test_public_demo`'s reduction ratio past its
+  threshold. The temptation was to move the threshold. The metadata endpoint describing the fixtures
+  turned out not to be needed by the browser at all — the path is a constant, the digests are in the
+  repository — so it came off the allowlist instead, and the guard holds honestly at 32 of 49.
+- A rehearsal matching "The host accepts the job" silently skipped the host step and worked the queue
+  with no host, which is not a sequence a presenter performs. The drawer names the host Pool actually
+  ranked — "Gio M. accepts the fulfilment job" — which is better product behaviour and a worse
+  selector.
+
+**Two defects the pass found rather than introduced**
+- `POST /api/demo/supplier-updates` had no showcase guard, and the Operations console was reachable
+  from inside showcase mode. Recording a rice quote wrote a bulk offer into the recording whose every
+  quoted figure — 24 units, 2 cases, $861.44 — is a claim about *that* world. Proved by curl before
+  fixing it. Refused server-side now, and the door removed from the client as well.
+- `discovery.latent_demand` ranked a family's target on demand alone, so it could propose the coffee
+  most people named over the one a supplier will actually sell, and `evaluate_opportunity` would then
+  refuse it for `no_retail_baseline`. Survivable while exact-only declarations were rare enough to be
+  outvoted; decisive the moment every declaration in a family is compatible. Sourceability now
+  outranks demand.
+- Smaller: `.panel-lead` was written on the first-use card and no such CSS rule ever existed, so the
+  one screen whose whole job is the pitch rendered as an ordinary panel. Three stale endpoint counts
+  in the README, `ARCHITECTURE.md` and the architecture diagram, plus a docstring still saying
+  "twenty-four allowlisted paths" against a real 32.
+
+**What we learned**
+Reading the source tells you what the system computes; only rendering it tells you what it says. Two
+of the three findings that shaped this pass were invisible in the code — a screen that lists one
+thing three times looks like three correct sections, and a beat carried by a minimum-quantity number
+looks like a correct number. And the most valuable single hour was running the engine against a
+hypothetical (twelve coffee drinkers) rather than arguing about it: the thesis was falsified by its
+own default, and no amount of reasoning about `substitution.py` would have produced the number
+thirty-six.
+
+**Article fodder**
+Article 1 — the demand-fragmentation experiment, and a product whose default contradicted its
+premise. Article 2 — splitting `is_exact` from `requires_disclosure`, and why an overloaded boolean
+becomes an apology in the UI. Article 3 — real ingestion with content-addressed economic authority,
+and the endpoint that came *off* the allowlist to keep a guard honest.
+
+**Evidence worth preserving**
+The matched pair after each supplier sheet: identical before, `Supplier found — not cheaper` then
+`Worth doing` after. The case-boundary drawing with two dashed units outside three full cases. The
+import panel showing a real digest, real byte count, and `line 2: unit_price_cents is not a whole
+number: 'oops'`. The three rehearsal transcripts.
+
+**Relevant commits / files**
+Branch `feat/final-experience-rebuild`: `90837ba` `ca4ed6e` `686c596` `49859d8` `a883395` `e95c46b`
+`effeb49` `f932f40` `b013811` `e0988e9`. `domain/substitution.py`, `domain/models.py`,
+`domain/policy.py`, `services/relevance.py`, `services/discovery.py`, `services/needs.py`,
+`services/supplier_import.py`, `data/catalog.py`, `scripts/build_catalog.py`, `api/app.py`,
+`api/public_demo.py`, `demo-data/`, `views/home.tsx`, `views/community.tsx`, `views/pools.tsx`,
+`views/pool.tsx`, `views/onboarding.tsx`, `views/operations.tsx`, `product-search.tsx`, `chosen.ts`,
+`ui.tsx`, `styles.css`, `docs/FINAL_EXPERIENCE_PLAN.md`.

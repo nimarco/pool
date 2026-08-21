@@ -5928,3 +5928,92 @@ fix is not a wider heuristic — it is the caller saying "I changed the world", 
 `apps/web/src/views/judge.tsx`, `views/judge.test.tsx`, `views/onboarding.tsx`, `App.tsx`,
 `api.ts`, `styles.css`, `tests/test_supplier_import.py`, `tests/test_public_demo.py`,
 `README.md`, `docs/ARCHITECTURE.md`, `docs/HACKATHON_SCORECARD.md`.
+
+---
+
+### #0053 — [2026-08-20] — Choosing between two finished visual systems, and shipping one
+`[PROCESS]` `[FRONTEND]` `[DEMO]`
+
+**Goal / user intent**
+Two complete visual systems existed on two branches, both green. Stop experimenting, pick
+the one that ships, prove the other did not leak into it, and make `main` the canonical
+implementation for an independent audit. This was release integration, not another design
+pass: nothing was redesigned, no architecture was reopened, and nothing was taken from the
+experiment.
+
+**What we did**
+
+*The experiment is preserved, not merged.* `exp/synoptic-hour` stays at `ddf0b45`, local and
+on `origin`, four commits past the release candidate. It replaced the warm-paper system with
+a cold chart-stock one — Archivo for Instrument Serif, a petrol/signal palette, a two-ring
+favicon, `#dbe3e1` in place of `#f7f4ef`, and a meteogram-style section treatment. It is a
+real alternative and it is kept readable rather than deleted, which is the only honest way to
+record a direction that was tried and not taken.
+
+*Leakage was proved absent rather than assumed.* The release candidate's tree is
+byte-identical to `e8941e3`, which is the exact parent of the first Synoptic commit
+(`ef69635^`), so nothing from the experiment can be present in tracked files by
+construction. The claim was then checked independently anyway: zero occurrences of
+`archivo`, `synoptic`, `meteogram` or `petrol` in tracked files, Instrument Serif still the
+only web font dependency, the six-people favicon and `#f7f4ef`/`#14130f` theme colours
+intact — and at runtime the served app computes `rgb(247, 244, 239)` with only
+`Instrument Serif` and `ui-sans-serif` in use. One stale artefact did survive outside Git: an
+empty `node_modules/@fontsource-variable/` scope directory left by the experiment's install,
+removed so the install state matches this branch's lockfile. `npm install` reported
+"up to date" with no tracked dependency drift.
+
+*A stale server was in the way, and the reason it had to go is the interesting part.* A
+`make api` uvicorn from the previous day still held :8000. It was not the deployed
+configuration — no SPA at `/`, and no way to prove what environment it had been started
+with. A release smoke test whose runtime provenance cannot be demonstrated is not evidence,
+so it was replaced with `scripts/run_public_demo_local.sh`, whose `/api/health` states the
+configuration on the record: `model_provider: offline`, `payment_provider: simulated`,
+`purchase_simulated: true`, `routing_provider: deterministic`, `schedules_enabled: false`,
+in-memory store, live agent off.
+
+**Verification**
+`make qa` green: **980 agent + 75 infra + 119 web = 1,174**, ruff, eslint, `tsc -b`,
+production build, secret scan (plus its self-test), `git diff --check`. The one pytest
+warning is Starlette's `httpx` deprecation from a dependency, not repository code.
+
+Browser smoke at 100% zoom against the offline stack, eleven surfaces at 1280×720 and five
+at 390×844: **0 console messages**, **154 server requests, all 200**, no response ≥400, no
+traceback, and **no external request of any kind** — the font is self-hosted, so nothing
+leaves the origin. No horizontal overflow at either viewport, no interactive target under
+24 px, a visible 2 px ink focus ring, and `visualViewport.scale` 1 throughout: no zoom-out
+needed to read anything.
+
+The Judge Demo was walked cold from reset. 37 standing needs exist before any supplier
+fact arrives. Quote A imports through the real path — `riverbend-split-case.csv`, 1144
+bytes, digest `8e0f4e6e…` matching `MANIFEST.json`, 1 valid, 0 rejected — and Pool answers
+*"Supplier found — not cheaper"*. The demand fingerprint is identical either side of both
+imports (38 needs, 7 rice declarations, 24 bags, 24 households), so the sheets move
+supplier facts and nothing else. Quote B travels the same path (713 bytes, digest
+`f8bd6a6a…`) and the answer becomes *"Worth doing — Pool has not run yet"*; both sheets stay
+on file and the run's own facts record that it compared two supplier prices. The run then
+formed `pool_67818840e2ca` from the seven pre-existing rice declarants — 24 bags against a
+16-unit minimum, three whole cases — with demand unchanged, which is the whole claim: the
+order came out of demand that was already there. After a later run advanced that pool, the
+first run's report was still byte-identical, field for field. Showcase runs in its own
+`…-showcase` workspace and the member's own state survives the round trip. Reset returns
+the workspace to 37 needs, no pools, no runs, `onboarded: false`.
+
+No AWS deploy, no AgentCore invocation, no Bedrock call, no live payment, nothing published.
+
+*Documentation.* `PRODUCT.md` claimed 975 agent tests and 1,156 total from #0050, and 50
+`BUILD_HISTORY` entries; both are now current. `docs/IMPECCABLE_HANDOFF.md` was re-read
+against the running app and its "no longer true" list is still correct, including the
+14-step Showcase. Nothing else in the current-state docs was stale, and no historical entry
+was rewritten.
+
+**What we learned**
+Two finished systems is a better position than one, but only if the losing one is preserved
+whole and the winner's independence from it can be demonstrated rather than asserted. Tree
+identity against the experiment's parent commit turned "we did not cherry-pick anything"
+from a promise into an argument. The other lesson is smaller and more practical: a leftover
+dev server is not a neutral inconvenience during a release check — it is an unprovable
+runtime, and evidence gathered against it would have been worthless.
+
+**Relevant commits / files**
+`PRODUCT.md`, `BUILD_HISTORY.md`. Release candidate `e8941e3` merged to `main`
+fast-forward; experiment preserved at `exp/synoptic-hour` `ddf0b45`.

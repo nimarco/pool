@@ -124,6 +124,17 @@ point neither exists — which supplier tier wins, whether the demand fills whol
 what the group pays and whether that beats buying alone are all facts about a chosen buyer
 set, and choosing one is what evaluation does.
 
+**What a run considered is not read from the strategy table.** A strategy's id is a
+digest of what it *is* — Community, objective, SKU, site — so a stored evaluation still
+resolves after the world moves. The cost is that the row is current shared state: two runs
+asking overlapping questions produce the same id, and the later one rewrites it, `run_id`
+and every count alike. Filtering that table by run therefore answers "which rows currently
+say this run made them", which stops being the same question the moment anybody edits a
+preference. History is `RunStrategyReference` — append-only, keyed `<run_id>#<strategy_id>`,
+carrying the ordinal and the **exact projection the model was transmitted**. Snapshotted
+rather than re-derived because `compatible_units`, `excluded_declaration_count` and the
+exclusion codes are not part of the identity digest and provably move under a stable id.
+
 The mutation takes **two identifiers and nothing else**. There is no parameter for a
 member, a quantity, a price, a supplier term or a product fact; everything the pool is
 made of is re-derived from stored state, re-costed from scratch, and refused if anything

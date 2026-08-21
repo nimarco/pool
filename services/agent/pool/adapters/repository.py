@@ -58,6 +58,7 @@ from ..domain.models import (
     Product,
     PurchaseRecord,
     RunEvaluation,
+    RunStrategyReference,
     StrategyEvaluation,
     Supplier,
 )
@@ -93,6 +94,7 @@ class Store:
     messages: dict[str, Message] = field(default_factory=dict)
     issues: dict[str, IssueCase] = field(default_factory=dict)
     clarification_plans: dict[str, ClarificationPlan] = field(default_factory=dict)
+    run_strategy_references: dict[str, RunStrategyReference] = field(default_factory=dict)
     coordination_events: dict[str, CoordinationEvent] = field(default_factory=dict)
     cohort_strategies: dict[str, CohortStrategy] = field(default_factory=dict)
     strategy_evaluations: dict[str, StrategyEvaluation] = field(default_factory=dict)
@@ -134,6 +136,10 @@ class Repository(Protocol):
     def list_clarification_plans(self, ws: str) -> list[ClarificationPlan]: ...
     def get_clarification_plan(self, ws: str, pid: str) -> ClarificationPlan | None: ...
     def put_clarification_plan(self, ws: str, p: ClarificationPlan) -> None: ...
+    def list_run_strategy_references(
+        self, ws: str, run_id: str | None = None
+    ) -> list[RunStrategyReference]: ...
+    def put_run_strategy_reference(self, ws: str, r: RunStrategyReference) -> None: ...
     def list_coordination_events(self, ws: str) -> list[CoordinationEvent]: ...
     def get_coordination_event(self, ws: str, eid: str) -> CoordinationEvent | None: ...
     def put_coordination_event(self, ws: str, e: CoordinationEvent) -> None: ...
@@ -301,6 +307,17 @@ class InMemoryRepository:
 
     def put_clarification_plan(self, ws, p):
         self.store(ws).clarification_plans[p.id] = p
+
+    def list_run_strategy_references(self, ws, run_id=None):
+        rows = list(self.store(ws).run_strategy_references.values())
+        if run_id is not None:
+            rows = [r for r in rows if r.run_id == run_id]
+        # Ordinal first, because the order a run was shown its options in is part of what
+        # it was shown. The strategy id breaks ties so two processes agree.
+        return sorted(rows, key=lambda r: (r.run_id, r.ordinal, r.strategy_id))
+
+    def put_run_strategy_reference(self, ws, r):
+        self.store(ws).run_strategy_references[r.id] = r
 
     def list_coordination_events(self, ws):
         # Oldest first: the order work was owed in is the order a dispatcher takes it.
@@ -541,6 +558,7 @@ _TYPES: dict[str, Any] = {
     "RUN": AgentRun,
     "RUN_EVALUATION": RunEvaluation,
     "CLARIFICATION_PLAN": ClarificationPlan,
+    "RUN_STRATEGY_REFERENCE": RunStrategyReference,
     "COORDINATION_EVENT": CoordinationEvent,
     "COHORT_STRATEGY": CohortStrategy,
     "STRATEGY_EVALUATION": StrategyEvaluation,
@@ -742,6 +760,15 @@ class DynamoDBRepository:
 
     def put_clarification_plan(self, ws, p):
         self._put(ws, "CLARIFICATION_PLAN", p.id, p)
+
+    def list_run_strategy_references(self, ws, run_id=None):
+        rows = self._query(ws, "RUN_STRATEGY_REFERENCE", RunStrategyReference)
+        if run_id is not None:
+            rows = [r for r in rows if r.run_id == run_id]
+        return sorted(rows, key=lambda r: (r.run_id, r.ordinal, r.strategy_id))
+
+    def put_run_strategy_reference(self, ws, r):
+        self._put(ws, "RUN_STRATEGY_REFERENCE", r.id, r)
 
     def list_coordination_events(self, ws):
         return sorted(

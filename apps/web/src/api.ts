@@ -647,6 +647,14 @@ export interface NeedCoordination {
   /** Null for an exact-only declaration: nothing was asked, because nothing needed
    *  to be — which is the truthful answer rather than a gap. */
   clarification: ClarificationProof | null;
+  /** Which run the `considered` listing and the `investigated` verdicts belong to.
+   *
+   *  The same as `run.run_id` except when an earlier run formed the order this
+   *  declaration is in — a member who narrowed their rules and widened them again is put
+   *  back by deterministic reconciliation, and the run their save caused genuinely
+   *  considered nothing. The explanation of the order stays the explanation the run that
+   *  built it produced; this names whose reasoning is on screen. */
+  evidence_run_id: string;
   run: {
     run_id: string;
     trigger: string;

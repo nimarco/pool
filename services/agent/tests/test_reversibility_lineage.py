@@ -265,111 +265,45 @@ def test_a_searches_strategies_and_forms_the_order(walked):
     assert len({e.strategy_id for e in evaluations}) >= 2
 
 
-def test_a_cohort_strategy_row_records_the_last_run_that_generated_it(client):
-    """A known limit of the stored record, pinned so it cannot drift unnoticed.
+def test_a_run_keeps_its_own_listing_when_a_later_run_regenerates_an_option(client):
+    """The defect 4.5.1 found and 4.5.2 repaired, kept as a regression.
 
-    A strategy's id is a digest of what it *is* — the product, the site, the declarations
-    whose own rules admit it — so two runs asking overlapping questions legitimately
-    generate the same strategy, and the second rewrites the row's ``run_id``. Evaluations
-    do not behave this way: each run writes its own, with its own id.
-
-    The consequence is narrow and worth stating rather than papering over. Filtering the
-    strategy table by ``run_id`` answers "which run generated this row most recently", not
-    "what did that run consider" — so an *earlier* run's option list can shrink after a
-    later run touches the same option. Every verdict, every price and every membership is
-    unaffected; what degrades is the historical option list on a superseded explanation.
-    Reported rather than fixed here: the honest repair is a stored set of runs per
-    strategy, which is a persisted-schema decision and not this pass's scope.
+    A strategy's id digests what the strategy *is*, so two runs asking overlapping
+    questions generate the same row and the later one rewrites it — ``run_id`` and every
+    model-visible count alike. History therefore cannot live on that row. It lives in
+    ``RunStrategyReference``, keyed by the pair, carrying the projection each run was
+    actually transmitted.
     """
     a = client.post(f"/api/needs?workspace={WS}", json=declaration(FLEXIBLE)).json()
     run_a = a["coordination"]["run_id"]
-    before = {
-        s.id for s in app_module.repo().list_cohort_strategies(WS) if s.run_id == run_a
-    }
-    assert len(before) >= 2
+    before = [
+        (r.ordinal, r.strategy_id, r.summary["compatible_units"])
+        for r in app_module.repo().list_run_strategy_references(WS, run_a)
+    ]
+    assert len(before) >= 2, "a search with one option is not a search"
 
     b = client.post(
         f"/api/needs/{a['need_id']}?workspace={WS}", json=declaration(EXACT)
     ).json()
     run_b = b["coordination"]["run_id"]
-    after = {
-        s.id for s in app_module.repo().list_cohort_strategies(WS) if s.run_id == run_a
-    }
-    reattributed = before - after
-    assert reattributed, "if this stops happening the docstring above is stale"
-    assert all(
-        app_module.repo().get_cohort_strategy(WS, sid).run_id == run_b
-        for sid in reattributed
-    )
 
-    # The part that must never degrade: each run keeps its own verdicts.
+    after = [
+        (r.ordinal, r.strategy_id, r.summary["compatible_units"])
+        for r in app_module.repo().list_run_strategy_references(WS, run_a)
+    ]
+    assert after == before, "a later run rewrote an earlier run's listing"
+
+    # B has its own, and the shared strategy row now points at B — which is exactly what
+    # that field means and exactly why nothing reads history from it.
+    b_refs = app_module.repo().list_run_strategy_references(WS, run_b)
+    assert {r.strategy_id for r in b_refs} < {sid for _, sid, _ in before}
+    shared = next(iter({r.strategy_id for r in b_refs}))
+    assert app_module.repo().get_cohort_strategy(WS, shared).run_id == run_b
+
     for run_id in (run_a, run_b):
         assert [
             e for e in app_module.repo().list_strategy_evaluations(WS) if e.run_id == run_id
         ]
-
-
-def test_b_processes_the_narrowed_declaration_on_its_own_terms(walked):
-    """Not a replay, and not a no-op: B costs the exact-only world it now describes."""
-    run = app_module.repo().get_run(WS, walked["B"]["coordination"]["run_id"])
-    called = [c.name for c in run.tool_calls]
-    assert "list_cohort_strategies" in called
-    assert "evaluate_cohort_strategy" in called
-
-    evaluations = [
-        e for e in app_module.repo().list_strategy_evaluations(WS) if e.run_id == run.id
-    ]
-    assert evaluations, "B reached a verdict about nothing"
-    # Exact-only means exactly one product can be considered — the one they named.
-    assert {e.target_product_id for e in evaluations} == {PRODUCT}
-    assert run.outcome.value == "no_action"
-
-
-def test_c_is_processed_against_current_truth_and_holds_no_mutation(walked):
-    """C's run is real, and its authority matches the question it was asked.
-
-    By the time it opens, reconciliation has established that a live pool serves the
-    declaration. The honest answer is that pool — so the run gets a read and an end, and
-    physically cannot form, lock, or purchase anything. Before this was narrowed it fell
-    through to the community surface and held `create_candidate_pool`, `lock_pool` and
-    `execute_purchase`: a member editing a checkbox could have caused any of them.
-    """
-    from pool.agent.objective import build_declaration_objective
-    from pool.agent.tools import build_tools
-    from pool.data.seed import COMMUNITY_ID
-
-    run = app_module.repo().get_run(WS, walked["C"]["coordination"]["run_id"])
-    assert run.outcome.value == "no_action"
-    assert [c.name for c in run.tool_calls] == ["record_no_action"]
-
-    ctx = app_module.ctx_for(WS)
-    objective = build_declaration_objective(
-        ctx,
-        COMMUNITY_ID,
-        event_id=walked["C"]["coordination"]["event_id"],
-        need_id=walked["need_id"],
-    )
-    assert objective.reviews_served_declaration
-    assert objective.served_need_ids == (walked["need_id"],)
-
-    names = {getattr(t, "tool_name", getattr(t, "__name__", "")) for t in build_tools(_tool_ctx(ctx, objective))}
-    assert names == {"inspect_pool", "record_no_action"}
-    for forbidden in (
-        "create_candidate_pool",
-        "create_candidate_pool_from_strategy",
-        "issue_final_offer",
-        "lock_pool",
-        "execute_purchase",
-        "recover_pool",
-    ):
-        assert forbidden not in names
-
-
-def _tool_ctx(ctx, objective):
-    from pool.agent.tools import ToolContext
-    from pool.data.seed import COMMUNITY_ID
-
-    return ToolContext(pool=ctx, community_id=COMMUNITY_ID, objective=objective)
 
 
 # ----------------------------------------------------------------- the participation
@@ -619,6 +553,103 @@ def test_the_explanation_after_c_can_account_for_the_order_on_screen(client, wal
     assert order["created_by_run"] == walked["A"]["coordination"]["run_id"]
     assert order["provisional"] is True
     assert proof["event"]["event_id"] == walked["C"]["coordination"]["event_id"]
+
+
+def test_each_runs_historical_listing_survives_the_whole_walk(client, walked):
+    """§6, end to end: run B and run C, then ask A what it considered.
+
+    The answer must be the answer it would have given before they existed — same options,
+    same order, same counts. Asked through the API rather than the store, because that is
+    the surface a judge reads.
+    """
+    references = app_module.repo().list_run_strategy_references
+    run_a = walked["A"]["coordination"]["run_id"]
+    run_b = walked["B"]["coordination"]["run_id"]
+    run_c = walked["C"]["coordination"]["run_id"]
+
+    a_history = references(WS, run_a)
+    b_history = references(WS, run_b)
+    c_history = references(WS, run_c)
+
+    a_products = [r.summary["product_id"] for r in a_history]
+    assert len(a_products) == 2, a_products
+    assert PRODUCT in a_products, "A considered the coffee they declared"
+    assert any(p != PRODUCT for p in a_products), "A considered a substitute as well"
+
+    # B saw only what exact-only permits, and it is a strict subset of A's.
+    assert [r.summary["product_id"] for r in b_history] == [PRODUCT]
+    assert {r.strategy_id for r in b_history} < {r.strategy_id for r in a_history}
+
+    # C listed nothing: its declaration was already served, so it held no listing tool.
+    assert c_history == []
+
+    # Ordinals are stable and dense, which is what makes "in this order" meaningful.
+    assert [r.ordinal for r in a_history] == [0, 1]
+
+
+def test_the_shared_option_belongs_to_both_runs_and_neither_owns_it(client, walked):
+    """Kestrel is one strategy row and two pieces of history."""
+    references = app_module.repo().list_run_strategy_references
+    run_a = walked["A"]["coordination"]["run_id"]
+    run_b = walked["B"]["coordination"]["run_id"]
+
+    shared = {r.strategy_id for r in references(WS, run_a)} & {
+        r.strategy_id for r in references(WS, run_b)
+    }
+    assert len(shared) == 1
+    strategy_id = next(iter(shared))
+
+    # One row, currently attributed to the later run — and that attribution is not what
+    # either run's history is read from.
+    row = app_module.repo().get_cohort_strategy(WS, strategy_id)
+    assert row.run_id == run_b
+    assert [r.run_id for r in references(WS, run_a) if r.strategy_id == strategy_id] == [
+        run_a
+    ]
+
+
+def test_the_proof_after_c_still_explains_how_the_order_was_built(client, walked):
+    """§8. A later save must not erase the reasoning behind an order it did not form.
+
+    C's own run correctly considered nothing — the declaration was already served. If
+    that empty listing stood as the explanation, editing a preference twice would delete
+    the account of why the order exists, while the order stayed on screen.
+    """
+    proof = client.get(
+        f"/api/needs/{walked['need_id']}/coordination?workspace={WS}"
+    ).json()
+
+    assert proof["event"]["event_id"] == walked["C"]["coordination"]["event_id"]
+    assert proof["run"]["run_id"] == walked["C"]["coordination"]["run_id"]
+    # The reasoning is the formation run's, and the payload says so rather than implying
+    # the most recent run produced it.
+    assert proof["evidence_run_id"] == walked["A"]["coordination"]["run_id"]
+    assert proof["order"]["formed_by_this_run"] is False
+
+    products = [o["product"] for o in proof["considered"]]
+    assert len(products) == 2
+    verdicts = {v["product"]: v["viable"] for v in proof["investigated"]}
+    assert any(v is False for v in verdicts.values()), "the refusal is part of the story"
+    assert any(v is True for v in verdicts.values()), "so is the one that worked"
+    assert proof["chosen"] is not None
+    assert proof["chosen"]["viable"] is True
+
+
+def test_the_proof_after_b_is_bs_own_search(client, walked):
+    """No order, so nothing to inherit: the explanation is the run's own."""
+    from pool.services import events as events_service
+
+    ctx = app_module.ctx_for(WS)
+    b_event = walked["B"]["coordination"]["event_id"]
+    b_run = walked["B"]["coordination"]["run_id"]
+
+    # Re-read B's own event rather than the latest, which is what a judge following the
+    # run ledger would do.
+    considered = ctx.repo.list_run_strategy_references(WS, b_run)
+    assert [r.summary["product_id"] for r in considered] == [PRODUCT]
+    assert events_service.view(ctx.repo.get_coordination_event(WS, b_event))["outcome"] == (
+        "no_action"
+    )
 
 
 def test_the_explanation_after_a_says_this_run_formed_it(client):

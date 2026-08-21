@@ -314,6 +314,12 @@ function Proof({ data }: { data: NeedCoordination }) {
           deterministic code, and the tool it calls to form an order takes two identifiers
           and nothing else.
         </p>
+        <p className="small muted">
+          The options above are stored as they were handed to that run, not looked up
+          again now. The same option can be offered to a later run with different numbers
+          behind it — somebody else declares, an order forms — and a record that re-read
+          them today would be today&apos;s listing wearing an older date.
+        </p>
       </div>
 
       {data.clarification ? (
@@ -386,6 +392,17 @@ function Proof({ data }: { data: NeedCoordination }) {
           label="Options offered"
           value={`${(data.considered ?? []).length}, cap ${run?.bounds.max_strategy_listings ?? 0} listing`}
         />
+        {/* Which run was shown the listing above. Named only when it is not this one,
+            because "the listing this run received" is the ordinary case and labelling it
+            every time would imply the two can drift apart more often than they do. The
+            listing itself is stored as it was transmitted, so it is what that run saw
+            rather than what the same options would say today. */}
+        {data.evidence_run_id && data.evidence_run_id !== run?.run_id ? (
+          <Fact
+            label="Listing shown to"
+            value={<code>{data.evidence_run_id}</code>}
+          />
+        ) : null}
         <Fact
           label="Options costed"
           value={`${(data.investigated ?? []).length} of ${run?.bounds.max_strategy_evaluations ?? 0} allowed`}

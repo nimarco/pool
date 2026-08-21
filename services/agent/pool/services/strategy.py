@@ -52,6 +52,7 @@ from ..domain.models import (
     NeedDeclaration,
     PickupSite,
     Product,
+    RunStrategyReference,
     StrategyEvaluation,
     SubstitutionPolicy,
     new_id,
@@ -549,7 +550,38 @@ def generate_strategies(
     if persist:
         for strategy in kept:
             ctx.repo.put_cohort_strategy(ctx.ws, strategy)
+        _record_listing(ctx, kept)
     return kept
+
+
+def _record_listing(ctx: PoolContext, strategies: list[CohortStrategy]) -> None:
+    """Write down what *this* run was shown, so a later run cannot rewrite it.
+
+    Two rows for one listing, and they carry different kinds of truth. The strategy row
+    above is current shared state, addressed by an identity digest so that a stored
+    evaluation still resolves after the world moves — which means a later run generating
+    the same option overwrites it, counts and all. The reference below is history: keyed
+    by the pair, so writing one can never disturb another run's, and carrying the exact
+    projection this run received rather than a pointer at a row that will have changed.
+
+    Written here rather than in the tool because this is the moment a strategy becomes
+    something a run has seen, and a listing that persisted its options without recording
+    who saw them is the defect this repairs. Silent when there is no run — generation is
+    also reachable from tests and from ``ensure_actionable``, and an association with no
+    run in it would be a row that means nothing.
+    """
+    if not ctx.run_id:
+        return
+    for ordinal, strategy in enumerate(strategies):
+        ctx.repo.put_run_strategy_reference(
+            ctx.ws,
+            RunStrategyReference(
+                run_id=ctx.run_id,
+                strategy_id=strategy.id,
+                ordinal=ordinal,
+                summary=strategy_summary(strategy),
+            ),
+        )
 
 
 # ------------------------------------------------------------------------ evaluation

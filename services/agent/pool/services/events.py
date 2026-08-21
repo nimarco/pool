@@ -350,11 +350,44 @@ def explain(ctx: PoolContext, need_id: str) -> dict[str, Any] | None:
         return None
     run = ctx.repo.get_run(ctx.ws, event.run_id) if event.run_id else None
 
-    considered = [
-        s for s in ctx.repo.list_cohort_strategies(ctx.ws) if run and s.run_id == run.id
-    ][:MAX_EXPLAINED_OPTIONS]
+    # The order this declaration is in — which is not always the order this run formed.
+    # A member who narrowed their rules, left an order, and then widened them again is
+    # put back by deterministic reconciliation, and the run their save caused correctly
+    # has nothing to create. Reading only `event.pool_id` made the explanation say
+    # nothing happened while the member was looking at the order it was about.
+    pool = ctx.repo.get_pool(ctx.ws, event.pool_id) if event.pool_id else None
+    formed_here = pool is not None
+    if pool is None:
+        pool = _pool_serving(ctx, event)
+
+    # Whose reasoning explains the order on screen. When an earlier run built it, that
+    # run's evidence is the answer to "why this order?" — the later save genuinely
+    # considered nothing, and letting its empty listing stand as the explanation would
+    # let a preference edit erase how the order came to exist. The latest run stays
+    # visible as itself in ``run``; this only decides which listing and which verdicts
+    # are being explained.
+    evidence_run = run
+    if pool is not None and not formed_here and pool.created_by_run:
+        formation = ctx.repo.get_run(ctx.ws, pool.created_by_run)
+        if formation is not None:
+            evidence_run = formation
+
+    # What that run was shown, from the append-only record of the listing it received —
+    # not from the strategy table filtered by a field a later run can rewrite. A strategy
+    # id digests what the strategy *is*, so two runs legitimately produce the same row and
+    # the second overwrites the first, counts included; reading history from there made an
+    # earlier run's proof shrink, or quietly show today's numbers, because somebody edited
+    # a preference afterwards.
+    considered = (
+        ctx.repo.list_run_strategy_references(ctx.ws, evidence_run.id)
+        if evidence_run
+        else []
+    )
+    considered = considered[:MAX_EXPLAINED_OPTIONS]
     investigated = [
-        e for e in ctx.repo.list_strategy_evaluations(ctx.ws) if run and e.run_id == run.id
+        e
+        for e in ctx.repo.list_strategy_evaluations(ctx.ws)
+        if evidence_run and e.run_id == evidence_run.id
     ]
     # One verdict per option: the guarded creator re-costs before it writes, so the same
     # option can carry two identical evaluations and showing both would read as two
@@ -367,15 +400,6 @@ def explain(ctx: PoolContext, need_id: str) -> dict[str, Any] | None:
         seen.add(evaluation.strategy_id)
         unique.append(evaluation)
 
-    # The order this declaration is in — which is not always the order this run formed.
-    # A member who narrowed their rules, left an order, and then widened them again is
-    # put back by deterministic reconciliation, and the run their save caused correctly
-    # has nothing to create. Reading only `event.pool_id` made the explanation say
-    # nothing happened while the member was looking at the order it was about.
-    pool = ctx.repo.get_pool(ctx.ws, event.pool_id) if event.pool_id else None
-    formed_here = pool is not None
-    if pool is None:
-        pool = _pool_serving(ctx, event)
     memberships = ctx.repo.list_memberships(ctx.ws, pool.id) if pool else []
     chosen = next(
         (e for e in unique if pool is not None and e.target_product_id == pool.product_id),
@@ -397,7 +421,12 @@ def explain(ctx: PoolContext, need_id: str) -> dict[str, Any] | None:
         # of them, and their order. What each answer means is not here because no run
         # decided it — see `services/needs.policy_from_answers`.
         "clarification": _clarification_view(ctx, event),
-        "considered": [_option_view(s) for s in considered],
+        "considered": [_option_view(reference) for reference in considered],
+        # Which run the listing and the verdicts above belong to. The same as ``run``
+        # except when an earlier run formed the order this declaration is in, and named
+        # so a surface can say whose reasoning it is showing rather than implying it was
+        # the most recent one's.
+        "evidence_run_id": evidence_run.id if evidence_run else "",
         "investigated": [_verdict_view(e) for e in unique],
         "chosen": _verdict_view(chosen) if chosen is not None else None,
         "exclusion_codes": dict(sorted(exclusions.items())),
@@ -491,15 +520,28 @@ def _run_view(ctx: PoolContext, run: Any) -> dict[str, Any] | None:
     }
 
 
-def _option_view(strategy: Any) -> dict[str, Any]:
-    """One option as it was offered, before anything was costed. No verdict, no price."""
+def _option_view(reference: Any) -> dict[str, Any]:
+    """One option as it was offered *to this run*, before anything was costed.
+
+    Read from the snapshot the run was transmitted rather than from the strategy row,
+    because the row's counts move under a stable id: a declaration retired somewhere else
+    in the Community changes ``excluded_declaration_count`` on an option a completed run
+    saw a different version of. Re-deriving this from current state would produce today's
+    listing wearing a historical label, which is the specific dishonesty AGENTS.md §8
+    names.
+
+    No verdict and no price, because at listing time there was neither.
+    """
+    summary = dict(getattr(reference, "summary", None) or {})
     return {
-        "strategy_id": strategy.id,
-        "product": strategy.target_product_name,
-        "attributes": dict(strategy.target_attributes),
-        "compatible_declarations": strategy.compatible_declaration_count,
-        "compatible_units": strategy.compatible_units,
-        "lowest_supplier_minimum_units": strategy.lowest_minimum_units,
+        "strategy_id": summary.get("strategy_id", getattr(reference, "strategy_id", "")),
+        "product": summary.get("product", ""),
+        "attributes": dict(summary.get("attributes") or {}),
+        "compatible_declarations": int(summary.get("compatible_declarations", 0)),
+        "compatible_units": int(summary.get("compatible_units", 0)),
+        "lowest_supplier_minimum_units": int(
+            summary.get("lowest_supplier_minimum_units", 0)
+        ),
     }
 
 

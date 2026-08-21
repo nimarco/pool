@@ -1953,9 +1953,19 @@ class CohortStrategy:
     lowest_minimum_units: int = 0
 
     input_fingerprint: str = ""
-    #: The run that listed this option. Lineage in the direction somebody reads it: a
-    #: member opens the order, the order names the run, the run names the options it
-    #: considered. Empty when generated outside a run.
+    #: The **most recent** run that generated this row, and nothing more than that.
+    #:
+    #: Not historical ownership, and it must not be used as such. A strategy's id digests
+    #: what the strategy *is* — the Community, the objective, the SKU, the site — so two
+    #: runs asking overlapping questions legitimately produce the same id, and the second
+    #: rewrites this row. Filtering by it therefore answers "which rows currently say this
+    #: run made them", which is a different question from "what did that run consider" and
+    #: gives a different answer once any later run has touched the same option.
+    #:
+    #: What a run considered is :class:`RunStrategyReference`, which is append-only and
+    #: carries the projection that run was actually shown. Kept here for the ordinary
+    #: forward direction — "which run most recently refreshed this option" — and for the
+    #: rows written before references existed.
     run_id: str = ""
     generated_at: str = field(default_factory=lambda: iso(utcnow()))
 
@@ -1978,6 +1988,61 @@ class CohortStrategy:
     def includes_objective_need(self) -> bool:
         """Whether the declaration that triggered this run is in the envelope at all."""
         return bool(self.objective_need_id) and self.objective_need_id in self.candidate_need_ids
+
+
+@dataclass
+class RunStrategyReference:
+    """One option, as one run was actually shown it. Append-only, and never rewritten.
+
+    The problem this exists to solve is that a strategy row is *current shared state* and
+    a run's listing is *history*, and the two were the same object. A strategy's id
+    digests what the strategy is — Community, objective, SKU, site — deliberately, so that
+    a stored evaluation still points at something after the world moves. The cost is that
+    two runs asking overlapping questions generate the same id, and the later one rewrites
+    the row: both its ``run_id`` and every model-visible count on it. An earlier run's
+    proof would then shrink, or quietly show today's numbers, purely because somebody
+    edited a preference afterwards.
+
+    So the association is its own row, keyed by the pair. Writing one can never disturb
+    another run's, because no other run's key is being written.
+
+    **The projection is snapshotted rather than re-derived.** ``compatible_units``,
+    ``excluded_declaration_count`` and the exclusion codes all move under a stable id as
+    declarations come and go, so reconstructing "what the model saw" from the strategy
+    table would produce today's listing wearing a historical label. ``summary`` is the
+    exact ``services/strategy.strategy_summary`` payload transmitted to the model, stored
+    verbatim — which is what makes this evidence rather than a plausible reconstruction.
+    """
+
+    run_id: str
+    strategy_id: str
+    #: Position in the listing the run was given, from zero. The order is part of what
+    #: was shown: a reader checking that nothing was ranked for the model needs the
+    #: sequence it actually received.
+    ordinal: int
+    #: The exact compact projection transmitted, verbatim. Never re-derived.
+    summary: dict[str, Any] = field(default_factory=dict)
+    created_at: str = field(default_factory=lambda: iso(utcnow()))
+
+    @property
+    def id(self) -> str:
+        """``<run_id>#<strategy_id>`` — the pair, so the pair is what a write addresses."""
+        return f"{self.run_id}#{self.strategy_id}"
+
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        d["id"] = self.id
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> RunStrategyReference:
+        return cls(
+            run_id=d["run_id"],
+            strategy_id=d["strategy_id"],
+            ordinal=int(d.get("ordinal", 0)),
+            summary=dict(d.get("summary") or {}),
+            created_at=d.get("created_at", iso(utcnow())),
+        )
 
 
 @dataclass

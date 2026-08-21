@@ -7029,3 +7029,107 @@ recreating it.
 `api/app.py`, `apps/web/src/preferences.tsx`, `api.ts`, `styles.css`, `views/why.tsx`,
 `views/verify.tsx`, `tests/test_reversibility_lineage.py`, `tests/test_targeted_questions.py`,
 `src/views/verify.test.tsx`, `src/preferences.test.tsx`.
+
+---
+
+### #0060 — [2026-08-21] — History is its own row: what a run considered stops moving
+`[ARCHITECTURE]` `[AGENT]` `[ARTICLE-2]`
+
+**Goal / user intent**
+Close the one defect #0059 reported rather than fixed. A completed run's historical
+strategy set must never change because a later run regenerates an identical strategy.
+
+**Starting state**
+`CohortStrategy.id` is a digest of what the strategy *is* — Community, objective, SKU,
+site — and that is load-bearing: a stored evaluation still resolves after the world moves,
+so a stale option can be recognised and reported as stale rather than becoming an unknown
+id indistinguishable from an invented one. The consequence nobody had followed through is
+that the row is **current shared state**. Two runs asking overlapping questions produce the
+same id, and `put_cohort_strategy` overwrites. `services/events.explain` filtered that
+table by `run_id`, which therefore answered "which rows currently say this run made them".
+
+**What the investigation actually found**
+
+Worse than the reported attribution problem, and the difference decided the design. The
+identity digest excludes every model-visible field, so a later run rewrites
+`compatible_units`, `compatible_declaration_count`, `excluded_declaration_count` and the
+exclusion codes too. Measured: generating for one objective, letting a neighbour declare,
+and generating again produced **the same ids with different counts**. Storing ids and an
+ordinal would therefore have fixed attribution and left the numbers free to drift — a
+historical listing showing today's figures, which is exactly the dishonesty §8 names.
+
+Option A was checked first and is unavailable. `ToolCallRecord` carries name, argument
+digest, ok, and a **180-character** summary — `_summarise_tool_result` is explicitly
+"never the full payload". `ToolContext.record_full` retains the listing in memory only, and
+`list_cohort_strategies` discards it (`del full`); `agent/evidence.py` reads only
+`evaluate_pool_economics` entries. There was no persisted record of what any run was shown.
+
+**Decision — Option B, with the projection snapshotted**
+
+`RunStrategyReference`, keyed `<run_id>#<strategy_id>`, carrying the ordinal and the exact
+`strategy_summary` payload the model was transmitted. Written by
+`strategy._record_listing` at the moment options are persisted for a run, so a listing
+cannot record its options without recording who saw them. Silent when there is no run.
+
+Two rows, two kinds of truth, and the split is the point. The strategy row is what the
+option *is*, addressed by identity so evaluations keep resolving. The reference is what a
+run *saw*, addressed by the pair so no write can disturb another run's. `CohortStrategy.
+run_id` is retained and its meaning corrected in place — the most recent run that
+regenerated the row, useful in the forward direction and never historical ownership.
+
+`StrategyEvaluation` was checked and needed nothing: `new_id("seval")` gives every
+evaluation its own row, so two runs costing the same option write two records. Pinned
+anyway, because the strategy table looked equally safe until somebody asked what the second
+write did.
+
+**Historical truth, and the explanation that outlives the run**
+
+`explain` now reads the listing from the references. It also decides *whose* reasoning it is
+showing: when an earlier run formed the order this declaration is in, that run's listing and
+verdicts are the answer to "why this order?", because the later save genuinely considered
+nothing and letting its empty listing stand would let a preference edit erase how the order
+came to exist. The payload names it (`evidence_run_id`), and the technical proof shows
+*Listing shown to* only when it differs from the run being reported.
+
+Measured across the canonical walk, after all three states completed:
+
+| run | historical listing |
+| --- | --- |
+| A | Kestrel (23 units, min 15), Harbourstone (20 units, min 12) — ordinals 0, 1 |
+| B | Kestrel only |
+| C | none — its declaration was already served, so it held no listing tool |
+
+The shared Kestrel row's `run_id` now reads B. A's history is unchanged.
+
+**AWS / external services touched** — None. No deploy, no AgentCore, no Bedrock, no live
+payment. Offline planner, zero tokens.
+
+**Validation**
+`make qa` green, no waived failures: **1,277 agent + 75 infra + 154 web = 1,506**.
+13 new agent tests (`tests/test_run_strategy_history.py`) and 4 added to
+`test_reversibility_lineage.py`. The #0059 test that pinned *last run wins* is gone,
+replaced by one asserting the repaired behaviour. Backend parity walks 30 list methods.
+Browser: A → B → C, then reopened A's proof and compared it field by field against the
+listing captured immediately after A — identical.
+
+**What we learned**
+The bug was a category error hiding inside a good decision. Making a strategy id a digest
+of its identity is right, and the reason it is right — the object survives the world
+moving — is precisely the reason it cannot also be a historical record. "Same truth, same
+id" and "what did you see at 4pm" are different questions, and one row cannot answer both.
+
+The second lesson is about how much the check was worth. The reported symptom was a
+mutable `run_id`; the actual exposure was mutable *numbers*, and only measuring found it.
+A fix built to the symptom would have shipped ids and an ordinal, passed every test written
+from the same assumption, and left a proof that quietly reported today's demand under an
+older run's name.
+
+**Article fodder**
+Article 2. Clean illustration of identity-versus-history in an agent audit trail, and of
+why "we already store the strategies" is not the same as "we can prove what the model saw".
+
+**Relevant commits / files**
+`services/agent/pool/domain/models.py`, `adapters/repository.py`,
+`services/strategy.py`, `services/events.py`, `apps/web/src/api.ts`, `views/why.tsx`,
+`tests/test_run_strategy_history.py`, `tests/test_reversibility_lineage.py`,
+`tests/test_public_demo.py`, `AGENTS.md`, `docs/ARCHITECTURE.md`.

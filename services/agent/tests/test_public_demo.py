@@ -871,6 +871,7 @@ MIRROR = {
     "coordination_events": "put_coordination_event",
     "cohort_strategies": "put_cohort_strategy",
     "strategy_evaluations": "put_strategy_evaluation",
+    "run_strategy_references": "put_run_strategy_reference",
 }
 
 
@@ -1185,18 +1186,19 @@ def test_both_stores_return_every_list_in_the_same_order():
         assert a == b, f"{method} came back in a different order"
         compared += 1
         populated += 1 if a else 0
-    # 29 list methods agree, and 23 of them actually held data — a comparison over
+    # 30 list methods agree, and 23 of them actually held data — a comparison over
     # empty lists would pass without proving anything.
     #
-    # The six that are empty here are the two strategy tables, the coordination event
-    # table and the clarification plans: the showcase is a homogeneous scenario that
-    # searches no strategies and asks nobody anything, and it declares its need through
-    # the service rather than through the HTTP write path where events are recorded.
-    # Their parity is proved against populated worlds in ``test_cohort_strategy.py``,
-    # ``test_declaration_events.py`` and ``test_targeted_questions.py`` instead. This
+    # The seven that are empty here are the two strategy tables, the run→strategy
+    # references, the coordination event table and the clarification plans: the showcase
+    # is a homogeneous scenario that searches no strategies and asks nobody anything, and
+    # it declares its need through the service rather than through the HTTP write path
+    # where events are recorded. Their parity is proved against populated worlds in
+    # ``test_cohort_strategy.py``, ``test_declaration_events.py``,
+    # ``test_targeted_questions.py`` and ``test_run_strategy_history.py`` instead. This
     # count is deliberately exact so that adding an entity to one backend and forgetting
     # it in the other fails here rather than in production.
-    assert (compared, populated) == (29, 23), (compared, populated)
+    assert (compared, populated) == (30, 23), (compared, populated)
 
 
 def test_a_completed_demo_session_stays_far_inside_dynamodbs_item_limit():

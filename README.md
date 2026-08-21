@@ -17,35 +17,35 @@ cannot create it.
 
 ## Open this first
 
-**<https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/>**
-
-No signup, no password, no credentials. Pool opens on four short questions — what to call
-you, roughly where you are, something you buy, and how much it may do without asking — and
-knows nothing about you until you answer them. Type `vanilla whey` and pick the tub you
-recognise. That standing declaration is the entire user input of the product; nothing
-about it creates a group or invites anybody.
-
-**On location:** Pool never asks your browser for a position, and never claims you are
-near the people in the demo. The community is invented, and the setup screen says so.
-Whatever city you are in, you explore Demo University from the inside.
-
-Then press **Run Pool now** and the coordinator goes looking for overlapping demand it was
-never told about. When it finds some, open the pool it formed and drive the rest — the
-host answering, a card being declined, the repair, the order, the handover — from the
-**Demo controls** drawer, which acts for the other synthetic participants.
-
-Then, on that same pool's **Activity** tab, open **Technical proof for this run**. It
-shows the exact AgentCore run that already formed the pool: run id, pool id,
-`created_by_run`, tool sequence, model, termination, and authoritative database readback.
-No second live invocation is needed; **Run again** is deliberately secondary.
-
-Or run everything locally, offline and free:
-
 ```bash
 make install     # Python agent, web app, CDK deps
-make qa          # lint, typecheck, tests, build, secret scan
-make dev         # API on :8000, web on :5173
+make demo-local  # judge mode, one origin on :8000, offline and free
 ```
+
+Then open **<http://localhost:8000/verify>**.
+
+No signup, no password, no credentials, and nothing to arrange. You arrive as an ordinary
+member of a synthetic community that already buys coffee and disagrees about which coffee.
+Add a coffee you drink, say whether another brand would do, answer the two or three
+questions Pool decides are worth asking, and save.
+
+**Saving is the only thing you do.** There is no *run* button on this path, and pressing
+one would be the thing the page exists to avoid. The declaration writes a durable
+coordination event, one bounded agent run answers it, and Home changes — into an order, or
+into a truthful *watching*, depending on what you actually said. Every row that changed can
+tell you why, and **Technical proof for this run** shows the run that produced it: run id,
+event id, tool sequence, model, the options it was offered and the deterministic verdicts
+that separated them.
+
+**On location:** Pool never asks your browser for a position, and never claims you are near
+the people in the demo. The community is invented, and the page says so before you start.
+
+**On the hosted URL.** A public Lambda Function URL was deployed and verified on
+2026-08-19 — `BUILD_HISTORY.md` #0048 — and that deployment is **five phases behind this
+branch**: it predates typed product requirements, the strategy engine, coordination events
+and the `/verify` experience described above. Its current reachability has not been
+reverified here, and it is named as a configured deployment target rather than as a live
+demonstration of this code. Run it locally to see what this repository actually does.
 
 ---
 
@@ -114,10 +114,9 @@ make demo        # the full lifecycle end to end, printed as a transcript
 make dev         # API on :8000, web on :5173
 ```
 
-Then open <http://localhost:5173>, set an account up, and press **Run Pool now**.
-
-`make demo-local` runs the same app in **judge mode** — the reduced configuration the
-public demo deploys in, served from a single origin on :8000.
+Then open <http://localhost:5173/verify>, or `make demo-local` and open
+<http://localhost:8000/verify> — the same app in **judge mode**, the reduced configuration
+the public demo deploys in, served from a single origin.
 
 ### What the app is
 
@@ -126,41 +125,47 @@ top-right control switches account, holds the demo controls, and explains what i
 
 | | |
 | --- | --- |
-| **Home** | A short narrative, and only the parts of it that currently apply: what Pool needs you to answer, what it found *for you* — your units, your price, your pickup — what it handled across the Community without asking anyone, what you buy anyway, and, folded away, whether Pool may commit your money at all |
-| **Pools** | The orders people are making together, and the full record of each one |
-| **Needs** | What you buy anyway. Declare one, change one, or stop buying something — the product's primary action, and the only thing a member ever has to do. Product, quantity, cadence and how many days early you'd tolerate; the authorisation limits sit behind one disclosure with their values stated on it. Underneath: the community's standing needs, none of which are organised into anything |
-| **Community** | Demo University, in the two currencies Pool saves: money created, then coordination avoided. Then the model behind them, the map, and where the money went |
+| **Home** | A short narrative, and only the parts of it that currently apply: what Pool needs you to answer, what it found *for you* — your units, your price, your pickup — or, just as often, that it is still watching and exactly what is missing. Folded away: whether Pool may commit your money at all |
+| **Orders** | The orders people are making together, and the full record of each one |
+| **What you buy** | Declare something, change it, or stop buying it — the product's primary action, and the only thing a member ever has to do. Product, quantity, cadence, how many days early you'd tolerate, and *how flexible you are*: only this exact product, or any brand matching preferences you state by answering questions about the product itself. Underneath: the community's standing declarations, none of which are organised into anything |
 
-A pool's own record carries the depth: **Overview**, **People**, **Economics**,
-**Fulfilment**, and an **Activity** tab holding the audit trail, the agent's tool
-sequence, the deployed AgentCore run, and a thirteen-stage reader for the whole
-lifecycle. None of that is in the navigation, because a student buying protein powder
-has no use for a Bedrock model id and a judge auditing the agent has nothing but use
-for it.
+Three destinations, and Community, Operations and the scripted showcase are deliberately
+not among them. A pool's own record carries the depth: **Overview**, **People**,
+**Economics**, **Fulfilment**, and an **Activity** tab holding the audit trail and the
+agent's tool sequence. A declaration carries its own: **Why this order?** in the member's
+words, with **Technical proof for this run** folded underneath it. None of that is in the
+navigation, because a student buying coffee has no use for a model id and a judge auditing
+the agent has nothing but use for it.
 
 Every action is attributed to one of three actors wherever it appears: **the agent chose
 to do this**, **deterministic code computed it**, or **a person was asked**.
 
-### Driving it alone
+### Driving the rest of the lifecycle
 
-Pool is a three-sided product and a judge is one person. The **Demo controls** drawer
-acts on behalf of the other synthetic participants — the host answering an offer, the
-remaining buyers answering theirs, the scheduler opening the pickup window, everyone
-collecting. Each control calls the same endpoint that participant would call, so the
-state machine, the economics and every viability check still apply, and a control that
-cannot legally run is not offered.
+Pool is a three-sided product and a judge is one person, so the parts of the lifecycle
+that need another participant — the host answering an offer, the remaining buyers
+answering theirs, the pickup window opening, everyone collecting — are reachable from a
+pool's own record and from the operator surface at `?operator=1`. Each control calls the
+same endpoint that participant would call, so the state machine, the economics and every
+viability check still apply, and a control that cannot legally run is not offered.
+
+**None of it is in the member's navigation, and none of it is needed for the judge path.**
+Acting for somebody else is the thing a sceptical reader is trying to see past, so the
+`/verify` walkthrough reaches a real order without any of it (`AGENTS.md` §8).
 
 ---
 
 ## The judge experience — live
 
 The public demo is a **separate, tiny stack** — one Lambda behind a Function URL, serving
-both the web app and a thirty-one-endpoint API, plus one DynamoDB table.
+both the web app and a reduced API, plus one DynamoDB table. The stack is what
+`make deploy-demo` builds; the deployment currently reachable at the URL above was built
+from an earlier commit (see *Open this first*).
 
 ```
 browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
                                              ├─ the built SPA (same origin, no CORS)
-                                             ├─ 32 allowlisted API paths
+                                             ├─ 36 of 55 API paths, allowlisted
                                              ├─ DynamoDB — this session only, 24 h TTL
                                              └─ InvokeAgentRuntime — bound to this session
                                                        │
@@ -192,17 +197,21 @@ Strands loop with the offline planner, the real domain maths, the real state mac
 That is deliberate: a demo that depends on a paid model call for every interaction is a
 demo that breaks in front of someone.
 
-Exactly one action leaves the machine, and it is the product's own: **Find
-opportunities** invokes Pool's coordinator on **Amazon Bedrock AgentCore Runtime** — a
-real model, a real Strands loop, real Pool tools — inside a runtime session generated
-per invocation, **bound to the visitor's own DynamoDB workspace**. The pool that appears
-afterwards was formed by that run: its `created_by_run` is the run id the runtime
-reported, and the page renders it by re-reading the table rather than by drawing the
-model's answer. The same invocation is auditable from a pool's *Activity → Technical
-proof for this run*, which reports the exact run and pool ids, `created_by_run`, tool
-sequence, model, token counts, termination reason, and same-workspace readback. It is
-capped and labelled, and if it fails it says so. A fresh invocation is not part of the
-demo path. **There is no code path that fabricates a run** (`AGENTS.md` §8).
+One action can leave the machine, and it is the product's own: **Find opportunities**
+invokes Pool's coordinator on **Amazon Bedrock AgentCore Runtime** — a real model, a real
+Strands loop, real Pool tools — inside a runtime session generated per invocation, **bound
+to the visitor's own DynamoDB workspace**. The pool that appears afterwards was formed by
+that run: its `created_by_run` is the run id the runtime reported, and the page renders it
+by re-reading the table rather than by drawing the model's answer. It is capped and
+labelled, and if it fails it says so. **There is no code path that fabricates a run**
+(`AGENTS.md` §8).
+
+That action is **not on the `/verify` judge path**, which is deliberate. There, a saved
+declaration writes a coordination event and one bounded run answers it in-process, under
+the same bounds and the same tools — so the thing a judge verifies is caused by an
+ordinary member action rather than by pressing a button labelled *run the agent*. Which
+model provider that run uses is the deployment's configuration; locally it is the offline
+deterministic planner, at zero tokens.
 
 The runtime is a *participant* in a workspace, never its owner. The API seeds workspaces,
 resets them, and rations how many exist; the runtime's execution role can read and write
@@ -391,6 +400,8 @@ number or email is ever exposed.
 
 | The model may decide | Deterministic code determines |
 | --- | --- |
+| which of the approved questions are worth asking a member, and in what order | what every answer means, and the typed rule it becomes |
+| which bounded strategy to investigate, and whether to adapt after a refusal | compatibility, eligibility, case allocation, landed economics, viability |
 | which latent demand deserves investigation | cents, quantities, package maths |
 | whether to search or refresh offers | MOQ, allocations, offer freshness |
 | whether a candidate pool is worth forming | timing eligibility, product compatibility |
@@ -400,9 +411,29 @@ number or email is ever exposed.
 | when there is nothing worth doing | pickup-code validity, state transitions |
 | | Smart Join verdicts and final viability |
 
+Two of those rows are the ones this product turns on, and they are worth stating as
+sentences rather than as cells.
+
+**Asking.** When a member says another brand would do, a bounded run reads a listing of
+*approved* questions — built from a curated family schema, each carrying two counts and no
+verdict — and chooses which are worth that person's attention and in what order. It cannot
+write a question the listing did not offer, and it decides nothing about what an answer
+implies: every prompt, every value label and every mapping lives in a committed table, and
+`services/needs.policy_from_answers` is the only thing that reads an answer. Every default
+there is the narrowest reading, so an unanswered question can never widen a rule.
+
+**Choosing.** When a declaration changes, a bounded run is given up to six candidate orders
+with no price, no verdict and no ranking, and picks which to cost. The deterministic
+evaluator answers, and can refuse — the option with the most demand behind it is routinely
+the one that loses money. The run adapts or records honest no-action. The tool that forms
+an order takes **two identifiers and nothing else**: there is no parameter for a member, a
+quantity, a price or a supplier term.
+
 The agent reaches the world through twelve narrow typed tools and nothing else — no
 shell, no arbitrary SQL, no generic mutation. Every tool is either a safe read or a
-single consequential operation with idempotency and an approval boundary built in.
+single consequential operation with idempotency and an approval boundary built in. A run
+answering a coordination event is given a different surface from the pool-day scan, and a
+run deciding what to *ask* holds two tools and no mutation at all.
 
 **Smart Join** returns one of three verdicts, never "close enough":
 
@@ -459,6 +490,15 @@ records `model_provider`, and the UI shows it.
 **Not real, and labelled as such everywhere:** the Community, the members, the suppliers,
 the offers, the money, and the purchase. No goods move. No traction is claimed.
 
+Four categories, because collapsing them is how a demo starts lying:
+
+| | What |
+| --- | --- |
+| **Synthetic** | The Community and its households. The coffee brands, products and their curated attribute facts. The standing demand around you. The supplier quotes, case sizes and minimums |
+| **Simulated** | Payment authorisation and capture. Supplier purchasing. No card is charged, no card is stored, no supplier is contacted |
+| **Real code, on real data** | Compatibility evaluation against curated facts. Strategy generation. Case allocation. Landed economics. Coordination events. The Strands loop and its bounds. Staleness refusal. The audit history, and every consequence you can see on screen |
+| **Live cloud** | Only what `README.md` §AWS records as verified, with the date it was observed. Nothing on this page infers a live capability from an older observation |
+
 **Real, because it costs nothing to be:** the products themselves. A member types
 `vanilla whey` and picks a tub they recognise, with the actual photograph. That comes from
 a curated Open Food Facts snapshot committed to this repository — 295 products, bundled
@@ -477,19 +517,21 @@ obligations: [`services/agent/pool/data/CATALOG_LICENSE.md`](services/agent/pool
 
 ## AWS
 
-**Bedrock inference is verified** on both the discovery path (`make verify-bedrock`) and
-the consequential recovery-and-lock path (`make verify-recovery`): a real model drives the
-real Strands loop and the real Pool tools, and the deterministic viability engine refuses
-the lock it is not allowed to take. **The AgentCore Runtime is deployed** and answering.
-The pilot-shaped stack also synthesizes, but it is not the deployed judge architecture.
-Nothing in this repository claims a deployment that has not happened.
+**Status language on this page is about when something was last observed, not about what
+is plausible.** Every line below was verified on the date its entry in `BUILD_HISTORY.md`
+records. The most recent cloud work was **#0048, 2026-08-19**; everything since — typed
+product requirements, the strategy engine, coordination events, the `/verify` experience,
+targeted questions, reversible preferences and immutable run history — is **local and
+offline only, and has never been deployed or driven by a live model**. Nothing here claims
+a deployment that has not happened, and nothing here re-uses an old observation to describe
+current code.
 
 | Service | Role | Status |
 | --- | --- | --- |
-| Bedrock | Model inference via Strands | **Verified** — `us.amazon.nova-lite-v1:0`; discovery, recovery, and lock branches all driven by real runs |
-| AgentCore Runtime | Hosted agent entrypoint | **Deployed and verified** — `agentcore_app.py`, `READY` in `us-east-1`, live invocations proving AgentCore → Strands → Bedrock → Pool tools |
-| Lambda Function URL | The public judge demo: web app + reduced API | **Deployed and verified** — full lifecycle on a real DynamoDB table, and a live AgentCore invocation from a public browser |
-| DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified** — the complete 13-step lifecycle runs on the real table with identical economics |
+| Bedrock | Model inference via Strands | **Verified 2026-08-19** — `us.amazon.nova-lite-v1:0`; discovery, recovery and lock branches driven by real runs (`make verify-bedrock`, `make verify-recovery`). Not rerun against this branch |
+| AgentCore Runtime | Hosted agent entrypoint | **Deployed and verified 2026-08-19** — `agentcore_app.py`, `READY` in `us-east-1`, live invocations proving AgentCore → Strands → Bedrock → Pool tools. **The deployed artefact predates this branch**; current status not reverified |
+| Lambda Function URL | The public judge demo: web app + reduced API | **Deployed and verified 2026-08-19** — full lifecycle on a real DynamoDB table. **Serves an earlier build**; reachability not reverified |
+| DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified 2026-08-19** — the complete 13-step lifecycle runs on the real table with identical economics |
 | API Gateway + Lambda | Pilot-shaped API | In `PoolStack`, which is **not** what the public demo deploys |
 | S3 + CloudFront | Pilot-shaped web hosting | In `PoolStack`. The public demo needs neither |
 | EventBridge | Optional future background scan | Implemented only in the un-deployed `PoolStack`; **zero rules exist in the deployed judge account** |

@@ -7133,3 +7133,106 @@ why "we already store the strategies" is not the same as "we can prove what the 
 `services/strategy.py`, `services/events.py`, `apps/web/src/api.ts`, `views/why.tsx`,
 `tests/test_run_strategy_history.py`, `tests/test_reversibility_lineage.py`,
 `tests/test_public_demo.py`, `AGENTS.md`, `docs/ARCHITECTURE.md`.
+
+---
+
+### #0061 — [2026-08-21] — Release candidate: saying only what is currently true
+`[DEMO]` `[ARCHITECTURE]` `[ARTICLE-1]` `[ARTICLE-2]`
+
+**Goal / user intent**
+Phase 5, local half. Turn the accepted implementation into a release candidate: audit every
+visible and documented claim, correct the ones that had drifted, rehearse the judge path on
+fresh workspaces, and stop at the AWS checkpoint without touching the cloud. No features.
+
+**The audit's central finding**
+
+The last cloud work was **#0048, 2026-08-19**. Everything since — typed product
+requirements, the strategy engine, coordination events, the `/verify` experience, targeted
+questions, reversible preferences and immutable run history — is local and offline only.
+So the deployed Lambda Function URL, still named as the front door of this project, serves
+a build **five phases older than the branch it is documented in**. Its README paragraph
+described an onboarding flow that no longer exists ("four short questions", "type
+`vanilla whey`", "press Run Pool now") and a navigation that no longer exists (Pools,
+Needs, Community, a Demo controls drawer).
+
+Nothing about that was invented; it was simply never re-read after the product changed
+underneath it. The correction is uniform: **every cloud claim now carries the date it was
+observed**, the README opens on `make demo-local` and `/verify` rather than on a URL, and
+the hosted deployment is named a *configured deployment target* whose reachability has not
+been reverified. Two tests were corrected with it — one pinned an endpoint count that had
+drifted from the guard that measures it (32 against a measured 36 of 55), and one assumed
+the submission flow was the first in the demo script.
+
+**A new guard**, because dates are the thing that rots: `test_the_readme_dates_every_cloud_claim_it_makes`
+fails if any Verified row in the AWS table loses its observation date.
+
+**What was rehearsed**
+
+Three fresh isolated workspaces, member actions only, no operator control touched:
+
+| | actions | clarification runs | coordination runs | outcome | payments |
+| --- | --- | --- | --- | --- | --- |
+| Rehearsal 1–3 | 6 | 1 | 1 | `pool_created`, Kestrel refused → Harbourstone viable | 0 |
+| Exact-only | 6 | 1 | 1 | `no_action`, Home *watching* | 0 |
+| Medium-only roast | 6 | 1 | 1 | `no_action`, Home *watching* | 0 |
+
+Six actions including the technical proof, and the proof names the same run as the save in
+every one. A→B→C separately: distinct revisions (0, 1, 2), distinct events, distinct runs,
+18 → 15 → 18 provisional units, zero payment rows, and run A's historical listing
+byte-identical after B and C.
+
+Browser: 390×844 and 360×800 and 1440×900, whole path including *Edit preferences* and
+A→B→C. No horizontal overflow at any viewport, no element past the right edge, touch
+targets on the labels at 44 px and above, no unlabelled inputs, and **zero operator
+controls anywhere in the member DOM**.
+
+`/verify` hard-loads in judge mode — the configuration the Lambda runs — at `/verify`,
+`/verify/` and with a query string, and every path-traversal shape returns `index.html`
+rather than file content.
+
+**Two things the environment taught us, and one it nearly hid**
+
+The sandbox stopped permitting `getcwd()` on the repository partway through this phase.
+Three consequences, all worth recording:
+
+*The product failed honestly under it.* A coordination run whose `Agent()` construction
+raised `PermissionError` recorded `status: failed`, `terminal_reason: error`, formed no
+pool and fabricated nothing. That is the behaviour the run bounds exist for, observed
+under a fault nobody designed for.
+
+*The secret scanner silently stopped scanning.* `scripts/secret_scan.sh` greps `.`, `.`
+became unreadable, the error went to `/dev/null`, and it reported **clean** — the exact
+failure mode its own docstring names ("a scanner that cannot fail is worse than no
+scanner"). `secret_scan_selftest.sh` caught it by planting a key and finding it undetected.
+The self-test earned its keep; `make qa` does not run it, which is worth changing.
+
+*So the scan was redone through `git grep`* over tracked content, with a planted-key
+control first to prove the mechanism detects. Ten patterns, no findings, `.env` untracked,
+`.env.example` carrying keys and no values, and no untracked files to commit.
+
+**AWS / external services touched** — None. No deploy, no AgentCore, no Bedrock, no live
+model, no live payment. The cloud checkpoint is the next step and is not taken here.
+
+**Validation**
+Ruff, eslint, `tsc -b --noEmit`, **1,278 agent + 75 infra + 154 web = 1,507**, production
+build, secret scan (via `git grep`, mechanism controlled). Three fresh rehearsals plus two
+negative flows plus the A→B→C walk, all through the ordinary product.
+
+**What we learned**
+Documentation rots in a specific direction: it keeps describing the product that existed
+when somebody last enjoyed writing about it. Every wrong sentence here was true once, and
+none of them was a lie at the time — which is why the fix is dating claims rather than
+rewriting them more carefully.
+
+The scanner is the sharper lesson. A check that cannot distinguish "nothing found" from
+"nothing looked at" is not a check, and the only reason this one was caught is that
+somebody had already written the test that plants a secret and demands it be found.
+
+**Article fodder**
+Article 1 and Article 2. The dating discipline, and the self-test that caught a silent
+scanner, are both small concrete stories about how a system knows what it actually knows.
+
+**Relevant commits / files**
+`README.md`, `PRODUCT.md`, `docs/DEMO_SCRIPT.md`, `docs/HACKATHON_SCORECARD.md`,
+`docs/RELEASE_CHECKLIST.md`, `docs/DEVPOST_DRAFT.md`,
+`services/agent/tests/test_presentation_truth.py`.

@@ -195,13 +195,17 @@ Real, and safe to rely on:
 - **Committed supplier sheets** — `demo-data/riverbend-split-case.csv`,
   `demo-data/riverbend-case-programme.csv`, `demo-data/MANIFEST.json`. Really parsed,
   digest-pinned, imported in that order.
-- **A deployed public demo** on AWS Lambda + DynamoDB, with the coordinator on Amazon
-  Bedrock AgentCore Runtime: `https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/`
+- **A configured public-demo deployment target** on AWS Lambda + DynamoDB, with the
+  coordinator on Amazon Bedrock AgentCore Runtime. Deployed and verified **2026-08-19**
+  (`BUILD_HISTORY.md` #0048) at
+  `https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/`. That artefact
+  predates typed product requirements, the strategy engine, coordination events and the
+  `/verify` experience; its current reachability has not been reverified.
 - **Stored proof of real invocations** — run ids, `created_by_run` lineage on the
   resulting pool, tool sequences, outcomes, terminations, and authoritative readback from
   the same workspace the browser reads.
-- **A large executed test suite** — 1,201 agent tests (verified by collection),
-  plus infra and web suites, reported green at 1,405 total in `BUILD_HISTORY.md` #0057.
+- **A large executed test suite** — 1,277 agent tests, plus infra and web suites, reported
+  green at 1,506 total in `BUILD_HISTORY.md` #0060.
 - **A canonical lifecycle fixture**, not to be paraphrased or adjusted for presentation:
   11 memberships, 10 funded buyers, 1 authorization failure, 1 replacement, 24 units,
   2 cases, 0 surplus, $861.44 all-in against $1,127.76 retail, $266.32 saved, 23.61%,

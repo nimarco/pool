@@ -1,8 +1,10 @@
 # Demo rehearsal script
 
-Three flows. **A** is the submission recording. **B** is the ninety-second explanation for
-somebody with no interest in AWS. **C** is the older changing-world narrative, kept because
-it proves a different claim and because the machinery behind it is still real.
+**Core (~2:00)** is the tight version and the one to record first. **A (~3:30)** is the
+same story with room to breathe, and is the submission recording. **A+ (~5:00)** extends it
+with reversibility and the AWS boundary. **B** is the ninety-second explanation for somebody
+with no interest in AWS. **C** is the older changing-world narrative, kept because it proves
+a different claim and because the machinery behind it is still real.
 
 All of them are navigation-and-timing rehearsals, not word-for-word voiceovers.
 
@@ -28,6 +30,27 @@ save and is readable afterwards from stored rows.
 
 **The presenter is a user of Pool, not its puppeteer.** If you find yourself pressing
 something a member would never press, the take is wrong.
+
+---
+
+# Core. The two-minute cut
+
+One browser, mobile-sized (390 × 844). Fresh session. Everything here is on screen; nothing
+is arranged in advance.
+
+| | Beat | What you do | What you say |
+| --- | --- | --- | --- |
+| **0:00** | Hook | `/verify`, already open | *"Group buying sounds simple until everybody buys a slightly different thing and nobody wants to organise the group."* |
+| **0:15** | The member | Start → name → search **Kestrel** → medium roast | *"I normally buy this coffee."* |
+| **0:30** | Consent | Choose **Any brand that matches my preferences** | *"I would take another brand — if it is still the coffee I actually drink."* |
+| **0:45** | The questions | Answer the two or three that appear; add **Dark** | *"The model decides what it needs to clarify. The product schema decides what every answer means."* |
+| **1:05** | Save | Three bags. Save. Once. | *"That is the only thing I do. There is no run button."* |
+| **1:15** | Consequence | Home has changed on its own | *"Pool found fragmented recurring demand that nobody organised — and it bought a dark roast, because I said dark was fine."* |
+| **1:30** | Why | **Why this order?** — considered, refused, chosen, excluded, provisional | *"The option with the most demand behind it is the one that lost money. It only found that out by costing it, and then it tried the other one."* |
+| **1:50** | Proof | Desktop. Expand **Technical proof for this run** | *"The model chooses what to investigate and can adapt. Deterministic code decides what is true — compatibility, cases, economics, and whether an action is allowed at all."* |
+
+Stop there. Do not walk the lifecycle to completion; the claim is already made and the
+order is honestly provisional.
 
 ---
 
@@ -60,22 +83,33 @@ through it. Do not linger on the map.
 
 Search **Kestrel**. Pick the medium roast.
 
-Then the beat this whole phase exists for. The form asks about *coffee*:
+Then the beat this whole phase exists for. One question first, and it is a consent gate:
 
-- Only this exact product, or similar products are okay.
+- **Only this exact coffee** — Pool will never buy you anything else.
+- **Any brand that matches my preferences** — the brand opens up, and nothing else does.
+
+Choose the second. *Now* the questions arrive, and they are about coffee:
+
+- Roasts that work for you — with the standing demand behind each one.
 - It has to be whole bean.
 - It has to be caffeinated.
-- Roasts that work for you.
 
-Say: **"I am not choosing a substitution policy. I am telling it what coffee is."**
+Say: **"I am not choosing a substitution policy. I am telling it what coffee is. And it
+worked out which of those questions were worth asking me — not what my answers mean."**
 
-Set **three bags a month**, choose *similar products are okay*, leave whole bean and
-caffeinated ticked, and add **Dark** alongside Medium.
+Set **three bags a month**, leave whole bean and caffeinated ticked, and add **Dark**
+alongside Medium.
 
-> Any quantity works and the answer you get is the real one. Three is used here because it
-> lands on this supplier's case boundary; two produces a truthful "Pool could assemble an
-> order, but not one you would be in, so it did not form it", which is a good answer and a
-> worse recording.
+> **On the roast.** Medium alone is the default, because Pool never widens a preference
+> nobody widened. Beside each roast is the standing demand it would let you combine with —
+> 22 units behind medium, 6 behind dark — so adding dark is a decision you make with the
+> consequence in front of you. Say it that way: *"I would drink a dark roast, and it shows
+> me what that opens up."* Do not say it is required for the demo.
+>
+> **On the quantity.** Any quantity works and the answer you get is the real one. Three is
+> the amount this member buys; it also happens to land on this supplier's case boundary.
+> Two produces a truthful *"Pool could assemble an order, but not one you would be in, so
+> it did not form it"* — a good answer and a worse recording.
 
 Save. **That is the last thing you do to Pool.**
 
@@ -118,8 +152,13 @@ the same rows. Point at three things and stop:
 
 - the tool sequence: list, evaluate, evaluate, create;
 - **2 of 3** options costed, **1 of 1** order formed, **5 of 8** model calls;
+- *What Pool decided to ask, before any of this* — the approved question set beside the
+  ones actually asked, and its own separate run;
 - provider and model, and the line saying the community is synthetic and payments
   simulated.
+
+Read the numbers off the screen rather than from this page. They are deterministic for the
+canonical fixture and they are still the run's, not the script's.
 
 Say: **"The model chose what to investigate and adapted when it was refused. It never
 computed a price, decided who was compatible, or supplied a member, a quantity or a
@@ -127,6 +166,47 @@ supplier term. The tool that forms an order takes two identifiers and nothing el
 
 Then reload the page. The explanation is still there, unchanged, and there is still one
 run. Nothing was held in the browser.
+
+---
+
+# A+. The five-minute cut
+
+Flow A, plus two beats and a closing frame. Only record this version if A is comfortably
+inside time — a rushed five minutes is worse than a calm three and a half.
+
+**Insert after *Why this order?* (about 3:00): changing your mind.**
+
+Go to **What you buy → Change**. Switch to **Only this exact coffee** and save.
+
+The order disappears from Home, and the banner says why: *Pool took you out of an order
+your new rules no longer allow. Nobody was charged, and the other members' order is
+unaffected.* Home now says it is watching, and names what is missing.
+
+Say: **"Watch what happens if I change my mind. It does not argue, and it does not keep
+me in an order I have just said I do not want."**
+
+That is the whole beat — about twenty seconds. **Do not** demonstrate switching back
+unless the take is short and calm: the restoration is real, it is verifiable, and it is
+one more thing to explain. It stays available to any judge who tries it.
+
+**Insert before the close (about 4:15): what is real.**
+
+Read the three lines off `/verify` rather than paraphrasing:
+
+- **Synthetic** — the community, the households, the coffee brands, the supplier quotes.
+- **Simulated** — payments and purchasing. No card is charged, no supplier is contacted.
+- **Real** — the compatibility engine, the case fitting, the landed economics, the agent
+  loop and its bounds, and every record you just read.
+
+Then the AWS frame, and **only what has been verified**. Check `README.md` §AWS before
+recording: if this branch has not been deployed and driven by a live model, say so in
+those words — *"this runs the same Strands loop against a deterministic planner locally;
+the cloud path is deployed and verified separately, and the repository says exactly
+when"* — and do not put an old URL on screen.
+
+**Close on the thesis, not on a feature list:**
+
+> **Nobody organised the group. Pool noticed.**
 
 ---
 

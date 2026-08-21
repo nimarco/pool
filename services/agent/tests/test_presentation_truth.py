@@ -69,16 +69,24 @@ def test_the_rehearsal_opens_on_the_person_not_a_dashboard():
     walked them through loading a fixture and pressing "run agent" — a sequence in which
     the only thing being demonstrated was the presenter.
 
-    The assertions below cover the *submission* flow, which is the first in the file. The
-    changing-world walkthrough is preserved further down and has its own guards.
+    The beat-order assertions are scoped to the *submission* flow; the rest are about the
+    document as a whole. The changing-world walkthrough is preserved further down and has
+    its own guards.
     """
     script = _read("docs/DEMO_SCRIPT.md")
     # Prose wraps, so match against a single-spaced copy rather than pinning line breaks.
     flat = " ".join(script.split())
-    headings = [line for line in script.splitlines() if line.startswith("## 0:")]
+    # The submission flow only, for the assertions that are about *its* beats and their
+    # order. Sliced explicitly rather than assumed to be first: the two-minute cut now
+    # precedes it, and a positional assumption would have this checking another script.
+    submission = script[
+        script.index("# A. The submission recording") : script.index("# A+.")
+    ]
+    flat_submission = " ".join(submission.split())
+    headings = [line for line in submission.splitlines() if line.startswith("## 0:")]
     assert headings, "the rehearsal has no opening beat"
 
-    # The submission recording is the first flow in the file, and its opening two beats
+    # The submission recording's opening two beats
     # are the world and the person — in that order, because a judge sent a link needs to
     # know what they are looking at before they are asked to act in it (#0057). What is
     # forbidden is unchanged: opening on the fixture's contents, or on somebody's account
@@ -91,10 +99,16 @@ def test_the_rehearsal_opens_on_the_person_not_a_dashboard():
 
     # And the causal order the recording exists to show: the member declares before
     # anything coordinates, and the only thing they do to Pool is save.
-    declare_at = flat.index("The one thing a member does")
-    assert declare_at < flat.index("What Home says now")
-    assert flat.index("That is the last thing you do to Pool.") < flat.index(
-        "Why this order?"
+    declare_at = flat_submission.index("The one thing a member does")
+    assert declare_at < flat_submission.index("What Home says now")
+    assert flat_submission.index("That is the last thing you do to Pool.") < (
+        flat_submission.index("Why this order?")
+    )
+
+    # And the consent gate is answered before any product question is asked, because that
+    # ordering is the whole claim about how flexibility is obtained (#0058).
+    assert flat_submission.index("Any brand that matches my preferences") < (
+        flat_submission.index("Roasts that work for you")
     )
 
     # The rehearsal must not depend on a memorised product name. It used to open by
@@ -163,12 +177,40 @@ def test_the_rehearsal_says_the_showcase_has_its_own_community():
 
 
 def test_readme_describes_the_product_run_as_its_own_proof():
+    """The proof explains the run that already happened; it never buys a second one.
+
+    The phrasing moved when the judge path stopped being a button — there is no second
+    invocation to decline now, because there was never a first one to press. What is
+    pinned is the property rather than the old sentence: the proof is *of this run*, the
+    lineage field is named, and the endpoint count is the measured one.
+    """
     readme = _read("README.md")
 
-    assert "No second live invocation is needed" in readme
+    assert "Technical proof for this run" in readme
     assert "`created_by_run`" in readme
     assert "zero EventBridge rules" in readme
-    assert "32 allowlisted API paths" in readme
+    # The count the allowlist guard measures, not a number that drifted away from it.
+    # `test_public_demo.py` asserts the same pair against the running application.
+    assert "36 of 55 API paths, allowlisted" in readme
+    assert "36 of 55 endpoints exist" in readme
+
+
+def test_the_readme_dates_every_cloud_claim_it_makes():
+    """A live claim with no observation date behind it is the one that rots quietly.
+
+    Deployment happened once, at a known commit, and everything since is local. So each
+    row in the AWS table carries the date it was observed, and the reader is told plainly
+    that the deployed artefact is older than the branch they are reading.
+    """
+    readme = _read("README.md")
+    aws = readme[readme.index("## AWS") :]
+    for line in aws.splitlines():
+        if not line.startswith("| ") or "Verified" not in line:
+            continue
+        assert "2026-08-19" in line, line
+
+    assert "predates this branch" in aws or "predates typed product requirements" in readme
+    assert "has never been deployed or driven by a live model" in aws
 
 
 def test_the_rehearsal_quotes_figures_the_screen_will_actually_show():

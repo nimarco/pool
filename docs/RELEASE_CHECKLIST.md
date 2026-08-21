@@ -35,7 +35,7 @@ line here for a submission decision.
 | README with setup and run instructions | **Verified** | `README.md`; commands are the Makefile's and are run by `make qa` |
 | Architecture diagram | **Verified** | `docs/architecture.svg`, hand-authored, readable at video resolution |
 | Diagram distinguishes deployed from absent services | **Verified** | Solid judge path is deployed; dashed pilot components say implemented but not deployed; EventBridge says zero deployed rules |
-| Public demo URL, reachable with no AWS account | **Verified** | <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/> |
+| Public demo URL, reachable with no AWS account | **TODO** | Deployed and verified 2026-08-19 (#0048) at <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/>. That build predates Phases 1–4.5.2; redeploy this branch and recheck before relying on it |
 | Demo stays free to test throughout judging | **TODO (human)** | Depends on credits lasting. `make cost-check` weekly; `make demo-kill` is the emergency stop |
 | Public video, **5 minutes maximum** | **TODO (human)** | Not recorded. Must cover the problem, the users, and why it matters |
 | Video is public and plays without a login | **TODO (human)** | Check in a private window before submitting |

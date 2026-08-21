@@ -104,6 +104,30 @@ export function WhyThisOrder({
         <Empty>Pool has not looked at this one yet.</Empty>
       ) : (
         <>
+          {/* An order this save did not form, but which the save put the member back
+              into. Said first and said plainly: the sections below describe what *this*
+              run did, which was correctly nothing, and without this the page would read
+              as though the order on their Home screen had no cause. */}
+          {order && !order.formed_by_this_run ? (
+            <section className="panel">
+              <div className="panel-head">
+                <h2>You are back in this order</h2>
+              </div>
+              <div className="panel-pad stack-sm">
+                <p className="small">
+                  Your rules allow <strong>{order.product}</strong> again, so Pool put you
+                  back into the order it had taken you out of — the same one, not a new
+                  one. It was worked out by an earlier run, and the reasoning below is
+                  that run&apos;s.
+                </p>
+                <p className="small muted">
+                  Nothing was charged and nothing was committed. Your place is provisional
+                  and you will be asked before anything is.
+                </p>
+              </div>
+            </section>
+          ) : null}
+
           {/* 1. What Pool considered. Options, before any of them was costed. */}
           <section className="panel">
             <div className="panel-head">
@@ -111,8 +135,9 @@ export function WhyThisOrder({
             </div>
             <div className="panel-pad stack-sm">
               <p className="small">
-                Nobody buys the identical bag, so there was more than one order Pool could
-                have assembled. It found {considered.length}.
+                {considered.length === 0
+                  ? "Nothing this time — the order you are in already served this, so there was nothing new to assemble."
+                  : `Nobody buys the identical bag, so there was more than one order Pool could have assembled. It found ${considered.length}.`}
               </p>
               <ul className="why-options">
                 {considered.map((option) => (
@@ -127,10 +152,12 @@ export function WhyThisOrder({
                   </li>
                 ))}
               </ul>
-              <p className="small muted">
-                At this point none of them had a price. Clearing a supplier&apos;s minimum
-                is necessary and nowhere near enough.
-              </p>
+              {considered.length > 0 ? (
+                <p className="small muted">
+                  At this point none of them had a price. Clearing a supplier&apos;s
+                  minimum is necessary and nowhere near enough.
+                </p>
+              ) : null}
             </div>
           </section>
 
@@ -368,6 +395,16 @@ function Proof({ data }: { data: NeedCoordination }) {
           value={`${data.order ? 1 : 0} of ${run?.bounds.max_strategy_pool_creations ?? 0} allowed`}
         />
         <Fact label="Order" value={<code>{data.order?.pool_id ?? "none"}</code>} />
+        <Fact
+          label="Order formed by"
+          value={
+            data.order
+              ? data.order.formed_by_this_run
+                ? "this run"
+                : <code>{data.order.created_by_run}</code>
+              : "—"
+          }
+        />
       </div>
 
       <p className="small muted">

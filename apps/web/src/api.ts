@@ -534,6 +534,33 @@ export interface PreferenceQuestion {
   product_value: string;
   product_value_label: string;
   options: { value: string; label: string }[];
+  /** What each answer to this question would currently reach. Present only on the
+   *  clarification response — the plain read serves a form where nobody has agreed to
+   *  alternatives yet, and demand figures have no business on that screen.
+   *
+   *  Every number is a count over stored declarations and sourceable products at this
+   *  moment. None of them is a prediction: whether an order forms depends on prices,
+   *  case sizes and supplier minimums the evaluator checks against a chosen buyer set
+   *  long afterwards. */
+  reach?: QuestionReach;
+}
+
+export interface AnswerReach {
+  sourceable_products: number;
+  standing_requests: number;
+  standing_units: number;
+}
+
+export interface QuestionReach {
+  /** Insisting on the product's own value. */
+  keep: AnswerReach & { values: string[] };
+  /** Accepting every value the schema allows. */
+  any: AnswerReach & { values: string[] };
+  /** The same figures for each individual value. */
+  options: Record<string, AnswerReach>;
+  /** Whether the products Pool can source actually differ on this dimension. When they
+   *  do not, no answer here changes anybody's cohort and the guidance says nothing. */
+  varies: boolean;
 }
 
 export interface ProductPreferences {
@@ -660,6 +687,12 @@ export interface NeedCoordination {
     distribution_day: string;
     provisional: boolean;
     host_status: string;
+    /** Whether the run this explanation is about is the one that formed the order.
+     *  False when a preference edit put the member back into an order an earlier run
+     *  built — real either way, and saying which run made it is the difference between
+     *  an explanation and a claim. */
+    formed_by_this_run: boolean;
+    created_by_run: string;
   } | null;
   not_yet?: {
     host_accepted: boolean;

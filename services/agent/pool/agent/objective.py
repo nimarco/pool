@@ -142,6 +142,29 @@ class RunObjective:
         return bool(self.anchor_need_id) and not self.clarify_product_id
 
     @property
+    def reviews_served_declaration(self) -> bool:
+        """Whether this run's declaration is already inside a live pool.
+
+        A fourth shape, and the reason it exists is authority rather than tidiness. A
+        declaration event asks about **one declaration**, and when deterministic
+        reconciliation has already established that a live pool serves it, the answer is
+        known before the run opens. Falling through to the community surface would hand a
+        run caused by somebody editing a checkbox the tools that form pools, issue final
+        offers, lock and execute purchases — authority its question never granted, over a
+        Community it was never asked about.
+
+        So it gets a read-only surface and an end. The run can look at the pool that
+        serves the declaration and say so; it cannot mutate anything, because there is no
+        mutation in it.
+        """
+        return (
+            bool(self.event_id)
+            and bool(self.served_need_ids)
+            and not self.needs
+            and not self.clarify_product_id
+        )
+
+    @property
     def plans_clarification(self) -> bool:
         """Whether this run chooses which approved questions are worth asking.
 

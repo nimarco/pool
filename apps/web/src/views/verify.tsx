@@ -57,9 +57,15 @@ export function Verify({
               <strong>three bags a month</strong>.
             </li>
             <li>
-              Say whether you would take another brand. If you would, Pool works out which
-              things about the coffee it still needs to know — grind, caffeine, roast — and
-              asks only those.
+              Say whether you would take another brand. If you would, Pool looks at what it
+              can source and what other members have asked for, and asks only the questions
+              whose answers would change which orders you could join.
+            </li>
+            <li>
+              <strong>Answer them the way you actually buy.</strong> Each answer shows the
+              standing demand it would let Pool combine you with, so you can see what a
+              narrower answer costs you — but a preference you do not hold is not worth
+              having, and Pool will not push you off one.
             </li>
             <li>Save.</li>
           </ol>
@@ -70,10 +76,18 @@ export function Verify({
             changed can tell you why.
           </p>
           <p className="small muted">
-            Any quantity works, and the answer you get is the real one. Three is suggested
-            because it lands on a supplier&apos;s case boundary in this particular
-            community — try two instead and Pool will tell you, truthfully, that it could
-            assemble an order but not one you would be in, so it did not form it.
+            <strong>What changes is a real answer, not necessarily an order.</strong> A
+            narrow set of answers can leave Pool watching — there is compatible demand, but
+            not enough of it under your rules to buy against, and it will say so in those
+            words. A broader set exposes more of what is already standing here. Both are the
+            software working; neither is arranged in advance, and nothing on this page knows
+            which one you will get.
+          </p>
+          <p className="small muted">
+            Quantity matters for the same reason. Three is suggested because it lands on a
+            supplier&apos;s case boundary in this particular community — try two instead and
+            Pool will tell you, truthfully, that it could assemble an order but not one you
+            would be in, so it did not form it.
           </p>
           <p className="small muted">
             You will be a member of <strong>Demo University</strong>, which is the only

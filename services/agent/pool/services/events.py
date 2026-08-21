@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..domain.models import (
+    LEFT_PARTICIPATION_STATES,
     CoordinationEvent,
     CoordinationEventKind,
     CoordinationEventStatus,
@@ -366,7 +367,15 @@ def explain(ctx: PoolContext, need_id: str) -> dict[str, Any] | None:
         seen.add(evaluation.strategy_id)
         unique.append(evaluation)
 
+    # The order this declaration is in — which is not always the order this run formed.
+    # A member who narrowed their rules, left an order, and then widened them again is
+    # put back by deterministic reconciliation, and the run their save caused correctly
+    # has nothing to create. Reading only `event.pool_id` made the explanation say
+    # nothing happened while the member was looking at the order it was about.
     pool = ctx.repo.get_pool(ctx.ws, event.pool_id) if event.pool_id else None
+    formed_here = pool is not None
+    if pool is None:
+        pool = _pool_serving(ctx, event)
     memberships = ctx.repo.list_memberships(ctx.ws, pool.id) if pool else []
     chosen = next(
         (e for e in unique if pool is not None and e.target_product_id == pool.product_id),
@@ -392,7 +401,7 @@ def explain(ctx: PoolContext, need_id: str) -> dict[str, Any] | None:
         "investigated": [_verdict_view(e) for e in unique],
         "chosen": _verdict_view(chosen) if chosen is not None else None,
         "exclusion_codes": dict(sorted(exclusions.items())),
-        "order": _order_view(ctx, pool, memberships, chosen),
+        "order": _order_view(ctx, pool, memberships, chosen, formed_here=formed_here),
         # What has **not** happened. Stated positively so a surface cannot forget to say
         # it: candidate formation touches no card, and nobody has agreed to fulfil
         # anything (AGENTS.md §8, canonical invariants 2 and 3).
@@ -517,8 +526,33 @@ def _verdict_view(evaluation: Any) -> dict[str, Any]:
     }
 
 
+def _pool_serving(ctx: PoolContext, event: Any) -> Any:
+    """The live pool this declaration is currently in, by stored lineage.
+
+    The same rule ``services/relevance.personal_pools`` applies and for the same reason:
+    a membership is this declaration's only when its ``need_id`` names it and the state
+    is one somebody is actually in. Read, never inferred from product names or ordering
+    (AGENTS.md §8).
+    """
+    need = ctx.repo.get_need(ctx.ws, event.need_id)
+    if need is None:
+        return None
+    for pool in ctx.repo.list_pools(ctx.ws):
+        membership = ctx.repo.get_membership(ctx.ws, pool.id, need.household_id)
+        if membership is None or membership.state in LEFT_PARTICIPATION_STATES:
+            continue
+        if membership.need_id == need.id:
+            return pool
+    return None
+
+
 def _order_view(
-    ctx: PoolContext, pool: Any, memberships: list[Any], chosen: Any
+    ctx: PoolContext,
+    pool: Any,
+    memberships: list[Any],
+    chosen: Any,
+    *,
+    formed_here: bool = True,
 ) -> dict[str, Any] | None:
     if pool is None:
         return None
@@ -542,4 +576,9 @@ def _order_view(
         "provisional": all(m.state.value == "provisional" for m in memberships),
         "host_status": "recruiting" if ctx.repo.get_host_assignment(ctx.ws, pool.id) is None
         else "assigned",
+        # Whether *this* run formed it. False when a preference edit put the member back
+        # into an order an earlier run built — the order is real either way, and saying
+        # which run made it is the difference between an explanation and a claim.
+        "formed_by_this_run": formed_here,
+        "created_by_run": pool.created_by_run,
     }

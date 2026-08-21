@@ -3572,6 +3572,12 @@ select.control {
   border-radius: var(--radius);
   background: var(--paper-sunken);
 }
+/* The demand behind one answer, inside its own pill. Faint and after the label: it is
+   context for a choice, not a score to compare against. */
+.prefs-reach-tag {
+  padding-left: 2px;
+  white-space: nowrap;
+}
 .prefs-why {
   padding: 0 6px;
 }

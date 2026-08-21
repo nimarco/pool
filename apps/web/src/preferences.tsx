@@ -170,6 +170,7 @@ export function Preferences({
                   <span>
                     <strong>{q.prompt}</strong>
                     {q.hint ? <span className="small muted">{q.hint}</span> : null}
+                    <Consequence question={q} thing={thing} />
                   </span>
                 </label>
               ) : (
@@ -178,6 +179,7 @@ export function Preferences({
                     {q.prompt}
                   </span>
                   {q.hint ? <span className="small muted">{q.hint}</span> : null}
+                  <Consequence question={q} thing={thing} />
                   <div
                     className="prefs-options"
                     role="group"
@@ -198,6 +200,7 @@ export function Preferences({
                           {option.value === q.product_value ? (
                             <span className="small muted"> — yours</span>
                           ) : null}
+                          <OptionReach question={q} value={option.value} />
                         </label>
                       );
                     })}
@@ -243,6 +246,55 @@ export function Preferences({
         )
       ) : null}
     </fieldset>
+  );
+}
+
+/** What the answers to one question currently reach, in the member's terms.
+ *
+ *  Every figure is the server's, counted from stored declarations and the products this
+ *  deployment can actually source (`services/clarification`). Nothing here adds anything
+ *  up and nothing here forecasts: a narrower answer reaches less demand, which is a fact,
+ *  and whether *any* order forms depends on prices and supplier minimums checked much
+ *  later against a chosen buyer set.
+ *
+ *  Silent when the question cannot matter — when the things Pool can source do not differ
+ *  on this dimension, no answer changes anybody's cohort, and saying so at length would be
+ *  noise dressed as information.
+ */
+function Consequence({ question, thing }: { question: PreferenceQuestion; thing: string }) {
+  const reach = question.reach;
+  if (!reach || !reach.varies) return null;
+
+  if (question.kind === "keep") {
+    return (
+      <span className="small muted">
+        Insisting on this leaves {reach.keep.sourceable_products} of{" "}
+        {reach.any.sourceable_products} {thing}s Pool can source, and{" "}
+        {plural(reach.keep.standing_units, "unit", "units")} of other members&apos; standing
+        demand against {reach.any.standing_units}.
+      </span>
+    );
+  }
+  return (
+    <span className="small muted">
+      Each answer shows the standing demand it would let Pool combine you with. More is not
+      better on its own — it is only worth having if you would genuinely accept it.
+    </span>
+  );
+}
+
+/** The demand behind one specific answer. A stored count, shown where the answer is. */
+function OptionReach({ question, value }: { question: PreferenceQuestion; value: string }) {
+  const reach = question.reach;
+  if (!reach || !reach.varies) return null;
+  const row = reach.options[value];
+  if (!row) return null;
+  return (
+    <span className="small faint prefs-reach-tag">
+      {row.standing_units === 0
+        ? "none standing"
+        : `${plural(row.standing_units, "unit", "units")} standing`}
+    </span>
   );
 }
 

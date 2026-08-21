@@ -189,12 +189,37 @@ class DeterministicPlannerModel(Model):
             return self._plan_clarification(view)
         if "list_cohort_strategies" in available:
             return self._plan_strategy_search(view)
+        if "list_latent_demand" not in available:
+            # A declaration already served by a live pool. The surface is a read and an
+            # end, so there is one honest sequence and no search to plan.
+            return self._plan_served(view)
         text = view.user_text.lower()
         if "recover" in text or "withdrew" in text or "failed" in text:
             return self._plan_attention(view)
         if "advance" in text or "host" in text or "lock" in text:
             return self._plan_attention(view)
         return self._plan_scan(view)
+
+    def _plan_served(self, view: TranscriptView) -> list[dict]:
+        """Say that the pool already serving this declaration is the answer.
+
+        No tool call at all. ``inspect_pool`` is offered because a real model may want
+        to look before it concludes, and this planner has nothing to look *for*: the
+        objective already names the declaration as served, and reading a pool to restate
+        a fact the instruction contains would be a step bought to look busy
+        (AGENTS.md §3.3).
+        """
+        if view.called("record_no_action"):
+            return _text_event("The order this member is already in is the answer.")
+        return _tool_event(
+            "record_no_action",
+            {
+                "reason": (
+                    "an order this member is already in serves the declaration they "
+                    "changed, and it still satisfies their current rules"
+                )
+            },
+        )
 
     # -- targeted questions ------------------------------------------------
 

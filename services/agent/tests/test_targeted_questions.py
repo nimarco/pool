@@ -124,9 +124,23 @@ def test_the_listing_states_reach_and_reaches_no_conclusion(coffee_ctx):
         payload = candidate.to_dict()
         assert set(payload["answers"]) == {clar.ANSWER_KEEP, clar.ANSWER_ANY}
         for answer in payload["answers"].values():
-            assert set(answer) == {"values", "sourceable_products", "standing_requests"}
-            assert isinstance(answer["sourceable_products"], int)
-            assert isinstance(answer["standing_requests"], int)
+            assert set(answer) == {
+                "values",
+                "sourceable_products",
+                "standing_requests",
+                "standing_units",
+            }
+            for key in ("sourceable_products", "standing_requests", "standing_units"):
+                assert isinstance(answer[key], int)
+
+        # And the same figures per individual value, so the consequence of one choice is
+        # a stored number rather than something a screen worked out.
+        for reach in payload["options"].values():
+            assert set(reach) == {
+                "sourceable_products",
+                "standing_requests",
+                "standing_units",
+            }
 
         flat = str(payload)
         for banned in ("recommend", "score", "rank", "priority", "best", "should_ask"):
@@ -285,6 +299,68 @@ def test_the_counts_are_about_everybody_else(coffee_ctx):
             )
 
 
+# --------------------------------------------------------- the conservative default
+
+
+def test_allowing_alternatives_never_pre_selects_a_second_value(coffee_ctx):
+    """Opening the brand does not open the roast, however much it would help.
+
+    The temptation is real and specific: the canonical walkthrough forms an order when
+    the member accepts a dark roast and truthfully refuses when they do not, so widening
+    the default by one value would make the demo succeed every time. It would also be
+    Pool consenting on somebody's behalf to drink coffee they did not ask for.
+    """
+    _, policy = needs_service.policy_from_answers(
+        coffee_ctx,
+        A_MEDIUM,
+        needs_service.PreferenceAnswers(
+            flexibility=needs_service.Flexibility.SIMILAR, keep=[], accept={}
+        ),
+    )
+    assert policy is not None
+    assert policy.requires["roast"] == frozenset({pf.ROAST_MEDIUM})
+    assert pf.ROAST_DARK not in policy.requires["roast"]
+    assert policy.requires["form"] == frozenset({pf.FORM_WHOLE_BEAN})
+    assert policy.requires["caffeine"] == frozenset({pf.CAFFEINE_CAFFEINATED})
+
+
+def test_the_narrow_default_is_the_one_that_can_refuse(coffee_ctx):
+    """And the refusal is the truthful outcome, not a bug to design around.
+
+    Pinned because it is the thing a demo-shaped instinct would break: a member who keeps
+    every default is compatible with strictly fewer products than one who broadens, and
+    Pool must be willing to reach the smaller answer.
+    """
+    narrow = needs_service.PreferenceAnswers(
+        flexibility=needs_service.Flexibility.SIMILAR, keep=[], accept={}
+    )
+    broad = needs_service.PreferenceAnswers(
+        flexibility=needs_service.Flexibility.SIMILAR,
+        keep=[],
+        accept={"roast": [pf.ROAST_MEDIUM, pf.ROAST_DARK]},
+    )
+    _, narrow_policy = needs_service.policy_from_answers(coffee_ctx, A_MEDIUM, narrow)
+    _, broad_policy = needs_service.policy_from_answers(coffee_ctx, A_MEDIUM, broad)
+    assert narrow_policy.requires["roast"] < broad_policy.requires["roast"]
+
+    def admits(policy) -> set[str]:
+        from pool.domain.substitution import evaluate_compatibility
+
+        declared = coffee_ctx.repo.get_product(WS, A_MEDIUM)
+        need = _declare(coffee_ctx)
+        need.attribute_policy = policy
+        return {
+            p.id
+            for p in coffee_ctx.repo.list_products(WS)
+            if p.substitute_group == pf.FAMILY
+            and evaluate_compatibility(
+                target=p, candidate=declared, need=need, facts=coffee_ctx.product_facts
+            ).compatible
+        }
+
+    assert admits(narrow_policy) < admits(broad_policy)
+
+
 # ------------------------------------------------------------------- the guidance
 
 
@@ -304,6 +380,60 @@ def test_the_flexibility_numbers_are_counted_rather_than_predicted(coffee_ctx):
 
     # No probability, no forecast, nothing a reader could quote back as a promise.
     assert set(facts) == {"exact_requests", "compatible_requests", "sourceable_alternatives"}
+
+
+def test_every_answer_carries_the_demand_it_would_reach(coffee_ctx):
+    """The consequence of a choice is a stored count, not a screen's arithmetic.
+
+    Per allowed value, so a member weighing "would dark do as well?" is shown what that
+    one answer reaches. A client summing rows would be re-deriving demand, and a client
+    inventing a combined figure would be inventing one.
+    """
+    for candidate in clar.candidates(coffee_ctx, COMMUNITY_ID, A_MEDIUM, MEMBER):
+        assert candidate.options, "an answer with no stated consequence explains nothing"
+        for value, reach in candidate.options.items():
+            assert set(reach) == {
+                "sourceable_products",
+                "standing_requests",
+                "standing_units",
+            }
+            # Every figure is a count over rows that exist, so none can exceed the total.
+            assert reach["sourceable_products"] <= candidate.answers[clar.ANSWER_ANY][
+                "sourceable_products"
+            ]
+            assert reach["standing_units"] <= candidate.answers[clar.ANSWER_ANY][
+                "standing_units"
+            ]
+            assert value in candidate.answers[clar.ANSWER_ANY]["values"]
+
+
+def test_the_units_behind_an_answer_are_the_units_members_actually_declared(coffee_ctx):
+    """Checkable against the store, because a plausible number is not a true one."""
+    from pool.data import product_facts as pf_data
+
+    candidates = {c.attribute: c for c in clar.candidates(coffee_ctx, COMMUNITY_ID, A_MEDIUM, MEMBER)}
+    roast = candidates["roast"]
+
+    for value, reach in roast.options.items():
+        products = {
+            p.id
+            for p in coffee_ctx.repo.list_products(WS)
+            if p.substitute_group == pf_data.FAMILY
+            and (fact := coffee_ctx.product_facts.facts_for(p.id).get("roast"))
+            and fact.is_authoritative
+            and fact.value == value
+            and coord.offers_for(coffee_ctx, p.id)[1]
+        }
+        expected_units = sum(
+            n.quantity
+            for n in coffee_ctx.repo.list_needs(WS)
+            if n.active
+            and n.community_id == COMMUNITY_ID
+            and n.household_id != MEMBER
+            and n.product_id in products
+        )
+        assert reach["standing_units"] == expected_units, value
+        assert reach["sourceable_products"] == len(products), value
 
 
 def test_the_guidance_counts_nobody_twice_and_names_nobody(coffee_ctx):

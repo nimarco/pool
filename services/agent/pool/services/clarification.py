@@ -68,8 +68,13 @@ class QuestionCandidate:
     hint: str
     product_value: str
     product_value_label: str
-    #: ``{answer -> {"values": [...], "sourceable_products": n, "standing_requests": n}}``
+    #: ``{answer -> {"values": [...], "sourceable_products": n, "standing_requests": n,
+    #: "standing_units": n}}`` — the narrow answer and the widest one.
     answers: dict[str, dict[str, Any]]
+    #: The same figures for each individual allowed value, so a member weighing "would
+    #: dark do as well?" can be shown what that one answer reaches without any screen
+    #: computing it. Stored aggregates, never a prediction.
+    options: dict[str, dict[str, Any]]
     #: Whether the products this deployment can source actually differ on this dimension.
     #: When they do not, the answer cannot change anybody's cohort.
     varies_among_sourceable: bool
@@ -82,6 +87,7 @@ class QuestionCandidate:
             "kind": self.kind,
             "product_value": self.product_value,
             "answers": self.answers,
+            "options": self.options,
             "varies_among_sourceable": self.varies_among_sourceable,
             "schema_required": self.schema_required,
         }
@@ -142,6 +148,16 @@ def candidates(
         answers[ANSWER_KEEP]["values"] = list(keep_values)
         answers[ANSWER_ANY]["values"] = list(any_values)
 
+        # One entry per allowed value, so the *consequence of each choice* is a stored
+        # figure rather than something a screen adds up. A member ticking two roasts is
+        # not reaching the sum of two rows — a product can only carry one value for an
+        # attribute here, so per-value rows do compose, but the composing is the server's
+        # to state and a client that summed them would be re-deriving demand.
+        options = {
+            value: _reach(ctx, sourceable, demand, definition.key, (value,))
+            for value in sorted(definition.allowed_values)
+        }
+
         values_present = {
             v
             for pid in sourceable
@@ -158,6 +174,7 @@ def candidates(
                 product_value=fact.value,
                 product_value_label=label,
                 answers=answers,
+                options=options,
                 varies_among_sourceable=len(values_present) > 1,
                 schema_required=definition.required_for_compatibility,
             )
@@ -186,13 +203,19 @@ def _sourceable_in_family(ctx: PoolContext, family: str) -> list[str]:
 
 def _standing_requests_by_product(
     ctx: PoolContext, community_id: str, family: str, exclude_household: str = ""
-) -> dict[str, int]:
-    """How many active declarations in this Community name each product in the family.
+) -> dict[str, dict[str, int]]:
+    """Standing demand in this Community for each product in the family.
+
+    Two aggregates per product, because they answer different questions: how many
+    *people* are asking, and how many *units* they are asking for. A supplier minimum is
+    denominated in units, so the second is the one a member weighing "would another roast
+    do?" is actually deciding about — and the first is the one that says whether that
+    demand is one household or six.
 
     Counts, and only counts. Which household declared what is that household's business
     and is never returned from here (AGENTS.md §4).
     """
-    out: dict[str, int] = {}
+    out: dict[str, dict[str, int]] = {}
     for need in ctx.repo.list_needs(ctx.ws):
         if not need.active or need.community_id != community_id:
             continue
@@ -201,28 +224,36 @@ def _standing_requests_by_product(
         declared = ctx.repo.get_product(ctx.ws, need.product_id)
         if declared is None or declared.substitute_group != family:
             continue
-        out[declared.id] = out.get(declared.id, 0) + 1
+        row = out.setdefault(declared.id, {"requests": 0, "units": 0})
+        row["requests"] += 1
+        row["units"] += max(0, int(need.quantity))
     return out
 
 
 def _reach(
     ctx: PoolContext,
     sourceable: list[str],
-    demand: dict[str, int],
+    demand: dict[str, dict[str, int]],
     attribute: str,
     values: tuple[str, ...],
 ) -> dict[str, Any]:
-    """What one answer would let this member reach: products, and requests behind them.
+    """What one answer would let this member reach: products, and the demand behind them.
 
-    Deliberately two numbers rather than one. "Three of the six things Pool can buy" and
-    "eleven of the fourteen standing requests" can point in different directions, and
+    Deliberately several numbers rather than one. "Three of the six things Pool can buy"
+    and "eleven of the fourteen standing requests" can point in different directions, and
     collapsing them into a score would be this module deciding which mattered.
+
+    Every figure is a count over stored rows at this moment. None of them is a prediction:
+    whether an order forms depends on prices, case sizes and supplier minimums that the
+    evaluator checks against a chosen buyer set, long after this.
     """
     allowed = set(values)
     products = [p for p in sourceable if _value_of(ctx, p, attribute) in allowed]
+    rows = [demand.get(p, {}) for p in products]
     return {
         "sourceable_products": len(products),
-        "standing_requests": sum(demand.get(p, 0) for p in products),
+        "standing_requests": sum(int(r.get("requests", 0)) for r in rows),
+        "standing_units": sum(int(r.get("units", 0)) for r in rows),
     }
 
 

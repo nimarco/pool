@@ -1310,6 +1310,25 @@ def product_clarification(product_id: str, workspace: str = Query("demo")) -> di
 
     rendered = needs_service.preference_questions(ctx, product_id)
     by_attribute = {q["attribute"]: q for q in rendered["questions"]}
+
+    # The consequence of each answer, attached to the question it is about. Counted from
+    # stored rows by `services/clarification`, never computed in a browser and never a
+    # prediction — it says what current demand each answer could combine with, and the
+    # deterministic evaluator is still the only thing that decides whether an order
+    # forms. Attached *here* rather than in `preference_questions`, because that read
+    # serves the form before anybody has agreed to alternatives, and demand figures have
+    # no business on a screen where the answer is still "only this exact one".
+    for candidate in offered:
+        question = by_attribute.get(candidate.attribute)
+        if question is None:
+            continue
+        question["reach"] = {
+            "keep": candidate.answers[clarify_service.ANSWER_KEEP],
+            "any": candidate.answers[clarify_service.ANSWER_ANY],
+            "options": candidate.options,
+            "varies": candidate.varies_among_sourceable,
+        }
+
     by_id = {
         c.question_id: by_attribute.get(c.attribute)
         for c in offered

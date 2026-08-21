@@ -2239,6 +2239,10 @@ def _restore_reconciled_participant(
     the pool's product, and the pool has to still be open to members. Any of them
     missing means the member simply stays out, silently — an unavailable undo is not an
     error, and the screen that shows them the world after the edit is the answer.
+
+    What comes back is a *provisional* place and the estimate that went with it. Never an
+    authorisation: whatever state they held before, they are asked again, and no payment
+    row is touched in either direction.
     """
     if not membership.withdrawn_reason or not need.active:
         return None
@@ -2251,6 +2255,16 @@ def _restore_reconciled_participant(
     # The compatibility test just answered this authoritatively, and the fresh membership
     # assumed the optimistic default. A substitute has to keep saying it is one.
     restored.is_exact_product = verdict.is_exact
+    # And it keeps the estimate it already had for this pool, because joining builds a
+    # membership from scratch and a scratch membership has no economics — which put
+    # "about $0.00 instead of $0.00" on the member's own screen the moment they were let
+    # back in. These are formation-time figures, shown as estimates and superseded by the
+    # final offer, and every other member of this pool is being shown figures from the
+    # same moment: recomputing one member's alone would make their number the only one in
+    # the room that meant something different.
+    restored.estimated_cost_cents = membership.estimated_cost_cents
+    restored.baseline_cents = membership.baseline_cents
+    restored.travel_minutes = membership.travel_minutes
     ctx.repo.put_membership(ctx.ws, restored)
     return {
         "pool_id": pool.id,

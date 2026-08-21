@@ -60,6 +60,54 @@ const REACH = {
   sourceable_alternatives: 5,
 };
 
+/** Server-shaped reach, attached to the roast question. Numbers a member could check
+ *  against the store, never a forecast. */
+const ROAST_REACH = {
+  keep: { sourceable_products: 3, standing_requests: 7, standing_units: 22, values: ["MEDIUM"] },
+  any: {
+    sourceable_products: 5,
+    standing_requests: 11,
+    standing_units: 33,
+    values: ["DARK", "LIGHT", "MEDIUM"],
+  },
+  options: {
+    DARK: { sourceable_products: 1, standing_requests: 2, standing_units: 6 },
+    LIGHT: { sourceable_products: 1, standing_requests: 2, standing_units: 5 },
+    MEDIUM: { sourceable_products: 3, standing_requests: 7, standing_units: 22 },
+  },
+  varies: true,
+};
+
+const FORM_REACH = {
+  keep: {
+    sourceable_products: 5,
+    standing_requests: 10,
+    standing_units: 29,
+    values: ["WHOLE_BEAN"],
+  },
+  any: {
+    sourceable_products: 6,
+    standing_requests: 12,
+    standing_units: 36,
+    values: ["GROUND", "WHOLE_BEAN"],
+  },
+  options: {
+    GROUND: { sourceable_products: 1, standing_requests: 2, standing_units: 7 },
+    WHOLE_BEAN: { sourceable_products: 5, standing_requests: 10, standing_units: 29 },
+  },
+  varies: true,
+};
+
+function withReach(): PreferenceQuestion[] {
+  return QUESTIONS.map((q) =>
+    q.attribute === "roast"
+      ? { ...q, reach: ROAST_REACH }
+      : q.attribute === "form"
+        ? { ...q, reach: FORM_REACH }
+        : q,
+  );
+}
+
 function renderPrefs(
   value: NeedPreferences = EXACT,
   props: Partial<Parameters<typeof Preferences>[0]> = {},
@@ -221,5 +269,72 @@ describe("what Pool says about being flexible", () => {
       screen.getByText(/why is pool asking these/i).closest("details")?.textContent ?? "";
     expect(text).toMatch(/everything Pool can establish/i);
     expect(text).not.toMatch(/picked the questions/i);
+  });
+});
+
+describe("what each answer would reach", () => {
+  it("shows the standing demand behind every value it offers", () => {
+    const questions = withReach();
+    renderPrefs(narrowestSimilar(questions), { questions });
+    const text = document.body.textContent ?? "";
+
+    /* Per value, because that is the shape of the decision: "would dark do as well?" is
+       a question about dark, and a combined figure would be a number nobody stored. */
+    expect(text).toMatch(/22 units standing/);
+    expect(text).toMatch(/6 units standing/);
+    expect(text).toMatch(/5 units standing/);
+  });
+
+  it("tells a keep question what insisting costs, in both currencies", () => {
+    const questions = withReach();
+    renderPrefs(narrowestSimilar(questions), { questions });
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(/Insisting on this leaves 5 of 6 coffees Pool can source/);
+    expect(text).toMatch(/29 units of other members' standing demand against 36/);
+  });
+
+  it("never turns a count into a forecast", () => {
+    const questions = withReach();
+    renderPrefs(narrowestSimilar(questions), { questions, flexibility: REACH });
+    const text = document.body.textContent ?? "";
+    for (const forecast of [
+      /%/,
+      /likely/i,
+      /chance of/i,
+      /probability/i,
+      /odds/i,
+      /guarantee/i,
+      /you will get an order/i,
+    ]) {
+      expect(text).not.toMatch(forecast);
+    }
+    /* An order forming may be mentioned only as something Pool does not know. Written as
+       a rule over every occurrence rather than a ban on the phrase, because the honest
+       sentence and the dishonest one differ by one word. */
+    for (const match of text.matchAll(/.{0,24}order will form/gi)) {
+      expect(match[0]).toMatch(/whether an order will form/i);
+    }
+    expect(text).toMatch(/cannot tell you whether an order will form/i);
+    /* And it does not tell anybody what to pick. */
+    expect(text).toMatch(/only worth having if you would genuinely accept it/i);
+    expect(text).not.toMatch(/you should|we recommend you|pick dark/i);
+  });
+
+  it("says nothing at all when the answer cannot change anything", () => {
+    /* Every sourceable coffee has the same roast, so no answer here moves a cohort.
+       A count in that situation is noise wearing the costume of information. */
+    const flat = QUESTIONS.map((q) =>
+      q.attribute === "roast" ? { ...q, reach: { ...ROAST_REACH, varies: false } } : q,
+    );
+    renderPrefs(narrowestSimilar(flat), { questions: flat });
+    expect(document.body.textContent).not.toMatch(/units standing/);
+  });
+
+  it("shows nothing before the member has agreed to alternatives", () => {
+    /* The reach only arrives with the plan, and the plan is only fetched on consent —
+       so an exact-only form has no figures to leak. */
+    const questions = withReach();
+    renderPrefs(EXACT, { questions });
+    expect(document.body.textContent).not.toMatch(/units standing/);
   });
 });

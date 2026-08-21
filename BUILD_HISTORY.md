@@ -6911,3 +6911,121 @@ shows somebody taking it back.
 `apps/web/src/use-clarification.ts`, `preferences.tsx`, `api.ts`, `styles.css`,
 `views/needs.tsx`, `views/onboarding.tsx`, `views/verify.tsx`, `views/why.tsx`, `App.tsx`,
 `tests/test_targeted_questions.py`, `src/use-clarification.test.tsx`.
+
+---
+
+### #0059 — [2026-08-21] — Proving the reversal, and three things the proof found
+`[AGENT]` `[ARCHITECTURE]` `[FRONTEND]` `[ARTICLE-2]` `[ARTICLE-3]`
+
+**Goal / user intent**
+A hardening pass on #0058 before release, with two jobs. Make the consequence of a
+narrow answer legible *before* somebody saves it — without broadening the conservative
+default to make the canonical walkthrough succeed. And prove the A→B→C lineage rather
+than asserting it: every declaration revision, event, run, evaluation, pool and
+membership state, written down and pinned.
+
+**Starting state**
+#0058 reported that reversibility worked, and it did — the member ends up back in the
+order. What had not been checked was *how*, and the how is where three defects were.
+
+**What the proof found**
+
+*A preference edit handed the agent the whole community lifecycle.* By the time C's run
+opens, deterministic reconciliation has already put the member back, so the declaration
+is served, so `build_declaration_objective` returns an objective with no needs — and
+`build_tools` fell through to the general surface. A run caused by somebody ticking a
+checkbox held `create_candidate_pool`, `issue_final_offer`, `recover_pool`, `lock_pool`
+and `execute_purchase`, over a Community it was never asked about. Nothing fired, because
+the offline planner recorded no action; the authority was wrong regardless.
+`RunObjective.reviews_served_declaration` now names that shape and gives it
+`inspect_pool` and `record_no_action` — a read and an end, with no mutation in it.
+
+*The explanation could not account for the order on screen.* C's run correctly created
+nothing, and `explain` read the order from `event.pool_id`, so "Why this order?" said
+nothing happened while Home showed the order. It now resolves the order from stored
+membership lineage — the same rule `relevance.personal_pools` applies — and reports
+`formed_by_this_run: false` with the run that did form it. The page says so in the
+member's own terms before the sections about what this run did.
+
+*The restored place had no price on it.* `join_pool_provisionally` builds a membership
+from scratch, and a scratch membership has no economics, so the moment the member was let
+back in their Home read **"about $0.00 instead of $0.00"**. The restore now keeps the
+estimate the row already carried — formation-time figures, shown as estimates, identical
+to what every other member of that pool is shown. Recomputing one member's alone would
+have made their number the only one in the room that meant something different.
+
+**The consequence of an answer, made legible**
+
+`clarification.candidates` now carries, per allowed value, the sourceable products and the
+standing requests and units behind them — the same `_reach` computation, one row per
+answer instead of only narrow-versus-widest. The form shows it where the answer is:
+*Dark · 6 units standing*, *Medium — yours · 22 units standing*, and for a keep question
+*"Insisting on this leaves 5 of 6 coffees Pool can source, and 29 units of other members'
+standing demand against 36."*
+
+Every figure is a count over stored rows. Nothing is summed in the browser, nothing is a
+percentage, and nothing says an order will form — the only sentence that mentions it says
+Pool cannot tell you, which is the claim the evaluator can actually support. Units as well
+as requests, because a supplier minimum is denominated in units and that is what the
+member is really deciding about.
+
+**The conservative default did not move.** Choosing *any brand that matches my
+preferences* still opens the brand and nothing else; roast still defaults to the one roast
+they picked. The canonical walkthrough therefore still refuses truthfully if somebody
+keeps every default, and `/verify` now says so in advance — *what changes is a real
+answer, not necessarily an order* — instead of implying that saving produces one. It does
+not tell anybody which answer to give, and a test bans the sentence that would.
+
+**A limit reported rather than fixed.** A cohort strategy's id is a digest of what it *is*,
+so two runs asking overlapping questions generate the same strategy and the second rewrites
+the row's `run_id`. Filtering that table by run answers "which run generated this row most
+recently", not "what did that run consider" — so an earlier run's option list can shrink
+after a later run touches the same option. Verdicts, prices and memberships are unaffected;
+what degrades is the historical option list on a superseded explanation. The honest repair
+is a stored set of runs per strategy, which is a persisted-schema decision and was out of
+scope for a hardening pass. Pinned by a test so it cannot change unnoticed.
+
+**AWS / external services touched** — None. No deploy, no AgentCore, no Bedrock, no live
+payment, no real purchase. Offline planner, zero tokens.
+
+**Validation**
+`make qa` green with no waived failures: **1,264 agent + 75 infra + 154 web = 1,493**.
+28 new agent tests (`tests/test_reversibility_lineage.py`, plus additions to
+`test_targeted_questions.py`), 11 new web tests (`views/verify.test.tsx`, additions to
+`preferences.test.tsx`). Browser walk at 390×846 with a reload after every state.
+
+The measured lineage, one process, offline planner:
+
+| | declaration | event | run | outcome |
+| --- | --- | --- | --- | --- |
+| A | rev 0, `attribute_constrained` v1 | `cev_f750bba…` | `run_bd3abca…` | `pool_created` |
+| B | rev 1, `exact_only` | `cev_d2ec5e0…` | `run_d07e74c…` | `no_action` |
+| C | rev 2, `attribute_constrained` v1 | `cev_7008652…` | `run_f1deea0…` | `no_action` |
+
+Three coordination runs, one clarification run, three distinct events, one membership row
+throughout, zero payment rows.
+
+**What we learned**
+The bug worth remembering is the tool surface. Every individual piece was right —
+reconciliation restores, the objective correctly reports the declaration as served, the
+tool builder correctly falls through when no other shape matches — and the composition
+handed a preference edit the ability to lock a pool. Authority defects do not look like
+defects from inside any one function, which is why the question worth asking of a new code
+path is not "what does it do" but "what could it do".
+
+The second is that "it works" and "it works for the right reason" are different claims, and
+only the second one survives contact with a judge. Two of the three defects here were
+invisible from the outcome: the member ends up in the right order either way.
+
+**Article fodder**
+Article 2 and Article 3. The served-declaration surface is a clean, small illustration of
+why agent authority has to be derived per-run from the question being asked rather than
+configured once — and the $0.00 is a good short story about restoring state versus
+recreating it.
+
+**Relevant commits / files**
+`services/agent/pool/agent/objective.py`, `agent/tools.py`, `agent/offline_model.py`,
+`services/clarification.py`, `services/coordination.py`, `services/events.py`,
+`api/app.py`, `apps/web/src/preferences.tsx`, `api.ts`, `styles.css`, `views/why.tsx`,
+`views/verify.tsx`, `tests/test_reversibility_lineage.py`, `tests/test_targeted_questions.py`,
+`src/views/verify.test.tsx`, `src/preferences.test.tsx`.

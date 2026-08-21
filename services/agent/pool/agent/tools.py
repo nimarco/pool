@@ -900,6 +900,11 @@ def build_tools(ctx: ToolContext) -> list:
             record_no_action,
         ]
 
+    if getattr(ctx.objective, "reviews_served_declaration", False):
+        # One declaration, already served by a live pool that deterministic
+        # reconciliation has re-checked against its current rules. Read, then end.
+        return [inspect_pool, record_no_action]
+
     if getattr(ctx.objective, "searches_strategies", False):
         return [
             list_cohort_strategies,

@@ -867,6 +867,8 @@ MIRROR = {
     "decisions": "put_decision",
     "runs": "put_run",
     "run_evaluations": "put_run_evaluation",
+    "cohort_strategies": "put_cohort_strategy",
+    "strategy_evaluations": "put_strategy_evaluation",
 }
 
 
@@ -1181,9 +1183,16 @@ def test_both_stores_return_every_list_in_the_same_order():
         assert a == b, f"{method} came back in a different order"
         compared += 1
         populated += 1 if a else 0
-    # 25 list methods agree, and 23 of them actually held data — a comparison over
+    # 27 list methods agree, and 23 of them actually held data — a comparison over
     # empty lists would pass without proving anything.
-    assert (compared, populated) == (25, 23), (compared, populated)
+    #
+    # The four that are empty here include the two strategy tables: the showcase is a
+    # homogeneous scenario and searches no strategies, so there is nothing for it to say
+    # about their ordering. Their parity is proved against a populated world in
+    # ``test_cohort_strategy.py`` instead, which is where a strategy exists at all. This
+    # count is deliberately exact so that adding an entity to one backend and forgetting
+    # it in the other fails here rather than in production.
+    assert (compared, populated) == (27, 23), (compared, populated)
 
 
 def test_a_completed_demo_session_stays_far_inside_dynamodbs_item_limit():

@@ -1839,3 +1839,215 @@ class RunEvaluation:
     def from_dict(cls, d: dict[str, Any]) -> RunEvaluation:
         known = {f.name for f in fields(cls)}
         return cls(**{k: v for k, v in d.items() if k in known})
+
+
+#: Bounds on what one strategy and one evaluation may store. Same reasoning as
+#: :data:`MAX_EVALUATION_TIERS`: evidence that grows with community size is a storage
+#: bill wearing a product's clothes, and the counts beside these lists stay exact.
+MAX_STRATEGY_NEED_REFS = 40
+MAX_STRATEGY_TIERS = 6
+
+
+@dataclass
+class CohortStrategy:
+    """One concrete way Pool *could* coordinate a group, before anyone has costed it.
+
+    A strategy names an exact SKU, a pickup site, and the declarations whose own stated
+    authority permits that SKU. It is a **candidate**, not a verdict: nothing here knows
+    whether the demand clears a supplier minimum after timing and geography, whether it
+    lands on whole cases, what the landed price is, or whether it beats buying alone.
+    Those are set-level facts and they belong to :class:`StrategyEvaluation`.
+
+    That split is not a device for making a later decision look harder than it is — it
+    is where the existing architecture already draws the line. ``discovery.compatible_
+    needs`` has always said so in as many words: "Timing, geography, case fitting and
+    economics are not decided here — they are what evaluation is for, and pretending to
+    know them would be the opposite mistake."
+
+    **Identity is deterministic.** ``id`` is a digest of what the strategy *is* — the
+    community, the objective it answers, the target SKU, the site, and whether future
+    demand is in scope — so regenerating from the same world produces the same id and a
+    stored evaluation keeps pointing at something real. ``input_fingerprint`` is a
+    separate digest of the authoritative *state* it was generated from, so a strategy
+    whose world has moved is detectable rather than quietly stale.
+
+    **No PII.** Declarations are referenced by need id. Household names, contact details
+    and coordinates are not stored here; ``household_count`` is a number, and everything
+    else the evaluator needs it reloads for itself (§4).
+    """
+
+    id: str
+    community_id: str
+    #: ``member`` or ``community`` — the same vocabulary ``AgentRun`` already uses.
+    objective_kind: str
+    #: The household a member-scoped objective is anchored to. Empty for a scan.
+    objective_household_id: str = ""
+    #: The declaration that anchored it, when there is one. Its inclusion in the final
+    #: buyer set is the question a member-triggered run actually asked.
+    objective_need_id: str = ""
+
+    target_product_id: str = ""
+    target_product_name: str = ""
+    #: The curated family and schema the target's attribute facts were read under, so a
+    #: re-curation is visible rather than silently reinterpreted.
+    product_family: str = ""
+    attribute_schema_version: int = 0
+    #: Authoritative curated facts for the target SKU, ``attribute -> value``. Verified
+    #: values only; an unverified fact is not evidence and is not carried here.
+    target_attributes: dict[str, str] = field(default_factory=dict)
+
+    pickup_site_id: str = ""
+    pickup_site_name: str = ""
+    include_future_demand: bool = True
+
+    #: Declarations whose own authority permits this SKU on this purchase date. Capped;
+    #: ``compatible_declaration_count`` stays exact. The evaluator never consumes this —
+    #: it reloads state — so a truncated list costs evidence, never correctness.
+    candidate_need_ids: list[str] = field(default_factory=list)
+    compatible_declaration_count: int = 0
+    household_count: int = 0
+    compatible_units: int = 0
+    current_units: int = 0
+    future_units: int = 0
+
+    #: How many declarations this SKU was refused by, and why, as counts per stable code
+    #: (``domain.substitution.CompatibilityReason`` and timing reasons). Counts only: who
+    #: was refused, and for what, is one member's business and not another's (§4).
+    excluded_declaration_count: int = 0
+    exclusion_codes: dict[str, int] = field(default_factory=dict)
+
+    #: Sourceability, as presence rather than terms. Prices are deliberately absent:
+    #: what a group would actually pay is landed economics, and landed economics is
+    #: evaluation's answer.
+    bulk_tier_count: int = 0
+    #: The lowest supplier minimum any tier will sell at, so "how far off is this" is
+    #: answerable without a price. Clearing it is necessary and nowhere near sufficient.
+    lowest_minimum_units: int = 0
+
+    input_fingerprint: str = ""
+    generated_at: str = field(default_factory=lambda: iso(utcnow()))
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> CohortStrategy:
+        known = {f.name for f in fields(cls)}
+        out = {k: v for k, v in d.items() if k in known}
+        out["exclusion_codes"] = {
+            str(k): int(v) for k, v in dict(out.get("exclusion_codes") or {}).items()
+        }
+        out["target_attributes"] = {
+            str(k): str(v) for k, v in dict(out.get("target_attributes") or {}).items()
+        }
+        return cls(**out)
+
+    @property
+    def includes_objective_need(self) -> bool:
+        """Whether the declaration that triggered this run is in the envelope at all."""
+        return bool(self.objective_need_id) and self.objective_need_id in self.candidate_need_ids
+
+
+@dataclass
+class StrategyEvaluation:
+    """Authoritative evidence about one strategy, at one moment, from reloaded state.
+
+    Everything here was computed by the same deterministic services that price a real
+    pool — ``coordination.evaluate_opportunity`` and what it calls. There is no separate
+    "strategy result" arithmetic, because a second implementation of viability is a
+    second answer to the only question that matters.
+
+    ``stale`` is the one field that is about the *evidence* rather than the world. An
+    evaluation is a snapshot; a snapshot taken before a supplier requoted or a member
+    amended their rule is not authority for acting now, and Phase 3's mutation path has
+    to be able to tell the difference.
+    """
+
+    id: str
+    strategy_id: str
+    community_id: str
+    target_product_id: str = ""
+    target_product_name: str = ""
+    objective_need_id: str = ""
+
+    #: The fingerprint the strategy carried, and the one its world has now. Equal means
+    #: nothing decision-relevant moved between generation and this evaluation.
+    strategy_fingerprint: str = ""
+    input_fingerprint: str = ""
+    stale: bool = False
+    stale_reason: str = ""
+
+    viable: bool = False
+    #: One of ``services.strategy.STRATEGY_BLOCKER_CODES``. Empty when viable.
+    blocker_code: str = ""
+    blocker_reason: str = ""
+
+    pickup_site_id: str = ""
+    pickup_site_name: str = ""
+    distribution_day: str = ""
+    radius_km: float = 0.0
+    avg_travel_minutes: int = 0
+    max_travel_minutes: int = 0
+    routing_provider: str = ""
+
+    retail_offer_id: str = ""
+    bulk_offer_id: str = ""
+    quote_age_hours: float = 0.0
+    quote_max_age_hours: int = 0
+    #: Every bulk tier compared and what happened to it. Capped at
+    #: :data:`MAX_STRATEGY_TIERS`.
+    offers_considered: list[dict[str, Any]] = field(default_factory=list)
+
+    matched_units: int = 0
+    minimum_units: int = 0
+    current_units: int = 0
+    future_units: int = 0
+    selected_units: int = 0
+    selected_member_count: int = 0
+    cases: int = 0
+    case_units: int = 0
+    surplus_units: int = 0
+
+    all_in_cents: int = 0
+    retail_baseline_cents: int = 0
+    net_savings_cents: int = 0
+    net_savings_bps: int = 0
+    host_compensation_cents: int = 0
+    platform_fee_cents: int = 0
+    processing_fee_cents: int = 0
+
+    auto_join_count: int = 0
+    approval_required_count: int = 0
+    #: Whether the declaration that triggered a member-scoped run survived every gate.
+    #: Distinct from "a pool formed": an order that excluded the person who asked for it
+    #: is a real outcome and must not be reported as their order (§8).
+    includes_objective_need: bool = False
+
+    #: The declarations that survived, and the ones that did not with their stable code.
+    #: Both capped at :data:`MAX_STRATEGY_NEED_REFS`; the counts beside them are exact.
+    #: The excluded list is internal evidence — projections carry counts, never a roster.
+    eligible_need_ids: list[str] = field(default_factory=list)
+    eligible_need_count: int = 0
+    excluded: list[dict[str, Any]] = field(default_factory=list)
+    excluded_count: int = 0
+    exclusion_codes: dict[str, int] = field(default_factory=dict)
+
+    at: str = field(default_factory=lambda: iso(utcnow()))
+
+    @property
+    def key(self) -> str:
+        return f"{self.strategy_id}#{self.id}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> StrategyEvaluation:
+        known = {f.name for f in fields(cls)}
+        out = {k: v for k, v in d.items() if k in known}
+        out["exclusion_codes"] = {
+            str(k): int(v) for k, v in dict(out.get("exclusion_codes") or {}).items()
+        }
+        out["radius_km"] = float(out.get("radius_km", 0.0) or 0.0)
+        out["quote_age_hours"] = float(out.get("quote_age_hours", 0.0) or 0.0)
+        return cls(**out)

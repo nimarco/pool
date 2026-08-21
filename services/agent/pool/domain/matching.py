@@ -80,12 +80,17 @@ class MatchRejection:
     """Why one declaration could not join. ``reason`` reads; ``code`` groups.
 
     ``code`` carries the compatibility layer's stable token when the refusal came from
-    there, and the attribute it turned on when the refusal was about a product fact.
-    Both are empty for the rejections this module decides itself — community scope,
-    verification, timing, radius — which have never had codes and do not acquire them
-    here. The point of carrying it at all is that "eleven members refused on caffeine"
-    is a countable fact and "product_incompatible: a required product fact is not
-    verified" is a string somebody would have to parse.
+    there, and this module's own token otherwise; ``attribute`` names the product fact a
+    compatibility refusal turned on, and is empty for everything else. The point is that
+    "eleven members refused on caffeine, four outside the radius" is a countable fact,
+    while "product_incompatible: a required product fact is not verified" is a string
+    somebody would have to parse.
+
+    Timing is the one refusal whose code is coarser than its sentence.
+    ``TimingEligibility.reason`` is written for a human reading a run trace and has more
+    than one wording; re-deriving a taxonomy from those sentences would build a second,
+    worse copy of one that already exists, so every timing refusal shares one token and
+    the sentence stays available beside it.
     """
 
     need_id: str
@@ -183,29 +188,29 @@ def find_candidates(
         # could still have its owner's card authorised. Checked here rather than at each
         # call site, because "who is even eligible" is this function's whole job.
         if not need.active:
-            reject(need, need.household_id, "declaration_retired")
+            reject(need, need.household_id, "declaration_retired", "declaration_retired")
             continue
         if need.community_id != community_id:
-            reject(need, need.household_id, "other_community")
+            reject(need, need.household_id, "other_community", "other_community")
             continue
 
         household = households.get(need.household_id)
         if household is None:
-            reject(need, need.household_id, "unknown_household")
+            reject(need, need.household_id, "unknown_household", "unknown_household")
             continue
         if need.household_id in exclude_household_ids:
-            reject(need, household.id, "already_in_pool")
+            reject(need, household.id, "already_in_pool", "already_in_pool")
             continue
 
         if require_verified_membership:
             membership = memberships.get(f"{community_id}#{household.id}")
             if membership is None or not membership.is_verified:
-                reject(need, household.id, "community_membership_not_verified")
+                reject(need, household.id, "community_membership_not_verified", "community_membership_not_verified")
                 continue
 
         need_product = products.get(need.product_id)
         if need_product is None:
-            reject(need, household.id, "unknown_product")
+            reject(need, household.id, "unknown_product", "unknown_product")
             continue
 
         compatibility = evaluate_compatibility(
@@ -227,15 +232,15 @@ def find_candidates(
 
         timing = evaluate_timing(need, purchase_date)
         if not timing.eligible:
-            reject(need, household.id, f"timing:{timing.reason}")
+            reject(need, household.id, f"timing:{timing.reason}", "timing_not_eligible")
             continue
         if timing.is_future_pull_forward and not include_future_demand:
-            reject(need, household.id, "future_demand_not_requested")
+            reject(need, household.id, "future_demand_not_requested", "future_demand_not_requested")
             continue
 
         distance = haversine_km(household.lat, household.lon, pickup_lat, pickup_lon)
         if distance > max_radius_km:
-            reject(need, household.id, "outside_radius")
+            reject(need, household.id, "outside_radius", "outside_radius")
             continue
 
         candidates.append(

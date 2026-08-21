@@ -130,6 +130,8 @@ deliberately different words, and the difference is load-bearing.
 | **what you buy** | the consumer name for a standing need declaration |
 | **product family** | a curated substitute group a member may declare instead of one SKU; the order still buys exactly one product |
 | **product requirements** | a member's typed rule over curated product facts — whole bean, caffeinated, medium or dark. Narrower than a family and wider than an allowlist. Internal register only: no consumer surface offers it yet |
+| **cohort strategy** | one concrete order Pool *could* form — an exact SKU, a pickup site, and the declarations whose own authority permits it. A candidate, not a verdict; internal register only |
+| **strategy evaluation** | what one cohort strategy actually costs, computed from reloaded state by the same engine that prices any order. The only thing that says *viable* |
 | **host** | the paid local fulfiller (one word only — never "runner" or "fulfiller" in consumer copy) |
 | **funded** | payment authorised for the exact final amount; only this counts toward a threshold |
 | **provisional** | counted for discovery, not a commitment |
@@ -195,13 +197,13 @@ Real, and safe to rely on:
 - **Stored proof of real invocations** — run ids, `created_by_run` lineage on the
   resulting pool, tool sequences, outcomes, terminations, and authoritative readback from
   the same workspace the browser reads.
-- **A large executed test suite** — 1,060 agent tests (verified by collection),
-  plus infra and web suites, reported green at 1,254 total in `BUILD_HISTORY.md` #0054.
+- **A large executed test suite** — 1,117 agent tests (verified by collection),
+  plus infra and web suites, reported green at 1,311 total in `BUILD_HISTORY.md` #0055.
 - **A canonical lifecycle fixture**, not to be paraphrased or adjusted for presentation:
   11 memberships, 10 funded buyers, 1 authorization failure, 1 replacement, 24 units,
   2 cases, 0 surplus, $861.44 all-in against $1,127.76 retail, $266.32 saved, 23.61%,
   North Hall lobby.
-- **An engineering record** — `AGENTS.md` (operating rules), `BUILD_HISTORY.md` (54
+- **An engineering record** — `AGENTS.md` (operating rules), `BUILD_HISTORY.md` (55
   entries, an AWS resource ledger and 18 tracked open questions), `docs/DEMO_SCRIPT.md`,
   `docs/ARCHITECTURE.md`.
 

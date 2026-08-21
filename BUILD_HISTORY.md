@@ -6210,3 +6210,201 @@ real rather than narrated.
 `services/context.py`, `services/needs.py`, `services/discovery.py`,
 `services/coordination.py`, `api/app.py`, `tests/test_constrained_demand.py`,
 `tests/test_catalog.py`.
+
+---
+
+### #0055 — [2026-08-21] — Several orders Pool could form, and the evidence that separates them
+`[ARCHITECTURE]` `[AGENT]` `[ARTICLE-2]` `[ARTICLE-3]`
+
+**Goal / user intent**
+Phase 2 of the post-audit architecture. Build the deterministic search space a later
+Strands upgrade will reason over: heterogeneous consented demand in, several bounded and
+genuinely plausible orders out, each one costable to an authoritative verdict. Explicitly
+not built here: any Strands change, any tool registration, any declaration-triggered run,
+dynamic questions, or demo/UI work.
+
+**Starting state**
+The whey scenario proves Pool can answer *is this worth doing*. It cannot exercise a
+search, because when everybody buys the same tub there is one candidate and the question
+of *which* never arises. Phase 1 (#0054) made the other shape expressible — typed rules
+over curated product facts — but nothing consumed it: `ATTRIBUTE_CONSTRAINED` was
+implemented, tested, and reachable by no running path.
+
+**Decision**
+Two stages, and the line between them is the entire design.
+
+**Generation** answers *who could join*. Compatibility and timing are pure functions of
+one declaration against one SKU on one date; they do not depend on who else is in. It is
+cheap, capped at six options per objective, and deliberately does not know what a group
+would pay.
+
+**Evaluation** answers *what the group is and what it costs* — site, radius, which
+supplier tier wins, whether the demand fills whole cases, landed economics, Smart Join.
+All of it set-level: it changes when the set changes.
+
+Two persisted entities carry it, following `RunEvaluation`'s conventions rather than a
+new framework: `CohortStrategy` (a candidate) and `StrategyEvaluation` (evidence at one
+moment). `services/strategy.py` generates, evaluates, and guards.
+
+**Why**
+
+*Why the split is real rather than staged.* The brief's binding constraint was not to
+pre-solve the model's future decision — but manufacturing ambiguity would be worse than
+pre-solving it. The split did not need inventing: `discovery.compatible_needs` has said
+so since it was written — *"Timing, geography, case fitting and economics are not decided
+here — they are what evaluation is for, and pretending to know them would be the opposite
+mistake."* A summary carries no verdict because at that point no verdict exists.
+
+*Why evaluation calls the existing evaluator.* `evaluate_strategy` wraps
+`coordination.evaluate_opportunity` and records what it returned. A second implementation
+of "is this worthwhile" would be a second answer to the only question that matters, and
+the two would diverge the first time one was edited.
+
+*Why identity and freshness are separate digests.* `id` is a digest of what a strategy
+**is** — community, objective, SKU, site, demand window. `input_fingerprint` is a digest
+of the authoritative state it was generated from. If the id moved whenever a quantity did,
+a stored evaluation would point at nothing and the only available answer would be
+"unknown strategy" — indistinguishable from a caller inventing one. Keeping identity
+stable means a strategy whose world moved can be *recognised* and reported as stale.
+
+*Why staleness reports rather than blocks.* An evaluation computed from current state is
+an honest verdict about now, whatever happened to the listing that led to it. What
+expired is the summary somebody chose from, so that is what `stale` says. Whether stored
+evidence may still be **acted on** is a different question, asked by `ensure_actionable`
+at the moment somebody wants to act — which recomputes the fingerprint rather than reading
+a flag written earlier.
+
+**Implementation** — implemented and tested; nothing deployed, no tool registered.
+
+New: `services/strategy.py`, `data/roast_coffee_fixture.py`, `CohortStrategy` and
+`StrategyEvaluation` in `domain/models.py`, both wired into both repository backends.
+Changed: `matching.py` now emits its own stable rejection codes (radius, timing,
+membership) so generation and evaluation share one exclusion vocabulary.
+
+**The fixture, and what is arranged versus computed.** Twelve synthetic households who
+all buy coffee: three constrained to whole-bean/caffeinated/medium-or-dark, one with no
+roast requirement, four exact-only, one allowlist of two bags, one decaf-only, one
+ground-only, one exact-only on ground. Six curated SKUs from Phase 1, each with a retail
+baseline and one bulk tier. The demand and the supplier terms are arranged; that is
+legitimate scripting. No row says which option wins, none is tagged to fail, and neither
+the generator nor the evaluator reads anything from that module.
+
+Anchored on the constrained member, the search produces exactly two options, because
+their own rule admits exactly two SKUs:
+
+| | listing | verdict |
+| --- | --- | --- |
+| Kestrel medium | 7 declarations, 20 units (17 now + 3 pulled forward), min 15 | **not_cheaper** — 4 x 5 whole cases, 0 surplus, all-in $367.19 against $360.00 retail: **−$7.19 (−2.00%)** |
+| Harbourstone dark | 6 declarations, 17 units, min 12 | **viable** — 12 of 17 units, 2 x 6 whole cases, 0 surplus, $185.58 against $222.00: **+$36.42 (16.41%)** |
+
+The option that looks better on every fact the listing carries is the one that fails.
+Twenty units clear a fifteen-unit minimum comfortably and fill four whole cases — and once
+a host is paid $39.80 for seven orders and the processor takes $12.77 across seven
+authorisations, the group pays more than the seven of them would pay separately. That is
+not a fact withheld from the listing; it is a fact that does not exist until a buyer set
+has been chosen and costed.
+
+A Community-wide scan in the same workspace has eleven candidates and keeps six, and logs
+the cut — a listing that silently drops options reads as "these are all the options".
+
+**AWS / external services touched** — None.
+
+**Cost-relevant activity** — None. No model call, no AWS call, no schedule, no new
+resource. Generation is bounded at six options and evaluates none of them; the model-facing
+summaries carry no roster and no free text.
+
+**Agent behavior** — unchanged. `services/agent/pool/agent/` has a zero-line diff, the
+tool surface is still the same twelve tools, and `services/strategy.py` imports nothing
+from the agent package. Both are asserted by test rather than promised.
+
+**Autonomy / HITL review (Phase 1 finding).** Re-examined and preserved, with the
+separation now pinned by test. A declaration's policy is a durable consent envelope about
+*products*; financial commitment is governed independently by Smart Join's other five
+checks. On the same member and the same viable order, with the substitution check passing
+throughout: switching them to Ask Me blocks auto-join on `autonomy_mode`, and a spend
+ceiling below the landed price blocks it on `max_spend`. Compatibility consent is not
+authorisation to spend, and it cannot become so by accident.
+
+The related hazard is also pinned: `AutonomyPolicy` shares the `SubstitutionPolicy` enum
+with a declaration, and a *standing* value of `ATTRIBUTE_CONSTRAINED` would read as
+"substitutes are pre-authorised" while carrying no rule to check. Nothing writes it, this
+phase adds no path that could, and a test now asserts every household's standing policy is
+`EXACT_ONLY`.
+
+**Validation**
+`make qa` green: **1,117 agent + 75 infra + 119 web = 1,311**, ruff, eslint, `tsc -b`,
+production build, secret scan and its self-test, `git diff --check`. 57 new tests.
+
+Proven: identical worlds produce identical ordered strategies with identical ids across
+separate processes and repositories; the cap holds and the cut is logged; each SKU admits
+exactly the declarations that authorised it, including the bag whose unverified roast
+serves only the member whose rule never made roast load-bearing; a soft preference never
+changes an envelope; an allowlist is never widened; another Community's demand is neither
+a candidate nor an exclusion; evaluation reloads state and disagrees with a stale listing;
+a member moved outside the formation radius is dropped by evaluation and not by the
+listing; a quote aged past the Community's maximum refuses an otherwise-viable option; and
+five different decision-relevant changes each make stored evidence unusable without
+editing it.
+
+The sharpest test is that the two summaries are indistinguishable on viability while their
+evaluations disagree — if it were the other way round the listing would be a ranking with
+extra steps.
+
+No AWS deploy, no AgentCore invocation, no Bedrock call, no live payment.
+
+**Failures / dead ends**
+Three, all found by running the fixture rather than by reading it.
+
+*The first listing reported 42 excluded declarations.* It was counting every household in
+the workspace who buys whey, rice or paper towels. Technically true and completely
+useless — and worse, a summary of one option had become a census of the Community's
+unrelated shopping. Exclusions are now scoped to declarations that could *ever* be
+admitted, which is exactly two doors: the substitute group, and an explicit allowlist,
+which is checked before the family gate. That scope is proved complete by a test over
+every product-declaration pair rather than asserted.
+
+*The refused option reported zero buyers.* `evaluate_opportunity` returns before building
+candidate assessments when landed economics fail, so the strategy evidence said nobody was
+in it — when in fact a buyer set had been chosen and priced, and that is *why* it failed.
+The buyer lines are now the fallback, and the Smart Join counts deliberately stay zero
+because Smart Join genuinely was not evaluated on that path.
+
+*The backend-parity guard in `test_public_demo` failed*, which is the single most useful
+thing that happened. It counts list methods across both repositories precisely so a new
+entity cannot be added to one and forgotten in the other, and two new entities took it
+from 25 to 27. Their ordering parity is now proved in the strategy suite, against a
+populated world, because the showcase is homogeneous and searches no strategies.
+
+Two constants were also written and deleted before commit: a `strategy_stale` blocker
+nothing could assign, and a pickup-coverage helper nothing called.
+
+**What we learned**
+The interesting boundary is not between "cheap" and "expensive" work — it is between
+*per-declaration* facts and *set-level* facts. Whether a member may have a product is a
+question about them alone; whether an order is worth forming is a question about everyone
+at once, and the second is not computable from the first however much of the first you
+gather. Getting that line in the right place is what makes a later model choice a real one
+without hiding anything, and it also happens to be the cheap way to do it.
+
+The second lesson is that the honest way to keep a search space plural is to refuse to
+manufacture it. Options that cannot be constructed at all — no supplier, no cohort, no
+site — are dropped at generation, because offering an investigation whose answer is
+already on the table is a waste. Options that are constructible but might fail are kept,
+with the numbers a reader needs to dismiss them cheaply, because deciding that for them is
+the pre-solving this phase exists to avoid.
+
+**Article fodder**
+Article 2, centrally: this is the substrate that makes "the model decides what to
+investigate, deterministic code decides what is true" a concrete architecture rather than
+a slogan. The three bugs above are the honest version of the story — the first two were
+the system quietly answering a slightly different question than the one asked.
+
+**Evidence worth preserving**
+The two-line canonical result — 20 units at −2.00% refused, 12 units at 16.41% viable, both
+on whole cases with zero surplus — is what Phase 3 should reproduce through a model choice
+rather than a loop over `generate_strategies`.
+
+**Relevant commits / files**
+`services/agent/pool/services/strategy.py`, `data/roast_coffee_fixture.py`,
+`domain/models.py`, `domain/matching.py`, `adapters/repository.py`,
+`tests/test_cohort_strategy.py`, `tests/test_public_demo.py`.

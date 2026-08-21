@@ -33,6 +33,7 @@ from ..domain.models import (
     ActivityEvent,
     AgentRun,
     Announcement,
+    CohortStrategy,
     Community,
     CommunityMembership,
     DecisionRequest,
@@ -55,6 +56,7 @@ from ..domain.models import (
     Product,
     PurchaseRecord,
     RunEvaluation,
+    StrategyEvaluation,
     Supplier,
 )
 
@@ -88,6 +90,8 @@ class Store:
     threads: dict[str, MessageThread] = field(default_factory=dict)
     messages: dict[str, Message] = field(default_factory=dict)
     issues: dict[str, IssueCase] = field(default_factory=dict)
+    cohort_strategies: dict[str, CohortStrategy] = field(default_factory=dict)
+    strategy_evaluations: dict[str, StrategyEvaluation] = field(default_factory=dict)
     decisions: dict[str, DecisionRequest] = field(default_factory=dict)
     activity: list[ActivityEvent] = field(default_factory=list)
     runs: dict[str, AgentRun] = field(default_factory=dict)
@@ -123,6 +127,14 @@ class Repository(Protocol):
     def list_needs(self, ws: str) -> list[NeedDeclaration]: ...
     def get_need(self, ws: str, nid: str) -> NeedDeclaration | None: ...
     def put_need(self, ws: str, n: NeedDeclaration) -> None: ...
+    def list_cohort_strategies(self, ws: str) -> list[CohortStrategy]: ...
+    def get_cohort_strategy(self, ws: str, sid: str) -> CohortStrategy | None: ...
+    def put_cohort_strategy(self, ws: str, s: CohortStrategy) -> None: ...
+    def list_strategy_evaluations(
+        self, ws: str, strategy_id: str | None = None
+    ) -> list[StrategyEvaluation]: ...
+    def get_strategy_evaluation(self, ws: str, eid: str) -> StrategyEvaluation | None: ...
+    def put_strategy_evaluation(self, ws: str, e: StrategyEvaluation) -> None: ...
 
     def list_suppliers(self, ws: str) -> list[Supplier]: ...
     def get_supplier(self, ws: str, sid: str) -> Supplier | None: ...
@@ -268,6 +280,29 @@ class InMemoryRepository:
     def list_needs(self, ws): return sorted(self.store(ws).needs.values(), key=lambda n: n.id)
     def get_need(self, ws, nid): return self.store(ws).needs.get(nid)
     def put_need(self, ws, n): self.store(ws).needs[n.id] = n
+
+    def list_cohort_strategies(self, ws):
+        return sorted(self.store(ws).cohort_strategies.values(), key=lambda s: s.id)
+
+    def get_cohort_strategy(self, ws, sid): return self.store(ws).cohort_strategies.get(sid)
+
+    def put_cohort_strategy(self, ws, s): self.store(ws).cohort_strategies[s.id] = s
+
+    def list_strategy_evaluations(self, ws, strategy_id=None):
+        items = [
+            e for e in self.store(ws).strategy_evaluations.values()
+            if strategy_id is None or e.strategy_id == strategy_id
+        ]
+        # Newest last, so a caller reading the tail gets the most recent evidence and a
+        # replay reads in the order the evaluations actually happened.
+        return sorted(items, key=lambda e: (e.at, e.id))
+
+    def get_strategy_evaluation(self, ws, eid):
+        return next(
+            (e for e in self.store(ws).strategy_evaluations.values() if e.id == eid), None
+        )
+
+    def put_strategy_evaluation(self, ws, e): self.store(ws).strategy_evaluations[e.key] = e
 
     def list_suppliers(self, ws): return sorted(self.store(ws).suppliers.values(), key=lambda s: s.id)
     def get_supplier(self, ws, sid): return self.store(ws).suppliers.get(sid)
@@ -472,6 +507,8 @@ _TYPES: dict[str, Any] = {
     "ACTIVITY": ActivityEvent,
     "RUN": AgentRun,
     "RUN_EVALUATION": RunEvaluation,
+    "COHORT_STRATEGY": CohortStrategy,
+    "STRATEGY_EVALUATION": StrategyEvaluation,
 }
 
 
@@ -658,6 +695,36 @@ class DynamoDBRepository:
     def list_needs(self, ws): return self._query(ws, "NEED", NeedDeclaration)
     def get_need(self, ws, nid): return self._get(ws, "NEED", nid, NeedDeclaration)
     def put_need(self, ws, n): self._put(ws, "NEED", n.id, n)
+
+    def list_cohort_strategies(self, ws):
+        return sorted(self._query(ws, "COHORT_STRATEGY", CohortStrategy), key=lambda s: s.id)
+
+    def get_cohort_strategy(self, ws, sid):
+        return self._get(ws, "COHORT_STRATEGY", sid, CohortStrategy)
+
+    def put_cohort_strategy(self, ws, s): self._put(ws, "COHORT_STRATEGY", s.id, s)
+
+    def list_strategy_evaluations(self, ws, strategy_id=None):
+        # `key` is "<strategy_id>#<evaluation id>", so one strategy's evidence is a
+        # begins_with query rather than a scan of every evaluation in the workspace.
+        items = self._query(
+            ws, "STRATEGY_EVALUATION", StrategyEvaluation,
+            f"{strategy_id}#" if strategy_id else None,
+        )
+        return sorted(items, key=lambda e: (e.at, e.id))
+
+    def get_strategy_evaluation(self, ws, eid):
+        return next(
+            (
+                e
+                for e in self._query(ws, "STRATEGY_EVALUATION", StrategyEvaluation)
+                if e.id == eid
+            ),
+            None,
+        )
+
+    def put_strategy_evaluation(self, ws, e):
+        self._put(ws, "STRATEGY_EVALUATION", e.key, e)
 
     def list_suppliers(self, ws): return self._query(ws, "SUPPLIER", Supplier)
     def get_supplier(self, ws, sid): return self._get(ws, "SUPPLIER", sid, Supplier)

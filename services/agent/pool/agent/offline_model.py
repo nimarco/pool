@@ -42,6 +42,10 @@ MAX_LISTINGS = 2
 #: already knows will be refused.
 MAX_STRATEGY_EVALUATIONS = 3
 
+#: Fallback when a listing has not reported the plan cap. The tools enforce the real
+#: bound; this only stops the planner proposing one it knows would be refused.
+MAX_CLARIFICATION_QUESTIONS = 3
+
 
 def _tool_event(name: str, payload: dict[str, Any]) -> list[dict]:
     """Build the Bedrock-shaped stream events for a single tool call."""
@@ -180,7 +184,10 @@ class DeterministicPlannerModel(Model):
         # (``objective.searches_strategies``), so their presence *is* the branch — and a
         # planner that sniffed the prompt for "coffee" would be a fixture-specific rule
         # pretending to be a policy.
-        if "list_cohort_strategies" in getattr(self, "_available_tools", frozenset()):
+        available = getattr(self, "_available_tools", frozenset())
+        if "list_preference_question_candidates" in available:
+            return self._plan_clarification(view)
+        if "list_cohort_strategies" in available:
             return self._plan_strategy_search(view)
         text = view.user_text.lower()
         if "recover" in text or "withdrew" in text or "failed" in text:
@@ -188,6 +195,81 @@ class DeterministicPlannerModel(Model):
         if "advance" in text or "host" in text or "lock" in text:
             return self._plan_attention(view)
         return self._plan_scan(view)
+
+    # -- targeted questions ------------------------------------------------
+
+    def _plan_clarification(self, view: TranscriptView) -> list[dict]:
+        """Choose which approved questions are worth asking, from the counts alone.
+
+        **Not evidence that a model can do this.** A deterministic policy over the same
+        projection, so the tool contracts, the validation and the bounds are exercised at
+        zero token cost. Whether Bedrock chooses well is a question only a Bedrock run
+        answers.
+
+        The policy is generic and contains no product id, no attribute name and no
+        fixture knowledge. It asks about a dimension only when the answer would reach a
+        *different* world — when keeping the product's own value excludes something Pool
+        could otherwise source — and orders by how much it excludes, largest first,
+        because that is the question whose answer changes most. A dimension the sourceable
+        products do not vary on is dropped: the member's answer could not change their
+        cohort, so asking is a question bought for nothing.
+        """
+        if view.called("record_no_action"):
+            return _text_event("Nothing further to ask about this product.")
+
+        if not view.called("list_preference_question_candidates"):
+            return _tool_event("list_preference_question_candidates", {})
+
+        listing = view.last_result_of("list_preference_question_candidates") or {}
+        questions = listing.get("questions", []) or []
+        if not questions:
+            return _tool_event(
+                "record_no_action",
+                {"reason": "this product has no confirmed facts that can be clarified"},
+            )
+
+        if view.called("set_preference_question_plan"):
+            planned = view.last_result_of("set_preference_question_plan") or {}
+            if planned.get("planned"):
+                return _text_event(
+                    f"Asked about {len(planned.get('question_ids', []))} of "
+                    f"{len(questions)} available dimensions."
+                )
+            return _tool_event(
+                "record_no_action",
+                {"reason": str(planned.get("reason", "the plan was refused"))[:200]},
+            )
+
+        def swing(question: dict) -> int:
+            answers = question.get("answers") or {}
+            keep = (answers.get("keep") or {}).get("sourceable_products", 0)
+            widest = max(
+                ((a or {}).get("sourceable_products", 0) for a in answers.values()),
+                default=0,
+            )
+            return max(0, widest - keep)
+
+        worth_asking = [
+            q for q in questions if q.get("varies_among_sourceable") and swing(q) > 0
+        ]
+        # Stable: by how much the answer changes what is reachable, then by the order the
+        # listing gave, which is the schema's and is itself deterministic.
+        order = {q.get("question_id"): i for i, q in enumerate(questions)}
+        worth_asking.sort(key=lambda q: (-swing(q), order.get(q.get("question_id"), 0)))
+        cap = int(listing.get("max_questions_in_a_plan", MAX_CLARIFICATION_QUESTIONS))
+
+        if not worth_asking:
+            return _tool_event(
+                "record_no_action",
+                {
+                    "reason": "every answer here reaches the same products, so none of "
+                    "them would change what Pool can do"
+                },
+            )
+        return _tool_event(
+            "set_preference_question_plan",
+            {"question_ids": [q["question_id"] for q in worth_asking[:cap]]},
+        )
 
     # -- strategy search ---------------------------------------------------
 

@@ -27,10 +27,16 @@ import {
   shortDateOnly,
 } from "../api";
 import { ChosenCard, ProductSearch } from "../product-search";
-import { NeedPreferences, PreferenceQuestion } from "../api";
+import {
+  FlexibilityContext,
+  NeedPreferences,
+  PreferenceQuestion,
+  Reconciliation,
+} from "../api";
 import { ChosenItem, Picked, asChosen } from "../chosen";
 import { EXACT } from "../preference-answers";
 import { Preferences } from "../preferences";
+import { useClarification } from "../use-clarification";
 import { categoryTone, productImage, productInitials } from "../products";
 import { Block, Chip, CoordinatorWait, Empty, IconArrowRight } from "../ui";
 
@@ -128,6 +134,10 @@ function NeedForm({
   questions,
   preferences,
   onPreferences,
+  noun,
+  flexibility,
+  planning,
+  planned,
 }: {
   draft: NeedDraft;
   /** What the member picked, as a card renders it. Null while adding, before anything
@@ -149,6 +159,12 @@ function NeedForm({
   questions: PreferenceQuestion[];
   preferences: NeedPreferences | null;
   onPreferences: (next: NeedPreferences) => void;
+  /** Curated consumer noun for the product's family, or empty outside one. */
+  noun: string;
+  /** Counted demand either side of the choice, once somebody has made it. */
+  flexibility: FlexibilityContext | null;
+  planning: boolean;
+  planned: boolean;
 }) {
   /** Whether the member has narrowed the buy-early window by hand. Until they do, it
    *  tracks the date they gave — so changing "next needed" does not silently leave a
@@ -286,6 +302,10 @@ function NeedForm({
             value={preferences ?? EXACT}
             onChange={onPreferences}
             disabled={busy}
+            noun={noun}
+            flexibility={flexibility}
+            loading={planning}
+            planned={planned}
           />
         ) : (
           <label className="field field-wide">
@@ -425,6 +445,52 @@ function NeedForm({
 }
 /** The same photograph the member picked from, at row scale. Falls back to a category
  *  tile, which is the ordinary state for curated household goods rather than an error. */
+/** What changing your mind did to orders you were already in.
+ *
+ *  Both directions, and neither of them is a model's decision: the same compatibility
+ *  evaluator that lets somebody into an order is the one that takes them out, re-run
+ *  against the declaration they have just saved. It is shown because the alternative is
+ *  an order silently vanishing from Home — or silently reappearing — with nothing on
+ *  screen connecting either to the edit that caused it.
+ *
+ *  A pool past the point where leaving is free is reported as refused rather than
+ *  forced. A standing preference is not a cancellation policy, and Pool does not undo a
+ *  payment that has already been captured because somebody edited a checkbox.
+ */
+function Reconciled({ rows }: { rows: Reconciliation[] }) {
+  return (
+    <div className="panel-pad reconciled">
+      <p className="small">
+        <strong>What that changed.</strong>
+      </p>
+      <ul className="small muted reconciled-list">
+        {rows.map((row) => (
+          <li key={row.pool_id}>
+            {row.restored ? (
+              <>
+                Your rules allow it again, so Pool put you back into the order it had
+                taken you out of. Nothing is charged and nothing is committed — you will
+                be asked before anything is.
+              </>
+            ) : row.withdrawn ? (
+              <>
+                Pool took you out of an order your new rules no longer allow. Nobody was
+                charged, and the other members' order is unaffected.
+              </>
+            ) : (
+              <>
+                One order you are in has already been paid for and placed with the
+                supplier, so Pool left it exactly as it is. Your new rules apply from the
+                next one.
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function NeedThumb({ need }: { need: NeedRow }) {
   const src = productImage(need.image_ref ?? "");
   return (
@@ -451,6 +517,7 @@ export function Needs({
   initialProduct,
   onConsumeInitialProduct,
   onFind,
+  onWorldChanged,
   running,
   hasPool,
   outlook,
@@ -463,6 +530,10 @@ export function Needs({
   initialProduct: Picked | null;
   onConsumeInitialProduct: () => void;
   onFind: () => void;
+  /** Something a save did to the deterministic picture that this view does not own —
+   *  the outlook beside every row, and whether this member is in an order at all.
+   *  Re-read from the server rather than patched here. */
+  onWorldChanged: () => void;
   running: boolean;
   /** What the deterministic evaluator says about each declaration *right now*.
    *
@@ -488,13 +559,17 @@ export function Needs({
   /** The chosen product, as a card renders it. Held beside the draft because the draft
    *  carries only the id the server needs, and the id is the one thing never shown. */
   const [chosen, setChosen] = useState<ChosenItem | null>(null);
-  /** What the chosen product can be asked about, and what the member answered.
-   *  `null` preferences means this product has no curated questions, so the older
-   *  substitution control is the one that appears. */
-  const [questions, setQuestions] = useState<PreferenceQuestion[]>([]);
-  const [preferences, setPreferences] = useState<NeedPreferences | null>(null);
+  /** What the chosen product can be asked about, what the member answered, and what
+   *  each side of the choice reaches. All of it server-owned, and the hook is the only
+   *  thing that can buy a model run — see `use-clarification.ts` for the rules. */
+  const clarification = useClarification(chosen?.draft.product_id);
+  const { questions, preferences, noun, flexibility, planned, planning } = clarification;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** What the last save did to orders this member was already in. Server-decided, both
+   *  directions, and shown because an edit that quietly removed somebody from an order —
+   *  or quietly put them back — is a consequence they are owed. */
+  const [reconciled, setReconciled] = useState<Reconciliation[]>([]);
 
   /** Re-reads from the server rather than patching local state with what was sent.
    *  The declaration the member sees has to be the one the store actually holds —
@@ -523,39 +598,6 @@ export function Needs({
     onConsumeInitialProduct();
   }, [initialProduct, identity.id, onConsumeInitialProduct]);
 
-  /* What this product can be asked about, fetched when one is chosen. Asked of the
-     server rather than derived here: the dimensions are a curated schema and the wording
-     is a curated table, and a browser that guessed either would be guessing at the
-     meaning of somebody's consent. A product outside a curated family answers with no
-     questions, and the older control appears instead. */
-  useEffect(() => {
-    const productId = chosen?.draft.product_id;
-    if (!productId) {
-      setQuestions([]);
-      setPreferences(null);
-      return;
-    }
-    let live = true;
-    void api
-      .productPreferences(productId)
-      .then((offered) => {
-        if (!live) return;
-        setQuestions(offered.questions);
-        // Exact-only until somebody says otherwise, every time. Carrying a previous
-        // product's answers across would be applying consent to a thing it was never
-        // given about.
-        setPreferences(offered.questions.length > 0 ? EXACT : null);
-      })
-      .catch(() => {
-        if (!live) return;
-        setQuestions([]);
-        setPreferences(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [chosen?.draft.product_id]);
-
   if (needs === null) return <Empty>Loading…</Empty>;
 
   const mine = needs
@@ -571,6 +613,7 @@ export function Needs({
 
   const openAdd = () => {
     setError(null);
+    setReconciled([]);
     setEditingId("");
     setChosen(null);
     setDraft(blankDraft(identity.id));
@@ -578,6 +621,7 @@ export function Needs({
 
   const openEdit = (need: NeedRow) => {
     setError(null);
+    setReconciled([]);
     setEditingId(need.need_id);
     // Editing keeps the product fixed, so the card is rebuilt from what the server
     // already told us about this declaration rather than searched for again.
@@ -609,6 +653,11 @@ export function Needs({
           },
     );
     setDraft(draftFrom(need));
+    /* On what they said, not on defaults. The server owns the mapping in both
+       directions, so this is a read rather than a reconstruction — and it is what stops
+       an edit opened for an unrelated reason from quietly re-adding a requirement the
+       member had dropped. */
+    clarification.load(need.preferences);
   };
 
   const close = () => {
@@ -631,8 +680,7 @@ export function Needs({
 
   const clearProduct = () => {
     setChosen(null);
-    setQuestions([]);
-    setPreferences(null);
+    clarification.reset();
     setDraft((d) => (d ? { ...d, product_id: undefined, group: undefined } : d));
   };
 
@@ -661,9 +709,15 @@ export function Needs({
     setBusy(true);
     setError(null);
     try {
-      if (editingId) await api.amendNeed(editingId, payload);
-      else await api.declareNeed(payload);
+      const saved = editingId
+        ? await api.amendNeed(editingId, payload)
+        : await api.declareNeed(payload);
+      setReconciled(saved.reconciled ?? []);
       await reload();
+      /* The outlook beside every row, and whether this member is in an order, are the
+         server's answers and both can have moved. Asking again is the only way this
+         page tells the truth a second after a save. */
+      onWorldChanged();
       close();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -712,10 +766,16 @@ export function Needs({
               onRetire={close}
               questions={questions}
               preferences={preferences}
-              onPreferences={setPreferences}
+              onPreferences={clarification.answer}
+              noun={noun}
+              flexibility={flexibility}
+              planning={planning}
+              planned={planned}
             />
           </div>
         ) : null}
+
+        {reconciled.length > 0 ? <Reconciled rows={reconciled} /> : null}
 
         {mine.length === 0 && editingId !== "" ? (
           <Empty>
@@ -742,7 +802,11 @@ export function Needs({
                     onRetire={() => void save({ active: false })}
                     questions={questions}
                     preferences={preferences}
-                    onPreferences={setPreferences}
+                    onPreferences={clarification.answer}
+                    noun={noun}
+                    flexibility={flexibility}
+                    planning={planning}
+                    planned={planned}
                   />
                 </div>
               ) : (

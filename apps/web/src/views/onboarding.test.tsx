@@ -313,6 +313,8 @@ describe("setting up an account", () => {
     vi.spyOn(apiModule.api, "needs").mockResolvedValue({
       needs: [
         {
+          preferences: { flexibility: "exact", keep: [], accept: {} },
+          revision: 0,
           need_id: "need_1",
           household_id: FRESH.household_id,
           household_name: "You",

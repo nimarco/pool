@@ -820,6 +820,12 @@ export default function App() {
                  poses the question before a run; this says how it looks as things
                  stand, which is a different claim and belongs beside the declaration. */
               outlook={member?.needs_outlook ?? []}
+              /* Saving a declaration can move this member in or out of an order that
+                 already exists, and the outlook beside every row is computed from
+                 exactly that. Without this the page kept showing the sentence that was
+                 true before the edit — "Pool is already coordinating this one", beside a
+                 declaration whose own new rules had just taken them out of it. */
+              onWorldChanged={worldChanged}
               /* This member's own pool, not "some pool exists". Answered by the
                  server from membership and need lineage. */
               hasPool={Boolean(member?.opportunity)}

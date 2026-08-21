@@ -57,8 +57,9 @@ export function Verify({
               <strong>three bags a month</strong>.
             </li>
             <li>
-              Answer the flexibility questions — whether it has to be whole bean, whether it
-              has to be caffeinated, which roasts work for you.
+              Say whether you would take another brand. If you would, Pool works out which
+              things about the coffee it still needs to know — grind, caffeine, roast — and
+              asks only those.
             </li>
             <li>Save.</li>
           </ol>
@@ -73,6 +74,18 @@ export function Verify({
             because it lands on a supplier&apos;s case boundary in this particular
             community — try two instead and Pool will tell you, truthfully, that it could
             assemble an order but not one you would be in, so it did not form it.
+          </p>
+          <p className="small muted">
+            You will be a member of <strong>Demo University</strong>, which is the only
+            community here — Pool has not asked your browser where you are and has not
+            guessed, which is what makes this behave identically wherever it is opened. It
+            is invented, and so is everyone in it, so nothing here implies a partnership
+            with a real institution.
+          </p>
+          <p className="small muted">
+            Nothing is one-way. Every answer stays editable afterwards, including the
+            first one — narrow your rules and Pool takes you out of an order they no
+            longer allow; widen them again and it puts you back.
           </p>
           <div className="row-actions">
             <button className="btn btn-primary" onClick={onStart}>

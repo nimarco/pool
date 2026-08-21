@@ -6760,3 +6760,154 @@ compute with. The four bugs are the honest version of "we built it and then used
 `views/verify.tsx`, `views/needs.tsx`, `views/onboarding.tsx`, `views/home.tsx`,
 `views/demo-panel.tsx`, `App.tsx`, `api.ts`, `styles.css`,
 `tests/test_member_demo.py`, `src/preferences.test.tsx`.
+
+---
+
+### #0058 — [2026-08-21] — Pool decides what to ask, and every answer stays changeable
+`[AGENT]` `[FRONTEND]` `[ARCHITECTURE]` `[DEMO]` `[ARTICLE-1]` `[ARTICLE-2]`
+
+**Goal / user intent**
+Phase 4.5, deliberately scoped between the member demo and release. Two things #0057 left
+undone. The declaration form asked every approved question in schema order, which is
+affordable for a family with three attributes and not for one with thirty — and it asked
+them *before* anybody had agreed to alternatives at all. And the answers, once given, were
+a one-way door: a member who narrowed their rules stayed in an order those rules forbade,
+and a member who widened them again got nothing back.
+
+**Starting state**
+`policy_from_answers` and the curated question table shipped in #0057. There was no
+consent gate — the form offered "similar products are okay" beside an already-visible list
+of questions. `reconcile_after_declaration_change` did not exist. Nothing chose which
+questions mattered, and nothing said so; `preferences.tsx` carried a comment promising that
+a later bounded agent could choose a subset without touching compatibility truth. This is
+that phase, and the promise held: the component's answer shape did not change.
+
+**Decision**
+
+*The agent chooses what to ask. It never chooses what an answer means.* That line is the
+whole phase. `services/clarification.candidates` builds the approved set from the curated
+schema and attaches, per answer, two independent counts — how many products Pool could
+source, and how much standing demand sits behind them. No score, no `recommended` flag, no
+single number to sort on. A bounded run (1 listing, 1 plan write, ≤3 questions) picks a
+subset and an order, and `record_plan` refuses anything the listing did not offer: an
+invented id, one from another family, one for an attribute this product carries no
+verified fact for, a repeat, or more than the cap. Every prompt, every label and every
+mapping from answer to typed policy stays in a committed table.
+
+*Brand flexibility is not attribute flexibility.* The gate is explicit and its two options
+are the member's own words — *only this exact coffee* against *any brand that matches my
+preferences*. Passing through it opens the brand and nothing else; every question left
+alone stays at what the chosen product already is. "Recommended" appears only when the
+counted world says flexibility genuinely reaches more, and disappears when it does not.
+
+*Counted, never predicted.* `flexibility_context` returns three integers about stored
+rows. Pool has no model of whether an order forms — the evaluator answers that only after
+a buyer set has been costed — so nothing on that screen carries a percentage, and it says
+out loud that it cannot tell you.
+
+*Changing your mind is a first-class action, in both directions.*
+`reconcile_after_declaration_change` re-runs the same compatibility evaluator against the
+amended declaration: an order the new rules forbid is left, and an order **Pool itself**
+took them out of is given back. Coming back is deliberately narrower than leaving — only a
+withdrawal Pool performed (`Membership.withdrawn_reason`), never one the member chose, and
+always to *provisional*, whatever state they held before. Editing a preference does not
+touch a card in either direction.
+
+**Implementation** — implemented, browser-verified, nothing deployed.
+
+New: `services/clarification.py`, `ClarificationPlan`, `POST /api/products/{id}/clarification`,
+two agent tools behind `CLARIFICATION_TOOL_SURFACE`, `build_clarification_objective`,
+`apps/web/src/use-clarification.ts`. Changed: `Preferences` gained the gate, the counts and
+*Why is Pool asking these?*; `needs.current_answers` reads a stored policy back as the
+answers that made it; `events.explain` carries the clarification lineage into the technical
+proof; the `/verify` walkthrough skips the community step it had already made redundant.
+
+**Two defects this phase found in its own foundations**
+
+*Going back to what you said before was not a new thing to have said.* Coordination is
+keyed on a digest of the declaration's content, so state C — textually identical to state A
+— resolved to A's already-completed event, and the member was shown a verdict about a world
+they had been withdrawn from in between. `NeedDeclaration.revision` moves only when
+`amend_need` sees the content actually change, so A→B→C is three events and re-saving an
+untouched form is still free.
+
+*Reopening the edit form silently re-narrowed a dropped requirement.* `current_answers`
+reconstructed from the stored policy, and a dropped requirement leaves no trace in one —
+"form: anything" and "form: never asked" are the same absence, while the forward mapping
+reads an unanswered keep-question as *kept*. Somebody who had dropped a requirement, opened
+*Edit preferences* for an unrelated reason and pressed Save would find Pool had put it back.
+The inverse now walks the same question set the forward map walks and says a dropped
+attribute out loud as an empty list. Pinned as a fixed point over every shape of answer.
+
+**One defect the browser found that no unit test would have**
+
+Ticking a second roast re-triggered the plan fetch, and the arriving plan reset the form to
+its narrowest reading — so the tick un-ticked itself and the member saved a declaration
+they had not made. Only the *crossing* buys a plan now; an answer below the gate is an
+answer to a question already asked. `use-clarification.test.tsx` pins it.
+
+**Cost** — the bound is the point. One listing, one plan write, at most three questions,
+and a plan is identified by a digest of the member, the product and the candidate listing,
+so reopening a form in an unchanged world is a primary-key read. The member's **own**
+declaration is excluded from those counts: it is circular evidence about what to ask them,
+and including it made the fingerprint move on every edit — the A→B→C walkthrough bought two
+model calls before that was fixed and buys one now. No model call on render, on reload, on
+a toggle, on opening an edit, on an exact-only declaration, or on seeding.
+
+**Judge actions** — six including the proof: start, name yourself, choose the coffee, say
+how flexible you are, save, read the technical proof. The community step is skipped only
+inside `/verify`, where that page has already said which synthetic community it is and that
+Pool has not asked the browser where anybody is. The ordinary member still sees the step and
+the disclosure on it.
+
+**Autonomy / consent** — narrowed, not widened. Alternatives are now behind an explicit
+gate that did not exist; the default is exact-only; every answer remains editable; a
+restored membership is provisional and asks again. A pool past lock is reported rather than
+undone, because a standing preference is not a cancellation policy.
+
+**AWS / external services touched** — None. No deploy, no AgentCore, no Bedrock, no live
+payment, no real purchase. Every run in this work used the offline planner at zero tokens.
+
+**Validation**
+`make qa` green with no waived failures: **1,236 agent + 75 infra + 143 web = 1,454**,
+ruff, eslint (zero warnings), `tsc -b`, production build, secret scan and its self-test.
+35 new agent tests (`tests/test_targeted_questions.py`), 14 new web tests
+(`use-clarification.test.tsx`, `preferences.test.tsx`), plus the A→B→C browser walkthrough
+at 375×812 and 1280×1400.
+
+Pinned: a plan may only contain questions the listing offered, in the order chosen, capped
+at three, and asking nothing is legitimate; the listing carries two counts and no verdict;
+widening an answer never reaches less than keeping it; the guidance names nobody and counts
+nobody twice; omission can only narrow; the edit round-trip is a fixed point; a member's own
+edits do not move their plan; an order they left themselves stays left; a retired
+declaration is put back into nothing; restoring never re-authorises a payment; another
+member's participation is never touched; and the technical record shows the approved set as
+well as the choice, so "the model chose within it" is falsifiable.
+
+**What we learned**
+The two foundation defects have the same shape, and it is worth naming: *an absence is not
+a statement*. A declaration that is textually identical to an earlier one is not the same
+declaration if the world moved in between, and a policy that does not mention an attribute
+has not told you whether it was widened or never asked. Both bugs were invisible from
+inside the code that caused them and obvious the moment somebody changed their mind twice.
+
+The third one is the browser's lesson, and it is the same one #0057 recorded: the failures
+that survive a full unit suite are the ones where every part is individually correct. The
+plan fetch was right, the narrowest-reading reset was right, and putting them on the same
+event threw away the member's answer.
+
+**Article fodder**
+Article 1 and Article 2. The gate is a good short answer to "how do you get consent an agent
+can compute with without a settings page" — one question in the member's own words, and a
+bounded agent deciding only which follow-ups are worth their attention. The reversibility
+half is the honest counterweight to every demo that shows an agent doing something and never
+shows somebody taking it back.
+
+**Relevant commits / files**
+`services/agent/pool/services/clarification.py`, `services/needs.py`,
+`services/coordination.py`, `services/events.py`, `domain/models.py`,
+`data/product_facts.py`, `agent/tools.py`, `agent/objective.py`, `agent/offline_model.py`,
+`api/app.py`, `api/public_demo.py`, `adapters/repository.py`, `config.py`,
+`apps/web/src/use-clarification.ts`, `preferences.tsx`, `api.ts`, `styles.css`,
+`views/needs.tsx`, `views/onboarding.tsx`, `views/verify.tsx`, `views/why.tsx`, `App.tsx`,
+`tests/test_targeted_questions.py`, `src/use-clarification.test.tsx`.

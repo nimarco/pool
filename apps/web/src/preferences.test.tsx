@@ -54,10 +54,25 @@ const QUESTIONS: PreferenceQuestion[] = [
   },
 ];
 
-function renderPrefs(value: NeedPreferences = EXACT) {
+const REACH = {
+  exact_requests: 4,
+  compatible_requests: 12,
+  sourceable_alternatives: 5,
+};
+
+function renderPrefs(
+  value: NeedPreferences = EXACT,
+  props: Partial<Parameters<typeof Preferences>[0]> = {},
+) {
   const onChange = vi.fn();
   const view = render(
-    <Preferences questions={QUESTIONS} value={value} onChange={onChange} />,
+    <Preferences
+      questions={QUESTIONS}
+      value={value}
+      onChange={onChange}
+      noun="coffee"
+      {...props}
+    />,
   );
   return { onChange, view };
 }
@@ -65,7 +80,7 @@ function renderPrefs(value: NeedPreferences = EXACT) {
 describe("the flexibility questions", () => {
   it("starts on exact-only and asks nothing else", () => {
     renderPrefs();
-    expect(screen.getByLabelText(/only this exact product/i)).toBeTruthy();
+    expect(screen.getByLabelText(/only this exact coffee/i)).toBeTruthy();
     expect(screen.queryByText(/It has to be whole bean/)).toBeNull();
   });
 
@@ -85,9 +100,9 @@ describe("the flexibility questions", () => {
     }
   });
 
-  it("opens on the narrowest reading of 'similar is okay'", async () => {
+  it("opens on the narrowest reading of allowing alternatives", async () => {
     const { onChange } = renderPrefs();
-    await userEvent.click(screen.getByLabelText(/similar products are okay/i));
+    await userEvent.click(screen.getByLabelText(/any brand that matches my preferences/i));
 
     /* Everything the product already is, kept — including the roast it happens to be.
        Anything looser is something the member does next, one control at a time. */
@@ -118,14 +133,14 @@ describe("the flexibility questions", () => {
 
   it("going back to exact-only clears every answer", async () => {
     const { onChange } = renderPrefs(narrowestSimilar(QUESTIONS));
-    await userEvent.click(screen.getByLabelText(/only this exact product/i));
+    await userEvent.click(screen.getByLabelText(/only this exact coffee/i));
     expect(onChange).toHaveBeenCalledWith(EXACT);
   });
 
   it("offers nothing to widen when the product has no curated questions", () => {
     const onChange = vi.fn();
     render(<Preferences questions={[]} value={EXACT} onChange={onChange} />);
-    const flexible = screen.getByLabelText(/similar products are okay/i) as HTMLInputElement;
+    const flexible = screen.getByLabelText(/any brand that matches my preferences/i) as HTMLInputElement;
     expect(flexible.disabled).toBe(true);
     expect(document.body.textContent).toMatch(/it will only buy this one/i);
   });
@@ -134,5 +149,77 @@ describe("the flexibility questions", () => {
     renderPrefs(narrowestSimilar(QUESTIONS));
     const medium = screen.getByLabelText(/^Medium/).closest("label");
     expect(medium?.textContent).toMatch(/yours/);
+  });
+});
+
+describe("what Pool says about being flexible", () => {
+  it("says nothing at all until somebody has chosen to allow alternatives", () => {
+    /* The counts are fetched by that choice, so guidance about them cannot appear
+       before it. A screen that already knew would have paid for the answer on render. */
+    renderPrefs(EXACT, { flexibility: REACH });
+    expect(document.body.textContent).not.toMatch(/requests/);
+  });
+
+  it("gives counted demand and never a probability", () => {
+    renderPrefs(narrowestSimilar(QUESTIONS), { flexibility: REACH });
+    const text = document.body.textContent ?? "";
+
+    expect(text).toMatch(/4 other members have asked for this exact coffee/);
+    expect(text).toMatch(/12 requests/);
+    /* The whole class of claim Pool cannot support. It has no model of whether an order
+       forms — the evaluator answers that only after a buyer set has been costed — so a
+       number with a % or a "likely" attached would be invented. */
+    expect(text).not.toMatch(/%|likely|chance|probably|expect to|guarantee/i);
+    expect(text).toMatch(/cannot tell you whether an order will form/i);
+  });
+
+  it("recommends flexibility only where flexibility actually reaches more", () => {
+    const { view } = renderPrefs(EXACT, { flexibility: REACH });
+    expect(screen.getByText(/Recommended/)).toBeTruthy();
+
+    view.rerender(
+      <Preferences
+        questions={QUESTIONS}
+        value={EXACT}
+        onChange={vi.fn()}
+        noun="coffee"
+        flexibility={{
+          exact_requests: 3,
+          compatible_requests: 3,
+          sourceable_alternatives: 0,
+        }}
+      />,
+    );
+    expect(screen.queryByText(/Recommended/)).toBeNull();
+  });
+
+  it("is honest when widening changes nothing today", () => {
+    renderPrefs(narrowestSimilar(QUESTIONS), {
+      flexibility: { exact_requests: 2, compatible_requests: 2, sourceable_alternatives: 0 },
+    });
+    expect(document.body.textContent).toMatch(/changes nothing you can see/i);
+  });
+
+  it("waits for the questions rather than showing the wrong ones", () => {
+    renderPrefs(narrowestSimilar(QUESTIONS), { loading: true });
+    expect(document.body.textContent).toMatch(/what is worth asking/i);
+    expect(screen.queryByText(/It has to be whole bean/)).toBeNull();
+  });
+
+  it("explains that the questions were chosen, without claiming a model decided meaning", () => {
+    renderPrefs(narrowestSimilar(QUESTIONS), { planned: true });
+    const why = screen.getByText(/why is pool asking these/i);
+    expect(why).toBeTruthy();
+    const text = why.closest("details")?.textContent ?? "";
+    expect(text).toMatch(/change which orders you could join/i);
+    expect(text).toMatch(/never guesses what an answer means/i);
+  });
+
+  it("does not claim questions were chosen when they were not", () => {
+    renderPrefs(narrowestSimilar(QUESTIONS), { planned: false });
+    const text =
+      screen.getByText(/why is pool asking these/i).closest("details")?.textContent ?? "";
+    expect(text).toMatch(/everything Pool can establish/i);
+    expect(text).not.toMatch(/picked the questions/i);
   });
 });

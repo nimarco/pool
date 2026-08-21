@@ -56,6 +56,8 @@ const LIMITS = {
 
 function needRow(overrides: Partial<apiModule.NeedRow> = {}): apiModule.NeedRow {
   return {
+    preferences: { flexibility: "exact", keep: [], accept: {} },
+    revision: 0,
     need_id: "need_1",
     household_id: ROSA.id,
     household_name: "Rosa N.",
@@ -94,6 +96,7 @@ function renderNeeds(
       initialProduct={initialProduct}
       onConsumeInitialProduct={() => {}}
       onFind={() => {}}
+      onWorldChanged={() => {}}
       running={false}
       hasPool={false}
       outlook={outlook}

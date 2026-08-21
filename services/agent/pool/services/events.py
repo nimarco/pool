@@ -382,6 +382,12 @@ def explain(ctx: PoolContext, need_id: str) -> dict[str, Any] | None:
         "need_id": need_id,
         "event": view(event),
         "run": _run_view(ctx, run),
+        # What Pool decided to *ask* before any of this, when the member allowed
+        # alternatives. A separate run, earlier and cheaper, and the only place in the
+        # chain where a model chose something a member then saw: the questions in front
+        # of them, and their order. What each answer means is not here because no run
+        # decided it — see `services/needs.policy_from_answers`.
+        "clarification": _clarification_view(ctx, event),
         "considered": [_option_view(s) for s in considered],
         "investigated": [_verdict_view(e) for e in unique],
         "chosen": _verdict_view(chosen) if chosen is not None else None,
@@ -396,6 +402,50 @@ def explain(ctx: PoolContext, need_id: str) -> dict[str, Any] | None:
             "card_authorised": bool(ctx.repo.list_payments(ctx.ws, pool.id)) if pool else False,
             "purchased": False,
         },
+    }
+
+
+def _clarification_view(ctx: PoolContext, event: Any) -> dict[str, Any] | None:
+    """The plan that shaped the questions this declaration's preferences came from.
+
+    Looked up by member and product rather than by run id, because the two runs are
+    deliberately not the same one: asking happens while somebody is still deciding, and
+    coordinating happens after they have decided. Tying the record to the coordination
+    run would have meant either running the planner inside it — too late to be of any use
+    — or inventing a link the storage layer does not have.
+
+    ``None`` for an exact-only declaration, which is the truthful answer: nothing was
+    asked, because nothing needed to be.
+    """
+    need = ctx.repo.get_need(ctx.ws, event.need_id)
+    if need is None:
+        return None
+    plans = [
+        p
+        for p in ctx.repo.list_clarification_plans(ctx.ws)
+        if p.household_id == need.household_id and p.product_id == need.product_id
+    ]
+    if not plans:
+        return None
+    plan = plans[-1]
+    run = ctx.repo.get_run(ctx.ws, plan.run_id) if plan.run_id else None
+    return {
+        "plan_id": plan.id,
+        "run_id": plan.run_id,
+        "status": plan.status,
+        "family": plan.family,
+        "schema_version": plan.schema_version,
+        "question_definition_version": plan.question_definition_version,
+        # Both, and in this order: what the deterministic layer put on the table, and
+        # what the model took from it. A reader checking that the model chose *within* an
+        # approved set needs the set, not a promise that one existed.
+        "offered": list(plan.candidate_question_ids),
+        "asked": list(plan.question_ids),
+        "model_provider": run.model_provider if run else "",
+        "model_id": run.model_id if run else "",
+        "iterations": run.iterations if run else 0,
+        "input_tokens": run.input_tokens if run else 0,
+        "output_tokens": run.output_tokens if run else 0,
     }
 
 

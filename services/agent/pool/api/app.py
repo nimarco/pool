@@ -71,6 +71,7 @@ from ..domain.models import (
 from ..domain.money import bps_to_pct_str, format_cents
 from ..domain.state import IllegalTransition
 from ..domain.viability import ViabilityStage
+from ..services import clarification as clarify_service
 from ..services import (
     communication,
     discovery,
@@ -1144,6 +1145,7 @@ def get_needs(workspace: str = Query("demo")) -> dict[str, Any]:
     ws = check_workspace(workspace)
     ensure_seeded(ws)
     r = repo()
+    ctx = ctx_for(ws)
     products = {p.id: p for p in r.list_products(ws)}
     return {
         # The catalogue a member can declare against, alongside their declarations, so
@@ -1196,7 +1198,11 @@ def get_needs(workspace: str = Query("demo")) -> dict[str, Any]:
                 "attribute_policy": (
                     n.attribute_policy.to_dict() if n.attribute_policy else None
                 ),
+                # The same rule as the answers that produced it, so *Edit preferences*
+                # opens on what this member said rather than on a fresh set of defaults.
+                "preferences": needs_service.current_answers(ctx, n),
                 "active": n.active,
+                "revision": n.revision,
             }
             for n in r.list_needs(ws)
         ],
@@ -1249,6 +1255,92 @@ def product_preferences(product_id: str, workspace: str = Query("demo")) -> dict
     ws = check_workspace(workspace)
     ensure_seeded(ws)
     return needs_service.preference_questions(ctx_for(ws), product_id)
+
+
+@app.post("/api/products/{product_id}/clarification")
+def product_clarification(product_id: str, workspace: str = Query("demo")) -> dict[str, Any]:
+    """The questions Pool decided are worth asking about this product, and what each
+    side of the flexibility choice would reach.
+
+    **Get-or-create, and the "get" is the common case.** A plan is identified by a digest
+    of the household, the product and the shape of the world around it, so reopening this
+    form — on an edit, on a Back, on a second look — finds the existing plan and spends
+    nothing. A run happens only when there is no valid plan, which means the member picked
+    a different product or the world moved enough to change which question matters
+    (AGENTS.md §3.3).
+
+    A ``POST`` rather than a ``GET`` because it can, on that first call, cost a bounded
+    model call — and a read that sometimes spends money is a read nobody can budget for.
+    The client calls it when somebody *chooses* to allow alternatives, never on render and
+    never on a reload.
+
+    Planning is gated by the same rule as coordination dispatch: on in the verification
+    partition, off everywhere else. A workspace that will not run the planner still gets
+    every approved question, in the schema's own order — the form works, it is simply not
+    targeted.
+    """
+    ws = check_workspace(workspace)
+    ensure_seeded(ws)
+    ctx = ctx_for(ws)
+
+    consumer = onboarding.consumer_household(ctx)
+    household_id = consumer.id if consumer else ""
+    plan, offered = clarify_service.existing_plan(
+        ctx, COMMUNITY_ID, household_id, product_id
+    )
+
+    ran = False
+    if plan is None and offered and household_id and _should_dispatch(ws):
+        _public.spend_action(ws)
+        coordinator = PoolCoordinator(
+            repo(), settings=_settings, routing=_routing, payments=_payments,
+            purchaser=_purchaser, sourcing=_sourcing,
+        )
+        with _public.workspace_mutation(ws, public_demo.WORKSPACE_BUSY):
+            coordinator.run(
+                ws,
+                trigger="clarify_need_preferences",
+                community_id=COMMUNITY_ID,
+                clarify=(household_id, product_id),
+            )
+        ran = True
+        plan, offered = clarify_service.existing_plan(
+            ctx, COMMUNITY_ID, household_id, product_id
+        )
+
+    rendered = needs_service.preference_questions(ctx, product_id)
+    by_attribute = {q["attribute"]: q for q in rendered["questions"]}
+    by_id = {
+        c.question_id: by_attribute.get(c.attribute)
+        for c in offered
+        if by_attribute.get(c.attribute)
+    }
+    if plan is not None:
+        # The model's order, and only the questions it chose. A question it passed over
+        # is not hidden from the record — the plan stores what was offered — it is simply
+        # not put in front of the member.
+        questions = [by_id[q] for q in plan.question_ids if q in by_id]
+    else:
+        questions = rendered["questions"]
+
+    return {
+        "product_id": product_id,
+        "family": rendered["family"],
+        "family_noun": rendered["family_noun"],
+        "schema_version": rendered["schema_version"],
+        "questions": questions,
+        "plan_id": plan.id if plan is not None else "",
+        "planned": plan is not None,
+        "planned_now": ran,
+        "questions_offered": [c.question_id for c in offered],
+        # Aggregate, deterministic, and about the world rather than about anybody: what
+        # each side of the exact-versus-alternatives choice could currently combine with.
+        # No prediction and no percentage — Pool has no model of whether an order forms,
+        # and the evaluator only answers that after a buyer set has been costed.
+        "flexibility": clarify_service.flexibility_context(
+            ctx, COMMUNITY_ID, household_id, product_id
+        ),
+    }
 
 
 def _coordination_for(ctx: PoolContext, ws: str, need) -> dict[str, Any] | None:
@@ -1334,7 +1426,16 @@ def update_need(
         )
     except needs_service.NeedError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {**needs_service.need_view(ctx, need), "coordination": _coordination_for(ctx, ws, need)}
+    # Before the new run looks at anything. A member whose amended rules no longer permit
+    # an order they were provisionally in is detached from it first, so what coordination
+    # sees — and what their own screen shows a moment later — is the world their current
+    # preferences describe rather than the one the old ones did (§21).
+    reconciled = coord.reconcile_after_declaration_change(ctx=ctx, need=need)
+    return {
+        **needs_service.need_view(ctx, need),
+        "coordination": _coordination_for(ctx, ws, need),
+        "reconciled": reconciled,
+    }
 
 
 @app.get("/api/members/{household_id}")

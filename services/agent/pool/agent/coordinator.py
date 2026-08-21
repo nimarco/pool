@@ -27,7 +27,13 @@ from ..domain.models import ActivityEvent, AgentRun, RunOutcome, iso, new_id, ut
 from ..services.context import PoolContext
 from .bounds import BoundedRun, BoundExceeded, RunTelemetry
 from .evidence import build as build_evidence
-from .objective import MEMBER, build_declaration_objective, for_trigger, prompt_for
+from .objective import (
+    MEMBER,
+    build_clarification_objective,
+    build_declaration_objective,
+    for_trigger,
+    prompt_for,
+)
 from .tools import ToolContext, build_tools
 
 logger = logging.getLogger(__name__)
@@ -216,6 +222,7 @@ class PoolCoordinator:
         instruction: str | None = None,
         community_id: str = "",
         event_id: str = "",
+        clarify: tuple[str, str] | None = None,
     ) -> AgentRun:
         """Execute one bounded coordination run and return its record.
 
@@ -246,7 +253,15 @@ class PoolCoordinator:
             sourcing=self.sourcing,
             run_id=run_id,
         )
-        if event_id:
+        if clarify is not None:
+            # ``(household_id, product_id)``. The narrowest objective there is: it plans
+            # which approved questions are worth asking about one product, and is given
+            # no tool that could cost an option or form a pool.
+            household_id, product_id = clarify
+            objective = build_clarification_objective(
+                pool_ctx, community_id, household_id=household_id, product_id=product_id
+            )
+        elif event_id:
             # A coordination event is the question. The declaration is read from the
             # stored event rather than from the caller, so this path inherits the same
             # property every other one has: there is no field in which to name somebody

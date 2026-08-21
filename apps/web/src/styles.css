@@ -3552,6 +3552,56 @@ select.control {
 .prefs-note {
   margin: 0;
 }
+.prefs-tag {
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--moss-soft);
+  border: 1px solid var(--moss-line);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  vertical-align: middle;
+}
+/* Counted demand, not a forecast. Sunken rather than tinted: it is context for the
+   choice above it, and colouring it like a result would read as a promise. */
+.prefs-reach {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--paper-sunken);
+}
+.prefs-why {
+  padding: 0 6px;
+}
+.prefs-why > summary {
+  cursor: pointer;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+.prefs-why > p {
+  margin: 4px 0 0;
+}
+
+/* What an edit did to an order you were in. Stated, not celebrated: this is a
+   consequence to read, and a tinted success box would be the wrong register for
+   "Pool took you out of an order". */
+.reconciled {
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper-sunken);
+}
+.reconciled > p {
+  margin: 0 0 4px;
+}
+.reconciled-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 
 /* ------------------------------------------------------------------- why this order */
 

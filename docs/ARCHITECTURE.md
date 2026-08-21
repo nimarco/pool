@@ -60,6 +60,7 @@ not a model-authored claim about what happened.
 | The model may decide | Deterministic code determines |
 | --- | --- |
 | which latent demand deserves investigation | cents, quantities, package maths |
+| which approved questions are worth asking a member, and in what order | what every answer means, and the typed rule it becomes |
 | whether to search or refresh supplier offers | MOQ, allocations, offer freshness |
 | whether a candidate pool is worth forming | timing eligibility, product compatibility |
 | whether to recruit a host | host eligibility, ranking, compensation |
@@ -75,7 +76,10 @@ the tool's value — not the model's paraphrase of it.
 
 Twelve narrow, typed tools. No shell, no arbitrary query, no generic mutation. A run
 answering a coordination event is given a different three instead of two of them —
-see *The strategy surface* below — so no run ever holds more than twelve.
+see *The strategy surface* below — so no run ever holds more than twelve. A run deciding
+what to *ask* holds two and nothing else (*The clarification surface*), because a run that
+could also form an order would be answering a question the member has not finished
+stating.
 
 Four effect kinds, because three could not describe the surface honestly. `read` writes
 nothing at all. `record` writes Pool's own working state — an evaluation it wants to be
@@ -132,6 +136,44 @@ outcome and a different one.
 | `MAX_STRATEGY_LISTINGS` | 1 | Refused with a reason; the options have not changed |
 | `MAX_STRATEGY_EVALUATIONS` | 3, against up to 6 options | Refused; the run must choose rather than sweep |
 | `MAX_STRATEGY_POOL_CREATIONS` | 1 | Refused; one order per declaration |
+
+### The clarification surface
+
+A different run, earlier and much cheaper, caused by a member choosing to allow
+alternatives. It decides **which approved questions are worth asking, and in what order**.
+It decides nothing else, and specifically not what an answer means: every prompt, every
+value label and every mapping from answer to typed policy lives in a committed table
+beside the family schema, and `services/needs.policy_from_answers` is the only thing that
+reads an answer.
+
+| Tool | Kind |
+| --- | --- |
+| `list_preference_question_candidates` | record — the approved set, with counts and no verdict |
+| `set_preference_question_plan` | record — an ordered subset of what that listing offered |
+
+The listing carries, per approved answer, two independent quantities: how many products
+this deployment could source under it, and how much standing demand sits behind them. Two
+rather than one on purpose — "this excludes three of the six things Pool can buy" and
+"this excludes eleven of the fourteen requests" can point in different directions, and
+collapsing them into a score would be the deterministic layer making the choice and then
+asking a model to agree with it. There is no `recommended` flag and nothing to sort on.
+
+`set_preference_question_plan` refuses every way of getting a question into a plan that
+the listing did not put there: an id it did not offer, one from another family, one for an
+attribute this product carries no verified fact for, a repeat, or more than the cap.
+Asking nothing is a legitimate plan.
+
+A plan is identified by a digest of the member, the product and the candidate listing, so
+reopening the form in an unchanged world is a primary-key read rather than a run — and the
+member's *own* declaration is excluded from those counts, both because it is circular
+evidence about what to ask them and because including it made the digest move every time
+they changed their mind.
+
+| Clarification bound | Default | On hit |
+| --- | --- | --- |
+| `MAX_CLARIFICATION_LISTINGS` | 1 | Refused; the candidates have not changed |
+| `MAX_CLARIFICATION_PLANS` | 1 | Refused; one plan per run |
+| `MAX_CLARIFICATION_QUESTIONS` | 3 | Refused; the run must choose rather than ask everything |
 
 `find_host_candidates` was published as a `read` — here, in the API, and on the Showcase
 page — while opening host recruiting and persisting a candidate record per evaluation.
@@ -375,7 +417,7 @@ member's details into an artifact that gets published.
 | Routing | Pure function of coordinates | Same deterministic adapter; labelled simulated | Amazon Location `geo-routes` adapter available |
 | Payments | Simulated provider | Simulated provider | Stripe **TEST** adapter available; live keys refused |
 | Purchase | Simulated executor | Simulated executor | Simulated executor |
-| API / web | uvicorn + Vite | One Lambda Function URL serves SPA + 35 of 54 API paths | API Gateway + Lambda; S3 + CloudFront |
+| API / web | uvicorn + Vite | One Lambda Function URL serves SPA + 36 of 55 API paths | API Gateway + Lambda; S3 + CloudFront |
 | Background | Manual trigger only | **Absent: zero EventBridge rules deployed** | EventBridge definition exists and defaults disabled if this stack is ever deployed |
 
 The offline planner replaces the LLM and only the LLM: the same Strands event loop, the

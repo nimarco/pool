@@ -44,6 +44,7 @@ from ..domain.models import (
     new_id,
 )
 from .context import PoolContext
+from .events import declaration_digest
 
 #: A member cannot buy more than one cycle ahead of themselves. Pulling forward further
 #: would mean restocking before the previous purchase is used, which is storage the
@@ -184,6 +185,12 @@ def amend_need(
                 "changed. Leave that pool first, or add a separate declaration."
             )
 
+    # What this declaration says right now, before any of it is overwritten. Comparing
+    # it with the same digest afterwards is how an amendment that changed nothing stays
+    # free: it is the coordination layer's own definition of material content, so the
+    # two sides cannot drift apart into disagreeing about what a real change is.
+    before = declaration_digest(need)
+
     need.product_id = data.product_id
     need.quantity = data.quantity
     need.cadence_days = data.cadence_days
@@ -198,6 +205,13 @@ def amend_need(
     need.substitution = data.substitution
     need.attribute_policy = data.attribute_policy
     need.active = data.active
+    # Going back to a set of rules you held before is a new thing to have said, because
+    # the world moved while you held the other ones — an order you were withdrawn from
+    # does not un-withdraw you by itself. Without this, re-widening resolves to the
+    # digest of the original declaration, whose coordination already ran, and the member
+    # is left looking at a verdict that was true about a world they have since left.
+    if declaration_digest(need) != before:
+        need.revision += 1
     ctx.repo.put_need(ctx.ws, need)
     ctx.log(
         "need_amended",
@@ -428,7 +442,16 @@ def need_view(ctx: PoolContext, need: NeedDeclaration) -> dict[str, Any]:
         "attribute_policy": (
             need.attribute_policy.to_dict() if need.attribute_policy else None
         ),
+        #: The same rule read back as the answers that produced it, so *Edit preferences*
+        #: opens on what this member actually said rather than on defaults. Server-owned
+        #: for the same reason the policy is: a client reconstructing it would be a
+        #: second implementation of the mapping, free to disagree with the real one.
+        "preferences": current_answers(ctx, need),
         "active": need.active,
+        #: How many times this declaration has been materially changed. On screen it is
+        #: nothing; it is here because it is what makes a reverted preference a new thing
+        #: to have said rather than a repeat of an old one.
+        "revision": need.revision,
     }
 
 
@@ -475,10 +498,10 @@ def preference_questions(ctx: PoolContext, product_id: str) -> dict[str, Any]:
     """
     product = ctx.repo.get_product(ctx.ws, product_id)
     if product is None:
-        return {"family": "", "schema_version": 0, "questions": []}
+        return {"family": "", "family_noun": "", "schema_version": 0, "questions": []}
     schema = ctx.product_facts.family_schema(product.substitute_group)
     if schema is None:
-        return {"family": "", "schema_version": 0, "questions": []}
+        return {"family": "", "family_noun": "", "schema_version": 0, "questions": []}
 
     facts = ctx.product_facts.facts_for(product_id)
     questions: list[dict[str, Any]] = []
@@ -509,6 +532,10 @@ def preference_questions(ctx: PoolContext, product_id: str) -> dict[str, Any]:
         )
     return {
         "family": schema.family,
+        #: The word to put in front of a member. Curated beside the questions, because a
+        #: screen that said "only this exact roast_coffee" would be showing them the
+        #: database — and a browser turning the slug into a noun would be guessing.
+        "family_noun": product_facts.family_noun(schema.family),
         "schema_version": schema.version,
         "product_id": product_id,
         "questions": questions,
@@ -565,3 +592,47 @@ def policy_from_answers(
         schema_version=int(offered["schema_version"]),
         requires=requires,
     )
+
+
+def current_answers(ctx: PoolContext, need: NeedDeclaration) -> dict[str, Any]:
+    """A saved declaration, read back as the answers that produced it.
+
+    The inverse of ``needs.policy_from_answers``, and the reason editing works: an edit
+    form has to open on what somebody actually said, not on a fresh set of defaults.
+
+    It walks the *same* question set the forward mapping walks, rather than only the
+    attributes the stored policy happens to mention, and that is the whole of the
+    correctness argument. A requirement somebody dropped leaves no trace in a policy —
+    "form: anything" and "form: never asked" are the same absence — while the mapper
+    reads an unanswered keep-question as *kept*. Reconstructing from the policy alone
+    therefore loses exactly the widenings, and a member who dropped a requirement, opened
+    the edit form and pressed Save without touching anything would find Pool had quietly
+    put the requirement back. So a dropped attribute travels as an explicit empty list,
+    which is the same way the form says it (§17).
+    """
+    if need.substitution != SubstitutionPolicy.ATTRIBUTE_CONSTRAINED or not need.attribute_policy:
+        return {"flexibility": "exact", "keep": [], "accept": {}}
+
+    requires = need.attribute_policy.requires
+    offered = preference_questions(ctx, need.product_id)["questions"]
+    keep: list[str] = []
+    accept: dict[str, list[str]] = {}
+    for question in offered:
+        attribute = question["attribute"]
+        values = requires.get(attribute)
+        if values is None:
+            # Asked, and answered by dropping it. Said out loud, not left out.
+            accept[attribute] = []
+            continue
+        accept[attribute] = sorted(values)
+        if question["kind"] == product_facts.QUESTION_KIND_KEEP and len(values) == 1:
+            keep.append(attribute)
+
+    # A policy attribute with no question behind it cannot be edited here, and dropping
+    # it from the answers would silently widen the rule on the next save. It is carried
+    # through untouched instead.
+    for attribute, values in requires.items():
+        if attribute not in accept:
+            accept[attribute] = sorted(values)
+
+    return {"flexibility": "similar", "keep": sorted(keep), "accept": accept}

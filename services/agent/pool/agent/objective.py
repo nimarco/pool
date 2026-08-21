@@ -104,6 +104,16 @@ class RunObjective:
     #: :attr:`searches_strategies`. Empty for the button, the scan, and every path that
     #: existed before declaration events did.
     anchor_need_id: str = ""
+    #: The product a **clarification** run is planning questions about. Its presence
+    #: selects a third, tiny surface — see :attr:`plans_clarification`. A run is never
+    #: both: choosing what to ask somebody and choosing what to buy for them are
+    #: different decisions with different authority, and a run holding both surfaces
+    #: could write a plan and a pool from one instruction.
+    clarify_product_id: str = ""
+    #: The product's display name, resolved server-side for the instruction. Product
+    #: names are the one field on this path a member can author, so it goes through the
+    #: same flattening every other name does (:func:`_prompt_safe`).
+    clarify_product_name: str = ""
     #: Declarations this member holds that the run did *not* take on, because the
     #: per-run cap was reached. Recorded so the report can say so instead of inventing a
     #: reason for their absence.
@@ -129,7 +139,18 @@ class RunObjective:
         ``create_candidate_pool`` or ``create_candidate_pool_from_strategy`` has two doors
         to one mutation, and only one of them is guarded by ``ensure_actionable``.
         """
-        return bool(self.anchor_need_id)
+        return bool(self.anchor_need_id) and not self.clarify_product_id
+
+    @property
+    def plans_clarification(self) -> bool:
+        """Whether this run chooses which approved questions are worth asking.
+
+        The narrowest objective in the system, and deliberately so: it reads a handful of
+        counts about one product and returns an ordered list of ids from a fixed set. It
+        cannot form a pool, cost an option, or write a policy, because it is not given a
+        tool that does any of those things.
+        """
+        return bool(self.clarify_product_id)
 
     @property
     def product_ids(self) -> tuple[str, ...]:
@@ -149,6 +170,7 @@ class RunObjective:
             "served_need_ids": list(self.served_need_ids),
             "event_id": self.event_id,
             "anchor_need_id": self.anchor_need_id,
+            "clarify_product_id": self.clarify_product_id,
         }
 
 
@@ -258,6 +280,27 @@ def build_declaration_objective(
     )
 
 
+def build_clarification_objective(
+    ctx: PoolContext, community_id: str, *, household_id: str, product_id: str
+) -> RunObjective:
+    """The bounded question a clarification run asks: what is worth asking about this?
+
+    Read-only, and it carries nothing about the member beyond the household the plan will
+    belong to — which the tools need in order to write it and the prompt never sees. A
+    product outside a curated family yields an objective with no product, and the run
+    records honest no-action rather than planning questions nobody can answer.
+    """
+    product = ctx.repo.get_product(ctx.ws, product_id)
+    if product is None:
+        return RunObjective(kind=MEMBER, household_id=household_id)
+    return RunObjective(
+        kind=MEMBER,
+        household_id=household_id,
+        clarify_product_id=product.id,
+        clarify_product_name=product.display_name,
+    )
+
+
 def for_trigger(ctx: PoolContext, community_id: str, trigger: str) -> RunObjective:
     """Derive this run's objective from its trigger and the workspace.
 
@@ -312,6 +355,28 @@ DECLARATION_PROMPT = (
     "verified."
 )
 
+#: What a clarification run is asked. Names the product and nothing else about the
+#: member — choosing which uncertainty is worth resolving needs the world, not a person.
+CLARIFY_PROMPT = (
+    "A member has just told Pool they buy {product}, and that they would accept other "
+    "products as long as those products still meet what matters to them. Before Pool "
+    "coordinates anything, decide which of the approved questions are worth their "
+    "attention.\n"
+    "Call list_preference_question_candidates once. Each candidate names one thing the "
+    "product can be asked about, what this product's own confirmed value is, and — the "
+    "part that decides it — how many products Pool can actually source, and how much "
+    "standing demand nearby, each possible answer would let them combine with. A "
+    "question whose answers reach the same world either way changes nothing for them.\n"
+    "Then call set_preference_question_plan with the ids of the questions genuinely "
+    "worth asking, most consequential first, and stop. Ask **fewer** where fewer will "
+    "do: every question is a thing a person has to think about, and a form that asks "
+    "everything the schema permits is a form nobody finishes. You may name at most "
+    "{max_questions}.\n"
+    "You are choosing what to ask. You are not deciding what any answer means, what any "
+    "product is, or what counts as compatible — all of that is already settled and none "
+    "of it is yours to change."
+)
+
 NO_DECLARATIONS_PROMPT = (
     "A member asked Pool to look at what they buy, but they hold no standing "
     "declaration that is not already being coordinated. There is nothing to "
@@ -349,6 +414,13 @@ def prompt_for(objective: RunObjective) -> str:
     Names products, never people. The member's own identity is not a fact the model
     needs in order to cost a bulk order, so it is not in here (AGENTS.md §4).
     """
+    if objective.plans_clarification:
+        from ..config import get_settings
+
+        return CLARIFY_PROMPT.format(
+            product=_prompt_safe(objective.clarify_product_name),
+            max_questions=get_settings().bounds.max_clarification_questions,
+        )
     if not objective.is_member:
         return COMMUNITY_PROMPT
     if not objective.needs:

@@ -351,6 +351,14 @@ export interface NeedRow {
   max_spend_display: string;
   max_spend_cents: number;
   substitution: string;
+  /** The stored rule read back as the answers that produced it, so *Edit preferences*
+   *  opens on what this member said. Server-owned: a client reconstructing it from
+   *  `attribute_policy` would be a second implementation of the mapping, and a dropped
+   *  requirement looks exactly like an unasked question in a policy. */
+  preferences: NeedPreferences;
+  /** How many times this declaration has materially changed. Never displayed; it is what
+   *  makes going back to an earlier preference a new thing to have said. */
+  revision: number;
   /** What saving this declaration set in motion, when the write path recorded an event.
    *  Present on the save response; absent from the listing, which is a read. */
   coordination?: {
@@ -362,7 +370,28 @@ export interface NeedRow {
     formed_order: boolean;
     reached_a_verdict: boolean;
   } | null;
+  /** What an amendment did to orders this member was already in — both directions.
+   *  Present on the amend response only. */
+  reconciled?: Reconciliation[];
   active: boolean;
+}
+
+/** One order a preference edit moved this member into or out of.
+ *
+ *  Deterministic reconciliation, not a model decision: the same compatibility evaluator
+ *  that admits a member is the one that removes them, and re-entry is only ever offered
+ *  for a withdrawal Pool itself performed. */
+export interface Reconciliation {
+  pool_id: string;
+  /** Pool took them out: their amended rules no longer permit this order. */
+  withdrawn?: boolean;
+  /** Pool put them back into an order it had removed them from, provisionally. */
+  restored?: boolean;
+  reason_code: string;
+  state?: string;
+  /** Present when the pool was past the point where leaving is free, and the membership
+   *  was therefore left exactly as it was. */
+  refused?: string;
 }
 
 /** The catalogue a member can declare a need against, served alongside their needs. */
@@ -509,9 +538,67 @@ export interface PreferenceQuestion {
 
 export interface ProductPreferences {
   family: string;
+  /** What to call this family in front of a member — "coffee". Curated server-side
+   *  beside the questions; empty for a product outside a curated family, where the
+   *  screens say "product" instead. */
+  family_noun: string;
   schema_version: number;
   product_id?: string;
   questions: PreferenceQuestion[];
+}
+
+/** The questions Pool decided are worth asking about one product, and the counts a
+ *  member is actually weighing when they choose between exact and flexible.
+ *
+ *  `questions` is a subset of the approved set, in the order the agent chose. Which ones
+ *  are worth asking is the only thing the model contributes — every prompt, label and
+ *  meaning is curated server-side, and the answers travel through the same
+ *  `NeedPreferences` shape they always did.
+ *
+ *  `planned` is false in a workspace that does not run the planner: the form still works
+ *  and asks everything, it is simply not targeted. */
+export interface ProductClarification extends ProductPreferences {
+  product_id: string;
+  plan_id: string;
+  planned: boolean;
+  /** Whether *this* request paid for a run. False on every reopen. */
+  planned_now: boolean;
+  questions_offered: string[];
+  flexibility: FlexibilityContext;
+}
+
+/** Counted, never predicted. Three integers about the world, and nothing that could be
+ *  read as a promise about whether an order forms. */
+export interface FlexibilityContext {
+  /** Other members with a standing declaration for this exact product. */
+  exact_requests: number;
+  /** Standing declarations Pool could potentially combine this one with. */
+  compatible_requests: number;
+  /** Other products in the family this deployment can actually source. */
+  sourceable_alternatives: number;
+}
+
+/** The plan that shaped the questions a member's preferences came from.
+ *
+ *  A separate, earlier run from the coordination one, and deliberately so: asking
+ *  happens while somebody is still deciding, coordinating happens after they have.
+ *  `offered` is what the deterministic layer put on the table and `asked` is what the
+ *  model took from it — both, because checking that a model chose *within* an approved
+ *  set needs the set. */
+export interface ClarificationProof {
+  plan_id: string;
+  run_id: string;
+  status: string;
+  family: string;
+  schema_version: number;
+  question_definition_version: number;
+  offered: string[];
+  asked: string[];
+  model_provider: string;
+  model_id: string;
+  iterations: number;
+  input_tokens: number;
+  output_tokens: number;
 }
 
 /** Everything one declaration caused, as the server recorded it.
@@ -530,6 +617,9 @@ export interface NeedCoordination {
     formed_order: boolean;
     reached_a_verdict: boolean;
   } | null;
+  /** Null for an exact-only declaration: nothing was asked, because nothing needed
+   *  to be — which is the truthful answer rather than a gap. */
+  clarification: ClarificationProof | null;
   run: {
     run_id: string;
     trigger: string;
@@ -1177,6 +1267,12 @@ export const api = {
     ),
   productPreferences: (productId: string) =>
     request<ProductPreferences>(`/api/products/${productId}/preferences`),
+  /** Ask what is worth asking about this product. A `POST` because the first call for a
+   *  given product and world may cost a bounded model run; every later one is a
+   *  primary-key read. Called when a member *chooses* to allow alternatives — never on
+   *  render, never on reload, never for an exact-only declaration. */
+  productClarification: (productId: string) =>
+    post<ProductClarification>(`/api/products/${productId}/clarification`, {}),
   needCoordination: (needId: string) =>
     request<NeedCoordination>(`/api/needs/${needId}/coordination`),
   declareNeed: (draft: NeedDraft) => post<NeedRow>("/api/needs", draft),

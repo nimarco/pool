@@ -20,21 +20,31 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import {
-  Consumer,
-  NeedDraft,
-  NeedPreferences,
-  Place,
-  PreferenceQuestion,
-  api,
-} from "../api";
+import { Consumer, NeedDraft, Place, api } from "../api";
 import { ChosenCard, ProductSearch } from "../product-search";
 import { ChosenItem, asChosen } from "../chosen";
 import { EXACT } from "../preference-answers";
 import { Preferences } from "../preferences";
+import { useClarification } from "../use-clarification";
 import { IconArrowRight, IconCheck } from "../ui";
 
 type Step = "you" | "where" | "buy" | "authority";
+
+/** Whether the "which community" step is a decision at all.
+ *
+ *  It is, in the product: the list comes from the device, it can have several entries,
+ *  and picking one is consent to be matched with those people. It is not, on the
+ *  verification walkthrough — that page has already said which synthetic community the
+ *  visitor is about to be a member of, that Pool has not asked their browser where they
+ *  are, and that there is exactly one. Asking them to press a button to confirm a thing
+ *  they have just read and pressed a button about is ceremony, and this walkthrough is
+ *  measured in how few actions stand between a sceptic and the evidence.
+ *
+ *  Narrow on purpose: the ordinary member still sees the step and the disclosure on it.
+ */
+function skipsCommunityChoice(): boolean {
+  return api.inVerifyScope();
+}
 
 const STEPS: { id: Step; label: string }[] = [
   { id: "you", label: "You" },
@@ -65,10 +75,13 @@ function defaultFlexibility(nextNeeded: string, cadence: number): number {
 /* ------------------------------------------------------------------- progress */
 
 function Progress({ current }: { current: Step }) {
-  const index = STEPS.findIndex((s) => s.id === current);
+  /* A step nobody is going to be shown is not a step, and counting it would promise a
+     screen that never arrives. */
+  const steps = STEPS.filter((s) => !(s.id === "where" && skipsCommunityChoice()));
+  const index = steps.findIndex((s) => s.id === current);
   return (
     <ol className="onboard-steps" aria-label="Setup progress">
-      {STEPS.map((s, i) => (
+      {steps.map((s, i) => (
         <li
           key={s.id}
           className={i < index ? "is-done" : i === index ? "is-current" : ""}
@@ -266,43 +279,18 @@ function BuyStep({
   const [cadence, setCadence] = useState(DEFAULT_CADENCE);
   const [nextNeeded, setNextNeeded] = useState(isoInDays(DEFAULT_NEXT_NEEDED_DAYS));
   /** What this product can be asked about, and what was answered. Setting up is not a
-   *  lesser declaration than editing one later: the same questions, the same server
-   *  mapping, the same typed policy. */
-  const [questions, setQuestions] = useState<PreferenceQuestion[]>([]);
-  const [preferences, setPreferences] = useState<NeedPreferences | null>(null);
-
-  useEffect(() => {
-    const productId = chosen?.draft.product_id;
-    if (!productId) {
-      setQuestions([]);
-      setPreferences(null);
-      return;
-    }
-    let live = true;
-    void api
-      .productPreferences(productId)
-      .then((offered) => {
-        if (!live) return;
-        setQuestions(offered.questions);
-        setPreferences(offered.questions.length > 0 ? EXACT : null);
-      })
-      .catch(() => {
-        if (!live) return;
-        setQuestions([]);
-        setPreferences(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [chosen?.draft.product_id]);
+   *  lesser declaration than editing one later: the same hook, the same questions, the
+   *  same server mapping, the same typed policy — and the same rule about when a model
+   *  call may be bought. */
+  const clarify = useClarification(chosen?.draft.product_id);
+  const { questions, preferences } = clarify;
 
   const reset = () => {
     setChosen(null);
     setQuantity(2);
     setCadence(DEFAULT_CADENCE);
     setNextNeeded(isoInDays(DEFAULT_NEXT_NEEDED_DAYS));
-    setQuestions([]);
-    setPreferences(null);
+    clarify.reset();
   };
 
   const flexibility = defaultFlexibility(nextNeeded, cadence);
@@ -408,8 +396,12 @@ function BuyStep({
             <Preferences
               questions={questions}
               value={preferences ?? EXACT}
-              onChange={setPreferences}
+              onChange={clarify.answer}
               disabled={busy}
+              noun={clarify.noun}
+              flexibility={clarify.flexibility}
+              loading={clarify.planning}
+              planned={clarify.planned}
             />
           ) : null}
           {error ? <p className="form-error">{error}</p> : null}
@@ -684,6 +676,10 @@ export function Onboarding({
     }
   };
 
+  const visibleSteps = STEPS.filter(
+    (s) => !(s.id === "where" && skipsCommunityChoice()),
+  );
+
   return (
     <div className="onboard">
       <Progress current={step} />
@@ -694,13 +690,13 @@ export function Onboarding({
         /* The step is a region that replaces itself, so a screen reader should hear the
            new one rather than silently land in the middle of it. */
         role="group"
-        aria-label={`Step ${STEPS.findIndex((s) => s.id === step) + 1} of ${STEPS.length}`}
+        aria-label={`Step ${visibleSteps.findIndex((s) => s.id === step) + 1} of ${visibleSteps.length}`}
       >
         {step === "you" ? (
           <YouStep
             name={name}
             onName={setName}
-            onNext={() => setStep("where")}
+            onNext={() => setStep(skipsCommunityChoice() ? "buy" : "where")}
             onJudgeDemo={onJudgeDemo}
           />
         ) : null}
@@ -716,7 +712,7 @@ export function Onboarding({
             added={added}
             onAdd={addNeed}
             onNext={() => setStep("authority")}
-            onBack={() => setStep("where")}
+            onBack={() => setStep(skipsCommunityChoice() ? "you" : "where")}
             busy={busy}
             error={error}
           />

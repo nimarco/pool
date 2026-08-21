@@ -87,6 +87,17 @@ class AgentBounds:
     #: One pool per declaration event. Members should hear from Pool rarely (§1).
     max_strategy_pool_creations: int = 1
 
+    #: Caps on the clarification surface. Choosing which questions are worth a person's
+    #: attention is a tiny decision and has to stay one: a plan is written once, from one
+    #: listing, and a plan that asks everything the family permits is a settings form
+    #: with a model call attached.
+    max_clarification_listings: int = 1
+    max_clarification_plans: int = 1
+    #: How many questions one plan may name. Mirrors
+    #: ``domain.models.MAX_CLARIFICATION_QUESTIONS``, which the server validates against;
+    #: this is the number the instruction tells the model, so the two must agree.
+    max_clarification_questions: int = 3
+
     @classmethod
     def from_env(cls) -> AgentBounds:
         return cls(
@@ -97,6 +108,9 @@ class AgentBounds:
             max_strategy_listings=_int_env("MAX_STRATEGY_LISTINGS", 1),
             max_strategy_evaluations=_int_env("MAX_STRATEGY_EVALUATIONS", 3),
             max_strategy_pool_creations=_int_env("MAX_STRATEGY_POOL_CREATIONS", 1),
+            max_clarification_listings=_int_env("MAX_CLARIFICATION_LISTINGS", 1),
+            max_clarification_plans=_int_env("MAX_CLARIFICATION_PLANS", 1),
+            max_clarification_questions=_int_env("MAX_CLARIFICATION_QUESTIONS", 3),
         )
 
 

@@ -363,6 +363,12 @@ ALLOWED_POST = frozenset(
 #:   full API, but the product answers host offers through the decision inbox like every
 #:   other question Pool asks, so exposing a second path here would widen the surface
 #:   without adding a capability.
+#: The clarification endpoint is a POST because it can, once per product per world, cost
+#: a bounded model call — so it is rationed by the same per-session action quota every
+#: other spending door is, and it plans only for the caller's own session workspace and
+#: their own household. A guessed product id buys at most one plan for a product that
+#: session selected; it cannot reach another workspace, another member, or a second run
+#: for the same product in an unchanged world.
 ALLOWED_POST_PATTERNS = tuple(
     re.compile(p)
     for p in (
@@ -375,6 +381,7 @@ ALLOWED_POST_PATTERNS = tuple(
         rf"^/api/pools/{_ID}/host-offer/{_ID}$",
         rf"^/api/pools/{_ID}/open-distribution$",
         rf"^/api/pools/{_ID}/withdraw/{_ID}$",
+        rf"^/api/products/{_ID}/clarification$",
     )
 )
 

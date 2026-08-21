@@ -778,6 +778,16 @@ class NeedDeclaration:
     attribute_policy: AttributeConstraint | None = None
     max_unit_price_cents: int = 0  # 0 = no explicit cap
     active: bool = True
+    #: How many times a member has materially changed this declaration. Not a version
+    #: number for optimistic locking and not an audit trail — it exists so that going
+    #: back to something you said before is a *new* thing to have said. Coordination is
+    #: keyed on the content of a declaration (``services/events.declaration_digest``),
+    #: and without this a member who narrows their rules and then widens them again
+    #: lands on the digest of the first version, whose coordination already ran and
+    #: whose outcome no longer describes a world they were withdrawn from in between.
+    #: ``amend_need`` moves it only when the content actually changed, so re-saving an
+    #: unchanged form still costs nothing.
+    revision: int = 0
 
     @property
     def accept_substitutes(self) -> bool:
@@ -855,6 +865,10 @@ class NeedDeclaration:
             ),
             max_unit_price_cents=int(d.get("max_unit_price_cents", 0)),
             active=bool(d.get("active", True)),
+            # Absent on every row written before revisions existed. Zero is the right
+            # reading: those declarations have been amended zero times *as far as this
+            # field is concerned*, and the first material amendment moves them to one.
+            revision=int(d.get("revision", 0)),
         )
 
 
@@ -1169,6 +1183,12 @@ class Membership:
     final_offer_at: str = ""
     payment_id: str = ""
     is_exact_product: bool = True
+    #: Set only when *Pool* took this member out of the pool because their own amended
+    #: rules stopped permitting it — it holds the compatibility reason code. Empty when a
+    #: person left of their own accord, and the difference is load-bearing: widening your
+    #: preferences again may undo something Pool did to you, and must never undo
+    #: something you did yourself. Somebody who leaves an order stays gone.
+    withdrawn_reason: str = ""
 
     @property
     def key(self) -> str:
@@ -1207,6 +1227,9 @@ class Membership:
             final_offer_at=d.get("final_offer_at", ""),
             payment_id=d.get("payment_id", ""),
             is_exact_product=bool(d.get("is_exact_product", True)),
+            # Absent on rows written before reconciliation existed. Empty is the safe
+            # reading: nobody is re-admitted to a pool on the strength of a missing key.
+            withdrawn_reason=d.get("withdrawn_reason", ""),
         )
 
 
@@ -2151,5 +2174,72 @@ class CoordinationEvent:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> CoordinationEvent:
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in known})
+
+
+#: How many targeted questions one plan may contain. Small on purpose: the point of
+#: planning is to ask the *fewest* things that change what Pool can do for somebody, and
+#: a plan that asks everything the family permits is a settings form with extra steps.
+MAX_CLARIFICATION_QUESTIONS = 3
+
+
+class ClarificationPlanStatus(str, Enum):
+    ACTIVE = "active"
+    #: The world it was planned against moved. Kept rather than deleted, because "what
+    #: did Pool decide was worth asking, and when" is audit material.
+    SUPERSEDED = "superseded"
+
+
+@dataclass
+class ClarificationPlan:
+    """Which approved questions Pool decided were worth asking about one product.
+
+    **Not compatibility authority.** A plan records a *decision about attention* — which
+    of the finitely many approved questions (``data/product_facts.QUESTIONS``) would
+    materially clarify what this member will accept. What an answer then *means* is the
+    deterministic mapper's, and what a member currently accepts is their stored
+    declaration's. A plan that named a question nobody answered changes nothing.
+
+    That separation is why a model may write this row and may not write a policy. The
+    only field it supplies is ``question_ids``, every entry of which must already exist
+    in the approved set, belong to this family and schema, and be applicable to this
+    product's verified facts — checked on write.
+
+    **Identity is the fingerprint.** ``id`` is a digest of the household, the product and
+    the world the plan was made against, so reopening a form for the same product in an
+    unchanged world finds the same plan and buys no model call. A change that would make
+    a different question worth asking produces a different id, and the old row is
+    superseded rather than rewritten.
+    """
+
+    id: str
+    community_id: str
+    household_id: str
+    product_id: str
+    family: str
+    schema_version: int
+    question_definition_version: int
+    input_fingerprint: str
+    #: Ordered. The order is the model's, bounded by
+    #: :data:`MAX_CLARIFICATION_QUESTIONS` and validated against the approved set.
+    question_ids: list[str] = field(default_factory=list)
+    #: Every approved question that was *available* when the plan was made, so a reader
+    #: can see what was passed over as well as what was chosen.
+    candidate_question_ids: list[str] = field(default_factory=list)
+    #: The bounded run that chose them. Empty when no run was needed.
+    run_id: str = ""
+    status: str = ClarificationPlanStatus.ACTIVE.value
+    created_at: str = field(default_factory=lambda: iso(utcnow()))
+
+    @property
+    def is_active(self) -> bool:
+        return self.status == ClarificationPlanStatus.ACTIVE.value
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ClarificationPlan:
         known = {f.name for f in fields(cls)}
         return cls(**{k: v for k, v in d.items() if k in known})

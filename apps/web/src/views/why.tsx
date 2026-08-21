@@ -289,6 +289,57 @@ function Proof({ data }: { data: NeedCoordination }) {
         </p>
       </div>
 
+      {data.clarification ? (
+        <div className="stack-sm">
+          <h3 className="small">What Pool decided to ask, before any of this</h3>
+          <div className="facts">
+            <Fact label="Plan" value={<code>{data.clarification.plan_id}</code>} />
+            <Fact label="Run" value={<code>{data.clarification.run_id || "none"}</code>} />
+            <Fact
+              label="Model"
+              value={
+                data.clarification.model_id
+                  ? `${data.clarification.model_provider} · ${data.clarification.model_id}`
+                  : "not run in this workspace"
+              }
+            />
+            <Fact
+              label="Tokens"
+              value={`${data.clarification.input_tokens} in · ${data.clarification.output_tokens} out`}
+            />
+          </div>
+          <ul className="proof-evals">
+            <li>
+              <strong>Approved:</strong>{" "}
+              {data.clarification.offered.map((q) => (
+                <code key={q}>{q} </code>
+              ))}
+            </li>
+            <li>
+              <strong>Asked, in this order:</strong>{" "}
+              {data.clarification.asked.length === 0 ? (
+                <span className="muted">nothing</span>
+              ) : (
+                data.clarification.asked.map((q) => (
+                  <code key={q}>{q} </code>
+                ))
+              )}
+            </li>
+          </ul>
+          <p className="small muted">
+            A separate, earlier run, with its own budget. The model chose which of the
+            approved questions were worth asking and in what order — a subset of the list
+            above it, and it cannot write one that is not on it. What each answer{" "}
+            <em>means</em> was decided by nothing in this table: every answer maps to a
+            fixed rule in <code>services/needs.policy_from_answers</code>, curated under{" "}
+            <code>
+              {data.clarification.family} v{data.clarification.schema_version}
+            </code>
+            .
+          </p>
+        </div>
+      ) : null}
+
       <div className="stack-sm">
         <h3 className="small">Deterministic verdicts</h3>
         <ul className="proof-evals">

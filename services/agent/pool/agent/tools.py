@@ -37,6 +37,7 @@ from ..domain.models import (
 )
 from ..domain.money import bps_to_pct_str, format_cents
 from ..domain.viability import ViabilityStage
+from ..services import clarification as clarify_svc
 from ..services import coordination as coord
 from ..services import discovery, hosting
 from ..services import fulfillment as fulfil
@@ -90,6 +91,12 @@ class ToolContext:
     #: Options actually evaluated, in order, so a repeat is visible as a repeat.
     evaluated_strategy_ids: list[str] = field(default_factory=list)
     strategy_pool_creations: int = 0
+    #: Approved question ids this run was offered, and how much of its tiny budget it has
+    #: spent. An id the listing did not offer cannot be planned, for the same reason a
+    #: strategy id from another run cannot be costed.
+    offered_question_ids: list[str] = field(default_factory=list)
+    clarification_listings: int = 0
+    clarification_plans_written: int = 0
 
     @property
     def repo(self):
@@ -164,6 +171,15 @@ MUTATING_TOOL_KINDS = frozenset({"record", "act"})
 #: merged so a run never holds two doors to the same mutation — only
 #: ``create_candidate_pool_from_strategy`` is guarded by ``ensure_actionable``, and a run
 #: that could also reach ``create_candidate_pool`` would have an unguarded way past it.
+#: The clarification surface: two tools, one of which writes a single row of Pool's own
+#: working state. Offered *only* to a clarification objective, and never alongside the
+#: strategy tools — deciding what to ask somebody and deciding what to buy for them are
+#: different authorities, and one instruction should not be able to reach both.
+CLARIFICATION_TOOL_SURFACE: tuple[tuple[str, str], ...] = (
+    ("list_preference_question_candidates", "read"),
+    ("set_preference_question_plan", "record"),
+)
+
 STRATEGY_TOOL_SURFACE: tuple[tuple[str, str], ...] = (
     ("list_cohort_strategies", "record"),
     ("evaluate_cohort_strategy", "record"),
@@ -763,6 +779,126 @@ def build_tools(ctx: ToolContext) -> list:
             if result.pool_id not in ctx.advanced_pool_ids:
                 ctx.advanced_pool_ids.append(result.pool_id)
         return _json(full)
+
+    # -------------------------------------------------- targeted clarification
+    #
+    # Two tools and nothing else. The run reads counts about one product and returns an
+    # ordered list of ids from a fixed approved set; it holds no tool that could cost an
+    # option, form a pool, or write a compatibility policy.
+
+    @tool
+    def list_preference_question_candidates() -> str:
+        """List the approved questions this product can be asked, and what each answer reaches.
+
+        Takes no arguments: the product is the one this run was given, and there is no
+        field in which to ask about another member's, another Community's, or one nobody
+        selected.
+
+        Each candidate names one dimension, this product's own confirmed value, and — for
+        each possible answer — how many products Pool can actually source and how much
+        standing demand nearby that answer would let this member combine with.
+
+        **Nothing here is ranked, scored, or recommended.** Two counts per answer and no
+        verdict: "narrowing this excludes three of the six things Pool can buy" and
+        "narrowing this excludes one" are different situations, and which of them is worth
+        a person's attention is the judgement you are being asked for.
+
+        A question is absent when this product carries no confirmed value for it. Asking
+        somebody to insist on something Pool cannot establish would build a rule that
+        refuses everything.
+        """
+        if ctx.clarification_listings >= ctx.bounds.max_clarification_listings:
+            return _json(
+                {
+                    "listed": False,
+                    "reason": "already listed this run; nothing a read could change",
+                    "questions": [],
+                }
+            )
+        ctx.clarification_listings += 1
+        product_id = getattr(ctx.objective, "clarify_product_id", "") or ""
+        offered = clarify_svc.candidates(
+            ctx.pool, ctx.community_id, product_id, ctx.objective.household_id
+        )
+        for candidate in offered:
+            if candidate.question_id not in ctx.offered_question_ids:
+                ctx.offered_question_ids.append(candidate.question_id)
+        ctx.record_full(
+            "list_preference_question_candidates",
+            {"product_id": product_id},
+            {"questions": [c.to_dict() for c in offered]},
+        )
+        return _json(
+            {
+                "questions": [c.to_dict() for c in offered],
+                "count": len(offered),
+                "max_questions_in_a_plan": ctx.bounds.max_clarification_questions,
+            }
+        )
+
+    @tool
+    def set_preference_question_plan(question_ids: list[str]) -> str:
+        """Record which approved questions to ask this member, in order.
+
+        You supply ids and an order, and nothing else. There is no field for question
+        text, for an answer, for what an answer means, or for a product fact — a plan is a
+        decision about *attention*, and every id in it must already exist in the approved
+        set for this product's family.
+
+        Ask fewer where fewer will do. A plan naming everything the schema permits is a
+        settings form, which is the thing this exists instead of.
+
+        Args:
+            question_ids: Approved question ids, most consequential first.
+        """
+        if ctx.clarification_plans_written >= ctx.bounds.max_clarification_plans:
+            return _json(
+                {
+                    "planned": False,
+                    "reason": "a plan has already been recorded for this product",
+                }
+            )
+        unknown = [q for q in question_ids if q not in ctx.offered_question_ids]
+        if unknown:
+            return _json(
+                {
+                    "planned": False,
+                    "reason": "those questions were not offered by this run's own listing",
+                    "unknown": unknown,
+                }
+            )
+
+        ctx.clarification_plans_written += 1
+        try:
+            plan = clarify_svc.record_plan(
+                ctx.pool,
+                community_id=ctx.community_id,
+                household_id=getattr(ctx.objective, "household_id", "") or "",
+                product_id=getattr(ctx.objective, "clarify_product_id", "") or "",
+                question_ids=list(question_ids),
+                run_id=ctx.pool.run_id,
+            )
+        except clarify_svc.ClarificationError as exc:
+            return _json({"planned": False, "reason": str(exc)})
+
+        ctx.outcome = RunOutcome.NO_ACTION
+        result = {
+            "planned": True,
+            "plan_id": plan.id,
+            "question_ids": plan.question_ids,
+            "offered": plan.candidate_question_ids,
+        }
+        ctx.record_full(
+            "set_preference_question_plan", {"question_ids": list(question_ids)}, result
+        )
+        return _json(result)
+
+    if getattr(ctx.objective, "plans_clarification", False):
+        return [
+            list_preference_question_candidates,
+            set_preference_question_plan,
+            record_no_action,
+        ]
 
     if getattr(ctx.objective, "searches_strategies", False):
         return [

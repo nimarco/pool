@@ -33,6 +33,7 @@ from ..domain.models import (
     ActivityEvent,
     AgentRun,
     Announcement,
+    ClarificationPlan,
     CohortStrategy,
     Community,
     CommunityMembership,
@@ -91,6 +92,7 @@ class Store:
     threads: dict[str, MessageThread] = field(default_factory=dict)
     messages: dict[str, Message] = field(default_factory=dict)
     issues: dict[str, IssueCase] = field(default_factory=dict)
+    clarification_plans: dict[str, ClarificationPlan] = field(default_factory=dict)
     coordination_events: dict[str, CoordinationEvent] = field(default_factory=dict)
     cohort_strategies: dict[str, CohortStrategy] = field(default_factory=dict)
     strategy_evaluations: dict[str, StrategyEvaluation] = field(default_factory=dict)
@@ -129,6 +131,9 @@ class Repository(Protocol):
     def list_needs(self, ws: str) -> list[NeedDeclaration]: ...
     def get_need(self, ws: str, nid: str) -> NeedDeclaration | None: ...
     def put_need(self, ws: str, n: NeedDeclaration) -> None: ...
+    def list_clarification_plans(self, ws: str) -> list[ClarificationPlan]: ...
+    def get_clarification_plan(self, ws: str, pid: str) -> ClarificationPlan | None: ...
+    def put_clarification_plan(self, ws: str, p: ClarificationPlan) -> None: ...
     def list_coordination_events(self, ws: str) -> list[CoordinationEvent]: ...
     def get_coordination_event(self, ws: str, eid: str) -> CoordinationEvent | None: ...
     def put_coordination_event(self, ws: str, e: CoordinationEvent) -> None: ...
@@ -285,6 +290,17 @@ class InMemoryRepository:
     def list_needs(self, ws): return sorted(self.store(ws).needs.values(), key=lambda n: n.id)
     def get_need(self, ws, nid): return self.store(ws).needs.get(nid)
     def put_need(self, ws, n): self.store(ws).needs[n.id] = n
+
+    def list_clarification_plans(self, ws):
+        return sorted(
+            self.store(ws).clarification_plans.values(), key=lambda p: (p.created_at, p.id)
+        )
+
+    def get_clarification_plan(self, ws, pid):
+        return self.store(ws).clarification_plans.get(pid)
+
+    def put_clarification_plan(self, ws, p):
+        self.store(ws).clarification_plans[p.id] = p
 
     def list_coordination_events(self, ws):
         # Oldest first: the order work was owed in is the order a dispatcher takes it.
@@ -524,6 +540,7 @@ _TYPES: dict[str, Any] = {
     "ACTIVITY": ActivityEvent,
     "RUN": AgentRun,
     "RUN_EVALUATION": RunEvaluation,
+    "CLARIFICATION_PLAN": ClarificationPlan,
     "COORDINATION_EVENT": CoordinationEvent,
     "COHORT_STRATEGY": CohortStrategy,
     "STRATEGY_EVALUATION": StrategyEvaluation,
@@ -713,6 +730,18 @@ class DynamoDBRepository:
     def list_needs(self, ws): return self._query(ws, "NEED", NeedDeclaration)
     def get_need(self, ws, nid): return self._get(ws, "NEED", nid, NeedDeclaration)
     def put_need(self, ws, n): self._put(ws, "NEED", n.id, n)
+
+    def list_clarification_plans(self, ws):
+        return sorted(
+            self._query(ws, "CLARIFICATION_PLAN", ClarificationPlan),
+            key=lambda p: (p.created_at, p.id),
+        )
+
+    def get_clarification_plan(self, ws, pid):
+        return self._get(ws, "CLARIFICATION_PLAN", pid, ClarificationPlan)
+
+    def put_clarification_plan(self, ws, p):
+        self._put(ws, "CLARIFICATION_PLAN", p.id, p)
 
     def list_coordination_events(self, ws):
         return sorted(

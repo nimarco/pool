@@ -65,7 +65,7 @@ from ..domain.models import (
 from ..domain.money import bps_to_pct_str, format_cents
 from ..domain.policy import JoinVerdictKind, PolicyVerdict, evaluate_smart_join
 from ..domain.state import assert_transition, is_open_to_joining
-from ..domain.substitution import evaluate_compatibility
+from ..domain.substitution import CompatibilityVerdict, evaluate_compatibility
 from ..domain.timing import build_timing, next_pool_day
 from ..domain.viability import (
     ViabilityInputs,
@@ -1452,13 +1452,17 @@ def respond_to_decision(
 
 
 def withdraw_participant(
-    *, ctx: PoolContext, pool_id: str, household_id: str
+    *, ctx: PoolContext, pool_id: str, household_id: str, reason: str = ""
 ) -> dict[str, Any]:
     """A buyer leaves. The boundary is the lock, and it is explicit (§59).
 
     Before authorisation: free. Authorised but not locked: the authorisation is
     released and the pool tries to recover. Locked or later: refused — the money is
     captured and the supplier order is committed.
+
+    ``reason`` is set only when Pool is the one leaving on the member's behalf, and it
+    records why. A member who clicks *leave* supplies nothing, which is what keeps the
+    two apart later: only the first kind is a thing Pool may undo.
     """
     from . import payments as payment_service
 
@@ -1485,6 +1489,7 @@ def withdraw_participant(
         ).ok
 
     membership.state = ParticipationState.WITHDRAWN
+    membership.withdrawn_reason = reason
     ctx.repo.put_membership(ctx.ws, membership)
 
     ctx.log(
@@ -2105,4 +2110,151 @@ def impact_metrics(ctx: PoolContext) -> dict[str, Any]:
             1 for m in committed if m.path == AutonomyPath.SMART_JOIN
         ),
         "is_demo_data": True,
+    }
+
+
+def reconcile_after_declaration_change(
+    *, ctx: PoolContext, need: NeedDeclaration
+) -> list[dict[str, Any]]:
+    """Square a member's live participation with what their *amended* declaration says.
+
+    Both directions, because a preference edit is not a one-way door: an order the new
+    rules forbid is left, and an order Pool itself took them out of is returned to them
+    when the rules permit it again.
+
+    The problem this solves is the one a recurring-preference product has and a checkout
+    does not. A member says "any whole-bean caffeinated coffee, medium or dark", Pool
+    provisionally puts them in a dark-roast order, and they change their mind to "only the
+    Kestrel medium". The order is still perfectly good for their neighbours — and it is no
+    longer a thing this member has agreed to. Leaving it on their screen would be Pool
+    showing somebody an order their own stated rules forbid.
+
+    So the test is exactly the compatibility test, re-run against the *new* declaration
+    with the same authoritative facts (§21). Nothing about "did the policy get narrower"
+    is inferred; a policy that changed in a way the pool's product still satisfies leaves
+    the membership alone, which is what makes broadening free.
+
+    **The commitment boundary is not this function's to decide.**
+    :func:`withdraw_participant` already owns it: free before authorisation, releases the
+    hold between authorisation and lock, and refuses outright once the money is captured
+    and the supplier order is placed. A recurring preference edit is not a cancellation
+    policy, and inventing one here would be inventing a refund rule (§59). A pool past
+    that line is left exactly as it is and reported back so a caller can say so.
+
+    **Coming back is narrower than leaving.** Re-entry is only ever offered for a
+    withdrawal *Pool* performed for this declaration — never for an order the member
+    chose to leave, which stays left — and it always returns them to provisional,
+    pending their approval, whatever state they held before. A released authorisation is
+    not silently re-taken, and no card is touched by editing a preference.
+
+    Other members are never touched. Their demand is theirs, and a pool that can still
+    sustain itself does; the ordinary shortfall machinery decides that, not this.
+    """
+    out: list[dict[str, Any]] = []
+    products = {p.id: p for p in ctx.repo.list_products(ctx.ws)}
+    declared = products.get(need.product_id)
+    if declared is None:
+        return out
+
+    for pool in ctx.repo.list_pools(ctx.ws):
+        membership = ctx.repo.get_membership(ctx.ws, pool.id, need.household_id)
+        if membership is None:
+            continue
+        if membership.need_id != need.id:
+            # Somebody else's declaration put them in that pool. Amending this one says
+            # nothing about it.
+            continue
+        target = products.get(pool.product_id)
+        if target is None:
+            continue
+        verdict = evaluate_compatibility(
+            target=target, candidate=declared, need=need, facts=ctx.product_facts
+        )
+
+        if membership.state in LEFT_PARTICIPATION_STATES:
+            restored = _restore_reconciled_participant(
+                ctx=ctx, pool=pool, need=need, membership=membership, verdict=verdict
+            )
+            if restored is not None:
+                out.append(restored)
+            continue
+
+        if verdict.compatible:
+            continue
+
+        try:
+            withdraw_participant(
+                ctx=ctx,
+                pool_id=pool.id,
+                household_id=need.household_id,
+                reason=verdict.code.value,
+            )
+            out.append(
+                {
+                    "pool_id": pool.id,
+                    "withdrawn": True,
+                    "reason_code": verdict.code.value,
+                }
+            )
+        except CoordinationError as exc:
+            # Past the commitment boundary. Recorded rather than forced: the money is
+            # captured and the order is placed, and a standing preference does not undo a
+            # transaction that already happened.
+            out.append(
+                {
+                    "pool_id": pool.id,
+                    "withdrawn": False,
+                    "reason_code": verdict.code.value,
+                    "refused": str(exc),
+                }
+            )
+    if out:
+        ctx.log(
+            "declaration_reconciled",
+            "A changed preference was squared with the orders this member was in",
+            {
+                "need_id": need.id,
+                "pools": [row["pool_id"] for row in out],
+                "withdrawn": sum(1 for row in out if row.get("withdrawn")),
+                "restored": sum(1 for row in out if row.get("restored")),
+            },
+            household_id=need.household_id,
+        )
+    return out
+
+
+def _restore_reconciled_participant(
+    *,
+    ctx: PoolContext,
+    pool: Pool,
+    need: NeedDeclaration,
+    membership: Membership,
+    verdict: CompatibilityVerdict,
+) -> dict[str, Any] | None:
+    """Put a member back into an order Pool took them out of. Returns ``None`` if not.
+
+    Four things all have to hold, and each of them is somebody's decision rather than an
+    implementation detail: Pool has to have been the one who withdrew them
+    (``withdrawn_reason``), the declaration has to be live, the new rules have to permit
+    the pool's product, and the pool has to still be open to members. Any of them
+    missing means the member simply stays out, silently — an unavailable undo is not an
+    error, and the screen that shows them the world after the edit is the answer.
+    """
+    if not membership.withdrawn_reason or not need.active:
+        return None
+    if not verdict.compatible or not is_open_to_joining(pool.status):
+        return None
+
+    restored = join_pool_provisionally(
+        ctx=ctx, pool_id=pool.id, household_id=need.household_id, need_id=need.id
+    )
+    # The compatibility test just answered this authoritatively, and the fresh membership
+    # assumed the optimistic default. A substitute has to keep saying it is one.
+    restored.is_exact_product = verdict.is_exact
+    ctx.repo.put_membership(ctx.ws, restored)
+    return {
+        "pool_id": pool.id,
+        "restored": True,
+        "reason_code": membership.withdrawn_reason,
+        "state": restored.state.value,
     }

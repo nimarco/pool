@@ -52,6 +52,13 @@ from ..domain.models import Product, ProductSource
 #: The curated family this module is authoritative for. Matches ``Product.substitute_group``.
 FAMILY = "roast_coffee"
 
+#: What to call this family when speaking to a member. The slug above is an identifier
+#: and reads like one; a screen that asked "only this exact roast_coffee" would be
+#: showing somebody the database. Curated here beside the questions rather than derived
+#: in a browser, for the same reason every other word a member reads is: the wording of
+#: a consent question is not something to generate at runtime.
+FAMILY_NOUN = "coffee"
+
 #: Bumped whenever the meaning of an attribute changes, not merely when a product is
 #: added. A stored member policy records the version it was written against and is
 #: refused rather than reinterpreted when the two disagree.
@@ -278,9 +285,22 @@ def install(repo, workspace: str) -> dict[str, object]:
 # and `services/needs.py` maps an answer back onto the typed policy deterministically.
 
 
+#: Bumped when the *approved set of questions or their meaning* changes — not when a
+#: label is reworded. A stored clarification plan records the version it was planned
+#: against and is regenerated rather than reinterpreted when the two disagree, for the
+#: same reason a member policy is (``domain/attributes``).
+QUESTION_DEFINITION_VERSION = 1
+
+
 @dataclass(frozen=True)
 class AttributeQuestion:
     """One thing a member can be asked about a product, in their own words.
+
+    **This is the ceiling, not a suggestion.** A later stage may choose *which* of these
+    to ask and in what order; it may not add one, reword one, or change what an answer
+    means. The id is stable and family-scoped so a plan can name a question without
+    carrying its wording, and so renaming a prompt cannot silently repoint a stored plan
+    at a different question.
 
     ``kind`` is what the control has to be, not what it looks like:
 
@@ -297,6 +317,8 @@ class AttributeQuestion:
     would be asking them to guess.
     """
 
+    #: Stable, family-scoped, and the only thing a plan stores.
+    id: str
     attribute: str
     kind: str
     #: The question, as a person reads it. ``{value}`` is substituted with the label of
@@ -319,17 +341,20 @@ VALUE_LABELS: dict[str, dict[str, str]] = {
 
 QUESTIONS: dict[str, AttributeQuestion] = {
     "form": AttributeQuestion(
+        id=f"{FAMILY}.form",
         attribute="form",
         kind=QUESTION_KIND_KEEP,
         prompt="It has to be {value}",
         hint="Ground coffee and whole beans are not the same thing to most people.",
     ),
     "caffeine": AttributeQuestion(
+        id=f"{FAMILY}.caffeine",
         attribute="caffeine",
         kind=QUESTION_KIND_KEEP,
         prompt="It has to be {value}",
     ),
     "roast": AttributeQuestion(
+        id=f"{FAMILY}.roast",
         attribute="roast",
         kind=QUESTION_KIND_CHOOSE,
         prompt="Roasts that work for you",
@@ -337,10 +362,28 @@ QUESTIONS: dict[str, AttributeQuestion] = {
     ),
 }
 
+#: By id, so a plan can be validated against the approved set without knowing which
+#: attribute an id belongs to.
+QUESTIONS_BY_ID: dict[str, AttributeQuestion] = {q.id: q for q in QUESTIONS.values()}
+
 
 def question_for(attribute: str) -> AttributeQuestion | None:
     return QUESTIONS.get(attribute)
 
 
+def question_by_id(question_id: str) -> AttributeQuestion | None:
+    """The approved definition for one id, or ``None``. There is no other way in."""
+    return QUESTIONS_BY_ID.get(question_id)
+
+
 def label_for(attribute: str, value: str) -> str:
     return VALUE_LABELS.get(attribute, {}).get(value, value)
+
+
+#: Curated consumer nouns, one per family. A family with no entry has no noun rather than
+#: a guessed one — the screens fall back to "product", which is true of everything.
+FAMILY_NOUNS: dict[str, str] = {FAMILY: FAMILY_NOUN}
+
+
+def family_noun(family: str) -> str:
+    return FAMILY_NOUNS.get(family, "")

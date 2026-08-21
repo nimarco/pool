@@ -45,7 +45,7 @@ from ..adapters.repository import Repository, build_repository
 from ..adapters.routing import build_routing
 from ..adapters.sourcing import SyntheticCatalogProvider
 from ..agent.coordinator import PoolCoordinator
-from ..agent.tools import TOOL_SURFACE
+from ..agent.tools import STRATEGY_TOOL_SURFACE, TOOL_SURFACE
 from ..config import get_settings
 from ..data import catalog
 from ..data.seed import COMMUNITY_ID, seed
@@ -81,6 +81,7 @@ from ..services import (
     supplier_import,
 )
 from ..services import coordination as coord
+from ..services import events as events_service
 from ..services import needs as needs_service
 from ..services import payments as payment_service
 from ..services import supplier_updates as supplier_updates_svc
@@ -475,6 +476,13 @@ def health() -> dict[str, Any]:
         # `agent/tools.py` so the UI cannot show a tool list that has drifted from the
         # one Strands is actually given.
         "agent_tools": [{"name": name, "kind": kind} for name, kind in TOOL_SURFACE],
+        # The second surface, published separately because it is offered *instead of*
+        # the first and never alongside it (``objective.searches_strategies``). Two lists
+        # rather than one, because merging them would say a run holds fifteen tools when
+        # no run ever holds more than twelve.
+        "agent_strategy_tools": [
+            {"name": name, "kind": kind} for name, kind in STRATEGY_TOOL_SURFACE
+        ],
     }
 
 
@@ -1082,6 +1090,40 @@ def get_needs(workspace: str = Query("demo")) -> dict[str, Any]:
     }
 
 
+def _coordination_for(ctx: PoolContext, ws: str, need) -> dict[str, Any] | None:
+    """Record that this declaration owes coordination, and dispatch it if configured.
+
+    Two writes, in this order and never the other: the declaration is already stored by
+    the time this runs, so a crash here leaves a member's input intact and coordination
+    merely not yet owed. The reverse ordering would leave an event pointing at a
+    declaration that does not exist, which is the failure worth designing against
+    (``services/events.py``).
+
+    Dispatch is off by default. A declaration always produces a durable event; whether a
+    model call happens in the same request is a deployment decision, and making it the
+    default would turn seeding a workspace into a bill (AGENTS.md §3.3).
+    """
+    event = events_service.record_declaration_event(ctx, need, COMMUNITY_ID)
+    if event is None:
+        return None
+    if not _settings.auto_dispatch_declaration_events:
+        return events_service.view(event)
+
+    coordinator = PoolCoordinator(
+        repo(), settings=_settings, routing=_routing, payments=_payments,
+        purchaser=_purchaser, sourcing=_sourcing,
+    )
+    with _public.workspace_mutation(ws, public_demo.WORKSPACE_BUSY):
+        dispatched = events_service.dispatch(
+            ctx,
+            event,
+            run=lambda e: coordinator.run(
+                ws, trigger="need_declared", community_id=COMMUNITY_ID, event_id=e.id
+            ),
+        )
+    return events_service.view(dispatched.event)
+
+
 @app.post("/api/needs")
 def create_need(body: NeedRequest, workspace: str = Query("demo")) -> dict[str, Any]:
     """Declare a standing need. **The primary user action of the product.**
@@ -1109,7 +1151,7 @@ def create_need(body: NeedRequest, workspace: str = Query("demo")) -> dict[str, 
         )
     except needs_service.NeedError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return needs_service.need_view(ctx, need)
+    return {**needs_service.need_view(ctx, need), "coordination": _coordination_for(ctx, ws, need)}
 
 
 @app.post("/api/needs/{need_id}")
@@ -1131,7 +1173,7 @@ def update_need(
         )
     except needs_service.NeedError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return needs_service.need_view(ctx, need)
+    return {**needs_service.need_view(ctx, need), "coordination": _coordination_for(ctx, ws, need)}
 
 
 @app.get("/api/members/{household_id}")
@@ -1373,6 +1415,72 @@ def trigger_run(
         "input_tokens": run.input_tokens,
         "output_tokens": run.output_tokens,
         "notes": run.notes,
+    }
+
+
+@app.get("/api/events")
+def list_coordination_events(workspace: str = Query("demo")) -> dict[str, Any]:
+    """Coordination work this workspace owes, is doing, or has finished.
+
+    Read-only, and it starts nothing. This is the server-owned state a surface needs to
+    say truthfully what Pool is doing about a declaration — waiting to be looked at,
+    being looked at, an order formed, looked at and nothing worth doing, stopped by a
+    safety bound, or failed. Six real situations, each read from a stored row rather
+    than animated (AGENTS.md §8).
+    """
+    ws = check_workspace(workspace)
+    ensure_seeded(ws)
+    events = repo().list_coordination_events(ws)
+    return {
+        "events": [events_service.view(e) for e in events],
+        "pending": sum(1 for e in events if e.status == "pending"),
+        "count": len(events),
+        # Whether writing a declaration also runs its coordination in the same request.
+        # Stated rather than inferred: a pending event means something different when
+        # nothing will ever pick it up on its own.
+        "auto_dispatch": _settings.auto_dispatch_declaration_events,
+    }
+
+
+@app.post("/api/events/{event_id}/dispatch")
+def dispatch_coordination_event(
+    event_id: str, workspace: str = Query("demo")
+) -> dict[str, Any]:
+    """Run the bounded coordinator for one pending coordination event.
+
+    One event, one run. Claiming is a state transition, so a second request for an event
+    already running or already finished does nothing and says so — which is the same
+    answer a duplicate form submission gets, for the same reason.
+
+    Nothing recurring is started, and no schedule exists: an event is dispatched because
+    something asked for it (AGENTS.md §3.2).
+    """
+    ws = check_workspace(workspace)
+    _public.spend_action(ws)
+    ensure_seeded(ws)
+    ctx = ctx_for(ws)
+    event = repo().get_coordination_event(ws, event_id)
+    if event is None:
+        raise HTTPException(404, "no such coordination event")
+
+    coordinator = PoolCoordinator(
+        repo(), settings=_settings, routing=_routing, payments=_payments,
+        purchaser=_purchaser, sourcing=_sourcing,
+    )
+    # The same lease every other run takes: two coordinators writing one partition is
+    # the duplicate-pool race, and an event dispatch is a run like any other.
+    with _public.workspace_mutation(ws, public_demo.WORKSPACE_BUSY):
+        dispatched = events_service.dispatch(
+            ctx,
+            event,
+            run=lambda e: coordinator.run(
+                ws, trigger="need_declared", community_id=COMMUNITY_ID, event_id=e.id
+            ),
+        )
+    return {
+        **events_service.view(dispatched.event),
+        "ran": dispatched.ran,
+        "skipped_reason": dispatched.reason,
     }
 
 

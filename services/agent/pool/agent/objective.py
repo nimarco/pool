@@ -95,6 +95,15 @@ class RunObjective:
     kind: str = COMMUNITY
     household_id: str = ""
     needs: tuple[NeedObjective, ...] = ()
+    #: The coordination event that caused this run, when one did. A run reached from a
+    #: durable event is attributable to the thing that caused it; a run reached from a
+    #: button is attributable to the press.
+    event_id: str = ""
+    #: The single declaration a coordination event is about. Its presence is what selects
+    #: the **strategy-search** shape of the run rather than the latent-demand shape — see
+    #: :attr:`searches_strategies`. Empty for the button, the scan, and every path that
+    #: existed before declaration events did.
+    anchor_need_id: str = ""
     #: Declarations this member holds that the run did *not* take on, because the
     #: per-run cap was reached. Recorded so the report can say so instead of inventing a
     #: reason for their absence.
@@ -105,6 +114,22 @@ class RunObjective:
     @property
     def is_member(self) -> bool:
         return self.kind == MEMBER
+
+    @property
+    def searches_strategies(self) -> bool:
+        """Whether this run gets the cohort-strategy tools instead of latent demand.
+
+        One question, one shape. A declaration event asks "several people buy roughly
+        this — is there an order in it, and which one?", which is a search over bounded
+        options (``services/strategy.py``). The button and the pool-day scan ask "is
+        anything worth doing at all", which the latent-demand path has always answered.
+
+        A property of the *objective* rather than a setting, because the two surfaces
+        must not both be available: a run that could reach a pool through either
+        ``create_candidate_pool`` or ``create_candidate_pool_from_strategy`` has two doors
+        to one mutation, and only one of them is guarded by ``ensure_actionable``.
+        """
+        return bool(self.anchor_need_id)
 
     @property
     def product_ids(self) -> tuple[str, ...]:
@@ -122,6 +147,8 @@ class RunObjective:
             "needs": [n.to_dict() for n in self.needs],
             "deferred_need_ids": list(self.deferred_need_ids),
             "served_need_ids": list(self.served_need_ids),
+            "event_id": self.event_id,
+            "anchor_need_id": self.anchor_need_id,
         }
 
 
@@ -181,6 +208,56 @@ def build_member_objective(
     )
 
 
+def build_declaration_objective(
+    ctx: PoolContext, community_id: str, *, event_id: str, need_id: str
+) -> RunObjective:
+    """The bounded question one declaration event asks.
+
+    Exactly one declaration, because that is what changed. A member with fifteen standing
+    needs who edits one of them has not asked Pool to re-examine the other fourteen, and
+    a run that did would turn a form submission into fifteen costed searches
+    (AGENTS.md §3.3).
+
+    Read-only, and the declaration is resolved from stored state by id — a dispatcher
+    supplies the event, and the event was written by the same service that wrote the
+    declaration. A declaration that has since been retired, or belongs to another
+    Community, yields an objective with no needs, and the run records honest no-action
+    rather than coordinating something nobody is asking for any more.
+    """
+    need = ctx.repo.get_need(ctx.ws, need_id)
+    if need is None or not need.active or need.community_id != community_id:
+        return RunObjective(kind=MEMBER, event_id=event_id)
+
+    served = _served_need_ids(ctx, need.household_id)
+    if need.id in served:
+        # Already inside a live pool. Its answer is that pool, not another run.
+        return RunObjective(
+            kind=MEMBER,
+            household_id=need.household_id,
+            event_id=event_id,
+            served_need_ids=(need.id,),
+        )
+
+    product = ctx.repo.get_product(ctx.ws, need.product_id)
+    targets = tuple(coord.sourceable_targets_for_need(ctx, need)) or (need.product_id,)
+    return RunObjective(
+        kind=MEMBER,
+        household_id=need.household_id,
+        needs=(
+            NeedObjective(
+                need_id=need.id,
+                product_id=need.product_id,
+                product_name=product.name if product else need.product_id,
+                quantity=need.quantity,
+                unit=product.unit if product else "unit",
+                target_product_ids=targets,
+            ),
+        ),
+        event_id=event_id,
+        anchor_need_id=need.id,
+    )
+
+
 def for_trigger(ctx: PoolContext, community_id: str, trigger: str) -> RunObjective:
     """Derive this run's objective from its trigger and the workspace.
 
@@ -206,6 +283,33 @@ COMMUNITY_PROMPT = (
     "Run a background scan of this community. Find the most worthwhile bulk "
     "buying opportunity among unserved recurring needs and form a candidate "
     "pool if one is genuinely worth forming."
+)
+
+#: What a declaration event asks. The strategy surface answers it, so the instruction
+#: names those tools and says what the model is and is not deciding — the same split
+#: ``SYSTEM_PROMPT`` states, restated here because this run's shape is different from
+#: every other run's.
+DECLARATION_PROMPT = (
+    "A member of this community has just told Pool they buy {declared}. Several "
+    "neighbours buy roughly the same thing and disagree about which exact product, so "
+    "there may be more than one order Pool could assemble from that demand.\n"
+    "Call list_cohort_strategies once. Each option names an exact product, what its "
+    "curated attributes are, how much compatible demand its own rules admit, and the "
+    "lowest quantity a supplier will sell. None of them carries a verdict, because "
+    "nothing has been costed yet — clearing a supplier minimum is necessary and nowhere "
+    "near sufficient.\n"
+    "Choose the one you judge most worth investigating and call "
+    "evaluate_cohort_strategy on it. That returns the authoritative answer: whether the "
+    "demand survives timing and geography, whether it fills whole supplier cases, what "
+    "the group would actually pay, and whether it beats buying alone. Read it. If it "
+    "refuses, that verdict stands — decide whether another listed option is materially "
+    "worth investigating, and evaluate that one instead. You have at most "
+    "{max_evaluations} evaluations.\n"
+    "When an option is confirmed viable, call create_candidate_pool_from_strategy with "
+    "that option's id and the id of the evaluation that confirmed it. If every option "
+    "you investigated was refused, or none was worth investigating, call "
+    "record_no_action and say what the refusals were. Do not form an order Pool has not "
+    "verified."
 )
 
 NO_DECLARATIONS_PROMPT = (
@@ -249,6 +353,14 @@ def prompt_for(objective: RunObjective) -> str:
         return COMMUNITY_PROMPT
     if not objective.needs:
         return NO_DECLARATIONS_PROMPT
+    if objective.searches_strategies:
+        from ..config import get_settings
+
+        anchor = objective.needs[0]
+        return DECLARATION_PROMPT.format(
+            declared=f"{anchor.quantity} × {_prompt_safe(anchor.product_name)}",
+            max_evaluations=get_settings().bounds.max_strategy_evaluations,
+        )
     listed = "; ".join(
         f"{n.quantity} × {_prompt_safe(n.product_name)}" for n in objective.needs
     )

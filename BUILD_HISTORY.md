@@ -6408,3 +6408,192 @@ rather than a loop over `generate_strategies`.
 `services/agent/pool/services/strategy.py`, `data/roast_coffee_fixture.py`,
 `domain/models.py`, `domain/matching.py`, `adapters/repository.py`,
 `tests/test_cohort_strategy.py`, `tests/test_public_demo.py`.
+
+---
+
+### #0056 — [2026-08-21] — A declaration becomes a search, and the search can be wrong first
+`[ARCHITECTURE]` `[AGENT]` `[HITL]` `[ARTICLE-2]` `[ARTICLE-3]`
+
+**Goal / user intent**
+Phase 3 of the post-audit architecture, and the one where the strategy engine becomes
+agent behaviour. Target: an ordinary declaration produces one durable coordination event,
+one bounded Strands run, several genuinely plausible options, a model choice, an
+authoritative refusal, an adaptation, and one verified candidate order — or honest
+no-action. Explicitly not built: member UI, Judge Demo, `/verify`, dynamic questions, any
+deployment.
+
+**Starting state**
+Phase 2 left a real search space that nothing consumed. `list_cohort_strategies` and
+`evaluate_cohort_strategy` existed as services with no tool, no event, and no trigger;
+`ensure_actionable` was deliberately not composed with anything. Meanwhile the agent's
+own problem was thin: `list_latent_demand` returns a pre-ranked queue and
+`evaluate_pool_economics` answers it, so "investigate the top entry" was very nearly a
+complete policy.
+
+**Decision**
+
+*A coordination event is the seam.* `CoordinationEvent` records that work is owed;
+a dispatcher decides when it happens. Declaring and coordinating are different
+transactions with different failure modes, and running them as one statement gets both
+wrong — a declaration that fails because the agent was unavailable has lost the user's
+input, and a run triggered from a page render is a bill that grows with traffic.
+
+*Identity is the dedupe key.* The event id is a digest of the declaration plus its
+material content, so a duplicate submission, a reload, or an edit that changed nothing all
+resolve to the row that already exists. Dedupe is a primary-key lookup in both backends,
+not a scan. A change that actually alters what Pool would coordinate produces a different
+digest and therefore a different event.
+
+*One objective, one surface.* A declaration event gets the three strategy tools **instead
+of** latent demand — not alongside. `create_candidate_pool` is not guarded by
+`ensure_actionable` and the strategy creator is, so a run holding both would have an
+unguarded way past the guard.
+
+*The model supplies two identifiers and nothing else.* Not a buyer list, not a quantity,
+not a price, not a supplier term, not a product fact. There is no parameter in which to
+put one, and the tool schema is asserted by test.
+
+**Implementation** — implemented and tested; nothing deployed, no AWS call made.
+
+New: `services/events.py`, `CoordinationEvent`, three tools
+(`list_cohort_strategies`, `evaluate_cohort_strategy`,
+`create_candidate_pool_from_strategy`), `strategy.create_candidate_pool_from_strategy`,
+`objective.build_declaration_objective`, a declaration prompt, and a strategy branch in
+the offline planner. Changed: `AgentRun` gains `event_id`; `AgentBounds` gains three
+strategy budgets; the API records an event on both declaration write paths and gains
+`GET /api/events` and `POST /api/events/{id}/dispatch`.
+
+**The canonical run, executed.** A constrained coffee declaration (`whole bean,
+caffeinated, medium or dark`) produced event `cev_c96e61c6…`. Five model calls, four tool
+calls, zero tokens (offline provider):
+
+    list_cohort_strategies       -> 2 options, neither carrying a verdict
+    evaluate_cohort_strategy     -> Kestrel medium: not_cheaper, -$7.19 (-2.00%)
+    evaluate_cohort_strategy     -> Harbourstone dark: viable, +$36.42 (16.41%)
+    create_candidate_pool_from_strategy -> pool_9a7717aa59ff
+
+The pool holds 4 members, 12 units, 2 x 6 whole cases, 0 surplus, every membership
+`provisional`, zero payment rows, and the declaration that asked the question inside it.
+Lineage is stored in both directions: `run.event_id` names the event, `pool.created_by_run`
+names the run.
+
+**Why the choice is a real one, checked rather than asserted.** The phase brief asks
+whether a trivial rule could reproduce the result. That question is now a test. Take the
+obvious single-step heuristics over the listing — first in the list, most compatible
+demand, most declarations, fewest refusals, most headroom over the supplier minimum — and
+**every one of them picks the option the evaluator went on to refuse.** Kestrel leads on
+all five and loses money once a host is paid for seven orders and a processor takes its
+cut of seven authorisations, which is a fact that does not exist until a buyer set has
+been chosen and costed.
+
+That is a narrow claim and it is the honest one: reaching the right answer requires
+costing something and reacting to what came back. It is not a claim that the problem is
+hard, and it is not evidence that Bedrock chooses well — the run above was driven by the
+deterministic planner, which exists so the tool contracts, the budgets and the
+authoritative evaluators can be exercised at zero token cost (AGENTS.md §3.3). The
+planner's strategy policy contains no product id and no fixture knowledge; it branches on
+which tool surface the run was given, takes the listing's own order, and moves on when a
+refusal comes back.
+
+**Bounds.** Three new budgets, enforced in the tools rather than the hook because "how
+many options may be costed" is a question only the tool that costs one can answer: one
+listing, **three evaluations against a generator that may offer six**, one pool. The
+evaluation budget being smaller than the search space is the point — "cost everything and
+pick the winner" is an exhaustive sweep wearing a search's clothes, and on a
+community-wide option set it is also the expensive way to the same answer.
+
+**AWS / external services touched** — None.
+
+**Cost-relevant activity** — None. Zero tokens: every run in this work used the offline
+planner. No schedule, no poller, no timer; an AST check asserts `services/events.py`
+imports none of `time`, `threading`, `asyncio`, `sched` and contains no loop. Synchronous
+dispatch on the declaration write path is **off by default**, because turning it on makes
+every declaration a model call — right for demonstrating the end-to-end path, wrong for
+seeding a workspace.
+
+**Atomicity — an honest boundary, not a claim.** `declare_need` writes the declaration and
+`record_declaration_event` writes the event, as two writes against a repository interface
+with no transaction. On DynamoDB that is two `PutItem` calls. The ordering is deliberate:
+the event is written second, so a crash between them leaves the member's input intact and
+coordination merely not yet owed — the recoverable direction. The unsafe direction, an
+event pointing at a declaration that does not exist, cannot happen. Making the pair atomic
+needs `TransactWriteItems` and the IAM to go with it. **That is a production requirement
+and it is not implemented**; no IAM was widened and no resource was touched. Exactly-once
+event semantics are not claimed.
+
+**Autonomy / HITL.** Nothing was widened. The strategy creator refuses stale evidence
+before writing anything, refuses a refused evaluation, re-costs the option from scratch,
+and — for a member-anchored question — refuses an order that would not include the
+declaration that asked it. That last one is pinned by a test that makes the anchor
+unfittable (5 units against 6-unit cases): the order stays viable for the neighbours and
+the member-scoped mutation refuses it, because forming it would tell somebody Pool had
+arranged their coffee when it had arranged everybody else's (§8). Candidate formation
+still touches no card: every membership is `provisional` and no payment row exists.
+
+**Validation**
+`make qa` green: **1,163 agent + 75 infra + 119 web = 1,357**, ruff, eslint, `tsc -b`,
+production build, secret scan and its self-test, `git diff --check`. 46 new tests.
+
+Proved: one declaration owes one event; asking twice is the same event; an unchanged edit
+owes nothing new and a real change owes a fresh look; a retired declaration owes nothing;
+one event produces one run and a second dispatcher finds the work taken; a failing run
+leaves an auditable failure distinct from "considered and declined"; reading state three
+times over starts nothing; a duplicate HTTP submission with dispatch on cannot buy a
+second run; an option this run never listed cannot be costed or formed; a refused option
+cannot be formed anyway; evidence that expired between reading and acting cannot form a
+pool; only one order forms; costing an option writes evidence and no pool, decision or
+payment; and no strategy tool payload contains a household id, a name, an email or a
+coordinate.
+
+No AWS deploy, no AgentCore invocation, no Bedrock call, no live payment, nothing
+published.
+
+**Failures / dead ends**
+Two guards fired, and both were right to.
+
+*The backend-parity test caught the new entity.* It counts list methods across both
+repositories precisely so an entity cannot be added to one and forgotten in the other.
+
+*The bound-vocabulary test caught the new budgets.* It asserts every `AgentBounds` field
+is read by the enforcement it names — a guard that exists because `max_tool_retries` was
+once configured, shipped in two CDK stacks and documented as "bounded with backoff" while
+nothing read it. The three strategy budgets are read in the tools, not the hook, so the
+search was widened to both enforcement sites rather than the claim weakened.
+
+One design change was made under test pressure and was the right one anyway. Threading
+the available tool surface into `_decide(view, available)` broke three test doubles that
+override `_decide(view)`. Those doubles are a signal that the seam is part of the
+contract, so the surface is recorded on the instance by `stream()` instead — one attribute
+against widening a seam other code builds on.
+
+**What we learned**
+The interesting boundary was not "what should the model do" but "what should the model be
+*unable* to do while still having something to decide". Handing it two identifiers and
+re-deriving everything else means the mutation is safe by construction rather than by
+prompt — and it costs nothing in agency, because choosing which option to investigate is
+the decision that was always the interesting one.
+
+The second lesson is about proving agency honestly. "The model chose" is unfalsifiable;
+"every trivial heuristic over the same information picks the option that turns out to lose
+money" is a test. Writing the second one is a better use of an afternoon than arguing the
+first.
+
+**Article fodder**
+Article 2 and Article 3 both. The event boundary is the AWS-shaped half — outbox
+semantics, dedupe by content digest, and an atomicity requirement stated rather than
+faked. The refusal-and-adapt sequence is the autonomy half: the model may decide what to
+investigate and may not decide what is true, and the five-heuristic test is the concrete
+evidence that the first half is not decoration.
+
+**Evidence worth preserving**
+The four-call trace and the two verdicts behind it: 20 units clearing a 15-unit minimum on
+four whole cases and still costing $7.19 more than buying alone; 12 units on two whole
+cases saving $36.42. Phase 4 should show the second number and be able to explain the
+first.
+
+**Relevant commits / files**
+`services/agent/pool/services/events.py`, `services/strategy.py`, `agent/tools.py`,
+`agent/objective.py`, `agent/coordinator.py`, `agent/offline_model.py`, `domain/models.py`,
+`adapters/repository.py`, `config.py`, `api/app.py`,
+`tests/test_declaration_events.py`, `tests/test_agent_bounds.py`,
+`tests/test_public_demo.py`, `README.md`, `docs/ARCHITECTURE.md`.

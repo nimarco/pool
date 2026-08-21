@@ -71,6 +71,22 @@ class AgentBounds:
     #: both places the agent can run, so it stays the innermost bound.
     workflow_timeout_seconds: int = 120
 
+    #: Caps on the cohort-strategy surface, which the global bounds above do not
+    #: express. Those count *calls*; these count **consequential investigation**, and the
+    #: two differ because a strategy search can be perfectly well-behaved by every global
+    #: measure and still cost more than the question is worth.
+    #:
+    #: One listing, because the options are derived from state that a read-only run
+    #: cannot change, so a second listing would return the first one again.
+    max_strategy_listings: int = 1
+    #: Three evaluations, against a generator that may offer six. Deliberately smaller
+    #: than the search space: "evaluate everything and pick the winner" is not a strategy
+    #: search, it is an exhaustive sweep wearing one's clothes, and on a community-wide
+    #: option set it is also the expensive way to get the same answer.
+    max_strategy_evaluations: int = 3
+    #: One pool per declaration event. Members should hear from Pool rarely (§1).
+    max_strategy_pool_creations: int = 1
+
     @classmethod
     def from_env(cls) -> AgentBounds:
         return cls(
@@ -78,6 +94,9 @@ class AgentBounds:
             max_tool_calls=_int_env("MAX_TOOL_CALLS_PER_RUN", 25),
             max_duplicate_tool_calls=_int_env("MAX_DUPLICATE_TOOL_CALLS", 2),
             workflow_timeout_seconds=_int_env("WORKFLOW_TIMEOUT_SECONDS", 120),
+            max_strategy_listings=_int_env("MAX_STRATEGY_LISTINGS", 1),
+            max_strategy_evaluations=_int_env("MAX_STRATEGY_EVALUATIONS", 3),
+            max_strategy_pool_creations=_int_env("MAX_STRATEGY_POOL_CREATIONS", 1),
         )
 
 
@@ -93,6 +112,13 @@ class Settings:
 
     # Cost safety
     schedules_enabled: bool = False
+    #: Whether writing a declaration also *runs* the coordination it owes, in the same
+    #: request. Off by default, and the default is the cost decision: a declaration
+    #: always records a durable event, and dispatching that event is a separate act
+    #: somebody asks for. Turning this on makes every declaration a model call, which is
+    #: right for a demo of the end-to-end path and wrong for a workspace being seeded
+    #: (AGENTS.md §3.3). Nothing here is scheduled or polled either way.
+    auto_dispatch_declaration_events: bool = False
     bounds: AgentBounds = field(default_factory=AgentBounds)
 
     # Adapters. "deterministic" keeps every test and local run free of paid calls.
@@ -136,6 +162,9 @@ class Settings:
             bedrock_model_id=os.environ.get("BEDROCK_MODEL_ID", DEFAULT_BEDROCK_MODEL_ID),
             model_max_tokens=_int_env("MODEL_MAX_TOKENS", 2048),
             schedules_enabled=_bool_env("SCHEDULES_ENABLED", False),
+            auto_dispatch_declaration_events=_bool_env(
+                "AUTO_DISPATCH_DECLARATION_EVENTS", False
+            ),
             bounds=AgentBounds.from_env(),
             routing_provider=os.environ.get("ROUTING_PROVIDER", "deterministic"),
             repository=os.environ.get("POOL_REPOSITORY", "memory"),

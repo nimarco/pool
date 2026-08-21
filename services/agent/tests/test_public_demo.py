@@ -867,6 +867,7 @@ MIRROR = {
     "decisions": "put_decision",
     "runs": "put_run",
     "run_evaluations": "put_run_evaluation",
+    "coordination_events": "put_coordination_event",
     "cohort_strategies": "put_cohort_strategy",
     "strategy_evaluations": "put_strategy_evaluation",
 }
@@ -1183,16 +1184,17 @@ def test_both_stores_return_every_list_in_the_same_order():
         assert a == b, f"{method} came back in a different order"
         compared += 1
         populated += 1 if a else 0
-    # 27 list methods agree, and 23 of them actually held data — a comparison over
+    # 28 list methods agree, and 23 of them actually held data — a comparison over
     # empty lists would pass without proving anything.
     #
-    # The four that are empty here include the two strategy tables: the showcase is a
-    # homogeneous scenario and searches no strategies, so there is nothing for it to say
-    # about their ordering. Their parity is proved against a populated world in
-    # ``test_cohort_strategy.py`` instead, which is where a strategy exists at all. This
-    # count is deliberately exact so that adding an entity to one backend and forgetting
-    # it in the other fails here rather than in production.
-    assert (compared, populated) == (27, 23), (compared, populated)
+    # The five that are empty here are the two strategy tables and the coordination
+    # event table: the showcase is a homogeneous scenario that searches no strategies,
+    # and it declares its need through the service rather than through the HTTP write
+    # path where events are recorded. Their parity is proved against populated worlds in
+    # ``test_cohort_strategy.py`` and ``test_declaration_events.py`` instead. This count
+    # is deliberately exact so that adding an entity to one backend and forgetting it in
+    # the other fails here rather than in production.
+    assert (compared, populated) == (28, 23), (compared, populated)
 
 
 def test_a_completed_demo_session_stays_far_inside_dynamodbs_item_limit():
@@ -1367,7 +1369,7 @@ def test_the_published_endpoint_counts_are_the_real_ones():
 
     public = {e for e in endpoints if reachable(*e)}
 
-    assert len(endpoints) == 50, f"the full API is now {len(endpoints)} endpoints"
+    assert len(endpoints) == 52, f"the full API is now {len(endpoints)} endpoints"
     assert len(public) == 33, f"judge mode now exposes {len(public)} endpoints"
     # The reduction is the point: most of the application is not on the public URL.
     assert len(public) < len(endpoints) / 1.5

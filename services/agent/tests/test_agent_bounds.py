@@ -225,8 +225,20 @@ class TestBoundVocabulary:
         it and no retry mechanism existed. Pool deliberately does not auto-retry tools:
         re-running a consequential call is the wrong default for a system that moves
         money. So the bound is absent rather than aspirational (#audit P1-1).
+
+        Two enforcement sites, not one. The run-level bounds live in the Strands hook,
+        which counts model calls and tool calls without knowing what any tool does; the
+        strategy budgets live in the tools, because "how many options may be costed" is a
+        question only the tool that costs one can answer. The claim is unchanged — a
+        bound nothing reads is a guarantee nobody keeps — so the search is widened to
+        wherever bounds are actually read rather than weakened.
         """
-        source = Path(bounds_module.__file__).read_text()
+        from pool.agent import tools as tools_module
+
+        source = "".join(
+            Path(module.__file__).read_text()
+            for module in (bounds_module, tools_module)
+        )
         for name in vars(AgentBounds()):
             assert f"bounds.{name}" in source, f"{name} is configured but never read"
 

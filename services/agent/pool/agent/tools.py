@@ -28,6 +28,7 @@ from typing import Any
 
 from strands import tool
 
+from ..config import AgentBounds, get_settings
 from ..domain.models import (
     DecisionState,
     ParticipationState,
@@ -39,6 +40,7 @@ from ..domain.viability import ViabilityStage
 from ..services import coordination as coord
 from ..services import discovery, hosting
 from ..services import fulfillment as fulfil
+from ..services import strategy as strategy_svc
 from ..services.context import PoolContext
 from . import projection as proj
 
@@ -75,6 +77,19 @@ class ToolContext:
     #: Authoritative results in call order, for auditing and any consumer that needs
     #: the detail the model is deliberately not shown.
     full_results: list[FullToolResult] = field(default_factory=list)
+
+    #: Hard caps on the strategy surface. Held here rather than read from settings inside
+    #: each tool so one run cannot see two different budgets.
+    bounds: AgentBounds = field(default_factory=lambda: get_settings().bounds)
+    #: Options this run itself listed. An id the model did not receive from
+    #: ``list_cohort_strategies`` in *this* run is refused — a strategy is evidence about
+    #: one objective, and accepting an id from anywhere else would let one run act on
+    #: another run's question.
+    listed_strategy_ids: list[str] = field(default_factory=list)
+    strategy_listings: int = 0
+    #: Options actually evaluated, in order, so a repeat is visible as a repeat.
+    evaluated_strategy_ids: list[str] = field(default_factory=list)
+    strategy_pool_creations: int = 0
 
     @property
     def repo(self):
@@ -143,6 +158,17 @@ TOOL_KINDS = frozenset({"read", "record", "act", "end"})
 #: Kinds that write. The complement of ``read``, stated once so the effect test and the
 #: API cannot disagree about which tools are supposed to be inert.
 MUTATING_TOOL_KINDS = frozenset({"record", "act"})
+
+#: The cohort-strategy surface, offered *instead of* latent demand when a declaration
+#: event is the question (``objective.searches_strategies``). Kept separate rather than
+#: merged so a run never holds two doors to the same mutation — only
+#: ``create_candidate_pool_from_strategy`` is guarded by ``ensure_actionable``, and a run
+#: that could also reach ``create_candidate_pool`` would have an unguarded way past it.
+STRATEGY_TOOL_SURFACE: tuple[tuple[str, str], ...] = (
+    ("list_cohort_strategies", "record"),
+    ("evaluate_cohort_strategy", "record"),
+    ("create_candidate_pool_from_strategy", "act"),
+)
 
 TOOL_SURFACE: tuple[tuple[str, str], ...] = (
     ("list_latent_demand", "read"),
@@ -553,6 +579,201 @@ def build_tools(ctx: ToolContext) -> list:
         if not acted:
             ctx.outcome = RunOutcome.NO_ACTION
         return _json({"acknowledged": True, "reason": reason, "prior_actions_this_run": acted})
+
+    # ------------------------------------------------------- cohort strategies
+    #
+    # Offered only when a declaration event is the question. Each one is bounded by its
+    # own budget as well as by the global run bounds, because "well-behaved by every
+    # global measure and still more expensive than the question is worth" is a real
+    # failure mode for a search (AGENTS.md §3.1, §3.3).
+
+    def _objective_strategy_objective():
+        return strategy_svc.StrategyObjective(
+            kind=strategy_svc.OBJECTIVE_MEMBER,
+            community_id=ctx.community_id,
+            household_id=getattr(ctx.objective, "household_id", "") or "",
+            need_id=getattr(ctx.objective, "anchor_need_id", "") or "",
+        )
+
+    @tool
+    def list_cohort_strategies() -> str:
+        """List the distinct orders Pool could assemble from this declaration's demand.
+
+        Takes no arguments: the question is the one this run was given, and there is no
+        field in which to ask about another member, another Community, or another
+        product.
+
+        Each option names an exact product, its curated attributes, how much compatible
+        demand its own rules admit, how that demand splits between now and demand pulled
+        forward, how many declarations it refused and under which codes, where it would
+        be handed over, and the lowest quantity any supplier will sell.
+
+        **No option carries a verdict, and none is ranked as the winner.** Nothing has
+        been costed yet: which supplier tier wins, whether the demand fills whole cases,
+        what the group would pay and whether that beats buying alone are facts about a
+        chosen buyer set, and choosing one is what evaluation does. Clearing a supplier
+        minimum is necessary and nowhere near sufficient — an option with plenty of
+        demand can still cost more than buying alone once fulfilment and processing are
+        paid for.
+        """
+        if ctx.strategy_listings >= ctx.bounds.max_strategy_listings:
+            return _json(
+                {
+                    "listed": False,
+                    "reason": "already listed this run; the options are derived from state "
+                    "no read-only call has changed",
+                    "strategies": [],
+                }
+            )
+        ctx.strategy_listings += 1
+        strategies = strategy_svc.generate_strategies(
+            ctx=ctx.pool, objective=_objective_strategy_objective()
+        )
+        for strategy in strategies:
+            if strategy.id not in ctx.listed_strategy_ids:
+                ctx.listed_strategy_ids.append(strategy.id)
+        summaries = [strategy_svc.strategy_summary(s) for s in strategies]
+        full = ctx.record_full(
+            "list_cohort_strategies", {}, {"strategies": [s.to_dict() for s in strategies]}
+        )
+        del full
+        return _json(
+            {
+                "strategies": summaries,
+                "count": len(summaries),
+                "evaluations_allowed": ctx.bounds.max_strategy_evaluations,
+            }
+        )
+
+    @tool
+    def evaluate_cohort_strategy(strategy_id: str) -> str:
+        """Cost one listed option against current authoritative state.
+
+        This is the answer, and it is not yours to argue with: compatible demand after
+        timing and geography, the supplier tier that wins, whether the demand fills whole
+        cases with nothing left over, the complete landed price including fulfilment and
+        processing, whether that beats buying alone, how many members' own Smart Join
+        rules accept it, and whether the declaration that caused this run is inside the
+        result.
+
+        A refusal is a result. If this option is refused, decide whether another listed
+        option is materially worth investigating — do not re-evaluate this one, and do
+        not form it anyway.
+
+        Args:
+            strategy_id: The id of an option returned by list_cohort_strategies.
+        """
+        if strategy_id not in ctx.listed_strategy_ids:
+            return _json(
+                {
+                    "evaluated": False,
+                    "reason": "that option was not offered by this run's own listing",
+                    "strategy_id": strategy_id,
+                }
+            )
+        remaining = ctx.bounds.max_strategy_evaluations - len(ctx.evaluated_strategy_ids)
+        if strategy_id in ctx.evaluated_strategy_ids:
+            return _json(
+                {
+                    "evaluated": False,
+                    "reason": "already evaluated this run; the answer has not changed",
+                    "strategy_id": strategy_id,
+                    "evaluations_remaining": remaining,
+                }
+            )
+        if remaining <= 0:
+            return _json(
+                {
+                    "evaluated": False,
+                    "reason": "evaluation budget exhausted for this declaration",
+                    "strategy_id": strategy_id,
+                    "evaluations_remaining": 0,
+                }
+            )
+
+        ctx.evaluated_strategy_ids.append(strategy_id)
+        evaluation = strategy_svc.evaluate_strategy(ctx=ctx.pool, strategy_id=strategy_id)
+        ctx.record_full(
+            "evaluate_cohort_strategy", {"strategy_id": strategy_id}, evaluation.to_dict()
+        )
+        payload = strategy_svc.evaluation_summary(evaluation)
+        payload["evaluations_remaining"] = (
+            ctx.bounds.max_strategy_evaluations - len(ctx.evaluated_strategy_ids)
+        )
+        payload["options_not_yet_evaluated"] = [
+            sid for sid in ctx.listed_strategy_ids if sid not in ctx.evaluated_strategy_ids
+        ]
+        return _json(payload)
+
+    @tool
+    def create_candidate_pool_from_strategy(strategy_id: str, evaluation_id: str) -> str:
+        """Form a candidate pool from an option a specific evaluation confirmed viable.
+
+        Consequential, and it commits no money: members join **provisionally**, the
+        saving shown is an estimate, and fulfilment is still being recruited. No card is
+        touched until a host accepts and the exact final price is known.
+
+        You supply two identifiers and nothing else. Who is in the order, how many units
+        each takes, what it costs and which supplier tier is used are all re-derived from
+        stored state — and re-derived *again* here, because evidence that was true when
+        you read it may not be true now. If anything it rested on has moved, this refuses
+        rather than building a pool from a stale answer.
+
+        Args:
+            strategy_id: The option to form.
+            evaluation_id: The evaluation that confirmed it viable.
+        """
+        if strategy_id not in ctx.listed_strategy_ids:
+            return _json(
+                {
+                    "created": False,
+                    "refusal_code": "strategy_not_in_this_run",
+                    "refusal_reason": "that option was not offered by this run's own listing",
+                }
+            )
+        if ctx.strategy_pool_creations >= ctx.bounds.max_strategy_pool_creations:
+            return _json(
+                {
+                    "created": False,
+                    "refusal_code": "creation_budget_exhausted",
+                    "refusal_reason": "one order has already been formed for this declaration",
+                }
+            )
+
+        ctx.strategy_pool_creations += 1
+        result = strategy_svc.create_candidate_pool_from_strategy(
+            ctx=ctx.pool,
+            strategy_id=strategy_id,
+            evaluation_id=evaluation_id,
+            # A member-anchored question may only be answered by an order that member is
+            # actually in. An order that is viable for the neighbours is a real outcome
+            # and a different one (AGENTS.md §8).
+            require_objective_need=True,
+        )
+        full = ctx.record_full(
+            "create_candidate_pool_from_strategy",
+            {"strategy_id": strategy_id, "evaluation_id": evaluation_id},
+            result.to_dict(),
+        )
+        if result.created:
+            ctx.outcome = RunOutcome.POOL_CREATED
+            ctx.created_pool_ids.append(result.pool_id)
+        elif result.pool_id:
+            # An equivalent pool already existed. Not created, not a refusal.
+            if result.pool_id not in ctx.advanced_pool_ids:
+                ctx.advanced_pool_ids.append(result.pool_id)
+        return _json(full)
+
+    if getattr(ctx.objective, "searches_strategies", False):
+        return [
+            list_cohort_strategies,
+            evaluate_cohort_strategy,
+            create_candidate_pool_from_strategy,
+            find_host_candidates,
+            request_host_acceptance,
+            inspect_pool,
+            record_no_action,
+        ]
 
     return [
         list_latent_demand,

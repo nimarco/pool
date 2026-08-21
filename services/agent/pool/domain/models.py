@@ -1706,6 +1706,10 @@ class AgentRun:
     #: state before it began (``agent/objective.py``). Recorded because a run report has
     #: to distinguish "investigated and declined" from "never investigated", and the
     #: difference is not visible anywhere in what the run did.
+    #: The coordination event that caused this run, when one did. Lineage in the
+    #: direction a question is actually asked: a member changed a declaration, an event
+    #: recorded that work was owed, and this run answered it.
+    event_id: str = ""
     objective_kind: str = "community"
     #: The member a member-triggered run belongs to. A synthetic household id, never a
     #: name or a contact detail; it is what stops one member's report being served for
@@ -1739,6 +1743,7 @@ class AgentRun:
             output_tokens=d.get("output_tokens"),
             hitl_decisions_created=int(d.get("hitl_decisions_created", 0)),
             notes=list(d.get("notes", [])),
+            event_id=d.get("event_id", ""),
             objective_kind=d.get("objective_kind", "community"),
             objective_household_id=d.get("objective_household_id", ""),
             objective_need_ids=list(d.get("objective_need_ids", [])),
@@ -2051,3 +2056,93 @@ class StrategyEvaluation:
         out["radius_km"] = float(out.get("radius_km", 0.0) or 0.0)
         out["quote_age_hours"] = float(out.get("quote_age_hours", 0.0) or 0.0)
         return cls(**out)
+
+
+class CoordinationEventKind(str, Enum):
+    """Why coordination work is owed.
+
+    One member today. The type exists rather than a bare string because the dispatcher
+    branches on it, and a second kind — a pool-day sweep, a supplier requote — is a row
+    here and a branch there rather than a new mechanism.
+    """
+
+    #: A member wrote or meaningfully changed a standing declaration.
+    NEED_DECLARED = "need_declared"
+
+
+class CoordinationEventStatus(str, Enum):
+    """Where one unit of coordination work has got to.
+
+    Four states, and the distinction between the last two is the one that matters to a
+    member: ``completed`` means a run reached a verdict, which may perfectly well have
+    been "nothing worth doing". ``failed`` means the run did not get to a verdict at all.
+    Collapsing them would let a bug read as a considered refusal.
+    """
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+@dataclass
+class CoordinationEvent:
+    """One durable unit of coordination work, owed because state changed.
+
+    **Why this exists at all.** Declaring a need and coordinating one are different
+    transactions with different failure modes. A declaration must persist whether or not
+    an agent is available; a run must be attributable to the thing that caused it, must
+    happen once per cause, and must survive being asked for twice. An event is the row
+    that holds those two apart — the write side records that work is owed, and a
+    dispatcher decides when it happens (AGENTS.md §3.2: event-driven, never polled).
+
+    **Identity is the dedupe key.** ``id`` is a digest of the kind, the declaration, and
+    that declaration's material content, so re-submitting the same form, reloading the
+    page, or saving an edit that changed nothing all resolve to the *same* event — which
+    is already there, and is not run again. A change that actually alters what Pool
+    would coordinate produces a different digest and therefore a different event. Dedupe
+    is a primary-key lookup rather than a scan, in both backends.
+
+    **What it deliberately does not carry.** No prompt, no model text, no reasoning, and
+    nothing about the member beyond the two identifiers a run needs to resolve its own
+    objective from stored state (§4).
+    """
+
+    id: str
+    kind: str
+    community_id: str
+    household_id: str = ""
+    need_id: str = ""
+    status: str = CoordinationEventStatus.PENDING.value
+    #: The run this event caused, once one has been claimed. One event, one run.
+    run_id: str = ""
+    #: How many times a dispatcher has claimed it. A claim that fails leaves the event
+    #: ``failed`` with the count intact, so a retry is a decision somebody makes rather
+    #: than something that happens on its own (§3.1).
+    attempts: int = 0
+    #: The run's own outcome value, copied so the member-facing state does not depend on
+    #: joining to a run record that a workspace reset may have swept.
+    outcome: str = ""
+    #: Why it ended, in the run's own vocabulary: ``completed``, a bound name, or an
+    #: error class. Never model prose.
+    terminal_reason: str = ""
+    #: The candidate pool this event produced, when it produced one.
+    pool_id: str = ""
+    created_at: str = field(default_factory=lambda: iso(utcnow()))
+    claimed_at: str = ""
+    ended_at: str = ""
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.status in {
+            CoordinationEventStatus.COMPLETED.value,
+            CoordinationEventStatus.FAILED.value,
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> CoordinationEvent:
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in known})

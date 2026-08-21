@@ -27,7 +27,7 @@ from ..domain.models import ActivityEvent, AgentRun, RunOutcome, iso, new_id, ut
 from ..services.context import PoolContext
 from .bounds import BoundedRun, BoundExceeded, RunTelemetry
 from .evidence import build as build_evidence
-from .objective import MEMBER, for_trigger, prompt_for
+from .objective import MEMBER, build_declaration_objective, for_trigger, prompt_for
 from .tools import ToolContext, build_tools
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,30 @@ legitimate outcome, and a worse answer to their own question.
 The tools apply each person's own rules and return the verdict.
 - A pool cannot be priced exactly until a host has accepted, and cannot lock until the \
 viability check passes. Do not try to skip a step; the tools will refuse.
-- When you are done, stop. Do not repeat a tool call whose inputs have not changed."""
+- When you are done, stop. Do not repeat a tool call whose inputs have not changed.
+
+When a member has just declared something they buy, the run is a search rather than a \
+sweep, and you are given cohort-strategy tools instead of latent demand. Neighbours who \
+buy roughly the same thing rarely buy the identical product, so there is usually more \
+than one order Pool could assemble from them, serving overlapping but different groups \
+of people.
+
+Work that search like this:
+- List the options once. Each names an exact product and how much compatible demand its \
+own rules admit. None of them says whether it is worth doing, because nothing has been \
+costed yet.
+- Judge which one is most worth investigating, and evaluate that one. Clearing a \
+supplier minimum is necessary and nowhere near sufficient — an option with plenty of \
+demand can still cost the group more than buying alone once fulfilment, processing and \
+Pool's fee are paid for, and that is only knowable after it has been costed.
+- Read the answer. If it refuses, the refusal stands: you may not form that option \
+anyway, argue with the economics, widen who is compatible, or supply your own members, \
+quantities or prices. Decide instead whether another listed option is materially worth \
+investigating, and evaluate that one. Your evaluation budget is smaller than the number \
+of options, so choose rather than sweep.
+- When an option is confirmed viable, form it from that option's id and the id of the \
+evaluation that confirmed it. If every option you investigated was refused, record no \
+action and say what the refusals were. Both are correct endings."""
 
 
 class PoolCoordinator:
@@ -192,6 +215,7 @@ class PoolCoordinator:
         trigger: str = "manual",
         instruction: str | None = None,
         community_id: str = "",
+        event_id: str = "",
     ) -> AgentRun:
         """Execute one bounded coordination run and return its record.
 
@@ -222,7 +246,20 @@ class PoolCoordinator:
             sourcing=self.sourcing,
             run_id=run_id,
         )
-        objective = for_trigger(pool_ctx, community_id, trigger)
+        if event_id:
+            # A coordination event is the question. The declaration is read from the
+            # stored event rather than from the caller, so this path inherits the same
+            # property every other one has: there is no field in which to name somebody
+            # else's declaration (``agent/objective.py``).
+            event = self.repo.get_coordination_event(ws, event_id)
+            objective = build_declaration_objective(
+                pool_ctx,
+                community_id,
+                event_id=event_id,
+                need_id=event.need_id if event is not None else "",
+            )
+        else:
+            objective = for_trigger(pool_ctx, community_id, trigger)
         ctx = ToolContext(
             pool=pool_ctx,
             community_id=community_id,
@@ -279,6 +316,7 @@ class PoolCoordinator:
         record.input_tokens = telemetry.input_tokens
         record.output_tokens = telemetry.output_tokens
         record.hitl_decisions_created = ctx.decisions_created
+        record.event_id = objective.event_id
         record.objective_kind = objective.kind
         record.objective_household_id = objective.household_id
         record.objective_need_ids = [n.need_id for n in objective.needs]
@@ -304,6 +342,7 @@ class PoolCoordinator:
                     "outcome": record.outcome.value,
                     "trigger": trigger,
                     "objective": objective.kind,
+                    "event_id": objective.event_id,
                     "objective_products": list(objective.product_ids),
                     "iterations": record.iterations,
                     "tool_calls": len(record.tool_calls),

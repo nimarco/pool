@@ -37,6 +37,11 @@ MAX_MEMBER_OBJECTIVES = 3
 #: consequence, and act once more; more than that is polling.
 MAX_LISTINGS = 2
 
+#: Fallback when a listing has not yet reported the remaining budget. The tools
+#: enforce the real bound; this only stops the planner asking for an evaluation it
+#: already knows will be refused.
+MAX_STRATEGY_EVALUATIONS = 3
+
 
 def _tool_event(name: str, payload: dict[str, Any]) -> list[dict]:
     """Build the Bedrock-shaped stream events for a single tool call."""
@@ -133,6 +138,8 @@ class DeterministicPlannerModel(Model):
 
     def __init__(self) -> None:
         self._config: dict[str, Any] = {"model_id": "offline-deterministic-planner"}
+        #: Which tools this run was given. Set per turn by :meth:`stream`.
+        self._available_tools: set[str] = set()
 
     # -- Model interface ---------------------------------------------------
 
@@ -153,6 +160,14 @@ class DeterministicPlannerModel(Model):
         **kwargs: Any,
     ) -> AsyncIterable[dict]:
         view = TranscriptView(messages)
+        # Recorded on the instance rather than passed down, because ``_decide(view)`` is
+        # the extension point three test doubles already override, and widening a seam
+        # other people build on to carry one more argument is a worse trade than one
+        # attribute. A planner is constructed per run and its turns are sequential, so
+        # there is nothing here for a second run to observe.
+        self._available_tools = {
+            str((spec or {}).get("name", "")) for spec in (tool_specs or []) if spec
+        }
         for event in self._decide(view):
             yield event
         yield _metadata_event()
@@ -160,12 +175,106 @@ class DeterministicPlannerModel(Model):
     # -- planning ----------------------------------------------------------
 
     def _decide(self, view: TranscriptView) -> list[dict]:
+        # Which surface this run was given, not which words its instruction contains.
+        # The strategy tools are offered only for a declaration event
+        # (``objective.searches_strategies``), so their presence *is* the branch — and a
+        # planner that sniffed the prompt for "coffee" would be a fixture-specific rule
+        # pretending to be a policy.
+        if "list_cohort_strategies" in getattr(self, "_available_tools", frozenset()):
+            return self._plan_strategy_search(view)
         text = view.user_text.lower()
         if "recover" in text or "withdrew" in text or "failed" in text:
             return self._plan_attention(view)
         if "advance" in text or "host" in text or "lock" in text:
             return self._plan_attention(view)
         return self._plan_scan(view)
+
+    # -- strategy search ---------------------------------------------------
+
+    def _plan_strategy_search(self, view: TranscriptView) -> list[dict]:
+        """Investigate options one at a time, and adapt to what each answer says.
+
+        **This is not evidence that a model can do this.** It is a deterministic policy
+        over the same projections a model would read, so the tool contracts, the bounds
+        and the authoritative evaluators are exercised at zero token cost. What it proves
+        is that the *architecture* supports investigate → inspect → adapt; whether Bedrock
+        chooses well is a question only a Bedrock run can answer.
+
+        The policy contains no product id, no brand and no fixture knowledge. It takes
+        the listing's order, evaluates the first option it has not tried, and on a refusal
+        moves to the next — stopping the moment one is confirmed viable, because the
+        budget is smaller than the option set and sweeping it would defeat the point.
+        """
+        if view.called("record_no_action"):
+            return _text_event("Nothing worth acting on for this declaration.")
+
+        if not view.called("list_cohort_strategies"):
+            return _tool_event("list_cohort_strategies", {})
+
+        listing = view.last_result_of("list_cohort_strategies") or {}
+        options = listing.get("strategies", []) or []
+        if not options:
+            return _tool_event(
+                "record_no_action",
+                {"reason": "no supplier and no compatible demand could serve this declaration"},
+            )
+
+        # A viable answer already in hand: form it, once.
+        evaluations = view.results_of("evaluate_cohort_strategy")
+        viable = next((e for e in evaluations if e.get("viable")), None)
+        if viable is not None:
+            if not view.called("create_candidate_pool_from_strategy"):
+                return _tool_event(
+                    "create_candidate_pool_from_strategy",
+                    {
+                        "strategy_id": viable["strategy_id"],
+                        "evaluation_id": viable["evaluation_id"],
+                    },
+                )
+            created = view.last_result_of("create_candidate_pool_from_strategy") or {}
+            if created.get("created"):
+                return _text_event(
+                    "Formed a candidate pool from the option the evaluator confirmed."
+                )
+            return _tool_event(
+                "record_no_action",
+                {
+                    "reason": (
+                        "the verified option could not be formed: "
+                        f"{created.get('refusal_reason', 'refused')}"
+                    )[:400]
+                },
+            )
+
+        # Otherwise investigate the next option in the listing's own order.
+        tried = {a.get("strategy_id") for a in view.args_of("evaluate_cohort_strategy")}
+        remaining = (
+            evaluations[-1].get("evaluations_remaining") if evaluations else MAX_STRATEGY_EVALUATIONS
+        )
+        if remaining is None:
+            remaining = MAX_STRATEGY_EVALUATIONS
+        if remaining > 0:
+            for option in options:
+                if option.get("strategy_id") in tried:
+                    continue
+                return _tool_event(
+                    "evaluate_cohort_strategy", {"strategy_id": option["strategy_id"]}
+                )
+
+        refusals = "; ".join(
+            f"{e.get('product', 'option')}: {e.get('blocker_code', 'refused')}"
+            for e in evaluations
+            if not e.get("viable")
+        )
+        return _tool_event(
+            "record_no_action",
+            {
+                "reason": (
+                    f"investigated {len(evaluations)} of {len(options)} option(s); "
+                    f"none was worth forming. {refusals}"
+                )[:400]
+            },
+        )
 
     # -- discovery ---------------------------------------------------------
 

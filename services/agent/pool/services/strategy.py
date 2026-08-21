@@ -565,6 +565,19 @@ def evaluate_strategy(*, ctx: PoolContext, strategy_id: str) -> StrategyEvaluati
 
     Read-only. It contacts nobody, commits no money and creates no pool.
     """
+    return _evaluate(ctx=ctx, strategy_id=strategy_id)[0]
+
+
+def _evaluate(
+    *, ctx: PoolContext, strategy_id: str
+) -> tuple[StrategyEvaluation, coord.OpportunityAssessment | None]:
+    """The evaluation, and the assessment it was computed from.
+
+    One implementation with two callers: the read-only evaluator, and the guarded
+    creator, which needs the *same* assessment object it just approved rather than a
+    second one costed a moment later. Two evaluations would be two answers, and the pool
+    would be built from whichever happened to be handier.
+    """
     strategy = ctx.repo.get_cohort_strategy(ctx.ws, strategy_id)
     if strategy is None:
         raise CoordinationError(f"unknown strategy: {strategy_id}")
@@ -587,10 +600,16 @@ def evaluate_strategy(*, ctx: PoolContext, strategy_id: str) -> StrategyEvaluati
     target = ctx.repo.get_product(ctx.ws, strategy.target_product_id)
     site = ctx.repo.get_site(ctx.ws, strategy.pickup_site_id)
     if target is None:
-        return _store(ctx, _blocked(evaluation, BLOCKER_TARGET_MISSING, "product no longer exists"))
+        return (
+            _store(ctx, _blocked(evaluation, BLOCKER_TARGET_MISSING, "product no longer exists")),
+            None,
+        )
     if site is None or site.community_id != strategy.community_id:
-        return _store(
-            ctx, _blocked(evaluation, BLOCKER_SITE_MISSING, "pickup site no longer available")
+        return (
+            _store(
+                ctx, _blocked(evaluation, BLOCKER_SITE_MISSING, "pickup site no longer available")
+            ),
+            None,
         )
 
     current = input_fingerprint(ctx, community=community, target=target, site=site)
@@ -634,19 +653,22 @@ def evaluate_strategy(*, ctx: PoolContext, strategy_id: str) -> StrategyEvaluati
         age = offer.age_hours(ctx.now) if offer is not None else None
         evaluation.quote_age_hours = round(age, 3) if age is not None else 0.0
         if offer is None or age is None or age > community.quote_max_age_hours:
-            return _store(
-                ctx,
-                _blocked(
-                    evaluation,
-                    BLOCKER_QUOTE_STALE,
-                    "the supplier quote is older than this community allows",
+            return (
+                _store(
+                    ctx,
+                    _blocked(
+                        evaluation,
+                        BLOCKER_QUOTE_STALE,
+                        "the supplier quote is older than this community allows",
+                    ),
                 ),
+                assessment,
             )
 
     evaluation.viable = assessment.viable
     evaluation.blocker_code = BLOCKER_NONE if assessment.viable else assessment.reason_code
     evaluation.blocker_reason = "" if assessment.viable else assessment.reason
-    return _store(ctx, evaluation)
+    return _store(ctx, evaluation), assessment
 
 
 def _blocked(evaluation: StrategyEvaluation, code: str, reason: str) -> StrategyEvaluation:
@@ -915,3 +937,114 @@ def evaluation_summary(evaluation: StrategyEvaluation) -> dict[str, Any]:
         "excluded_declarations": evaluation.excluded_count,
         "exclusion_codes": dict(evaluation.exclusion_codes),
     }
+
+
+# ------------------------------------------------------------- guarded creation
+
+
+CREATE_REFUSED_STALE = "evidence_stale"
+CREATE_REFUSED_NOT_VIABLE = "evaluation_refused"
+CREATE_REFUSED_RECHECK_FAILED = "recheck_refused"
+CREATE_REFUSED_OBJECTIVE_EXCLUDED = "objective_member_not_included"
+
+
+@dataclass(frozen=True)
+class CreationResult:
+    """What the guarded creator did, and — when it refused — exactly why.
+
+    ``created`` is false both when the guard refused and when an equivalent pool already
+    existed; ``refusal_code`` is empty in the second case, because finding the pool you
+    were about to make is a success rather than a refusal.
+    """
+
+    created: bool
+    pool_id: str = ""
+    refusal_code: str = ""
+    refusal_reason: str = ""
+    evaluation_id: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "created": self.created,
+            "pool_id": self.pool_id,
+            "refusal_code": self.refusal_code,
+            "refusal_reason": self.refusal_reason,
+            "evaluation_id": self.evaluation_id,
+        }
+
+
+def create_candidate_pool_from_strategy(
+    *,
+    ctx: PoolContext,
+    strategy_id: str,
+    evaluation_id: str,
+    require_objective_need: bool = True,
+) -> CreationResult:
+    """Form a candidate pool from a strategy that current evidence still supports.
+
+    The one mutation in this layer, and the whole of its safety is that **the caller
+    supplies two identifiers and nothing else**. Not a buyer list, not a quantity, not a
+    price, not a supplier term, not a product fact — there is no parameter in which to
+    put one. Everything the pool is made of is re-derived here from stored state.
+
+    The order of the gates is the point:
+
+    1. the evidence must exist, match the strategy, be viable, and describe the world as
+       it is **now** — :func:`ensure_actionable`, before anything is written;
+    2. the option is then **re-costed from scratch**, because a guard passing a moment
+       ago and a pool built from the assessment behind an older evaluation is exactly the
+       failure the guard exists to prevent;
+    3. the fresh verdict must itself be viable;
+    4. for a member-anchored question, the declaration that *asked* it must be in the
+       resulting buyer set. A viable order that excludes them is a real and legitimate
+       outcome for the Community and is not an answer to their question — forming it as
+       though it were would tell somebody Pool had arranged their coffee when it had
+       arranged everybody else's (AGENTS.md §8).
+
+    Only then does ``coordination.create_candidate_pool`` run, with its own idempotency
+    claim, so a repeated request returns the pool that already exists rather than a
+    second one.
+    """
+    check = ensure_actionable(ctx=ctx, strategy_id=strategy_id, evaluation_id=evaluation_id)
+    if not check.ok:
+        return CreationResult(
+            False,
+            refusal_code=(
+                CREATE_REFUSED_NOT_VIABLE
+                if check.code == ACTIONABLE_NOT_VIABLE
+                else CREATE_REFUSED_STALE
+            ),
+            refusal_reason=check.reason,
+            evaluation_id=evaluation_id,
+        )
+
+    strategy = ctx.repo.get_cohort_strategy(ctx.ws, strategy_id)
+    if strategy is None:  # unreachable once the guard passed; fails closed regardless
+        return CreationResult(
+            False, refusal_code=CREATE_REFUSED_STALE, refusal_reason="no such option"
+        )
+
+    fresh, assessment = _evaluate(ctx=ctx, strategy_id=strategy_id)
+    if not fresh.viable or assessment is None or not assessment.viable:
+        return CreationResult(
+            False,
+            refusal_code=CREATE_REFUSED_RECHECK_FAILED,
+            refusal_reason=fresh.blocker_reason or "the option no longer prices",
+            evaluation_id=fresh.id,
+        )
+    if require_objective_need and strategy.objective_need_id and not fresh.includes_objective_need:
+        return CreationResult(
+            False,
+            refusal_code=CREATE_REFUSED_OBJECTIVE_EXCLUDED,
+            refusal_reason="this order would not include the declaration that asked the question",
+            evaluation_id=fresh.id,
+        )
+
+    key = (
+        f"{strategy.community_id}:{strategy.target_product_id}:"
+        f"{strategy.pickup_site_id}:{assessment.distribution_day}"
+    )
+    pool, created = coord.create_candidate_pool(
+        ctx=ctx, assessment=assessment, idempotency_key=key
+    )
+    return CreationResult(created, pool_id=pool.id, evaluation_id=fresh.id)

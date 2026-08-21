@@ -73,7 +73,9 @@ the tool's value — not the model's paraphrase of it.
 
 ### The tool surface
 
-Twelve narrow, typed tools. No shell, no arbitrary query, no generic mutation.
+Twelve narrow, typed tools. No shell, no arbitrary query, no generic mutation. A run
+answering a coordination event is given a different three instead of two of them —
+see *The strategy surface* below — so no run ever holds more than twelve.
 
 Four effect kinds, because three could not describe the surface honestly. `read` writes
 nothing at all. `record` writes Pool's own working state — an evaluation it wants to be
@@ -95,6 +97,41 @@ closes the run.
 | `lock_pool` | act — irreversible for buyers |
 | `execute_purchase` | act — externally consequential, simulated in this build |
 | `record_no_action` | end |
+
+### The strategy surface
+
+A run caused by a **coordination event** — a member created or meaningfully changed a
+declaration — is a search rather than a sweep, and is given three different tools *instead
+of* latent demand. Never alongside: `create_candidate_pool` is not guarded by
+`ensure_actionable` and `create_candidate_pool_from_strategy` is, so a run holding both
+would have an unguarded way past the guard.
+
+| Tool | Kind |
+| --- | --- |
+| `list_cohort_strategies` | record — up to six options, none carrying a verdict |
+| `evaluate_cohort_strategy` | record — the authoritative verdict, and evidence of it |
+| `create_candidate_pool_from_strategy` | act — commits no money |
+
+The listing carries what generation established: an exact product, its curated
+attributes, how much compatible demand its own rules admit, how that splits between now
+and demand pulled forward, aggregate refusal codes, a pickup candidate, and the lowest
+quantity a supplier will sell. It carries **no verdict and no price**, because at that
+point neither exists — which supplier tier wins, whether the demand fills whole cases,
+what the group pays and whether that beats buying alone are all facts about a chosen buyer
+set, and choosing one is what evaluation does.
+
+The mutation takes **two identifiers and nothing else**. There is no parameter for a
+member, a quantity, a price, a supplier term or a product fact; everything the pool is
+made of is re-derived from stored state, re-costed from scratch, and refused if anything
+it rested on moved. For a member-anchored question it additionally refuses an order that
+would not include the declaration that asked it — viable for the neighbours is a real
+outcome and a different one.
+
+| Strategy bound | Default | On hit |
+| --- | --- | --- |
+| `MAX_STRATEGY_LISTINGS` | 1 | Refused with a reason; the options have not changed |
+| `MAX_STRATEGY_EVALUATIONS` | 3, against up to 6 options | Refused; the run must choose rather than sweep |
+| `MAX_STRATEGY_POOL_CREATIONS` | 1 | Refused; one order per declaration |
 
 `find_host_candidates` was published as a `read` — here, in the API, and on the Showcase
 page — while opening host recruiting and persisting a candidate record per evaluation.
@@ -126,6 +163,37 @@ summarization — a model-written summary of a price would make the model the so
 truth, which is the one thing the layering above exists to prevent. Measured effect on the
 same model, seed, scenario and bounds: **35.8k → 19.2k input tokens, identical tool
 sequence and outcome.**
+
+---
+
+## Declaration to coordination
+
+Declaring a need and coordinating one are different transactions. The write side records
+that work is **owed**; a dispatcher decides when it happens.
+
+    declaration written -> CoordinationEvent (pending) -> dispatch -> one bounded run
+                                                                   -> candidate pool
+                                                                      or honest no-action
+
+An event's id is a digest of the declaration and its material content, so one cause
+produces one event: a duplicate submission, a page reload, or an edit that changed nothing
+all resolve to the row that already exists, and none of them buys a second model call.
+A change that alters what Pool would coordinate produces a different digest and a new
+event. Claiming is a state transition, so a second dispatcher finds the work taken.
+
+Nothing is scheduled and nothing polls. An event is dispatched because something asked —
+an explicit request today, a queue consumer later. Synchronous dispatch on the declaration
+write path exists and is **off by default**: turning it on makes every declaration a model
+call, which is right for demonstrating the path end to end and wrong for seeding a
+workspace.
+
+**Atomicity is bounded honestly.** The declaration and the event are two writes against a
+repository interface with no transaction — two `PutItem` calls on DynamoDB. The event is
+written second on purpose, so a crash between them leaves the member's input intact and
+coordination merely not yet owed; the reverse ordering would leave an event pointing at a
+declaration that does not exist. Making the pair atomic requires `TransactWriteItems` and
+the IAM to match. That is a **production requirement and is not implemented**, and
+exactly-once event semantics are not claimed.
 
 ---
 
@@ -265,6 +333,11 @@ Enforced in the Strands event loop as a hook provider, not by asking the model n
 | `WORKFLOW_TIMEOUT_SECONDS` | 45 deployed; 120 local default | Cooperative check between model/tool steps → raises; cannot interrupt a call already running |
 | `MAX_ROUTE_MATRIX_CELLS` | 100 | Checked *before* the call is made and billed |
 
+The three strategy budgets above are enforced in the tools rather than in the hook,
+because "how many options may be costed" is a question only the tool that costs one can
+answer. A test asserts every configured bound is read by the enforcement it names, across
+both sites — a bound nothing reads is a guarantee nobody keeps.
+
 Tool-level bounds cancel so the model can wind down cleanly; run-level bounds raise,
 because at that point the run is no longer trusted to wind itself down. Every run ends in
 a recorded outcome — there is no path where it simply stops.
@@ -302,7 +375,7 @@ member's details into an artifact that gets published.
 | Routing | Pure function of coordinates | Same deterministic adapter; labelled simulated | Amazon Location `geo-routes` adapter available |
 | Payments | Simulated provider | Simulated provider | Stripe **TEST** adapter available; live keys refused |
 | Purchase | Simulated executor | Simulated executor | Simulated executor |
-| API / web | uvicorn + Vite | One Lambda Function URL serves SPA + 33 of 50 API paths | API Gateway + Lambda; S3 + CloudFront |
+| API / web | uvicorn + Vite | One Lambda Function URL serves SPA + 33 of 52 API paths | API Gateway + Lambda; S3 + CloudFront |
 | Background | Manual trigger only | **Absent: zero EventBridge rules deployed** | EventBridge definition exists and defaults disabled if this stack is ever deployed |
 
 The offline planner replaces the LLM and only the LLM: the same Strands event loop, the

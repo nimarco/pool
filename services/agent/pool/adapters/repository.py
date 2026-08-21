@@ -36,6 +36,7 @@ from ..domain.models import (
     CohortStrategy,
     Community,
     CommunityMembership,
+    CoordinationEvent,
     DecisionRequest,
     FulfillmentRun,
     HostAssignment,
@@ -90,6 +91,7 @@ class Store:
     threads: dict[str, MessageThread] = field(default_factory=dict)
     messages: dict[str, Message] = field(default_factory=dict)
     issues: dict[str, IssueCase] = field(default_factory=dict)
+    coordination_events: dict[str, CoordinationEvent] = field(default_factory=dict)
     cohort_strategies: dict[str, CohortStrategy] = field(default_factory=dict)
     strategy_evaluations: dict[str, StrategyEvaluation] = field(default_factory=dict)
     decisions: dict[str, DecisionRequest] = field(default_factory=dict)
@@ -127,6 +129,9 @@ class Repository(Protocol):
     def list_needs(self, ws: str) -> list[NeedDeclaration]: ...
     def get_need(self, ws: str, nid: str) -> NeedDeclaration | None: ...
     def put_need(self, ws: str, n: NeedDeclaration) -> None: ...
+    def list_coordination_events(self, ws: str) -> list[CoordinationEvent]: ...
+    def get_coordination_event(self, ws: str, eid: str) -> CoordinationEvent | None: ...
+    def put_coordination_event(self, ws: str, e: CoordinationEvent) -> None: ...
     def list_cohort_strategies(self, ws: str) -> list[CohortStrategy]: ...
     def get_cohort_strategy(self, ws: str, sid: str) -> CohortStrategy | None: ...
     def put_cohort_strategy(self, ws: str, s: CohortStrategy) -> None: ...
@@ -280,6 +285,18 @@ class InMemoryRepository:
     def list_needs(self, ws): return sorted(self.store(ws).needs.values(), key=lambda n: n.id)
     def get_need(self, ws, nid): return self.store(ws).needs.get(nid)
     def put_need(self, ws, n): self.store(ws).needs[n.id] = n
+
+    def list_coordination_events(self, ws):
+        # Oldest first: the order work was owed in is the order a dispatcher takes it.
+        return sorted(
+            self.store(ws).coordination_events.values(), key=lambda e: (e.created_at, e.id)
+        )
+
+    def get_coordination_event(self, ws, eid):
+        return self.store(ws).coordination_events.get(eid)
+
+    def put_coordination_event(self, ws, e):
+        self.store(ws).coordination_events[e.id] = e
 
     def list_cohort_strategies(self, ws):
         return sorted(self.store(ws).cohort_strategies.values(), key=lambda s: s.id)
@@ -507,6 +524,7 @@ _TYPES: dict[str, Any] = {
     "ACTIVITY": ActivityEvent,
     "RUN": AgentRun,
     "RUN_EVALUATION": RunEvaluation,
+    "COORDINATION_EVENT": CoordinationEvent,
     "COHORT_STRATEGY": CohortStrategy,
     "STRATEGY_EVALUATION": StrategyEvaluation,
 }
@@ -695,6 +713,18 @@ class DynamoDBRepository:
     def list_needs(self, ws): return self._query(ws, "NEED", NeedDeclaration)
     def get_need(self, ws, nid): return self._get(ws, "NEED", nid, NeedDeclaration)
     def put_need(self, ws, n): self._put(ws, "NEED", n.id, n)
+
+    def list_coordination_events(self, ws):
+        return sorted(
+            self._query(ws, "COORDINATION_EVENT", CoordinationEvent),
+            key=lambda e: (e.created_at, e.id),
+        )
+
+    def get_coordination_event(self, ws, eid):
+        return self._get(ws, "COORDINATION_EVENT", eid, CoordinationEvent)
+
+    def put_coordination_event(self, ws, e):
+        self._put(ws, "COORDINATION_EVENT", e.id, e)
 
     def list_cohort_strategies(self, ws):
         return sorted(self._query(ws, "COHORT_STRATEGY", CohortStrategy), key=lambda s: s.id)

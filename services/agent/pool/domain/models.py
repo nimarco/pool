@@ -26,6 +26,8 @@ from datetime import UTC, date, datetime
 from enum import Enum
 from typing import Any
 
+from .attributes import AttributeConstraint
+
 
 def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
@@ -95,6 +97,19 @@ class SubstitutionPolicy(str, Enum):
     named a family, and any member of it is what I asked for." The distinction is not
     cosmetic: it decides whether the interface owes the member a disclosure, because
     being handed Pike Place is a substitution only if you asked for something else.
+
+    ``ATTRIBUTE_CONSTRAINED`` is the second such member, and the narrower one. It answers
+    "I named a *rule*": the member accepts any product in one curated family whose
+    authoritative attribute facts satisfy a policy they stated —
+    ``NeedDeclaration.attribute_policy``, evaluated by ``domain.attributes``. It is what
+    the three shapes a real household has need to be expressible as three different
+    things rather than one blunt one:
+
+    * **exact** — ``EXACT_ONLY``: this SKU and nothing else.
+    * **flexible** — ``APPROVED_PRODUCTS``: an allowlist the member wrote. The model may
+      never add to it.
+    * **constrained** — ``ATTRIBUTE_CONSTRAINED``: a typed rule over curated product
+      facts, satisfied by products the member has never seen and could not have listed.
     """
 
     EXACT_ONLY = "exact_only"
@@ -103,6 +118,7 @@ class SubstitutionPolicy(str, Enum):
     APPROVED_BRANDS = "approved_brands"
     STRUCTURED_CATEGORY_MATCH = "structured_category_match"
     GROUP_DECLARED = "group_declared"
+    ATTRIBUTE_CONSTRAINED = "attribute_constrained"
 
 
 class PoolStatus(str, Enum):
@@ -755,6 +771,11 @@ class NeedDeclaration:
     substitution: SubstitutionPolicy = SubstitutionPolicy.EXACT_ONLY
     approved_product_ids: list[str] = field(default_factory=list)
     approved_brands: list[str] = field(default_factory=list)
+    #: The typed rule an ``ATTRIBUTE_CONSTRAINED`` declaration carries, and the only
+    #: policy that reads it. Absent everywhere else, including on every row written
+    #: before this field existed — which is why the compatibility layer treats a missing
+    #: policy as authorising nothing rather than as authorising the family.
+    attribute_policy: AttributeConstraint | None = None
     max_unit_price_cents: int = 0  # 0 = no explicit cap
     active: bool = True
 
@@ -793,6 +814,13 @@ class NeedDeclaration:
             else None
         )
         d["substitution"] = self.substitution.value
+        # `asdict` recurses into the constraint and leaves frozensets and tuples behind,
+        # neither of which DynamoDB's serialiser accepts and neither of which has a
+        # stable iteration order. The constraint's own `to_dict` emits sorted lists, so
+        # the same consent always serialises to the same bytes.
+        d["attribute_policy"] = (
+            self.attribute_policy.to_dict() if self.attribute_policy else None
+        )
         return d
 
     @classmethod
@@ -817,6 +845,14 @@ class NeedDeclaration:
             substitution=SubstitutionPolicy(d.get("substitution", "exact_only")),
             approved_product_ids=list(d.get("approved_product_ids", [])),
             approved_brands=list(d.get("approved_brands", [])),
+            # A row written before this field existed has no key, and a row whose policy
+            # was cleared has an explicit null. Both mean the same thing and both must
+            # keep meaning it: no attribute authority whatsoever.
+            attribute_policy=(
+                AttributeConstraint.from_dict(d["attribute_policy"])
+                if d.get("attribute_policy")
+                else None
+            ),
             max_unit_price_cents=int(d.get("max_unit_price_cents", 0)),
             active=bool(d.get("active", True)),
         )

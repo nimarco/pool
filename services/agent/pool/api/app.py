@@ -32,7 +32,7 @@ import logging
 import re
 import time
 from datetime import date
-from typing import Any
+from typing import Any, ClassVar
 
 from fastapi import Body, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,6 +49,7 @@ from ..agent.tools import TOOL_SURFACE
 from ..config import get_settings
 from ..data import catalog
 from ..data.seed import COMMUNITY_ID, seed
+from ..domain.attributes import AttributeConstraint
 from ..domain.models import (
     LEFT_PARTICIPATION_STATES,
     AllocationState,
@@ -296,6 +297,49 @@ class IssueRequest(BaseModel):
     detail: str = Field(default="", max_length=600)
 
 
+class AttributeConstraintRequest(BaseModel):
+    """Typed product requirements, as a member states them.
+
+    Bounded on every axis a request can grow along, because this is the one field on a
+    declaration whose *shape* is caller-supplied. The values are checked against the
+    curated schema in ``services/needs`` — an attribute the family does not define, or a
+    value it does not allow, is refused there rather than stored and quietly ignored.
+
+    ``prefers`` is accepted and is deliberately inert: it orders choices the member has
+    already authorised and can never create or remove one, which is asserted by
+    ``domain.attributes`` and by test rather than promised here.
+    """
+
+    family: str = Field(max_length=60)
+    schema_version: int = Field(ge=1, le=1_000)
+    requires: dict[str, list[str]] = Field(default_factory=dict)
+    excludes: dict[str, list[str]] = Field(default_factory=dict)
+    prefers: dict[str, list[str]] = Field(default_factory=dict)
+
+    #: Small on purpose. A curated family has a handful of attributes with a handful of
+    #: values each; anything larger is not a member expressing a preference.
+    MAX_ATTRIBUTES: ClassVar[int] = 12
+    MAX_VALUES: ClassVar[int] = 24
+    MAX_TOKEN: ClassVar[int] = 60
+
+    def to_constraint(self) -> AttributeConstraint:
+        for mapping in (self.requires, self.excludes, self.prefers):
+            if len(mapping) > self.MAX_ATTRIBUTES:
+                raise HTTPException(400, "too many product requirements")
+            for key, values in mapping.items():
+                if len(key) > self.MAX_TOKEN or len(values) > self.MAX_VALUES:
+                    raise HTTPException(400, "that requirement is not one this demo accepts")
+                if any(len(v) > self.MAX_TOKEN for v in values):
+                    raise HTTPException(400, "that requirement is not one this demo accepts")
+        return AttributeConstraint(
+            family=self.family,
+            schema_version=self.schema_version,
+            requires={k: frozenset(v) for k, v in self.requires.items()},
+            excludes={k: frozenset(v) for k, v in self.excludes.items()},
+            prefers={k: tuple(v) for k, v in self.prefers.items()},
+        )
+
+
 class NeedRequest(BaseModel):
     """One standing declaration, as a member states it.
 
@@ -319,6 +363,11 @@ class NeedRequest(BaseModel):
     min_savings_pct: int = Field(default=20, ge=0, le=90)
     max_spend_cents: int = Field(ge=1, le=500_000)
     substitution: str = Field(default="exact_only", max_length=40)
+    #: Present only on an ``attribute_constrained`` declaration. Absent everywhere else,
+    #: and refused rather than ignored when it turns up beside another policy — silently
+    #: dropping stated requirements is how a member ends up with authority they did not
+    #: intend and no way to see it.
+    constraint: AttributeConstraintRequest | None = None
     active: bool = True
 
     def to_input(self) -> needs_service.NeedInput:
@@ -355,6 +404,15 @@ class NeedRequest(BaseModel):
         if not product_id:
             raise HTTPException(400, "name a product or a product family")
 
+        # Constrained declarations name a *product* — the exemplar their lineage
+        # resolves to — and carry the rule that decides what else may serve it. Naming a
+        # family instead would be two statements of authority on one row, and the wider
+        # of them would win: the family gate would already have set `group_declared`.
+        if self.group and self.constraint is not None:
+            raise HTTPException(
+                400, "product requirements go with a product, not with a family"
+            )
+
         return needs_service.NeedInput(
             household_id=self.household_id,
             product_id=product_id,
@@ -366,6 +424,9 @@ class NeedRequest(BaseModel):
             min_savings_pct=self.min_savings_pct,
             max_spend_cents=self.max_spend_cents,
             substitution=substitution,
+            attribute_policy=(
+                self.constraint.to_constraint() if self.constraint is not None else None
+            ),
             active=self.active,
         )
 
@@ -1009,6 +1070,11 @@ def get_needs(workspace: str = Query("demo")) -> dict[str, Any]:
                 "max_spend_display": format_cents(n.max_spend_cents),
                 "max_spend_cents": n.max_spend_cents,
                 "substitution": n.substitution.value,
+                # Server-owned, as stored. A client never re-derives what a member
+                # required; it reads it, or it reads that they required nothing.
+                "attribute_policy": (
+                    n.attribute_policy.to_dict() if n.attribute_policy else None
+                ),
                 "active": n.active,
             }
             for n in r.list_needs(ws)

@@ -29,6 +29,12 @@ from datetime import date, timedelta
 from typing import Any
 
 from ..data import catalog
+from ..domain.attributes import (
+    AttributeConstraint,
+    ConstraintError,
+    check_product_attributes,
+    validate_constraint,
+)
 from ..domain.models import (
     LEFT_PARTICIPATION_STATES,
     MembershipStatus,
@@ -79,6 +85,10 @@ class NeedInput:
     min_savings_pct: int = 20
     max_spend_cents: int = 5000
     substitution: SubstitutionPolicy = SubstitutionPolicy.EXACT_ONLY
+    #: The typed rule an ``ATTRIBUTE_CONSTRAINED`` declaration carries. Required by that
+    #: policy and refused by every other, so a caller cannot attach attribute authority
+    #: to a declaration whose stated policy is something narrower.
+    attribute_policy: AttributeConstraint | None = None
     active: bool = True
 
 
@@ -114,6 +124,7 @@ def declare_need(*, ctx: PoolContext, community_id: str, data: NeedInput) -> Nee
         min_savings_pct=data.min_savings_pct,
         max_spend_cents=data.max_spend_cents,
         substitution=data.substitution,
+        attribute_policy=data.attribute_policy,
         active=data.active,
     )
     ctx.repo.put_need(ctx.ws, need)
@@ -184,6 +195,7 @@ def amend_need(
     need.min_savings_pct = data.min_savings_pct
     need.max_spend_cents = data.max_spend_cents
     need.substitution = data.substitution
+    need.attribute_policy = data.attribute_policy
     need.active = data.active
     ctx.repo.put_need(ctx.ws, need)
     ctx.log(
@@ -219,6 +231,8 @@ def _validate(ctx: PoolContext, community_id: str, data: NeedInput) -> None:
     if not _ensure_product(ctx, data.product_id):
         raise NeedError("unknown product")
 
+    _validate_attribute_policy(ctx, data)
+
     if not 1 <= data.quantity <= MAX_QUANTITY:
         raise NeedError(f"quantity must be between 1 and {MAX_QUANTITY}")
 
@@ -250,6 +264,59 @@ def _validate(ctx: PoolContext, community_id: str, data: NeedInput) -> None:
 
     if data.routine_lead_days < 0 or data.routine_lead_days > data.cadence_days:
         raise NeedError("how far ahead you normally restock must fit inside one cycle")
+
+
+def _validate_attribute_policy(ctx: PoolContext, data: NeedInput) -> None:
+    """Accept a constrained declaration only when it can actually decide something.
+
+    Four refusals, and each one closes a way of ending up with a policy that reads as a
+    restriction and behaves as something else:
+
+    * a constrained declaration with no policy would authorise nothing at all, silently;
+    * a policy attached to any other declaration would be authority nobody's stated rule
+      accounts for — the matcher would ignore it today and might not tomorrow;
+    * a policy the shipped schema does not accept (unknown attribute, unknown value,
+      superseded version, no hard rule) can never match anything, and the member should
+      be told that now rather than discovering it as silence;
+    * a policy whose family is not the declared product's family, or that the declared
+      product itself fails, is a contradiction — the row's own exemplar would be refused
+      by the rule attached to it, which is how a member ends up believing they declared
+      something they did not.
+
+    The last one is a check at the edge, not a guarantee. Facts get re-curated, so the
+    evaluator re-derives the answer on every match rather than trusting that this ran.
+    """
+    policy = data.attribute_policy
+    constrained = data.substitution == SubstitutionPolicy.ATTRIBUTE_CONSTRAINED
+    if constrained and policy is None:
+        raise NeedError(
+            "a declaration with product requirements has to say what they are"
+        )
+    if policy is None:
+        return
+    if not constrained:
+        raise NeedError(
+            "product requirements only apply to a declaration that states them as its rule"
+        )
+
+    schema = ctx.product_facts.family_schema(policy.family)
+    try:
+        validate_constraint(policy, schema)
+    except ConstraintError as exc:
+        raise NeedError(str(exc)) from exc
+
+    product = ctx.repo.get_product(ctx.ws, data.product_id)
+    if product is None or product.substitute_group != policy.family:
+        raise NeedError("those requirements do not describe the item you chose")
+
+    check = check_product_attributes(
+        product_id=product.id,
+        product_family=product.substitute_group,
+        constraint=policy,
+        source=ctx.product_facts,
+    )
+    if not check.ok:
+        raise NeedError("the item you chose does not meet the requirements you set")
 
 
 def _ensure_product(ctx: PoolContext, product_id: str) -> bool:
@@ -353,5 +420,12 @@ def need_view(ctx: PoolContext, need: NeedDeclaration) -> dict[str, Any]:
         "min_savings_pct": need.min_savings_pct,
         "max_spend_cents": need.max_spend_cents,
         "substitution": need.substitution.value,
+        #: The member's typed product requirements, exactly as stored — server-owned,
+        #: never re-derived by a client, and ``None`` for every declaration that has
+        #: none. Emitted rather than summarised because the whole claim of the
+        #: constrained policy is that a person can check what Pool was told.
+        "attribute_policy": (
+            need.attribute_policy.to_dict() if need.attribute_policy else None
+        ),
         "active": need.active,
     }

@@ -24,7 +24,7 @@ import pytest
 from pool.data import catalog
 from pool.data.seed import PRODUCTS, seed
 from pool.domain.models import NeedDeclaration, Product, ProductSource, SubstitutionPolicy
-from pool.domain.substitution import evaluate_compatibility
+from pool.domain.substitution import CompatibilityReason, evaluate_compatibility
 from pool.services import needs as needs_service
 from tests.conftest import WS
 
@@ -190,6 +190,12 @@ def test_an_unmapped_product_combines_with_nothing_but_itself(policy):
     If that ever became "matches anything in the same category", an unreviewed import
     could silently make two people's purchases interchangeable — which is the one thing
     the substitution seam exists to prevent (§21).
+
+    ``ATTRIBUTE_CONSTRAINED`` is the one policy for which "itself" is not automatically
+    enough, and the exception strengthens the claim rather than weakening it. That policy
+    says "I accept a product **when its facts say X**", so a declaration carrying no such
+    rule — as this one does not — authorises nothing at all, not even the row it names.
+    Every other policy behaves exactly as it did before this one existed.
     """
     unmapped = Product("p_new", "Something", "", "unit", "")
     other = Product("p_other", "Something else", "", "unit", "")
@@ -201,7 +207,14 @@ def test_an_unmapped_product_combines_with_nothing_but_itself(policy):
     same = evaluate_compatibility(
         target=unmapped, candidate=unmapped, need=_need("p_new", policy)
     )
-    assert same.compatible and same.is_exact
+    if policy is SubstitutionPolicy.ATTRIBUTE_CONSTRAINED:
+        assert not same.compatible
+        assert same.code is CompatibilityReason.ATTRIBUTE_POLICY_MISSING
+        # Still an honest report of the two product ids: `is_exact` is stored on the
+        # membership and has to keep meaning literally what it says.
+        assert same.is_exact
+    else:
+        assert same.compatible and same.is_exact
 
 
 def test_every_catalogue_group_is_one_a_human_wrote():

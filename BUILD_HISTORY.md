@@ -6017,3 +6017,196 @@ runtime, and evidence gathered against it would have been worthless.
 **Relevant commits / files**
 `PRODUCT.md`, `BUILD_HISTORY.md`. Release candidate `e8941e3` merged to `main`
 fast-forward; experiment preserved at `exp/synoptic-hour` `ddf0b45`.
+
+---
+
+### #0054 — [2026-08-20] — Consent Pool can compute with: typed product requirements over curated facts
+`[ARCHITECTURE]` `[HITL]` `[ARTICLE-3]`
+
+**Goal / user intent**
+Phase 1 of a post-audit architecture. Build the smallest deterministic foundation that lets
+Pool reason about *heterogeneous* recurring demand later — several households who all buy
+roughly the same thing and disagree about which one — without ever asking a model whether
+two products are basically the same. Explicitly not built here: cohort-strategy generation,
+any Strands change, the coordination event, the member UI for it.
+
+**Starting state**
+`domain/substitution.py` evaluated one exact target SKU against each declaration under six
+policies. Two of them are the shapes a household actually comes in — `EXACT_ONLY` ("this
+bag") and `APPROVED_PRODUCTS` ("these bags, and I listed them"). `GROUP_DECLARED` added a
+third in #0044: "coffee, I do not care which."
+
+The gap the audit found is the shape in between, and it is the common one: *whole bean,
+caffeinated, medium or dark — never ground, never decaf.* That is not an allowlist, because
+it describes products the member has never seen. It is not a family, because the catalogue's
+`coffee` family has 26 members including a vanilla creamer, an instant, a bottled cold brew
+and a chilled Frappuccino. There was no field in which to say it, so the only expressible
+approximations were far too narrow or far too wide.
+
+**Decision**
+A fourth kind of statement, `ATTRIBUTE_CONSTRAINED`, built on three separated pieces:
+
+- **`ProductFamilySchema`** (`domain/attributes.py`) — versioned. Which attributes exist for
+  one curated family, what values each may take, and which of them a product must carry
+  before it may be reasoned about at all.
+- **`ProductAttributeFact`** — one authoritative statement about one product, carrying its
+  provenance and verification state. Curated, committed, synthetic.
+- **`AttributeConstraint`** — the member's typed rule: `requires` (hard, "the value must be
+  one of these"), `excludes` (hard), `prefers` (soft, ranked, and structurally inert).
+
+The curated family is **`roast_coffee`**, deliberately *not* the catalogue's `coffee`. Beans
+and ground coffee only. Attributes: `form` (WHOLE_BEAN | GROUND) and `caffeine` (CAFFEINATED
+| DECAF), both required by the family; `roast` (LIGHT | MEDIUM | DARK), not required.
+
+**Why**
+
+*Why a new family rather than the existing one.* There is no honest value of `form` for a
+creamer. Writing a schema over the broad coffee family would have meant inventing facts to
+fit the model, which is the single thing this layer exists to make impossible. The broad
+family stays exactly as it is and stays declarable; the narrow one is a separate curated
+set that overlaps it in zero products, asserted by test.
+
+*Why facts are a separate object rather than columns on `Product`.* Provenance and
+verification have to travel with the value, and the object has to have no writable runtime
+path. `ProductAttributeFact(` is constructed in exactly one place in the codebase — a
+committed table in `data/product_facts.py`. Adding a fact means editing a file and
+committing it. "The model is never the source of a product fact" is therefore a property
+of the code rather than a promise in a docstring.
+
+*Why the family-level required flag and the member's policy are two different mechanisms.*
+`form` and `caffeine` are what a product **is**; `roast` is taste. So a member who never
+mentions roast can be served a bag whose roast nobody confirmed, and a member who requires
+medium cannot — because their own rule is what makes that fact load-bearing. One flag
+would have forced a choice between too strict for everyone and too loose for the people who
+care, and the asymmetry is the interesting part of the design.
+
+*Why the exact-id short-circuit is skipped for this one policy.* Every other policy
+short-circuits when the target and the declared product are the same id, which is right:
+you asked for this. A constrained declaration stores a product for lineage and its consent
+is a statement about *facts*, so a curated fact corrected afterwards — this bag turned out
+to be decaf — has to be able to refuse that very product. Otherwise the exemplar would be
+the one thing in the world exempt from the member's own rule. Tested both ways.
+
+**Implementation** — implemented and tested; nothing deployed.
+
+New: `domain/attributes.py` (schema, facts, constraint, the pure evaluator, reason codes),
+`data/product_facts.py` (curated synthetic family, six bags, the fact registry).
+
+Changed: `SubstitutionPolicy` gains one member; `NeedDeclaration` gains
+`attribute_policy`; `domain/substitution.py` gains `CompatibilityReason` and a `code` +
+`attribute` on every verdict; `matching.py` carries the code on a rejection;
+`PoolContext` gains an injected `product_facts`; `services/needs.py` validates a
+constrained declaration; the API accepts and projects one; `domain/policy.py` treats a
+constrained match the way it already treated a family declaration.
+
+*Reason codes.* Every verdict now carries a stable token — `EXACT_PRODUCT_REQUIRED`,
+`PRODUCT_NOT_ALLOWED`, `WRONG_PRODUCT_FAMILY`, `REQUIRED_ATTRIBUTE_MISMATCH`,
+`EXCLUDED_ATTRIBUTE_VALUE`, `ATTRIBUTE_UNKNOWN`, `ATTRIBUTE_UNVERIFIED`,
+`ATTRIBUTE_CONFLICTED`, `SCHEMA_VERSION_MISMATCH`, and the rest — plus the schema
+attribute that decided it. A code alone cannot tell "eleven members refused on grind" from
+"eleven refused on roast", and that distinction is what makes an exclusion actionable
+rather than merely honest. The human sentence is unchanged for every policy that already
+had one, so nothing displayed anywhere moved.
+
+The rows never reach the model: `OpportunityOutcome.to_dict()` emits `rejected_count` and
+not the rejections, so this costs zero tokens per turn (§3.3).
+
+**A HITL boundary did move, deliberately.** A constrained member on Smart Join is no longer
+asked to approve a product that satisfies their own rule. AGENTS.md §5 keeps "accepting a
+materially different substitute" for a human because *Pool* would otherwise be deciding what
+"materially different" means. Here the member decided, in a typed rule, and the
+deterministic layer proved this product satisfies it — the same argument that already
+applies to `GROUP_DECLARED`. Asking "will you accept whole-bean caffeinated coffee for your
+whole-bean caffeinated coffee?" is the notification this product exists to remove. A product
+*outside* the rule is still a hard failure, and that is asserted.
+
+**Backward compatibility: interpretation, not migration.** No stored row is rewritten and
+there is no migration code. The new field defaults to `None`, an absent key and an explicit
+null both read as "no attribute authority", and `GROUP_DECLARED` keeps its exact previous
+meaning including that it still pools ground coffee and decaf for somebody who declared the
+family. The one existing test that changed is `test_an_unmapped_product_combines_with_
+nothing_but_itself`, which sweeps every enum member: under the new policy a declaration
+carrying no rule is refused *even for the product it names*, which is stricter than the
+claim the test was making, so the new case is asserted separately rather than folded in.
+
+**AWS / external services touched** — None.
+
+**Cost-relevant activity** — None. No model call, no AWS call, no schedule, no new
+resource. The fact source is a compiled-in table; there is no lookup service and nothing to
+provision (§3.7).
+
+**Agent behavior** — unchanged. `services/agent/pool/agent/` has a zero-line diff.
+
+**Validation**
+`make qa` green: **1,060 agent + 75 infra + 119 web = 1,254**, ruff, eslint, `tsc -b`,
+production build, secret scan, `git diff --check`. 80 new tests, 79 of them in
+`tests/test_constrained_demand.py`.
+
+Proven there: exact accepts its SKU and refuses another; an allowlist admits only what the
+member listed; the canonical constrained member gets medium and dark whole-bean caffeinated
+and is refused light, decaf and ground, each naming the attribute that decided it; an
+exclusion is a separate rule from a requirement; a soft preference mismatch is never a
+refusal and a soft preference can never admit what a hard rule refused; unknown, unverified,
+conflicted, wrong-family, wrong-schema-version, invalid-policy, missing-policy and
+no-fact-source-at-all each refuse with their own code; a policy round-trips through the
+DynamoDB adapter and boto3's own serialiser byte-for-byte identically; a row written before
+the field existed is still readable; the canonical rice demand still matches at six
+households and twenty-two bags on `EXACT_ONLY`; and eight malformed constrained
+declarations are refused by the API with a stated reason.
+
+Two of those tests were written expecting the wrong answer and were right to fail. The
+second found a real fail-open: a schema attribute whose type this build cannot compare was
+being compared for equality anyway when the *family* required it, because the type check
+only ran where the member's policy named the attribute. A family with any uncomparable
+attribute now refuses wholesale.
+
+The pre-commit self-review found a second, narrower one. Nothing checked that a fact was
+actually filed under the product and attribute it claims — the shipped registry indexes by
+the fact's own fields and so cannot produce a mismatch, but a fact source is an injected
+collaborator and a hand-built one could. Mis-attributing one bag's grind to another is
+precisely the failure this layer exists to prevent, so the fact is now checked against the
+key it was found under rather than trusted for being there.
+
+**Failures / dead ends**
+The first design had the fact source as a module-level lookup the domain imported. That
+reverses the dependency direction the repository already has — `data` imports `domain`,
+never the other way — and, worse, it makes the authority a compatibility decision rests on
+invisible at the call site. It became an injected `ProductFactSource` on `PoolContext`,
+alongside the repository and the payment provider, because it is the same kind of thing.
+The default is a source that knows nothing, so a caller that has not wired facts in gets
+refusals rather than a structural fallback: "nobody supplied the facts" and "the member's
+rule passes" must never produce the same answer.
+
+`AttributeValueType` briefly looked like a one-member enum worth deleting. It earns its
+place as the fail-closed guard above, which is also what made the gap findable.
+
+**What we learned**
+The useful unit of consent is not a product and not a category — it is a *rule*, and a rule
+is only safe if the facts it reads are curated, versioned, and unwritable at runtime. The
+version field is doing more work than it looks like: a member's stored policy was written
+against one reading of what "whole bean" means, and silently reinterpreting it under
+another is exactly how consent broadens with nobody deciding to.
+
+The second lesson is about test design. A parametrized sweep over an enum is the cheapest
+early warning a codebase can have — adding one member ran forty existing assertions against
+a policy that did not exist when they were written, and the single failure it produced was
+the one genuinely interesting semantic question in the change.
+
+**Article fodder**
+Article 3, directly: this is a concrete answer to "when may an agent act without asking",
+and the answer is "when the human wrote a machine-checkable rule and deterministic code
+proved it holds" — not "when the model is confident". The `roast_coffee`-versus-`coffee`
+decision is a good short illustration for Article 1 of why product ontology is a safety
+problem and not a modelling convenience.
+
+**Evidence worth preserving**
+The six curated bags and their facts are the fixture Phase 2's cohort strategies will be
+generated over; the one deliberately unverified roast is what will make a refusal there
+real rather than narrated.
+
+**Relevant commits / files**
+`services/agent/pool/domain/attributes.py`, `data/product_facts.py`,
+`domain/substitution.py`, `domain/models.py`, `domain/matching.py`, `domain/policy.py`,
+`services/context.py`, `services/needs.py`, `services/discovery.py`,
+`services/coordination.py`, `api/app.py`, `tests/test_constrained_demand.py`,
+`tests/test_catalog.py`.

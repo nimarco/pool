@@ -24,6 +24,7 @@ import math
 from dataclasses import dataclass
 from datetime import date
 
+from .attributes import ProductFactSource
 from .models import (
     CommunityMembership,
     Household,
@@ -76,9 +77,22 @@ class MatchCandidate:
 
 @dataclass(frozen=True)
 class MatchRejection:
+    """Why one declaration could not join. ``reason`` reads; ``code`` groups.
+
+    ``code`` carries the compatibility layer's stable token when the refusal came from
+    there, and the attribute it turned on when the refusal was about a product fact.
+    Both are empty for the rejections this module decides itself — community scope,
+    verification, timing, radius — which have never had codes and do not acquire them
+    here. The point of carrying it at all is that "eleven members refused on caffeine"
+    is a countable fact and "product_incompatible: a required product fact is not
+    verified" is a string somebody would have to parse.
+    """
+
     need_id: str
     household_id: str
     reason: str
+    code: str = ""
+    attribute: str = ""
 
 
 @dataclass(frozen=True)
@@ -110,7 +124,13 @@ class MatchResult:
             "candidate_count": len(self.candidates),
             "candidates": [c.to_dict() for c in self.candidates],
             "rejected": [
-                {"need_id": r.need_id, "household_id": r.household_id, "reason": r.reason}
+                {
+                    "need_id": r.need_id,
+                    "household_id": r.household_id,
+                    "reason": r.reason,
+                    "code": r.code,
+                    "attribute": r.attribute,
+                }
                 for r in self.rejections
             ],
         }
@@ -132,18 +152,29 @@ def find_candidates(
     exclude_household_ids: frozenset[str] = frozenset(),
     include_future_demand: bool = True,
     require_verified_membership: bool = True,
+    facts: ProductFactSource | None = None,
 ) -> MatchResult:
     """Find every declared need that could legitimately join a pool for this product.
 
     ``memberships`` is keyed ``"<community_id>#<household_id>"``. Rejections are
     returned alongside candidates so the agent — and the activity feed — can explain
     why someone was left out without guessing.
+
+    ``facts`` is the authoritative product-fact source an attribute-constrained
+    declaration is evaluated against. Omitting it does not loosen anything: a constrained
+    declaration with no facts available is refused, like every other unproven claim here.
     """
     candidates: list[MatchCandidate] = []
     rejections: list[MatchRejection] = []
 
-    def reject(need: NeedDeclaration, household_id: str, reason: str) -> None:
-        rejections.append(MatchRejection(need.id, household_id, reason))
+    def reject(
+        need: NeedDeclaration,
+        household_id: str,
+        reason: str,
+        code: str = "",
+        attribute: str = "",
+    ) -> None:
+        rejections.append(MatchRejection(need.id, household_id, reason, code, attribute))
 
     for need in needs:
         # A retired declaration is not a declaration. `active` is what a member sets to
@@ -182,9 +213,16 @@ def find_candidates(
             candidate=need_product,
             need=need,
             offer_unit_price_cents=offer_unit_price_cents,
+            facts=facts,
         )
         if not compatibility.compatible:
-            reject(need, household.id, f"product_incompatible:{compatibility.reason}")
+            reject(
+                need,
+                household.id,
+                f"product_incompatible:{compatibility.reason}",
+                compatibility.code.value,
+                compatibility.attribute,
+            )
             continue
 
         timing = evaluate_timing(need, purchase_date)

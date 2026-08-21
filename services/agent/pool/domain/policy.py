@@ -176,6 +176,19 @@ def evaluate_smart_join(
         checks.append(
             PolicyCheck("substitution", True, "member declared this product family")
         )
+    elif need.substitution == SubstitutionPolicy.ATTRIBUTE_CONSTRAINED:
+        # The same argument, one step narrower, and it is worth stating why this is not
+        # the preauthorisation AGENTS.md §5 tells us to withhold. "Accepting a materially
+        # different substitute" needs a human because Pool would be deciding what
+        # "materially different" means. Here the member decided: they wrote a typed rule
+        # over curated product facts, `domain.attributes` proved this product satisfies
+        # it, and `substitution_authorised` above is that proof. Asking them to confirm
+        # their own rule would be the notification this product exists to remove.
+        checks.append(
+            PolicyCheck(
+                "substitution", True, "product meets this member's stated requirements"
+            )
+        )
     else:
         standing_allows = policy.substitution != SubstitutionPolicy.EXACT_ONLY
         checks.append(

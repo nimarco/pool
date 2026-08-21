@@ -41,6 +41,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ..domain.attributes import ProductFactSource
 from ..domain.matching import haversine_km
 from ..domain.models import NeedDeclaration, Product
 from ..domain.substitution import evaluate_compatibility
@@ -61,6 +62,7 @@ def compatible_needs(
     community_id: str,
     offer_unit_price_cents: int | None = None,
     exclude_household_ids: frozenset[str] = frozenset(),
+    facts: ProductFactSource | None = None,
 ) -> list[NeedDeclaration]:
     """Declarations a pool buying ``target`` could actually serve.
 
@@ -84,6 +86,7 @@ def compatible_needs(
             candidate=declared,
             need=need,
             offer_unit_price_cents=offer_unit_price_cents,
+            facts=facts,
         )
         if verdict.compatible:
             out.append(need)
@@ -142,6 +145,7 @@ def _opportunity(
         community_id=community_id,
         offer_unit_price_cents=coord.best_bulk_unit_price_cents(ctx, target.id),
         exclude_household_ids=already,
+        facts=ctx.product_facts,
     )
     households = sorted({n.household_id for n in usable})
     # A member-anchored entry is sited around that member too: they are the person who
@@ -227,6 +231,7 @@ def unsourced_demand(
         exclude_household_ids=frozenset(
             coord.pooled_household_ids(ctx, community_id, need.product_id)
         ),
+        facts=ctx.product_facts,
     )
     others = [n for n in usable if n.household_id != need.household_id]
     return UnsourcedDemand(
@@ -308,6 +313,7 @@ def standing_demand_for(
                 community_id=community_id,
                 offer_unit_price_cents=coord.best_bulk_unit_price_cents(ctx, target_id),
                 exclude_household_ids=already,
+                facts=ctx.product_facts,
             )
             if n.household_id != need.household_id
         ]

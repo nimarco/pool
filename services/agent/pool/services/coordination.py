@@ -395,6 +395,7 @@ def sourceable_targets_for_need(ctx: PoolContext, need: NeedDeclaration) -> list
             candidate=declared,
             need=need,
             offer_unit_price_cents=best_bulk_unit_price_cents(ctx, target_id),
+            facts=ctx.product_facts,
         )
         if verdict.compatible:
             out.append(target_id)
@@ -605,9 +606,20 @@ def evaluate_opportunity(
             max_radius_km=radius_km,
             exclude_household_ids=exclude_household_ids,
             include_future_demand=include_future_demand,
+            facts=ctx.product_facts,
         )
         rejected = [
-            {"need_id": r.need_id, "household_id": r.household_id, "reason": r.reason}
+            {
+                "need_id": r.need_id,
+                "household_id": r.household_id,
+                "reason": r.reason,
+                # The stable form of the same fact. `to_dict` emits only the *count* of
+                # these, so nothing here reaches the model's context (§3.3) — it is for
+                # the operator surface, the audit trail, and grouping an exclusion by
+                # its cause rather than by parsing its sentence.
+                "code": r.code,
+                "attribute": r.attribute,
+            }
             for r in match.rejections
         ]
         near_misses.append(
@@ -1716,6 +1728,7 @@ def recover_pool(
         offer_unit_price_cents=offer.unit_price_cents,
         max_radius_km=radius_km,
         exclude_household_ids=frozenset(involved),
+        facts=ctx.product_facts,
     )
 
     if not match.candidates:

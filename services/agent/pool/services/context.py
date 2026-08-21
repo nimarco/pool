@@ -17,6 +17,8 @@ from ..adapters.purchase import PurchaseExecutor, SimulatedPurchaseExecutor
 from ..adapters.repository import Repository
 from ..adapters.routing import RoutingService
 from ..adapters.sourcing import SourcingProvider, SyntheticCatalogProvider
+from ..data import product_facts
+from ..domain.attributes import ProductFactSource
 from ..domain.models import ActivityEvent, Community, new_id, utcnow
 
 
@@ -34,6 +36,15 @@ class PoolContext:
     payments: PaymentProvider = field(default_factory=LocalSimulatedPaymentProvider)
     purchaser: PurchaseExecutor = field(default_factory=SimulatedPurchaseExecutor)
     sourcing: SourcingProvider = field(default_factory=SyntheticCatalogProvider)
+    #: Where a compatibility decision reads authoritative product facts from. Injected
+    #: like every other collaborator, and for the same reason: the set of things a
+    #: service may treat as true should be visible at the seam rather than imported
+    #: somewhere in the middle of the domain. Nothing writes to it at runtime — the
+    #: curated set is committed to the repository, which is what makes "the model is
+    #: never the source of a product fact" a property of the code and not a promise.
+    product_facts: ProductFactSource = field(
+        default_factory=lambda: product_facts.REGISTRY
+    )
     run_id: str = ""
     #: Overridable clock so timing behaviour is testable without sleeping.
     now: datetime = field(default_factory=utcnow)

@@ -3449,3 +3449,161 @@ select.control {
     flex-direction: column;
   }
 }
+
+/* ------------------------------------------------------------------ preferences
+   The product-specific flexibility questions on a declaration. Built from the tokens
+   already here — no new colours, no new type scale, no new radius. The only thing these
+   rules add is layout for a control shape the product did not have: a radio pair with a
+   consequence, and beneath it a small set of answers about the product itself. */
+
+.prefs {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+  padding: 14px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.prefs > legend {
+  padding: 0 4px;
+}
+.prefs-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.prefs-radio,
+.prefs-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  /* 44px minimum touch target, met by padding rather than by a fixed height so the
+     label can wrap on a narrow screen without clipping. */
+  padding: 8px 6px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+.prefs-radio:hover,
+.prefs-check:hover {
+  background: var(--paper-sunken);
+}
+.prefs-radio input,
+.prefs-check input {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--moss);
+}
+.prefs-radio > span,
+.prefs-check > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.prefs-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+.prefs-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 6px;
+}
+.prefs-group-label {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.prefs-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.prefs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--paper);
+  cursor: pointer;
+  font-size: 13.5px;
+}
+.prefs-pill.is-on {
+  background: var(--moss-soft);
+  border-color: var(--moss-line);
+}
+.prefs-pill input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--moss);
+}
+.prefs-note {
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------- why this order */
+
+.watch-why {
+  margin-left: 8px;
+  font-size: 12.5px;
+  /* Its own row on a narrow screen rather than crowding the status chip. */
+  flex: none;
+}
+.why-options,
+.why-exclusions,
+.why-not-yet,
+.verify-steps,
+.verify-facts,
+.proof-tools,
+.proof-evals {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.why-verdict {
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: var(--paper-raised);
+}
+.why-verdict.is-ok {
+  border-left-color: var(--moss);
+}
+.why-verdict.is-no {
+  border-left-color: var(--clay);
+}
+.why-verdict-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.why-verdict p {
+  margin: 0;
+}
+.proof-tools code,
+.proof-evals code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.self-start {
+  align-self: flex-start;
+}

@@ -150,14 +150,26 @@ rather than asserted — 0 contrast failures across 444 rendered pairs in both t
 stops without a ring under real Tab traversal, no target under 24x24, and three demo
 rehearsals from reset that were byte-identical.
 
-The live app is now self-testable. **Judge demo**, reached from the first screen and the
-footer, walks a first-time visitor through the central claim in four clicks: pre-existing
-rice demand (7 people, 24 bags, 2 theirs), a committed supplier quote that clears the
-minimum and is still refused, a better one that is worth doing, and a run that forms the
-order. Every control is a door onto the mechanism that already existed — the two quote
-imports call the same `_ingest_supplier_bytes` an upload reaches, digest check included —
-so nothing on that page is a canned verdict. Measured: 423 words and 12 s of clicking, so
-roughly 2–2.5 minutes for somebody reading at 200–250 wpm.
+The live app is self-testable, and **the way it is tested changed** (#0057). The scripted
+judge demo asked a visitor to load a fixture, record a supplier quote and press "run
+agent" — four clicks whose only purpose was advancing a demo, which is the thing a
+sceptical reader is trying to see past. It still exists at `/judge` for regression and is
+no longer in navigation.
+
+Verification is now **`/verify`**: a fresh synthetic community that already contains
+fragmented coffee demand, and then the ordinary product. A judge adds a coffee they buy,
+answers questions *about coffee* — whole bean, caffeinated, which roasts — and saves. That
+single save is the only causal action. Pool lists two orders it could assemble, costs the
+one with more demand behind it, is refused on landed economics, costs the other, and forms
+it; Home changes, *Why this order?* explains both verdicts and the aggregate exclusions,
+and *Technical proof for this run* shows the same event, run, evaluation and pool ids with
+the bounds each was inside. A reload changes none of it, because none of it is held in the
+browser.
+
+Browser-verified at 390×844 and 1280×720 against the local public-demo stack: event
+`cev_ba48cbb0e450e9b8` → run `run_34720f1f9297` → pool `pool_d10604b82d23`, 18 units in
+three whole cases, zero surplus, six members including the judge, $69.18 saved (20.7%),
+and the refused option at −$7.19. Nothing was deployed and no model tokens were spent.
 
 What remains is human-owned and none of it is claimed complete here: the public video,
 repository visibility, the Builder ID, the Builder Center articles, and the submission

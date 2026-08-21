@@ -20,9 +20,18 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Consumer, NeedDraft, Place, api } from "../api";
+import {
+  Consumer,
+  NeedDraft,
+  NeedPreferences,
+  Place,
+  PreferenceQuestion,
+  api,
+} from "../api";
 import { ChosenCard, ProductSearch } from "../product-search";
 import { ChosenItem, asChosen } from "../chosen";
+import { EXACT } from "../preference-answers";
+import { Preferences } from "../preferences";
 import { IconArrowRight, IconCheck } from "../ui";
 
 type Step = "you" | "where" | "buy" | "authority";
@@ -256,12 +265,44 @@ function BuyStep({
   const [quantity, setQuantity] = useState(2);
   const [cadence, setCadence] = useState(DEFAULT_CADENCE);
   const [nextNeeded, setNextNeeded] = useState(isoInDays(DEFAULT_NEXT_NEEDED_DAYS));
+  /** What this product can be asked about, and what was answered. Setting up is not a
+   *  lesser declaration than editing one later: the same questions, the same server
+   *  mapping, the same typed policy. */
+  const [questions, setQuestions] = useState<PreferenceQuestion[]>([]);
+  const [preferences, setPreferences] = useState<NeedPreferences | null>(null);
+
+  useEffect(() => {
+    const productId = chosen?.draft.product_id;
+    if (!productId) {
+      setQuestions([]);
+      setPreferences(null);
+      return;
+    }
+    let live = true;
+    void api
+      .productPreferences(productId)
+      .then((offered) => {
+        if (!live) return;
+        setQuestions(offered.questions);
+        setPreferences(offered.questions.length > 0 ? EXACT : null);
+      })
+      .catch(() => {
+        if (!live) return;
+        setQuestions([]);
+        setPreferences(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [chosen?.draft.product_id]);
 
   const reset = () => {
     setChosen(null);
     setQuantity(2);
     setCadence(DEFAULT_CADENCE);
     setNextNeeded(isoInDays(DEFAULT_NEXT_NEEDED_DAYS));
+    setQuestions([]);
+    setPreferences(null);
   };
 
   const flexibility = defaultFlexibility(nextNeeded, cadence);
@@ -271,6 +312,9 @@ function BuyStep({
     await onAdd(chosen, {
       household_id: "",
       ...chosen.draft,
+      /* Answers, not a policy, and they replace the draft's substitution value so there
+         is exactly one source for what this member consented to. */
+      ...(preferences ? { preferences, substitution: undefined } : {}),
       quantity,
       cadence_days: cadence,
       expected_next_need_date: nextNeeded,
@@ -360,6 +404,14 @@ function BuyStep({
               </span>
             </label>
           </div>
+          {questions.length > 0 ? (
+            <Preferences
+              questions={questions}
+              value={preferences ?? EXACT}
+              onChange={setPreferences}
+              disabled={busy}
+            />
+          ) : null}
           {error ? <p className="form-error">{error}</p> : null}
           <div className="btn-row">
             <button className="btn btn-primary" onClick={() => void save()} disabled={busy}>

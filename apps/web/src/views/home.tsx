@@ -171,6 +171,8 @@ function OpportunityCard({
   pool,
   mine,
   substituteFor,
+  whyNeedId,
+  onWhy,
   whyItWorked,
   onOpen,
   onShowAgent,
@@ -182,6 +184,10 @@ function OpportunityCard({
    *  substitute for it. The card leads with the pool's name and photograph, so
    *  without this the two silently disagree with the declaration behind them. */
   substituteFor: string;
+  /** The declaration behind this order, when the server could name one. Its absence is
+   *  why the older execution-trace link is still the fallback. */
+  whyNeedId: string;
+  onWhy: (needId: string, productName: string) => void;
   /** Why this order worked, as the run that formed it established — supplier minimum,
    *  case fit, which tier won, which pickup point. Empty unless the run on screen is
    *  the one that produced this pool, because these are facts about *that* run rather
@@ -316,7 +322,16 @@ function OpportunityCard({
             Open the pool
             <IconArrowRight />
           </button>
-          {pool.execution_proof ? (
+          {/* One door, member-first, with the proof inside it rather than beside it.
+              This used to go straight to the run's execution trace — the right evidence
+              for a judge and the wrong first answer for the person whose order it is.
+              "Why this order?" reads the same rows and puts the deterministic proof one
+              disclosure down, so nobody has to choose between the two. */}
+          {whyNeedId ? (
+            <button className="btn btn-sm" onClick={() => onWhy(whyNeedId, pool.product_name)}>
+              <ActorTag actor="agent" label="Why this order?" />
+            </button>
+          ) : pool.execution_proof ? (
             <button className="btn btn-sm" onClick={() => onShowAgent(pool.pool_id)}>
               <ActorTag actor="agent" label="Technical proof for this run" />
             </button>
@@ -440,6 +455,7 @@ function WatchingRow({
   outlook,
   lastRun,
   onOpenPool,
+  onWhy,
 }: {
   demand: StandingDemand;
   need: NeedRow | null;
@@ -449,6 +465,7 @@ function WatchingRow({
    *  wording differs". */
   lastRun: { headline: string; at: string; reasonCode: string } | null;
   onOpenPool: (id: string) => void;
+  onWhy: (needId: string, productName: string) => void;
 }) {
   const unit = (n: number) => (n === 1 ? demand.unit : `${demand.unit}s`);
   const together = demand.compatible_units + demand.my_units;
@@ -474,6 +491,18 @@ function WatchingRow({
       <div className="watch-head">
         <span className="watch-name">{demand.product_name}</span>
         <StatusChip status={status} label={outlook?.headline ?? "Pool is watching this"} />
+        {/* Present whatever the answer was. "Pool looked and decided not to" is exactly
+            as much of an answer as an order, and a link that only appeared on success
+            would make the refusal look like nothing happened. The screen behind it says
+            so itself when Pool has not looked yet. */}
+        {need ? (
+          <button
+            className="linkish watch-why"
+            onClick={() => onWhy(need.need_id, demand.product_name)}
+          >
+            {status === "coordinating" ? "Why this order?" : "Why not yet?"}
+          </button>
+        ) : null}
       </div>
 
       {/* Skipped entirely when an order has already taken the demand. `compatible_members`
@@ -706,6 +735,7 @@ export function Home({
   onRespond,
   onShowAgent,
   onStartNeed,
+  onWhy,
   liveDiscovery,
   region,
 }: {
@@ -727,6 +757,10 @@ export function Home({
   onRespond: (id: string, approve: boolean) => void;
   onShowAgent: (poolId: string) => void;
   onStartNeed: (picked: Picked | null) => void;
+  /** Open "why this order?" for one declaration. Passed down rather than fetched here:
+   *  the explanation is one server read about one declaration, and the row only has to
+   *  know which declaration it is about. */
+  onWhy: (needId: string, productName: string) => void;
   liveDiscovery: boolean;
   region: string | null;
 }) {
@@ -943,12 +977,19 @@ export function Home({
         <OpportunityCard
           pool={pool}
           mine={myMembership}
+          /* The server's answer, not an inference from `is_exact_product`.
+             Reading it off the product ids was wrong for two policies: a member who
+             declared a family, or who stated a rule about product facts, named no
+             product — so a different bag is what they asked for rather than a stand-in
+             for it, and the apology would be for doing exactly what they said (§21). */
           substituteFor={
-            member?.opportunity && !member.opportunity.is_exact_product
+            member?.opportunity?.substitution_disclosed
               ? member.opportunity.declared_product_name
               : ""
           }
           whyItWorked={whyItWorked}
+          whyNeedId={member?.opportunity?.need_id ?? ""}
+          onWhy={onWhy}
           onOpen={() => onOpenPool(pool.pool_id)}
           onShowAgent={onShowAgent}
         />
@@ -975,6 +1016,7 @@ export function Home({
                   outlook={byOutlook.get(d.need_id) ?? null}
                   lastRun={lastRunFor.get(d.need_id) ?? null}
                   onOpenPool={onOpenPool}
+                  onWhy={onWhy}
                 />
               ))}
             </div>

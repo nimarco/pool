@@ -309,3 +309,187 @@ def dispatch(
         ),
         True,
     )
+
+
+# ------------------------------------------------------- what one declaration caused
+
+
+#: Bounds on the explanation. It is read by a member on a phone and by a judge on a
+#: laptop, and neither of them wants a transcript.
+MAX_EXPLAINED_OPTIONS = 6
+MAX_EXPLAINED_TOOL_CALLS = 12
+
+
+def latest_for_need(ctx: PoolContext, need_id: str) -> CoordinationEvent | None:
+    """The most recent coordination this declaration caused, if any."""
+    matching = [
+        e for e in ctx.repo.list_coordination_events(ctx.ws) if e.need_id == need_id
+    ]
+    return matching[-1] if matching else None
+
+
+def explain(ctx: PoolContext, need_id: str) -> dict[str, Any] | None:
+    """The whole causal chain one declaration set off, read from stored rows.
+
+    Reload-safe by construction: nothing here is reconstructed from what a browser
+    happened to see. The event names the run, the run's own strategy rows name what was
+    considered, its evaluations name what was costed and what each verdict was, and the
+    pool — if one formed — names itself. Refreshing the page re-reads the same rows.
+
+    Two audiences, one source. The member-facing half answers "what happened and what has
+    *not* happened"; the technical half answers "which model, which tools, in what order,
+    under what bounds". They are the same facts at two levels of detail, so they cannot
+    disagree — which is the property that makes the second one proof of the first.
+
+    Counts, never a roster: which specific neighbour was excluded is not an answer to
+    anybody else's question (AGENTS.md §4).
+    """
+    event = latest_for_need(ctx, need_id)
+    if event is None:
+        return None
+    run = ctx.repo.get_run(ctx.ws, event.run_id) if event.run_id else None
+
+    considered = [
+        s for s in ctx.repo.list_cohort_strategies(ctx.ws) if run and s.run_id == run.id
+    ][:MAX_EXPLAINED_OPTIONS]
+    investigated = [
+        e for e in ctx.repo.list_strategy_evaluations(ctx.ws) if run and e.run_id == run.id
+    ]
+    # One verdict per option: the guarded creator re-costs before it writes, so the same
+    # option can carry two identical evaluations and showing both would read as two
+    # investigations.
+    seen: set[str] = set()
+    unique: list[Any] = []
+    for evaluation in investigated:
+        if evaluation.strategy_id in seen:
+            continue
+        seen.add(evaluation.strategy_id)
+        unique.append(evaluation)
+
+    pool = ctx.repo.get_pool(ctx.ws, event.pool_id) if event.pool_id else None
+    memberships = ctx.repo.list_memberships(ctx.ws, pool.id) if pool else []
+    chosen = next(
+        (e for e in unique if pool is not None and e.target_product_id == pool.product_id),
+        None,
+    )
+
+    exclusions: dict[str, int] = {}
+    for evaluation in unique:
+        for code, count in (evaluation.exclusion_codes or {}).items():
+            exclusions[code] = max(exclusions.get(code, 0), int(count))
+
+    return {
+        "need_id": need_id,
+        "event": view(event),
+        "run": _run_view(ctx, run),
+        "considered": [_option_view(s) for s in considered],
+        "investigated": [_verdict_view(e) for e in unique],
+        "chosen": _verdict_view(chosen) if chosen is not None else None,
+        "exclusion_codes": dict(sorted(exclusions.items())),
+        "order": _order_view(ctx, pool, memberships, chosen),
+        # What has **not** happened. Stated positively so a surface cannot forget to say
+        # it: candidate formation touches no card, and nobody has agreed to fulfil
+        # anything (AGENTS.md §8, canonical invariants 2 and 3).
+        "not_yet": {
+            "host_accepted": False,
+            "final_price_issued": bool(pool and pool.has_final_offer),
+            "card_authorised": bool(ctx.repo.list_payments(ctx.ws, pool.id)) if pool else False,
+            "purchased": False,
+        },
+    }
+
+
+def _run_view(ctx: PoolContext, run: Any) -> dict[str, Any] | None:
+    if run is None:
+        return None
+    from ..config import get_settings
+
+    # The configured bounds, so a reader can check the run against them rather than
+    # taking the word "bounded" on trust.
+    bounds = get_settings().bounds
+    return {
+        "run_id": run.id,
+        "trigger": run.trigger,
+        "objective": run.objective_kind,
+        "model_provider": run.model_provider,
+        "model_id": run.model_id,
+        "outcome": run.outcome.value,
+        "termination_reason": run.termination_reason,
+        "iterations": run.iterations,
+        "input_tokens": run.input_tokens,
+        "output_tokens": run.output_tokens,
+        "duration_ms": run.duration_ms,
+        "tool_calls": [
+            {"name": t.name, "ok": t.ok} for t in run.tool_calls[:MAX_EXPLAINED_TOOL_CALLS]
+        ],
+        "bounds": {
+            "max_iterations": bounds.max_iterations,
+            "max_tool_calls": bounds.max_tool_calls,
+            "max_strategy_listings": bounds.max_strategy_listings,
+            "max_strategy_evaluations": bounds.max_strategy_evaluations,
+            "max_strategy_pool_creations": bounds.max_strategy_pool_creations,
+        },
+    }
+
+
+def _option_view(strategy: Any) -> dict[str, Any]:
+    """One option as it was offered, before anything was costed. No verdict, no price."""
+    return {
+        "strategy_id": strategy.id,
+        "product": strategy.target_product_name,
+        "attributes": dict(strategy.target_attributes),
+        "compatible_declarations": strategy.compatible_declaration_count,
+        "compatible_units": strategy.compatible_units,
+        "lowest_supplier_minimum_units": strategy.lowest_minimum_units,
+    }
+
+
+def _verdict_view(evaluation: Any) -> dict[str, Any]:
+    from ..domain.money import bps_to_pct_str, format_cents
+
+    return {
+        "strategy_id": evaluation.strategy_id,
+        "evaluation_id": evaluation.id,
+        "product": evaluation.target_product_name,
+        "viable": evaluation.viable,
+        "blocker_code": evaluation.blocker_code,
+        "matched_units": evaluation.matched_units,
+        "minimum_units": evaluation.minimum_units,
+        "selected_units": evaluation.selected_units,
+        "cases": evaluation.cases,
+        "case_units": evaluation.case_units,
+        "surplus_units": evaluation.surplus_units,
+        "all_in_display": format_cents(evaluation.all_in_cents),
+        "retail_baseline_display": format_cents(evaluation.retail_baseline_cents),
+        "net_savings_display": format_cents(evaluation.net_savings_cents),
+        "net_savings_pct": bps_to_pct_str(evaluation.net_savings_bps),
+        "includes_your_declaration": evaluation.includes_objective_need,
+    }
+
+
+def _order_view(
+    ctx: PoolContext, pool: Any, memberships: list[Any], chosen: Any
+) -> dict[str, Any] | None:
+    if pool is None:
+        return None
+    product = ctx.repo.get_product(ctx.ws, pool.product_id)
+    site = ctx.repo.get_site(ctx.ws, pool.pickup_site_id)
+    return {
+        "pool_id": pool.id,
+        "status": pool.status.value,
+        "product": product.display_name if product else pool.product_id,
+        "member_count": len(memberships),
+        "units": sum(m.requested_units for m in memberships),
+        "threshold_units": pool.threshold_units,
+        "cases": chosen.cases if chosen is not None else 0,
+        "case_units": chosen.case_units if chosen is not None else 0,
+        "surplus_units": chosen.surplus_units if chosen is not None else 0,
+        "pickup_site": site.name if site else "",
+        "distribution_day": pool.timing.distribution_starts_at[:10]
+        if pool.timing.distribution_starts_at
+        else "",
+        # Provisional is the whole state, so it is a field rather than a sentence.
+        "provisional": all(m.state.value == "provisional" for m in memberships),
+        "host_status": "recruiting" if ctx.repo.get_host_assignment(ctx.ws, pool.id) is None
+        else "assigned",
+    }

@@ -63,17 +63,39 @@ def test_the_rehearsal_opens_on_the_person_not_a_dashboard():
     """The opening is the whole fix, so it is pinned rather than left to a copy pass.
 
     A judge has to watch somebody set up their own account and say what they buy, *before*
-    anything about members, needs or coordination appears. Two earlier openings failed
-    this differently: one led with a table of thirty-three seeded rows, and the next led
-    with a search box belonging to a persona the visitor had been silently cast as.
+    anything about members, needs or coordination appears. Three earlier openings failed
+    this differently: one led with a table of thirty-three seeded rows, the next led with a
+    search box belonging to a persona the visitor had been silently cast as, and the third
+    walked them through loading a fixture and pressing "run agent" — a sequence in which
+    the only thing being demonstrated was the presenter.
+
+    The assertions below cover the *submission* flow, which is the first in the file. The
+    changing-world walkthrough is preserved further down and has its own guards.
     """
     script = _read("docs/DEMO_SCRIPT.md")
     # Prose wraps, so match against a single-spaced copy rather than pinning line breaks.
     flat = " ".join(script.split())
-    headings = [line for line in script.splitlines() if line.startswith("## 0:00")]
+    headings = [line for line in script.splitlines() if line.startswith("## 0:")]
     assert headings, "the rehearsal has no opening beat"
-    # It opens on who is using it, not on what the fixture contains.
-    assert "who" in headings[0].lower(), headings[0]
+
+    # The submission recording is the first flow in the file, and its opening two beats
+    # are the world and the person — in that order, because a judge sent a link needs to
+    # know what they are looking at before they are asked to act in it (#0057). What is
+    # forbidden is unchanged: opening on the fixture's contents, or on somebody's account
+    # the visitor was silently cast as.
+    opening = " ".join(headings[:2]).lower()
+    assert "where you are" in opening, headings[:2]
+    assert "member" in opening or "who" in opening, headings[:2]
+    for banned in ("what pool is watching", "seeded", "dashboard"):
+        assert banned not in opening, headings[:2]
+
+    # And the causal order the recording exists to show: the member declares before
+    # anything coordinates, and the only thing they do to Pool is save.
+    declare_at = flat.index("The one thing a member does")
+    assert declare_at < flat.index("What Home says now")
+    assert flat.index("That is the last thing you do to Pool.") < flat.index(
+        "Why this order?"
+    )
 
     # The rehearsal must not depend on a memorised product name. It used to open by
     # telling the presenter to type `vanilla whey`, which was honest only because search

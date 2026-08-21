@@ -17,6 +17,8 @@ import { Picked } from "./chosen";
 import { IconArrowLeft, IconCross } from "./ui";
 import { About } from "./views/about";
 import { JudgeDemo } from "./views/judge";
+import { Verify } from "./views/verify";
+import { WhyThisOrder } from "./views/why";
 import { Onboarding } from "./views/onboarding";
 import { CommunityView } from "./views/community";
 import { DemoPanel, Identity } from "./views/demo-panel";
@@ -28,7 +30,17 @@ import { Pools } from "./views/pools";
 import { AgentExecution } from "./views/live";
 import { RunView } from "./views/run";
 
-type View = "home" | "pools" | "needs" | "community" | "pool" | "operations" | "about" | "judge";
+type View =
+  | "home"
+  | "pools"
+  | "needs"
+  | "community"
+  | "pool"
+  | "operations"
+  | "about"
+  | "judge"
+  | "why"
+  | "verify";
 
 /** Showcase mode: the guided judge experience, kept alongside the product rather than
  *  instead of it. Same components, same state, same API — a different order and a
@@ -77,14 +89,39 @@ const NAV: { id: View; label: string }[] = [
  *  greeted by somebody else's name. */
 const NOBODY: Identity = { id: "", display_name: "" };
 
+/** The one linkable entry point. Everything else is a state machine, deliberately —
+ *  Pool is one screen deep in most places and a router would be ceremony. But
+ *  verification is a thing somebody is *sent to*, so `/verify` has to survive being
+ *  typed, pasted and reloaded. Read once, at mount, from the real path. */
+function initialView(): View {
+  if (typeof window === "undefined") return "home";
+  return window.location.pathname.replace(/\/+$/, "") === "/verify" ? "verify" : "home";
+}
+
+/** Whether this session may drive other synthetic participants.
+ *
+ *  Development and rehearsal only. The primary member experience never sets it, and the
+ *  controls it reveals are *absent* rather than hidden when it is off — hiding an
+ *  act-as control with CSS leaves it on the tab order, which is the same problem wearing
+ *  a stylesheet. */
+function operatorRequested(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("operator") === "1";
+}
+
 export default function App() {
-  const [view, setView] = useState<View>("home");
+  const [view, setView] = useState<View>(initialView);
+  const [operatorMode] = useState(operatorRequested);
   /** Set when Home hands a chosen product to the Needs form. */
   const [pendingProduct, setPendingProduct] = useState<Picked | null>(null);
   const [state, setState] = useState<AppState | null>(null);
   const [map, setMap] = useState<MapData | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [openPool, setOpenPool] = useState<PoolView | null>(null);
+  /** Which declaration "Why this order?" is about. One server read behind it, so the
+   *  screen survives a reload — the old judge demo held its narrative in React state and
+   *  lost it, which is the failure this replaces. */
+  const [why, setWhy] = useState<{ needId: string; productName: string } | null>(null);
   const [busyDecision, setBusyDecision] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [scenario, setScenario] = useState<ScenarioResult | null>(null);
@@ -246,6 +283,11 @@ export default function App() {
       const leaving = api.inShowcaseScope();
       api.setShowcaseScope(false);
       setShowcase(null);
+      /* Verification is a world, not a screen, so its scope survives navigation *within*
+         it. Entering it happens on the page itself; leaving it is the visitor going back
+         to their own session, which nothing here does implicitly — a member who wandered
+         out of the coffee community and found their declaration gone would have been told
+         the product forgot it. */
       if (leaving) forgetWorkspaceState();
       setView(next);
       setPanelOpen(false);
@@ -697,7 +739,10 @@ export default function App() {
               build ended up greeting people by a stranger's name. Showcase mode skips
               it: that is the guided walkthrough, and it is explicitly not the consumer
               experience. */}
-          {!showcase && needsOnboarding && view !== "judge" && consumer ? (
+          {/* Verification explains the world before asking for a name. Somebody sent a
+              link to check a claim should read what they are about to do first; the
+              account step is a normal member action and happens when they start. */}
+          {!showcase && needsOnboarding && view !== "judge" && view !== "verify" && consumer ? (
             <Onboarding
               consumer={consumer}
               onJudgeDemo={() => navigate("judge")}
@@ -726,8 +771,28 @@ export default function App() {
                 void openPoolDetail(poolId, { tab: "activity", deep: "execution" })
               }
               onStartNeed={startNeed}
+              onWhy={(needId, productName) => {
+                setWhy({ needId, productName });
+                navigate("why");
+              }}
               liveDiscovery={Boolean(demoConfig?.live_agent_available)}
               region={demoConfig?.region ?? null}
+            />
+          ) : null}
+
+          {view === "why" && why ? (
+            <WhyThisOrder
+              needId={why.needId}
+              productName={why.productName}
+              onBack={() => navigate("home")}
+            />
+          ) : null}
+
+          {view === "verify" ? (
+            <Verify
+              health={health}
+              onStart={() => navigate("needs")}
+              onHome={() => navigate("home")}
             />
           ) : null}
 
@@ -900,8 +965,14 @@ export default function App() {
               Behind Pool
             </button>{" "}
             ·{" "}
-            <button className="linkish" onClick={() => navigate("judge")}>
-              Judge demo
+            {/* The scripted judge demo used to live here. It walked somebody through
+                loading a fixture, recording a quote and pressing "run agent" — six
+                actions whose only purpose was advancing a demo, which is precisely the
+                thing a judge is trying to see past. Verification now starts a fresh
+                synthetic community and asks them to use the product. The old harness is
+                still reachable at /judge for regression; it is not a front door. */}
+            <button className="linkish" onClick={() => navigate("verify")}>
+              Verify this yourself
             </button>
           </span>
         </div>
@@ -909,6 +980,12 @@ export default function App() {
 
       <DemoPanel
         open={panelOpen}
+        /* Operator capability is opt-in and absent otherwise. `?operator=1` is a
+           development and rehearsal affordance rather than a feature: a member never
+           needs it, the primary recording never uses it, and the regression harnesses
+           that do need it still have somewhere to come from. Read from the URL rather
+           than kept in state, so it cannot be reached by wandering. */
+        operator={operatorMode}
         onClose={() => setPanelOpen(false)}
         state={state}
         health={health}

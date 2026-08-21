@@ -133,6 +133,8 @@ deliberately different words, and the difference is load-bearing.
 | **cohort strategy** | one concrete order Pool *could* form — an exact SKU, a pickup site, and the declarations whose own authority permits it. A candidate, not a verdict; internal register only |
 | **strategy evaluation** | what one cohort strategy actually costs, computed from reloaded state by the same engine that prices any order. The only thing that says *viable* |
 | **coordination event** | one durable unit of work Pool owes because a declaration changed. One cause, one event, one run — a duplicate submission or an unchanged edit resolves to the event that already exists. Internal register only |
+| **how flexible are you** | the consumer name for a member's product requirements: questions about the product they picked, whose answers the server maps to the typed policy. Never called a substitution policy on a member surface |
+| **why this order** | the member-facing account of what one declaration caused, with the technical proof for the same run one disclosure below it. Both read the same stored rows |
 | **host** | the paid local fulfiller (one word only — never "runner" or "fulfiller" in consumer copy) |
 | **funded** | payment authorised for the exact final amount; only this counts toward a threshold |
 | **provisional** | counted for discovery, not a commitment |
@@ -198,13 +200,13 @@ Real, and safe to rely on:
 - **Stored proof of real invocations** — run ids, `created_by_run` lineage on the
   resulting pool, tool sequences, outcomes, terminations, and authoritative readback from
   the same workspace the browser reads.
-- **A large executed test suite** — 1,163 agent tests (verified by collection),
-  plus infra and web suites, reported green at 1,357 total in `BUILD_HISTORY.md` #0056.
+- **A large executed test suite** — 1,201 agent tests (verified by collection),
+  plus infra and web suites, reported green at 1,405 total in `BUILD_HISTORY.md` #0057.
 - **A canonical lifecycle fixture**, not to be paraphrased or adjusted for presentation:
   11 memberships, 10 funded buyers, 1 authorization failure, 1 replacement, 24 units,
   2 cases, 0 surplus, $861.44 all-in against $1,127.76 retail, $266.32 saved, 23.61%,
   North Hall lobby.
-- **An engineering record** — `AGENTS.md` (operating rules), `BUILD_HISTORY.md` (56
+- **An engineering record** — `AGENTS.md` (operating rules), `BUILD_HISTORY.md` (57
   entries, an AWS resource ledger and 18 tracked open questions), `docs/DEMO_SCRIPT.md`,
   `docs/ARCHITECTURE.md`.
 

@@ -37,6 +37,7 @@ no one's benefit.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from ..domain.attributes import (
     AttributeDefinition,
@@ -262,3 +263,84 @@ def install(repo, workspace: str) -> dict[str, object]:
     for product in PRODUCTS:
         repo.put_product(workspace, product)
     return {"products": len(PRODUCTS), "facts": len(FACTS), "family": FAMILY}
+
+
+# --------------------------------------------------------------- declarable questions
+#
+# The consumer wording for the dimensions above. Curated here, beside the schema, for the
+# same reason the facts are: a question a member answers becomes a hard constraint on what
+# Pool may buy for them, so its meaning cannot be authored at runtime by anything —
+# including a model. This table is the *approved set*; a later phase may let a bounded
+# agent choose which of these to ask and in what order, and it will still be choosing
+# from here.
+#
+# Nothing in this table decides compatibility. It decides how a dimension is *spoken*,
+# and `services/needs.py` maps an answer back onto the typed policy deterministically.
+
+
+@dataclass(frozen=True)
+class AttributeQuestion:
+    """One thing a member can be asked about a product, in their own words.
+
+    ``kind`` is what the control has to be, not what it looks like:
+
+    ``keep``
+        A single fact about the product they picked that they may insist on — "it has to
+        be whole bean". Derived from an attribute the family marks
+        ``required_for_compatibility``, because those are what a product *is*.
+    ``choose``
+        A dimension where several answers are genuinely acceptable — "medium or dark".
+
+    A question is only ever offered for an attribute the *selected product* carries a
+    verified fact for. Asking somebody to insist on a value Pool cannot establish would
+    produce a rule that refuses everything, and asking about a fact nobody has confirmed
+    would be asking them to guess.
+    """
+
+    attribute: str
+    kind: str
+    #: The question, as a person reads it. ``{value}`` is substituted with the label of
+    #: the selected product's own value where the wording needs it.
+    prompt: str
+    #: Short helper text, or empty. Never a justification for saying yes.
+    hint: str = ""
+
+
+QUESTION_KIND_KEEP = "keep"
+QUESTION_KIND_CHOOSE = "choose"
+
+#: Consumer labels for every token the schema defines. Exhaustive by construction — a
+#: value with no label would reach a screen as ``WHOLE_BEAN``.
+VALUE_LABELS: dict[str, dict[str, str]] = {
+    "form": {FORM_WHOLE_BEAN: "Whole bean", FORM_GROUND: "Ground"},
+    "caffeine": {CAFFEINE_CAFFEINATED: "Caffeinated", CAFFEINE_DECAF: "Decaf"},
+    "roast": {ROAST_LIGHT: "Light", ROAST_MEDIUM: "Medium", ROAST_DARK: "Dark"},
+}
+
+QUESTIONS: dict[str, AttributeQuestion] = {
+    "form": AttributeQuestion(
+        attribute="form",
+        kind=QUESTION_KIND_KEEP,
+        prompt="It has to be {value}",
+        hint="Ground coffee and whole beans are not the same thing to most people.",
+    ),
+    "caffeine": AttributeQuestion(
+        attribute="caffeine",
+        kind=QUESTION_KIND_KEEP,
+        prompt="It has to be {value}",
+    ),
+    "roast": AttributeQuestion(
+        attribute="roast",
+        kind=QUESTION_KIND_CHOOSE,
+        prompt="Roasts that work for you",
+        hint="Pick every roast you would be happy with.",
+    ),
+}
+
+
+def question_for(attribute: str) -> AttributeQuestion | None:
+    return QUESTIONS.get(attribute)
+
+
+def label_for(attribute: str, value: str) -> str:
+    return VALUE_LABELS.get(attribute, {}).get(value, value)

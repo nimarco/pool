@@ -1,19 +1,269 @@
 # Demo rehearsal script
 
-Two flows. The first is the submission recording; the second is the version for somebody
-who has ninety seconds and no interest in AWS.
+Three flows. **A** is the submission recording. **B** is the ninety-second explanation for
+somebody with no interest in AWS. **C** is the older changing-world narrative, kept because
+it proves a different claim and because the machinery behind it is still real.
 
-Both are navigation-and-timing rehearsals, not word-for-word voiceovers.
+All of them are navigation-and-timing rehearsals, not word-for-word voiceovers.
 
 The line everything hangs off:
 
 > **Nobody organised the group. Pool noticed.**
 
-And the line this version cashes, which is the harder half:
+And the line flow A cashes, which is the harder half:
 
-> **Pool kept watching, the world changed, and the answer changed with it.**
+> **The obvious option was the one that did not work, and Pool found that out by
+> costing it.**
 
-## What changed, and why
+## What changed, and why it matters to the presenter
+
+The recording used to require the presenter to *drive* Pool: load a fixture, record a
+supplier quote, press "run agent", answer for other people. Every one of those is an
+action whose only purpose is advancing a demo, and a judge watching one is being asked to
+take the interesting part on trust.
+
+Flow A now contains **one** causal action: a member saves something they buy. Everything
+after it — the search, the refusal, the adaptation, the order — happens because of that
+save and is readable afterwards from stored rows.
+
+**The presenter is a user of Pool, not its puppeteer.** If you find yourself pressing
+something a member would never press, the take is wrong.
+
+---
+
+# A. The submission recording (~3:30)
+
+One browser, mobile-sized (390 × 844), for everything except the last beat.
+
+## Before recording
+
+- `bash scripts/run_public_demo_local.sh`, or the deployed URL if one has been verified.
+- A **fresh** browser profile or cleared `localStorage`. The walkthrough is about a cold
+  session; a warm one has your last take's declaration in it.
+- Go to `/verify`. Nothing else is set up in advance, and nothing needs to be.
+
+## 0:00–0:20 — Where you are, honestly
+
+`/verify` says it before you do: a synthetic community that already has coffee demand in
+it, real software, simulated payments, nobody real represented. Read the three lines under
+*What is real here* rather than paraphrasing them — they are the claim being made.
+
+Say: **"A dozen households here already buy coffee. They disagree about which coffee.
+Nothing has been arranged for me."**
+
+## 0:20–0:50 — Becoming a member
+
+Start → a name → join the community. This is ordinary setup and is not the story; move
+through it. Do not linger on the map.
+
+## 0:50–1:40 — The one thing a member does
+
+Search **Kestrel**. Pick the medium roast.
+
+Then the beat this whole phase exists for. The form asks about *coffee*:
+
+- Only this exact product, or similar products are okay.
+- It has to be whole bean.
+- It has to be caffeinated.
+- Roasts that work for you.
+
+Say: **"I am not choosing a substitution policy. I am telling it what coffee is."**
+
+Set **three bags a month**, choose *similar products are okay*, leave whole bean and
+caffeinated ticked, and add **Dark** alongside Medium.
+
+> Any quantity works and the answer you get is the real one. Three is used here because it
+> lands on this supplier's case boundary; two produces a truthful "Pool could assemble an
+> order, but not one you would be in, so it did not form it", which is a good answer and a
+> worse recording.
+
+Save. **That is the last thing you do to Pool.**
+
+## 1:40–2:10 — What Home says now
+
+Home has changed on its own. Read what is actually there:
+
+- Harbourstone dark roast — *not* the bag that was picked.
+- Your three bags, about **$43.96** instead of **$55.50** buying alone.
+- With five others, collecting from the Student Union.
+- **Not final yet** — a fulfiller's pay is part of the price.
+- 18 units, past the supplier's 12-unit minimum.
+
+Say: **"I asked for a medium roast. It bought a dark one, because I said dark was fine —
+and it never tells me that is a substitute, because it isn't."**
+
+## 2:10–3:00 — Why this order?
+
+One tap from the order card. Take these in order and do not rush the middle one:
+
+1. **What Pool considered** — two options, neither with a price. Kestrel had *more*
+   demand (23 bags from 8 people) and more headroom over its minimum.
+2. **What Pool worked out** — Kestrel: not worth doing. $367.19 all in against $360.00
+   buying separately. Harbourstone: 18 bags, three full cases of six, nothing left over,
+   $69.18 saved.
+3. **Who could not join** — four people who asked for one specific product, two who buy
+   decaf or ground. Aggregate only; no names anywhere.
+4. **What has not happened** — no card charged, nobody has agreed to collect it, the exact
+   price comes later, nothing ordered.
+
+Say: **"The option that looked best on every fact it had is the one that lost money. It
+only found that out by costing it — and it did not give up, it tried the other one."**
+
+## 3:00–3:30 — Technical proof for this run
+
+Switch to desktop here, once. Expand *Technical proof for this run*.
+
+The same event id, run id, evaluation ids and pool id as the page above it — because it is
+the same rows. Point at three things and stop:
+
+- the tool sequence: list, evaluate, evaluate, create;
+- **2 of 3** options costed, **1 of 1** order formed, **5 of 8** model calls;
+- provider and model, and the line saying the community is synthetic and payments
+  simulated.
+
+Say: **"The model chose what to investigate and adapted when it was refused. It never
+computed a price, decided who was compatible, or supplied a member, a quantity or a
+supplier term. The tool that forms an order takes two identifiers and nothing else."**
+
+Then reload the page. The explanation is still there, unchanged, and there is still one
+run. Nothing was held in the browser.
+
+---
+
+# B. The two-minute product explanation
+
+No AWS, no proof surface, no operator console framing. If Pool cannot be made
+understandable in two minutes, that is a fact about the product and not about the edit.
+
+**0:00–0:25 — set up.** Type a name. Join the one community found near you. Type `rice`,
+pick the family, keep the defaults, add it. Choose *ask me first*, add the simulated card,
+finish. Four screens, no group created, nobody invited.
+
+**0:25–0:50 — the pitch is the screen.** Home, one row:
+
+> Rice · WATCHING · No verified supplier yet
+> 7 people near you buy this — 24 bags standing, 2 of them yours
+
+Seven people already buy this. Nobody organised anything, and what is missing is a supplier
+rather than people.
+
+**0:50–1:10 — the world changes.** Import the split-case sheet. Same row:
+
+> Supplier found — not cheaper
+
+There is a supplier now, and it is still not worth doing once collection and fees are
+counted. Pool bothered nobody.
+
+**1:10–1:25 — and again.** Import the case-programme sheet. Same row:
+
+> Worth doing
+
+**1:25–1:50 — the order.** *Check again now.* Your 2 bags, about $17.53 instead of $22.98,
+with six others, collect from Central Quad pavilion. Three complete cases, nothing left over.
+
+**1:50–2:00 — the line.** Nobody organised the group. Pool noticed.
+
+---
+
+## What to show, and what to leave out
+
+**Must show.** Setup as yourself · the family declaration · the demand that pre-existed ·
+one refusal · the file import · the intermediate refusal · the second run forming the order ·
+the one approval question · `created_by_run` proof.
+
+**Optional if time.** The paper-towels second refusal · the map's walking rings · the case
+drawing on an excluded declaration · the money ledger in Behind Pool.
+
+**Do not show in the primary video.** The Showcase's fourteen stages — it is a regression
+proof, and walking it costs ninety seconds to restate a claim the live sequence already made.
+The community aggregates. The viability checklist's eleven checks. The Orders list when it
+holds one row. Every one of those is real, and each one asks the viewer to hold a second
+subject.
+
+## Continuity rules
+
+- One workspace, one continuous journey, **two** live AgentCore invocations and no more.
+- The real wait is content, not dead air. Hold the first one; the second may be tightened,
+  but a cut may not replace a run or its result.
+- Never pre-record a supplier quote. The starting state has none, and the sequence is the
+  demonstration.
+- Import the sheets in order. The split-case one first, always.
+- Never say "deployed," "paid," "captured," "final," or "permission" more strongly than the
+  screen supports.
+- Never say a number not visible on screen. An estimate labelled *about* on screen is an
+  estimate out loud.
+- Never say Pool "considered" something the report does not list. The report shows only what
+  that run actually evaluated, and that is the claim being made.
+- Never describe the supplier sheets as anything but synthetic and operator-imported.
+  Riverbend Wholesale does not exist.
+- Never call a family declaration a substitution. The member said "rice"; Pool choosing
+  jasmine is fulfilment, not a swap.
+- If a live call fails, keep the honest failure visible and stop the rehearsal. Do not spend
+  another invocation trying to manufacture a clean take.
+
+## If the take runs long
+
+Cut in this order:
+
+1. **The paper-towels declaration** (‑20s). The rice thread carries the whole argument alone;
+   towels only adds "and it answered the other one too", which the outcome-matrix table can
+   cover if a judge asks.
+2. **The map aside in Behind Pool** (‑10s).
+3. **The host-acceptance step** (‑15s), going straight to the approval question.
+
+Do **not** cut the split-case quote. A single quote that turns a no into a yes is the version
+of this sequence that looks like an answer key; the refusal in the middle is what makes the
+whole thing evidence rather than a switch.
+
+## Other truthful inputs, if a judge asks
+
+Every one of these is reachable through the same flow, and each ends somewhere different:
+
+| Typed | What happens |
+| --- | --- |
+| `whey` | forms, and you are in it |
+| `coffee` | forms — a different product, different members, its own economics |
+| `energy` | forms, on a third independent set of members |
+| `laundry` | refused on **economics**: enough demand, and pooling it saves nothing |
+| `towels` | refused on the **supplier minimum**: 6 packs against 48 |
+| `rice` | refused for **no supplier at all**, with the demand behind it still shown |
+| a specific coffee Pool cannot source | stays exactly what you picked, and truthfully no-ops |
+| `Pike Place`, on a fresh account | an order forms **without** your units, and the case boundary is drawn |
+| something invented entirely | declarable, and openly unsourceable |
+
+`tests/test_outcome_matrix.py` runs these through the real endpoints, so the table cannot
+drift from the product without a test failing.
+
+## The Showcase, if it is asked for
+
+Fourteen recorded stages on **one page**, in **its own copy of Demo University**, which
+means it **does not touch the account you set up** in the recording — a separate partition,
+reseeded every time it runs. It is no longer a paginated reader: a sticky unit track draws
+the quantity through the whole story (24 funded, two lost to a declined card, two restored
+by a replacement, closing into two whole cases), the twelve acts are labelled destinations,
+and every stage is on screen at once with its figures one click away. It is the one place the whole lifecycle appears, including the parts the live
+sequence cannot reach in four minutes: an authorisation that fails, the quantity falling to
+22, a compatible replacement restoring exactly 24, purchase, ten pickups, and
+reconciliation.
+
+Canonical, and not to be paraphrased: 11 memberships, 10 funded buyers, 1 authorisation
+failure, 1 replacement, 24 units, 2 cases, 0 surplus, $861.44 all-in against $1,127.76
+retail, $266.32 kept, 23.61%, North Hall lobby.
+
+---
+
+# C. The changing-world narrative (kept, and still real)
+
+The older recording, preserved because it proves a *different* claim: that Pool keeps
+watching, that an outside event can change the answer, and that no agent runs when nothing
+happened. It uses the rice fixture and the supplier-quote import, and every mechanism in it
+still works.
+
+It is **not** the submission recording any more, for the reason at the top of this file:
+it required the presenter to drive the system. Use it for the changing-world claim, for
+regression rehearsal, and when somebody asks specifically how supplier facts arrive.
+
+## What that flow changed, and why
 
 Three things about the *product* changed since the last rehearsal, and each one removes a
 sentence the presenter used to have to say out loud.
@@ -72,7 +322,7 @@ subject.
 
 ---
 
-# A. The submission recording — about 4:00
+## The changing-world walkthrough — about 4:00
 
 ## 0:00–0:10 — Who is using this
 
@@ -286,123 +536,3 @@ Close on the collective outcome rather than a feature list:
 > noticed — and kept noticing.
 
 ---
-
-# B. The two-minute product explanation
-
-No AWS, no proof surface, no operator console framing. If Pool cannot be made
-understandable in two minutes, that is a fact about the product and not about the edit.
-
-**0:00–0:25 — set up.** Type a name. Join the one community found near you. Type `rice`,
-pick the family, keep the defaults, add it. Choose *ask me first*, add the simulated card,
-finish. Four screens, no group created, nobody invited.
-
-**0:25–0:50 — the pitch is the screen.** Home, one row:
-
-> Rice · WATCHING · No verified supplier yet
-> 7 people near you buy this — 24 bags standing, 2 of them yours
-
-Seven people already buy this. Nobody organised anything, and what is missing is a supplier
-rather than people.
-
-**0:50–1:10 — the world changes.** Import the split-case sheet. Same row:
-
-> Supplier found — not cheaper
-
-There is a supplier now, and it is still not worth doing once collection and fees are
-counted. Pool bothered nobody.
-
-**1:10–1:25 — and again.** Import the case-programme sheet. Same row:
-
-> Worth doing
-
-**1:25–1:50 — the order.** *Check again now.* Your 2 bags, about $17.53 instead of $22.98,
-with six others, collect from Central Quad pavilion. Three complete cases, nothing left over.
-
-**1:50–2:00 — the line.** Nobody organised the group. Pool noticed.
-
----
-
-## What to show, and what to leave out
-
-**Must show.** Setup as yourself · the family declaration · the demand that pre-existed ·
-one refusal · the file import · the intermediate refusal · the second run forming the order ·
-the one approval question · `created_by_run` proof.
-
-**Optional if time.** The paper-towels second refusal · the map's walking rings · the case
-drawing on an excluded declaration · the money ledger in Behind Pool.
-
-**Do not show in the primary video.** The Showcase's fourteen stages — it is a regression
-proof, and walking it costs ninety seconds to restate a claim the live sequence already made.
-The community aggregates. The viability checklist's eleven checks. The Orders list when it
-holds one row. Every one of those is real, and each one asks the viewer to hold a second
-subject.
-
-## Continuity rules
-
-- One workspace, one continuous journey, **two** live AgentCore invocations and no more.
-- The real wait is content, not dead air. Hold the first one; the second may be tightened,
-  but a cut may not replace a run or its result.
-- Never pre-record a supplier quote. The starting state has none, and the sequence is the
-  demonstration.
-- Import the sheets in order. The split-case one first, always.
-- Never say "deployed," "paid," "captured," "final," or "permission" more strongly than the
-  screen supports.
-- Never say a number not visible on screen. An estimate labelled *about* on screen is an
-  estimate out loud.
-- Never say Pool "considered" something the report does not list. The report shows only what
-  that run actually evaluated, and that is the claim being made.
-- Never describe the supplier sheets as anything but synthetic and operator-imported.
-  Riverbend Wholesale does not exist.
-- Never call a family declaration a substitution. The member said "rice"; Pool choosing
-  jasmine is fulfilment, not a swap.
-- If a live call fails, keep the honest failure visible and stop the rehearsal. Do not spend
-  another invocation trying to manufacture a clean take.
-
-## If the take runs long
-
-Cut in this order:
-
-1. **The paper-towels declaration** (‑20s). The rice thread carries the whole argument alone;
-   towels only adds "and it answered the other one too", which the outcome-matrix table can
-   cover if a judge asks.
-2. **The map aside in Behind Pool** (‑10s).
-3. **The host-acceptance step** (‑15s), going straight to the approval question.
-
-Do **not** cut the split-case quote. A single quote that turns a no into a yes is the version
-of this sequence that looks like an answer key; the refusal in the middle is what makes the
-whole thing evidence rather than a switch.
-
-## Other truthful inputs, if a judge asks
-
-Every one of these is reachable through the same flow, and each ends somewhere different:
-
-| Typed | What happens |
-| --- | --- |
-| `whey` | forms, and you are in it |
-| `coffee` | forms — a different product, different members, its own economics |
-| `energy` | forms, on a third independent set of members |
-| `laundry` | refused on **economics**: enough demand, and pooling it saves nothing |
-| `towels` | refused on the **supplier minimum**: 6 packs against 48 |
-| `rice` | refused for **no supplier at all**, with the demand behind it still shown |
-| a specific coffee Pool cannot source | stays exactly what you picked, and truthfully no-ops |
-| `Pike Place`, on a fresh account | an order forms **without** your units, and the case boundary is drawn |
-| something invented entirely | declarable, and openly unsourceable |
-
-`tests/test_outcome_matrix.py` runs these through the real endpoints, so the table cannot
-drift from the product without a test failing.
-
-## The Showcase, if it is asked for
-
-Fourteen recorded stages on **one page**, in **its own copy of Demo University**, which
-means it **does not touch the account you set up** in the recording — a separate partition,
-reseeded every time it runs. It is no longer a paginated reader: a sticky unit track draws
-the quantity through the whole story (24 funded, two lost to a declined card, two restored
-by a replacement, closing into two whole cases), the twelve acts are labelled destinations,
-and every stage is on screen at once with its figures one click away. It is the one place the whole lifecycle appears, including the parts the live
-sequence cannot reach in four minutes: an authorisation that fails, the quantity falling to
-22, a compatible replacement restoring exactly 24, purchase, ten pickups, and
-reconciliation.
-
-Canonical, and not to be paraphrased: 11 memberships, 10 funded buyers, 1 authorisation
-failure, 1 replacement, 24 units, 2 cases, 0 surplus, $861.44 all-in against $1,127.76
-retail, $266.32 kept, 23.61%, North Hall lobby.

@@ -315,6 +315,12 @@ afterEach(() => {
 
 async function openShowcaseFromTheDrawer() {
   const user = userEvent.setup();
+  /* Operator mode, because that is where these controls live now. The drawer a member
+     opens carries what this environment is and what is simulated in it; acting as
+     somebody else, resetting the world and entering the scripted showcase are operator
+     capabilities and are *absent* from it — see `DemoPanel`'s `operator` prop. The
+     harness still needs them, so it asks for them the way a rehearsal does. */
+  window.history.replaceState({}, "", "/?operator=1");
   render(<App />);
   await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
   // The drawer's opener is labelled with the community name and titled with what it

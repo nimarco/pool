@@ -351,6 +351,17 @@ export interface NeedRow {
   max_spend_display: string;
   max_spend_cents: number;
   substitution: string;
+  /** What saving this declaration set in motion, when the write path recorded an event.
+   *  Present on the save response; absent from the listing, which is a read. */
+  coordination?: {
+    event_id: string;
+    status: string;
+    run_id: string;
+    outcome: string;
+    pool_id: string;
+    formed_order: boolean;
+    reached_a_verdict: boolean;
+  } | null;
   active: boolean;
 }
 
@@ -458,8 +469,133 @@ export interface NeedDraft {
   routine_lead_days: number;
   min_savings_pct: number;
   max_spend_cents: number;
-  substitution: string;
+  /** Optional because the server defaults it, and because a declaration carrying
+   *  `preferences` must not also carry a policy — the answers are the only source. */
+  substitution?: string;
+  /** What the member said about this product, not a policy.
+   *
+   *  The server decides what an answer *means* (`services/needs.policy_from_answers`),
+   *  which is why this carries answers rather than requirements: every default there is
+   *  the narrowest reading, and a browser assembling a policy could widen one by
+   *  omission. */
+  preferences?: NeedPreferences;
   active: boolean;
+}
+
+/** A member's answers to the product-specific questions. */
+export interface NeedPreferences {
+  /** `exact` — only this product. `similar` — subject to the answers below. */
+  flexibility: "exact" | "similar";
+  /** Attributes they insist stay as they are on the product they picked. */
+  keep: string[];
+  /** Attribute → every value they would be happy with. */
+  accept: Record<string, string[]>;
+}
+
+/** One thing a product can be asked about, in consumer words.
+ *
+ *  Derived server-side from the curated family schema and the curated label table beside
+ *  it. Nothing here is generated at runtime, and no model chooses what is asked. */
+export interface PreferenceQuestion {
+  attribute: string;
+  /** `keep` — a single fact they may insist on. `choose` — several answers may work. */
+  kind: "keep" | "choose";
+  prompt: string;
+  hint: string;
+  product_value: string;
+  product_value_label: string;
+  options: { value: string; label: string }[];
+}
+
+export interface ProductPreferences {
+  family: string;
+  schema_version: number;
+  product_id?: string;
+  questions: PreferenceQuestion[];
+}
+
+/** Everything one declaration caused, as the server recorded it.
+ *
+ *  One read behind two surfaces: the member-facing explanation and the technical proof
+ *  are the same rows at two levels of detail, so they cannot tell different stories. */
+export interface NeedCoordination {
+  need_id: string;
+  event: {
+    event_id: string;
+    status: string;
+    run_id: string;
+    outcome: string;
+    terminal_reason: string;
+    pool_id: string;
+    formed_order: boolean;
+    reached_a_verdict: boolean;
+  } | null;
+  run: {
+    run_id: string;
+    trigger: string;
+    objective: string;
+    model_provider: string;
+    model_id: string;
+    outcome: string;
+    termination_reason: string;
+    iterations: number;
+    input_tokens: number;
+    output_tokens: number;
+    duration_ms: number | null;
+    tool_calls: { name: string; ok: boolean }[];
+    bounds: Record<string, number>;
+  } | null;
+  considered?: {
+    strategy_id: string;
+    product: string;
+    attributes: Record<string, string>;
+    compatible_declarations: number;
+    compatible_units: number;
+    lowest_supplier_minimum_units: number;
+  }[];
+  investigated?: StrategyVerdict[];
+  chosen?: StrategyVerdict | null;
+  exclusion_codes?: Record<string, number>;
+  order: {
+    pool_id: string;
+    status: string;
+    product: string;
+    member_count: number;
+    units: number;
+    threshold_units: number;
+    cases: number;
+    case_units: number;
+    surplus_units: number;
+    pickup_site: string;
+    distribution_day: string;
+    provisional: boolean;
+    host_status: string;
+  } | null;
+  not_yet?: {
+    host_accepted: boolean;
+    final_price_issued: boolean;
+    card_authorised: boolean;
+    purchased: boolean;
+  };
+}
+
+export interface StrategyVerdict {
+  strategy_id: string;
+  evaluation_id: string;
+  product: string;
+  viable: boolean;
+  blocker_code: string;
+  matched_units: number;
+  minimum_units: number;
+  selected_units: number;
+  cases: number;
+  case_units: number;
+  surplus_units: number;
+  all_in_display: string;
+  retail_baseline_display: string;
+  net_savings_display: string;
+  net_savings_pct: string;
+  includes_your_declaration: boolean;
 }
 
 export interface Health {
@@ -671,6 +807,12 @@ export interface PersonalOpportunity {
   is_exact_product: boolean;
   /** What they typed, when it differs from what the pool buys. */
   declared_product_name: string;
+  /** Whether this member is owed "that is a stand-in for what you asked for".
+   *
+   *  A different question from `is_exact_product`, and the server decides it: somebody
+   *  who declared a family, or stated a rule about what a product has to be, named no
+   *  product — so a different bag is what they asked for rather than a substitute for it. */
+  substitution_disclosed: boolean;
 }
 
 /** What already exists around one declaration, before Pool has evaluated anything.
@@ -893,6 +1035,10 @@ let cachedWorkspace: string | null = null;
  *  the two can never collide. */
 const SHOWCASE_SUFFIX = "-showcase";
 
+/** Mirrors `public_demo.VERIFY_SUFFIX`. The partition the verification walkthrough
+ *  runs in, and the only one the curated coffee community is installed into. */
+const VERIFY_SUFFIX = "-verify";
+
 /** Showcase mode is a different world, not a different screen.
  *
  *  The scripted lifecycle declares a flagship need, drives a payment failure, a
@@ -904,10 +1050,30 @@ let showcaseScope = false;
 
 export function setShowcaseScope(on: boolean): void {
   showcaseScope = on;
+  if (on) verifyScope = false;
 }
 
 export function inShowcaseScope(): boolean {
   return showcaseScope;
+}
+
+/** The verification world: the same product, in a community that has heterogeneous
+ *  coffee demand in it.
+ *
+ *  A third partition rather than a mode, and for the same reason the showcase is one. It
+ *  holds the curated coffee fixture, which is deliberately not part of the canonical seed
+ *  and must never leak into it; and saving a declaration there dispatches its coordination
+ *  event in the same request, which is the whole point of the walkthrough and would be a
+ *  cost bug anywhere else. Mutually exclusive with the showcase — one world at a time. */
+let verifyScope = false;
+
+export function setVerifyScope(on: boolean): void {
+  verifyScope = on;
+  if (on) showcaseScope = false;
+}
+
+export function inVerifyScope(): boolean {
+  return verifyScope;
 }
 
 /** Each visitor gets an isolated dataset, so two judges cannot corrupt each other. */
@@ -936,7 +1102,9 @@ function workspaceId(): string {
 /** The workspace this request should address: the visitor's own, or the showcase's. */
 function activeWorkspace(): string {
   const base = workspaceId();
-  return showcaseScope ? `${base}${SHOWCASE_SUFFIX}` : base;
+  if (showcaseScope) return `${base}${SHOWCASE_SUFFIX}`;
+  if (verifyScope) return `${base}${VERIFY_SUFFIX}`;
+  return base;
 }
 
 export function resetWorkspaceId(): void {
@@ -1007,6 +1175,10 @@ export const api = {
       "/api/products/custom",
       { name },
     ),
+  productPreferences: (productId: string) =>
+    request<ProductPreferences>(`/api/products/${productId}/preferences`),
+  needCoordination: (needId: string) =>
+    request<NeedCoordination>(`/api/needs/${needId}/coordination`),
   declareNeed: (draft: NeedDraft) => post<NeedRow>("/api/needs", draft),
   amendNeed: (needId: string, draft: NeedDraft) =>
     post<NeedRow>(`/api/needs/${needId}`, draft),
@@ -1081,6 +1253,10 @@ export const api = {
    *  visitor's. The scripted lifecycle is a different world, not a different screen. */
   setShowcaseScope,
   inShowcaseScope,
+  /** Point every subsequent request at the verification partition, or back at the
+   *  visitor's own. Same mechanism as the showcase, different world. */
+  setVerifyScope,
+  inVerifyScope,
 
   /** What one run did about this member's own declarations. Server-assembled from the
    *  evaluation records that run wrote; the browser renders and decides nothing. */

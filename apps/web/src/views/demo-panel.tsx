@@ -136,6 +136,7 @@ export function DemoPanel({
   onLifecycle,
   onOperations,
   onShowcase,
+  operator = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -153,6 +154,17 @@ export function DemoPanel({
   onLifecycle: () => void;
   onOperations: () => void;
   onShowcase: () => void;
+  /** Whether the *controls* are present at all.
+   *
+   *  Off in the ordinary member product, and off means **absent** rather than hidden:
+   *  acting as somebody else, answering for them, running the queue, opening pickup and
+   *  resetting the world are operator capabilities, and a member who tabs through this
+   *  drawer must not find them. Hiding them with CSS would leave every one of them
+   *  keyboard-reachable, which is the same problem wearing a stylesheet.
+   *
+   *  What stays either way is the part a member is entitled to: what this environment
+   *  is, what is real in it, and what is simulated (AGENTS.md §8). */
+  operator?: boolean;
 }) {
   const [people, setPeople] = useState<Identity[]>([]);
   const sheet = useRef<HTMLElement | null>(null);
@@ -271,6 +283,7 @@ export function DemoPanel({
               multi-person product being demonstrated by one person, so the capability
               has to stay; what changed is that stepping into somebody else is now an
               explicit, visibly-temporary act rather than the default state. */}
+          {operator ? (
           <section className="block" style={{ borderTop: "none", paddingTop: 0 }}>
             <h3 className="section-title" style={{ marginBottom: 10 }}>
               Act as a synthetic participant
@@ -313,7 +326,9 @@ export function DemoPanel({
               </p>
             )}
           </section>
+          ) : null}
 
+          {operator ? (
           <section className="block">
             <h3 className="section-title" style={{ marginBottom: 6 }}>
               Demo controls
@@ -360,6 +375,7 @@ export function DemoPanel({
               </button>
             </div>
           </section>
+          ) : null}
 
           <section className="block">
             <h3 className="section-title" style={{ marginBottom: 10 }}>
@@ -411,6 +427,7 @@ export function DemoPanel({
             ) : null}
           </section>
 
+          {operator ? (
           <section className="block">
             <h3 className="section-title" style={{ marginBottom: 10 }}>
               For judges
@@ -486,6 +503,7 @@ export function DemoPanel({
               </div>
             </div>
           </section>
+          ) : null}
         </div>
       </aside>
     </>

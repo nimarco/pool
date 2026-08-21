@@ -1930,6 +1930,10 @@ class CohortStrategy:
     lowest_minimum_units: int = 0
 
     input_fingerprint: str = ""
+    #: The run that listed this option. Lineage in the direction somebody reads it: a
+    #: member opens the order, the order names the run, the run names the options it
+    #: considered. Empty when generated outside a run.
+    run_id: str = ""
     generated_at: str = field(default_factory=lambda: iso(utcnow()))
 
     def to_dict(self) -> dict[str, Any]:
@@ -1974,6 +1978,9 @@ class StrategyEvaluation:
     target_product_id: str = ""
     target_product_name: str = ""
     objective_need_id: str = ""
+    #: The run that costed this option, so an explanation can be scoped to one run
+    #: rather than to whatever evidence happens to be in the workspace.
+    run_id: str = ""
 
     #: The fingerprint the strategy carried, and the one its world has now. Equal means
     #: nothing decision-relevant moved between generation and this evaluation.

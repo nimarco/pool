@@ -6597,3 +6597,166 @@ first.
 `adapters/repository.py`, `config.py`, `api/app.py`,
 `tests/test_declaration_events.py`, `tests/test_agent_bounds.py`,
 `tests/test_public_demo.py`, `README.md`, `docs/ARCHITECTURE.md`.
+
+---
+
+### #0057 — [2026-08-21] — The member does one thing, and the architecture happens
+`[FRONTEND]` `[DEMO]` `[ARCHITECTURE]` `[ARTICLE-1]` `[ARTICLE-3]`
+
+**Goal / user intent**
+Phase 4. Three phases built a causal chain — typed consent, a bounded strategy search, a
+durable coordination event — and none of it was reachable by *using* Pool. Make the
+ordinary member product demonstrate it: somebody adds a coffee they buy, answers questions
+about coffee, saves, and an order appears that they can understand and a judge can verify.
+Explicitly not built: a new visual system, a deployment, a recording.
+
+**Starting state**
+The Phase 3 flow existed only through HTTP. The declaration form offered a select over
+`SubstitutionPolicy` values; the judge demo was six actions of fixture-loading and
+button-pressing; the demo drawer put "act as somebody else" and "reset the world" one tap
+from Home. A presenter looked like Pool's puppeteer rather than its user.
+
+**Decision**
+
+*The questions are about coffee, and the server decides what they mean.* A member is asked
+"does it have to be whole bean?", not to pick `attribute_constrained`. The dimensions come
+from the curated family schema and the wording from a curated table beside it
+(`data/product_facts.QUESTIONS`); the browser sends **answers**, and
+`services/needs.policy_from_answers` maps them to the typed policy. Every default there is
+the narrowest reading — an unanswered "keep" is kept, an unchosen value set is the
+product's own — so an omission can never widen a rule. Widening is always a deliberate
+act.
+
+*Saving is the only cause.* No run button, no page-render dispatch, no reload dispatch.
+Auto-dispatch is scoped to one partition rather than switched on globally, because
+seeding writes a hundred rows and the showcase declares a need of its own.
+
+*One door, member first, proof underneath.* `Why this order?` and
+`Technical proof for this run` are one server read — `/api/needs/{id}/coordination` — at
+two levels of detail. They cannot tell different stories because they are the same rows,
+which is what makes the second evidence for the first rather than a parallel narrative.
+And it survives a reload, which the old judge demo did not: it held its story in React
+state.
+
+*Verification is a place, not a script.* `/verify` puts somebody in a synthetic community
+that already has fragmented coffee demand, says what is real and what is not, and gets out
+of the way. It presses nothing on Pool's behalf.
+
+**Implementation** — implemented, browser-verified, nothing deployed.
+
+New: `GET /api/products/{id}/preferences`, `GET /api/needs/{id}/coordination`,
+`services/events.explain`, `data/product_facts.QUESTIONS`,
+`services/needs.policy_from_answers`, a `-verify` workspace suffix,
+`apps/web/src/preferences.tsx`, `views/why.tsx`, `views/verify.tsx`. Changed: the
+declaration form and the onboarding declaration step both use the new control; the demo
+drawer's operator controls are gated; the footer's judge-demo link became
+`Verify this yourself`.
+
+**Navigation.** Judge demo and Showcase are gone from normal navigation and still exist —
+`/judge` directly, and the showcase behind `?operator=1`. The demo drawer keeps only
+*What is real here*; act-as, reset, the queue, the lifecycle replay and the operations link
+are **absent from the DOM** rather than hidden, because hiding a control with CSS leaves it
+on the tab order and that is the same problem wearing a stylesheet.
+
+**Browser verification.** Local public-demo stack, offline planner, in-memory store.
+Mobile 390×844 and desktop 1280×720. A cold `/verify` → name → community → search
+"Kestrel" → pick the medium roast → 3 bags → "similar products are okay" → add Dark →
+save. That single save produced event `cev_ba48cbb0e450e9b8` → run `run_34720f1f9297` →
+pool `pool_d10604b82d23`:
+
+    list_cohort_strategies       2 options, no verdict on either
+    evaluate_cohort_strategy     Kestrel   23/15 units, 4x5 cases -> not_cheaper, -$7.19
+    evaluate_cohort_strategy     Harbourstone 20/12 units, 3x6 cases -> viable, +$69.18 (20.7%)
+    create_candidate_pool_from_strategy -> 18 units, 0 surplus, 6 members, judge included
+
+Home changed to the order. *Why this order?* named both options, both verdicts, the
+aggregate exclusions (4 exact-only, 2 on a product fact) and the four things that have
+**not** happened. *Technical proof* named the same event, run, evaluation and pool ids, the
+tool sequence, and the bounds each was inside. Reload: one run, one pool, byte-identical
+explanation. No horizontal overflow at either width, no interactive target under 24px,
+and the drawer contained exactly one section.
+
+Negative path, same build: exact-only decaf → 6 bags against an 18-bag minimum →
+`below_minimum`, event `completed` with `no_action`, no pool, and a page that says why.
+
+**Failures / dead ends**
+Four, all found by using the thing rather than reading it.
+
+*The search could not find the coffee.* The curated family is installed into one workspace
+and is deliberately absent from the bundled catalogue, so `/api/products/search` — which
+ranks a snapshot — returned nothing for "Kestrel". A member of a community must be able to
+declare a product that community holds, so the endpoint now appends the workspace's own
+matching rows after the snapshot's ranking. Appended rather than merged: the snapshot's
+ordering is a tuned pure function a test pins, and these rows have no ranking of their own.
+
+*Home called it a substitute.* The order card read "A substitute for the Whole bean coffee
+you declared" off `is_exact_product`, which is a fact about two product ids. Phase 1
+established that a member who declared a *rule* named no product, so a different bag is
+what they asked for rather than a stand-in for it. The signal now comes from the server
+(`relevance.substitution_disclosed`) and is decided where the semantics already live.
+A member who genuinely named one bag and got another is still told — asserted on the
+allowlist member in the same order.
+
+*The Why link vanished exactly when it was needed.* It was on the watching row, and a
+declaration that becomes an order stops being a watching row. It is on the order card now,
+and it replaced the card's existing execution-trace link rather than sitting beside it.
+
+*The default quantity does not fit.* Two bags cannot land on a six-bag case boundary in
+this fixture, so the member-scoped rule correctly refuses to form an order that would
+exclude the person who asked — and the neighbours get nothing either, because a
+member-anchored run may not answer their question with somebody else's order. The
+behaviour is right and the demo is sensitive to it: `/verify` now suggests three bags and
+says plainly what happens if you try two. Recorded as a Phase 5 risk rather than papered
+over.
+
+**Autonomy / consent** — nothing widened. The mapping's every default is the narrowest
+reading, exact-only remains the default and is one tap, and a member who does not consent
+to substitution is never nudged. Candidate formation still touches no card: every
+membership is `provisional`, no payment row exists, and no host has accepted.
+
+**What is deliberately not implemented.** Agent-selected clarification questions. The
+questions are the curated schema's, chosen by nobody at runtime, and no second model call
+was added. The component takes an approved question list from the server and returns a
+fixed answer shape, so a later bounded agent could choose a subset and order without
+touching compatibility truth — but nothing does today, and nothing claims to.
+
+**AWS / external services touched** — None. No deploy, no AgentCore, no Bedrock, no live
+payment. Every run in this work used the offline planner at zero tokens.
+
+**Validation**
+`make qa` green: **1,201 agent + 75 infra + 129 web = 1,405**, ruff, eslint (zero
+warnings), `tsc -b`, production build, secret scan and its self-test, `git diff --check`.
+38 new agent tests, 9 new web tests, plus the browser walkthrough above.
+
+Pinned: the coffee community exists only in the `-verify` partition and the canonical seed
+is unchanged; seeding runs no agent; every answer maps to exactly one policy and silence
+never widens one; answers and a raw policy cannot both be sent; saving is the only cause
+and doing it twice causes one run; the explanation is reload-stable, names nobody, and
+counts exclusions rather than listing them; the refusal path stays a considered answer; and
+the general event dispatcher is not on the public allowlist, because auto-dispatch removed
+the need for the browser to have one.
+
+**What we learned**
+The distance between "the architecture is correct" and "a person can see that it is" was
+almost entirely copy and one server field. Three of the four bugs above were the product
+telling a true-ish sentence about a true fact — a substitute that was not a substitute, a
+link that existed until it mattered, a search that was correct about a catalogue and wrong
+about a community. None of them would have been found by a test written from the same
+assumptions as the code.
+
+The second lesson is the one about the quantity. A demo that depends on the visitor
+choosing three is a demo with a footnote, and the honest response was to write the footnote
+into the product rather than to loosen a rule that is doing exactly what it should.
+
+**Article fodder**
+Article 1 and Article 3. The declaration form is the whole thesis in one screen: the member
+says something about coffee, and a deterministic engine turns it into consent the system can
+compute with. The four bugs are the honest version of "we built it and then used it".
+
+**Relevant commits / files**
+`services/agent/pool/services/needs.py`, `services/events.py`, `services/relevance.py`,
+`api/app.py`, `api/public_demo.py`, `data/product_facts.py`,
+`apps/web/src/preferences.tsx`, `preference-answers.ts`, `views/why.tsx`,
+`views/verify.tsx`, `views/needs.tsx`, `views/onboarding.tsx`, `views/home.tsx`,
+`views/demo-panel.tsx`, `App.tsx`, `api.ts`, `styles.css`,
+`tests/test_member_demo.py`, `src/preferences.test.tsx`.

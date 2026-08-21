@@ -27,7 +27,10 @@ import {
   shortDateOnly,
 } from "../api";
 import { ChosenCard, ProductSearch } from "../product-search";
+import { NeedPreferences, PreferenceQuestion } from "../api";
 import { ChosenItem, Picked, asChosen } from "../chosen";
+import { EXACT } from "../preference-answers";
+import { Preferences } from "../preferences";
 import { categoryTone, productImage, productInitials } from "../products";
 import { Block, Chip, CoordinatorWait, Empty, IconArrowRight } from "../ui";
 
@@ -122,6 +125,9 @@ function NeedForm({
   onSubmit,
   onCancel,
   onRetire,
+  questions,
+  preferences,
+  onPreferences,
 }: {
   draft: NeedDraft;
   /** What the member picked, as a card renders it. Null while adding, before anything
@@ -138,6 +144,11 @@ function NeedForm({
   onSubmit: () => void;
   onCancel: () => void;
   onRetire: () => void;
+  /** What this product can be asked about, as the server says. Empty for anything
+   *  outside a curated family, which is when the older control appears instead. */
+  questions: PreferenceQuestion[];
+  preferences: NeedPreferences | null;
+  onPreferences: (next: NeedPreferences) => void;
 }) {
   /** Whether the member has narrowed the buy-early window by hand. Until they do, it
    *  tracks the date they gave — so changing "next needed" does not silently leave a
@@ -261,35 +272,50 @@ function NeedForm({
             it is the difference between joining an order and being told nothing can be
             done. Somebody who never opens a collapsed section never sees a choice they
             have already effectively made — and for a product Pool cannot source, it is
-            the *only* thing that could change the answer. The matcher reads the value
-            structurally; the model never decides two products are close enough (§21). */}
-        <label className="field field-wide">
-          <span className="field-label">Would another product do?</span>
-          <select
-            className="control"
-            value={draft.substitution}
-            onChange={(e) => set("substitution", e.target.value)}
-          >
-            {SUBSTITUTION.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-          <span className="field-note">
-            {chosen.sourceable === false ? (
-              <>
-                Pool has no bulk supplier for this exact product yet, so it cannot form an
-                order for it on its own. Your declaration is still recorded, and widening
-                this is the only thing that would change that — your call, not Pool&apos;s.
-              </>
-            ) : draft.substitution === "exact_only" ? (
-              "Only this exact product will ever be bought for you."
-            ) : (
-              "Pool may use another product that structurally matches this rule — and always tells you which."
-            )}
-          </span>
-        </label>
+            the *only* thing that could change the answer.
+
+            Two shapes, and which one appears is the server's answer rather than this
+            file's. A product in a curated family can be asked about *itself* — grind,
+            caffeine, roast — so the member answers questions about coffee instead of
+            picking a substitution policy out of a list. Everything else keeps the older
+            control, because there is nothing authoritative to ask about it and inventing
+            a question would be inventing a fact (§21). */}
+        {questions.length > 0 || preferences ? (
+          <Preferences
+            questions={questions}
+            value={preferences ?? EXACT}
+            onChange={onPreferences}
+            disabled={busy}
+          />
+        ) : (
+          <label className="field field-wide">
+            <span className="field-label">Would another product do?</span>
+            <select
+              className="control"
+              value={draft.substitution}
+              onChange={(e) => set("substitution", e.target.value)}
+            >
+              {SUBSTITUTION.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <span className="field-note">
+              {chosen.sourceable === false ? (
+                <>
+                  Pool has no bulk supplier for this exact product yet, so it cannot form an
+                  order for it on its own. Your declaration is still recorded, and widening
+                  this is the only thing that would change that — your call, not Pool&apos;s.
+                </>
+              ) : draft.substitution === "exact_only" ? (
+                "Only this exact product will ever be bought for you."
+              ) : (
+                "Pool may use another product that structurally matches this rule — and always tells you which."
+              )}
+            </span>
+          </label>
+        )}
       </div>
 
       {/* Available rather than absent. These already hold safe values, the deterministic
@@ -462,6 +488,11 @@ export function Needs({
   /** The chosen product, as a card renders it. Held beside the draft because the draft
    *  carries only the id the server needs, and the id is the one thing never shown. */
   const [chosen, setChosen] = useState<ChosenItem | null>(null);
+  /** What the chosen product can be asked about, and what the member answered.
+   *  `null` preferences means this product has no curated questions, so the older
+   *  substitution control is the one that appears. */
+  const [questions, setQuestions] = useState<PreferenceQuestion[]>([]);
+  const [preferences, setPreferences] = useState<NeedPreferences | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -491,6 +522,39 @@ export function Needs({
     setDraft({ ...blankDraft(identity.id), ...item.draft });
     onConsumeInitialProduct();
   }, [initialProduct, identity.id, onConsumeInitialProduct]);
+
+  /* What this product can be asked about, fetched when one is chosen. Asked of the
+     server rather than derived here: the dimensions are a curated schema and the wording
+     is a curated table, and a browser that guessed either would be guessing at the
+     meaning of somebody's consent. A product outside a curated family answers with no
+     questions, and the older control appears instead. */
+  useEffect(() => {
+    const productId = chosen?.draft.product_id;
+    if (!productId) {
+      setQuestions([]);
+      setPreferences(null);
+      return;
+    }
+    let live = true;
+    void api
+      .productPreferences(productId)
+      .then((offered) => {
+        if (!live) return;
+        setQuestions(offered.questions);
+        // Exact-only until somebody says otherwise, every time. Carrying a previous
+        // product's answers across would be applying consent to a thing it was never
+        // given about.
+        setPreferences(offered.questions.length > 0 ? EXACT : null);
+      })
+      .catch(() => {
+        if (!live) return;
+        setQuestions([]);
+        setPreferences(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [chosen?.draft.product_id]);
 
   if (needs === null) return <Empty>Loading…</Empty>;
 
@@ -567,8 +631,11 @@ export function Needs({
 
   const clearProduct = () => {
     setChosen(null);
+    setQuestions([]);
+    setPreferences(null);
     setDraft((d) => (d ? { ...d, product_id: undefined, group: undefined } : d));
   };
+
 
   /** Something the catalogue does not have. The server stores it with no substitute
    *  group and no supplier, so the need is real and no pool can form for it yet. */
@@ -586,7 +653,11 @@ export function Needs({
 
   const save = async (override?: Partial<NeedDraft>) => {
     if (!draft) return;
-    const payload = { ...draft, ...override };
+    /* Answers, not a policy. The server decides what they mean, and the older
+       `substitution` value is dropped when they travel so there is exactly one source
+       for what this member consented to. */
+    const answered = preferences ? { preferences, substitution: undefined } : {};
+    const payload = { ...draft, ...answered, ...override };
     setBusy(true);
     setError(null);
     try {
@@ -639,6 +710,9 @@ export function Needs({
               onSubmit={() => void save()}
               onCancel={close}
               onRetire={close}
+              questions={questions}
+              preferences={preferences}
+              onPreferences={setPreferences}
             />
           </div>
         ) : null}
@@ -666,6 +740,9 @@ export function Needs({
                     onSubmit={() => void save()}
                     onCancel={close}
                     onRetire={() => void save({ active: false })}
+                    questions={questions}
+                    preferences={preferences}
+                    onPreferences={setPreferences}
                   />
                 </div>
               ) : (

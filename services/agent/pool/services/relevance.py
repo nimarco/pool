@@ -56,6 +56,7 @@ from ..domain.models import (
     NeedDeclaration,
     Pool,
     PoolStatus,
+    SubstitutionPolicy,
 )
 from . import coordination as coord
 from . import discovery
@@ -111,6 +112,22 @@ class PersonalPool:
             # the image silently disagree with the declaration behind them (§21).
             "is_exact_product": self.membership.is_exact_product,
             "declared_product_name": self.declared_product_name,
+            # Whether the member is owed the sentence "this is a stand-in for what you
+            # asked for". Not the same question as `is_exact_product`, and reading it off
+            # that was wrong for two policies.
+            #
+            # A member who declared the *family*, or who stated a typed rule over product
+            # facts, named no product — so a different bag is the thing they asked for
+            # rather than a substitute for it, and calling it one would be an apology for
+            # doing exactly what they said. The same distinction ``CompatibilityVerdict.
+            # requires_disclosure`` makes at match time; decided here so no screen has to
+            # re-derive it (§21).
+            "substitution_disclosed": bool(self.declared_product_name)
+            and self.need.substitution
+            not in {
+                SubstitutionPolicy.GROUP_DECLARED,
+                SubstitutionPolicy.ATTRIBUTE_CONSTRAINED,
+            },
         }
 
 

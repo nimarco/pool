@@ -24,11 +24,12 @@ these values: the timing engine decides pull-forward eligibility from
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
-from ..data import catalog
+from ..data import catalog, product_facts
 from ..domain.attributes import (
     AttributeConstraint,
     ConstraintError,
@@ -429,3 +430,138 @@ def need_view(ctx: PoolContext, need: NeedDeclaration) -> dict[str, Any]:
         ),
         "active": need.active,
     }
+
+
+# ------------------------------------------------------- product-specific preferences
+#
+# What a member is *asked* about a product, and what their answers deterministically
+# mean. Both ends are authoritative: the dimensions come from the curated family schema
+# (§21) and the wording from the curated question table beside it, so nothing at runtime —
+# least of all a model — decides either what may be asked or what an answer implies.
+
+
+class Flexibility:
+    """The one question every declaration answers, in the member's own terms."""
+
+    #: This exact product and nothing else. The default, everywhere.
+    EXACT = "exact"
+    #: Similar products are acceptable, subject to the answers below.
+    SIMILAR = "similar"
+
+
+@dataclass
+class PreferenceAnswers:
+    """A member's answers, as the form collects them.
+
+    ``keep`` is the set of attributes they insist stay as they are on the product they
+    picked; ``accept`` maps an attribute to every value they would be happy with. Both
+    are answers about *this* product, which is why neither carries a value the member
+    would have had to look up.
+    """
+
+    flexibility: str = Flexibility.EXACT
+    keep: tuple[str, ...] = ()
+    accept: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+
+
+def preference_questions(ctx: PoolContext, product_id: str) -> dict[str, Any]:
+    """What this product can be asked about, in consumer language.
+
+    Only attributes the *selected product* carries a **verified** fact for. Asking
+    somebody to insist on a value Pool cannot establish would build a rule that refuses
+    everything; asking about a fact nobody has confirmed would be asking them to guess.
+    A product outside any curated family yields no questions at all, and the form then
+    offers exact-only — which is what Pool can actually honour for it.
+    """
+    product = ctx.repo.get_product(ctx.ws, product_id)
+    if product is None:
+        return {"family": "", "schema_version": 0, "questions": []}
+    schema = ctx.product_facts.family_schema(product.substitute_group)
+    if schema is None:
+        return {"family": "", "schema_version": 0, "questions": []}
+
+    facts = ctx.product_facts.facts_for(product_id)
+    questions: list[dict[str, Any]] = []
+    for definition in schema.attributes:
+        fact = facts.get(definition.key)
+        if fact is None or not fact.is_authoritative:
+            continue
+        question = product_facts.question_for(definition.key)
+        if question is None:
+            continue
+        value_label = product_facts.label_for(definition.key, fact.value)
+        questions.append(
+            {
+                "attribute": definition.key,
+                "kind": question.kind,
+                "prompt": question.prompt.replace("{value}", value_label.lower()),
+                "hint": question.hint,
+                "product_value": fact.value,
+                "product_value_label": value_label,
+                "options": [
+                    {
+                        "value": value,
+                        "label": product_facts.label_for(definition.key, value),
+                    }
+                    for value in sorted(definition.allowed_values)
+                ],
+            }
+        )
+    return {
+        "family": schema.family,
+        "schema_version": schema.version,
+        "product_id": product_id,
+        "questions": questions,
+    }
+
+
+def policy_from_answers(
+    ctx: PoolContext, product_id: str, answers: PreferenceAnswers
+) -> tuple[SubstitutionPolicy, AttributeConstraint | None]:
+    """Turn what a member said into what Pool is allowed to buy. Deterministic.
+
+    **Every default is the narrowest reading.** That is the whole rule, and it is why
+    this function exists rather than the browser assembling a policy:
+
+    * exact-only is the default and produces no attribute policy at all;
+    * an attribute the member was asked to keep and did not answer stays kept, because
+      unanswered is not consent to change it;
+    * an attribute whose acceptable values they did not choose is required to match the
+      product they picked, which is the narrowest rule that can be written;
+    * a value outside the curated schema, or an attribute the product carries no
+      verified fact for, is simply not expressible — ``validate_constraint`` refuses it
+      downstream and the member is told, rather than having their rule quietly widened.
+
+    An answer can therefore only ever *widen* by being given explicitly. Omitting one
+    never does.
+    """
+    if answers.flexibility != Flexibility.SIMILAR:
+        return SubstitutionPolicy.EXACT_ONLY, None
+
+    offered = preference_questions(ctx, product_id)
+    if not offered["questions"]:
+        # Nothing about this product can be constrained deterministically, so "similar is
+        # fine" has no expressible meaning. Exact-only is the honest answer, and it is
+        # narrower than the alternative rather than wider.
+        return SubstitutionPolicy.EXACT_ONLY, None
+
+    keep = set(answers.keep)
+    requires: dict[str, frozenset[str]] = {}
+    for question in offered["questions"]:
+        attribute = question["attribute"]
+        own = question["product_value"]
+        if question["kind"] == product_facts.QUESTION_KIND_KEEP:
+            # Unanswered means kept. The member was shown a checked box; unchecking it is
+            # the deliberate act, and treating silence as "anything goes" would broaden a
+            # rule nobody widened.
+            if attribute in keep or attribute not in answers.accept:
+                requires[attribute] = frozenset({own})
+            continue
+        chosen = tuple(answers.accept.get(attribute, ()))
+        requires[attribute] = frozenset(chosen) if chosen else frozenset({own})
+
+    return SubstitutionPolicy.ATTRIBUTE_CONSTRAINED, AttributeConstraint(
+        family=offered["family"],
+        schema_version=int(offered["schema_version"]),
+        requires=requires,
+    )

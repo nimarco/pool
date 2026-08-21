@@ -168,6 +168,7 @@ function opportunityIn(pool: PoolView, needId = "need_rosa_whey"): PersonalOppor
     declared_product_id: pool.product_id,
     is_exact_product: true,
     declared_product_name: "",
+    substitution_disclosed: false,
   };
 }
 
@@ -206,6 +207,7 @@ function renderHome(
   pools: PoolView[],
   options: {
     onShowAgent?: (poolId: string) => void;
+    onWhy?: (needId: string, productName: string) => void;
     decisions?: Decision[];
     /** Defaults to "this member is in the first pool", which is the ordinary state
      *  every pre-existing assertion here was written against. Pass `null` for a member
@@ -232,6 +234,7 @@ function renderHome(
       onRespond={() => {}}
       onShowAgent={options.onShowAgent ?? (() => {})}
       onStartNeed={() => {}}
+      onWhy={options.onWhy ?? (() => {})}
       liveDiscovery={false}
       region={null}
     />,
@@ -261,7 +264,14 @@ describe("the proof action on Home", () => {
   it("opens the proof for the pool the card is showing, not for whichever pool sorts first", async () => {
     const shown = poolView();
     const onShowAgent = vi.fn();
-    renderHome([shown, OTHER], { onShowAgent });
+    /* No declaration named on the opportunity, which is the case where the card still
+       falls back to the run's execution trace. When the server *can* name one, the card
+       offers "Why this order?" instead — the same evidence with the member-facing answer
+       in front of it, asserted below. */
+    renderHome([shown, OTHER], {
+      onShowAgent,
+      member: memberView({ opportunity: { ...opportunityIn(shown), need_id: "" } }),
+    });
 
     // Whatever the card drew is the pool whose proof must open. The card appears once
     // the server has said which pool is this member's, so this waits for that answer
@@ -280,6 +290,20 @@ describe("the proof action on Home", () => {
     await waitFor(() => expect(onShowAgent).toHaveBeenCalledTimes(1));
     expect(onShowAgent).toHaveBeenCalledWith(shown.pool_id);
     expect(onShowAgent).not.toHaveBeenCalledWith(OTHER.pool_id);
+  });
+
+  it("asks why this order, for the declaration that caused it", async () => {
+    const shown = poolView();
+    const onWhy = vi.fn();
+    renderHome([shown], {
+      onWhy,
+      member: memberView({
+        opportunity: { ...opportunityIn(shown), need_id: "need_rosa_whey" },
+      }),
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /why this order/i }));
+    expect(onWhy).toHaveBeenCalledWith("need_rosa_whey", shown.product_name);
   });
 });
 
@@ -359,12 +383,37 @@ describe("a pool buying an authorised substitute", () => {
           declared_product_id: "prod_whey_chocolate",
           is_exact_product: false,
           declared_product_name: "Gold Standard 100% Whey",
+          substitution_disclosed: true,
         },
       }),
     });
 
     expect(await screen.findByText(/A substitute for the/)).toBeTruthy();
     expect(screen.getByText("Gold Standard 100% Whey")).toBeTruthy();
+  });
+
+  it("says nothing of the kind when the member named a rule rather than a product", async () => {
+    /* A different bag is not a *substitute* for somebody who declared "whole bean,
+       caffeinated, medium or dark" — it is the thing they asked for. The server decides
+       that (`relevance.substitution_disclosed`), because reading it off the two product
+       ids was wrong for exactly this case and for family declarations (§21). */
+    const shown = poolView();
+    vi.spyOn(apiModule.api, "pool").mockResolvedValue({ ...shown, members: [ROSA_MEMBERSHIP] });
+    renderHome([shown], {
+      member: memberView({
+        opportunity: {
+          ...opportunityIn(shown),
+          product_id: "prod_rc_harbourstone_dark",
+          declared_product_id: "prod_rc_kestrel_medium",
+          is_exact_product: false,
+          declared_product_name: "Whole bean coffee, 2 lb",
+          substitution_disclosed: false,
+        },
+      }),
+    });
+
+    await screen.findByText(/Pool found something for you|Forming/);
+    expect(screen.queryByText(/A substitute for the/)).toBeNull();
   });
 
   it("says nothing extra when the pool buys exactly what was declared", async () => {

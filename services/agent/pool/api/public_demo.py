@@ -89,7 +89,20 @@ logger = logging.getLogger(__name__)
 #: that already protects ``/api/state``.
 SHOWCASE_SUFFIX = "-showcase"
 
-PUBLIC_WORKSPACE_RE = re.compile(rf"^w[a-z0-9]{{8,32}}({re.escape(SHOWCASE_SUFFIX)})?$")
+#: The partition the *verification* walkthrough runs in. Same hyphen property as the
+#: showcase suffix, and the same reason: a browser-generated session id cannot contain
+#: one, so a visitor's own workspace, their showcase and their verification world are
+#: three partitions that can never collide, and reaching somebody else's still means
+#: guessing their session id.
+#:
+#: It exists because the heterogeneous coffee community is *not* part of the canonical
+#: seed and must never become part of it (Phase 2). A workspace that wants it asks for
+#: it by name.
+VERIFY_SUFFIX = "-verify"
+
+PUBLIC_WORKSPACE_RE = re.compile(
+    rf"^w[a-z0-9]{{8,32}}({re.escape(SHOWCASE_SUFFIX)}|{re.escape(VERIFY_SUFFIX)})?$"
+)
 
 
 def showcase_workspace(ws: str) -> str:
@@ -103,6 +116,26 @@ def showcase_workspace(ws: str) -> str:
 
 def is_showcase_workspace(ws: str) -> bool:
     return ws.endswith(SHOWCASE_SUFFIX)
+
+
+def verify_workspace(ws: str) -> str:
+    """The partition the verification walkthrough runs in, for a given session."""
+    if ws.endswith(VERIFY_SUFFIX):
+        return ws
+    base = ws[: -len(SHOWCASE_SUFFIX)] if ws.endswith(SHOWCASE_SUFFIX) else ws
+    return f"{base}{VERIFY_SUFFIX}"
+
+
+def is_verify_workspace(ws: str) -> bool:
+    """Whether this partition is the heterogeneous verification world.
+
+    Two consequences, and both are deliberately scoped to this suffix rather than made
+    global: the curated coffee community is installed here and nowhere else, and saving a
+    declaration here dispatches its coordination event in the same request. Turning
+    either on globally would put six unsourceable products into every workspace and make
+    every declaration anywhere a model call (AGENTS.md §3.3).
+    """
+    return ws.endswith(VERIFY_SUFFIX)
 
 #: Never reachable as a workspace prefix — ``WORKSPACE_RE`` requires a leading
 #: ``[a-z0-9]`` — so quota and lease rows cannot collide with a session's data.
@@ -224,9 +257,25 @@ ALLOWED_GET_PATTERNS = tuple(
         # and refuses to describe a run that was not this member's.
         rf"^/api/runs/{_ID}/report$",
         rf"^/api/members/{_ID}$",
+        # The product-specific questions one item can be asked about. A pure read over a
+        # committed schema and a committed label table: it creates nothing, spends no
+        # model tokens, takes no client string that reaches a prompt, and returns the
+        # same answer for the same product in every workspace.
+        rf"^/api/products/{_ID}/preferences$",
+        # Everything one declaration caused: the options considered, the verdicts, the
+        # order if one formed, and the run that reached them. A pure read over rows that
+        # run already wrote — no model tokens, no mutation, and counts rather than a
+        # roster of who was excluded.
+        rf"^/api/needs/{_ID}/coordination$",
     )
 )
 
+#: ``GET /api/events`` and ``POST /api/events/{id}/dispatch`` are deliberately **not**
+#: here. The browser never needs either: saving a declaration in a verification workspace
+#: dispatches its coordination event server-side and returns the outcome, and everything a
+#: surface has to say afterwards comes from ``/api/needs/{id}/coordination``, which is
+#: scoped to one declaration. Exposing a general dispatcher would hand an anonymous caller
+#: a way to spend a model call on any event id they could guess, for no product benefit.
 ALLOWED_POST = frozenset(
     {
         "/api/agent/run",

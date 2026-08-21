@@ -48,6 +48,7 @@ from ..agent.coordinator import PoolCoordinator
 from ..agent.tools import STRATEGY_TOOL_SURFACE, TOOL_SURFACE
 from ..config import get_settings
 from ..data import catalog
+from ..data.roast_coffee_fixture import install_roast_coffee
 from ..data.seed import COMMUNITY_ID, seed
 from ..domain.attributes import AttributeConstraint
 from ..domain.models import (
@@ -228,6 +229,14 @@ def ensure_seeded(ws: str) -> None:
         # it has not seen. Public mode rations how many cold sessions a day can open.
         _public.spend_new_session()
         seed(repo(), ws)
+        if public_demo.is_verify_workspace(ws):
+            # The heterogeneous coffee community, on top of the canonical seed and only
+            # here. It brings its own products, suppliers, offers, households and
+            # declarations — but deliberately *not* a coffee declaration for the visitor,
+            # and *not* the resulting order. Those are what their own save has to cause,
+            # or the walkthrough would be showing them a world that was already finished
+            # (AGENTS.md §8).
+            install_roast_coffee(repo(), ws)
     finally:
         _public.release_workspace(ws)
 
@@ -341,6 +350,45 @@ class AttributeConstraintRequest(BaseModel):
         )
 
 
+class PreferenceRequest(BaseModel):
+    """A member's answers to the product-specific questions, as the form collects them.
+
+    Deliberately *not* a policy. The browser sends what somebody said about the product
+    they picked; ``services/needs.policy_from_answers`` decides what that means, so the
+    narrowest-reading rules live in one testable place and a client cannot assemble a
+    permission the questions never offered.
+    """
+
+    flexibility: str = Field(default=needs_service.Flexibility.EXACT, max_length=20)
+    keep: list[str] = Field(default_factory=list)
+    accept: dict[str, list[str]] = Field(default_factory=dict)
+
+    #: Small on purpose. A curated family has a handful of dimensions with a handful of
+    #: values each; anything larger is not somebody answering a form.
+    MAX_ATTRIBUTES: ClassVar[int] = 12
+    MAX_VALUES: ClassVar[int] = 24
+    MAX_TOKEN: ClassVar[int] = 60
+
+    def to_answers(self) -> needs_service.PreferenceAnswers:
+        if self.flexibility not in (
+            needs_service.Flexibility.EXACT,
+            needs_service.Flexibility.SIMILAR,
+        ):
+            raise HTTPException(400, "that is not an answer this form offers")
+        if len(self.keep) > self.MAX_ATTRIBUTES or len(self.accept) > self.MAX_ATTRIBUTES:
+            raise HTTPException(400, "too many product preferences")
+        for key, values in self.accept.items():
+            if len(key) > self.MAX_TOKEN or len(values) > self.MAX_VALUES:
+                raise HTTPException(400, "that preference is not one this demo accepts")
+            if any(len(v) > self.MAX_TOKEN for v in values):
+                raise HTTPException(400, "that preference is not one this demo accepts")
+        return needs_service.PreferenceAnswers(
+            flexibility=self.flexibility,
+            keep=tuple(self.keep),
+            accept={k: tuple(v) for k, v in self.accept.items()},
+        )
+
+
 class NeedRequest(BaseModel):
     """One standing declaration, as a member states it.
 
@@ -369,6 +417,10 @@ class NeedRequest(BaseModel):
     #: dropping stated requirements is how a member ends up with authority they did not
     #: intend and no way to see it.
     constraint: AttributeConstraintRequest | None = None
+    #: The member-facing form's answers. Mutually exclusive with ``constraint``: one is
+    #: a policy and the other is what somebody said, and accepting both would mean two
+    #: sources for one permission.
+    preferences: PreferenceRequest | None = None
     active: bool = True
 
     def to_input(self) -> needs_service.NeedInput:
@@ -413,6 +465,15 @@ class NeedRequest(BaseModel):
             raise HTTPException(
                 400, "product requirements go with a product, not with a family"
             )
+        if self.preferences is not None:
+            if self.constraint is not None:
+                raise HTTPException(
+                    400, "send the answers or the policy, not both"
+                )
+            if self.group:
+                raise HTTPException(
+                    400, "product preferences go with a product, not with a family"
+                )
 
         return needs_service.NeedInput(
             household_id=self.household_id,
@@ -901,13 +962,65 @@ def search_products(
             if p.substitute_group in wanted and p.id in sourceable:
                 by_group[p.substitute_group] = True
         in_group = by_group
+    results = [e.view(sourceable=e.product_id in sourceable) for e in found]
+    # Then this Community's own products, for anything the bundled snapshot does not
+    # carry. A curated family installed into one workspace is a real thing a real member
+    # of that community buys, and a search that could not find it would leave them unable
+    # to declare it — which is the one action the whole product is built around.
+    #
+    # Appended rather than merged into the ranking: the snapshot's ordering is a pure
+    # function a test can pin, and these rows have no ranking of their own. Deduped
+    # against what the catalogue already returned, and capped by the same limit.
+    seen = {r["product_id"] for r in results}
+    if len(results) < limit:
+        for product in _local_matches(ws, q):
+            if product.id in seen:
+                continue
+            results.append(
+                {
+                    "product_id": product.id,
+                    "name": product.name,
+                    "brand": product.brand,
+                    "variant": product.variant,
+                    "display_size": product.display_size,
+                    "unit": product.unit,
+                    "category": product.category,
+                    "image_ref": product.image_ref,
+                    "sourceable": product.id in sourceable,
+                }
+            )
+            seen.add(product.id)
+            if len(results) >= limit:
+                break
     return {
         "query": q.strip(),
         "groups": [g.view(sourceable=in_group.get(g.group, False)) for g in families],
-        "results": [e.view(sourceable=e.product_id in sourceable) for e in found],
+        "results": results,
         # So the client can render the licence obligation next to what it obliges.
         "attribution": catalog.attribution().to_dict(),
     }
+
+
+def _local_matches(ws: str, query: str) -> list[Any]:
+    """Products this workspace holds that a query plainly names.
+
+    Deliberately blunt — whole-word substring over brand, name and variant, ordered by
+    product id. The catalogue's ranking is a tuned, tested, pure function over a fixed
+    snapshot; these rows are whatever a community happens to have, and inventing a second
+    scoring system for them would be two rankings that disagree. Anything subtler belongs
+    in the snapshot.
+    """
+    words = [w for w in re.split(r"[^a-z0-9]+", query.casefold()) if len(w) >= 2]
+    if not words:
+        return []
+    out = []
+    for product in sorted(repo().list_products(ws), key=lambda p: p.id):
+        haystack = " ".join(
+            (product.brand, product.name, product.variant, product.category)
+        ).casefold()
+        if all(word in haystack for word in words):
+            out.append(product)
+    return out
 
 
 def _sourceable_product_ids(ws: str) -> frozenset[str]:
@@ -1090,6 +1203,54 @@ def get_needs(workspace: str = Query("demo")) -> dict[str, Any]:
     }
 
 
+def _should_dispatch(ws: str) -> bool:
+    """Whether saving a declaration also runs the coordination it owes, in this request.
+
+    Two ways to be true, and neither of them is "always". A deployment may turn it on
+    globally; the verification partition has it on because that walkthrough is the one
+    place the causal chain — save, event, run, order — is the whole point.
+
+    Everywhere else it is off, and the reason is cost rather than caution: seeding a
+    workspace writes dozens of rows and the showcase declares a need of its own, so a
+    global switch would turn opening a page into a model call (AGENTS.md §3.3). Note
+    that seeding could not dispatch even if it were on — it writes declarations straight
+    to the repository, and only the HTTP write path records events at all.
+    """
+    return _settings.auto_dispatch_declaration_events or public_demo.is_verify_workspace(ws)
+
+
+def _need_input(ctx: PoolContext, body: NeedRequest) -> needs_service.NeedInput:
+    """The declaration a request describes, with its answers already interpreted.
+
+    The mapping happens here rather than on ``NeedRequest`` because it needs the
+    workspace: which questions a product can even be asked, and what its own verified
+    values are, are facts about stored state. A browser that guessed them would be
+    guessing at somebody's consent.
+    """
+    data = body.to_input()
+    if body.preferences is None:
+        return data
+    data.substitution, data.attribute_policy = needs_service.policy_from_answers(
+        ctx, data.product_id, body.preferences.to_answers()
+    )
+    return data
+
+
+@app.get("/api/products/{product_id}/preferences")
+def product_preferences(product_id: str, workspace: str = Query("demo")) -> dict[str, Any]:
+    """The product-specific questions this item can be asked about.
+
+    Read-only. The dimensions come from the curated family schema and the wording from
+    the curated table beside it (``data/product_facts.py``) — nothing here is generated,
+    and no model is involved in deciding what a member may be asked or what their answer
+    would mean. A product outside a curated family returns no questions, and the form
+    then offers only "this exact product", which is what Pool can actually honour for it.
+    """
+    ws = check_workspace(workspace)
+    ensure_seeded(ws)
+    return needs_service.preference_questions(ctx_for(ws), product_id)
+
+
 def _coordination_for(ctx: PoolContext, ws: str, need) -> dict[str, Any] | None:
     """Record that this declaration owes coordination, and dispatch it if configured.
 
@@ -1106,7 +1267,7 @@ def _coordination_for(ctx: PoolContext, ws: str, need) -> dict[str, Any] | None:
     event = events_service.record_declaration_event(ctx, need, COMMUNITY_ID)
     if event is None:
         return None
-    if not _settings.auto_dispatch_declaration_events:
+    if not _should_dispatch(ws):
         return events_service.view(event)
 
     coordinator = PoolCoordinator(
@@ -1147,7 +1308,7 @@ def create_need(body: NeedRequest, workspace: str = Query("demo")) -> dict[str, 
     ctx = ctx_for(ws)
     try:
         need = needs_service.declare_need(
-            ctx=ctx, community_id=COMMUNITY_ID, data=body.to_input()
+            ctx=ctx, community_id=COMMUNITY_ID, data=_need_input(ctx, body)
         )
     except needs_service.NeedError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -1169,7 +1330,7 @@ def update_need(
     ctx = ctx_for(ws)
     try:
         need = needs_service.amend_need(
-            ctx=ctx, community_id=COMMUNITY_ID, need_id=need_id, data=body.to_input()
+            ctx=ctx, community_id=COMMUNITY_ID, need_id=need_id, data=_need_input(ctx, body)
         )
     except needs_service.NeedError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -1440,6 +1601,29 @@ def list_coordination_events(workspace: str = Query("demo")) -> dict[str, Any]:
         # nothing will ever pick it up on its own.
         "auto_dispatch": _settings.auto_dispatch_declaration_events,
     }
+
+
+@app.get("/api/needs/{need_id}/coordination")
+def need_coordination(need_id: str, workspace: str = Query("demo")) -> dict[str, Any]:
+    """Everything one declaration caused, read from stored rows.
+
+    The single source behind both member-facing surfaces: *Why this order?* reads the
+    order, the options and the verdicts; *Technical proof for this run* reads the run,
+    the tool sequence and the bounds. They cannot disagree, because they are the same
+    rows at two levels of detail — which is the property that makes the second one proof
+    of the first rather than a parallel story.
+
+    Reload-safe: nothing is reconstructed from what a browser saw. Counts, never a
+    roster — which neighbour was excluded is not an answer to anybody else's question.
+    """
+    ws = check_workspace(workspace)
+    ensure_seeded(ws)
+    explained = events_service.explain(ctx_for(ws), need_id)
+    if explained is None:
+        # Not an error: a declaration Pool has not looked at yet is an ordinary state,
+        # and the surface reading this needs to be able to say so.
+        return {"need_id": need_id, "event": None, "run": None, "order": None}
+    return explained
 
 
 @app.post("/api/events/{event_id}/dispatch")

@@ -481,6 +481,7 @@ def _build(
         input_fingerprint=input_fingerprint(
             ctx, community=community, target=target, site=site
         ),
+        run_id=ctx.run_id,
     )
 
 
@@ -591,6 +592,7 @@ def _evaluate(
         target_product_name=strategy.target_product_name,
         objective_need_id=strategy.objective_need_id,
         strategy_fingerprint=strategy.input_fingerprint,
+        run_id=ctx.run_id,
         pickup_site_id=strategy.pickup_site_id,
         pickup_site_name=strategy.pickup_site_name,
         quote_max_age_hours=community.quote_max_age_hours,

@@ -155,10 +155,10 @@ the demo are simulated.
 | Payments | **Simulated in the demo.** Stripe adapter accepts TEST keys only; Stripe servers have not been verified. |
 | Host compensation | **Computed and recorded; not paid out.** No payout rail exists. |
 | Supplier purchase | **Simulated.** Every purchase record is flagged; no supplier is contacted. |
-| Bedrock inference | **Verified 2026-08-19** with Nova Lite through Strands; not rerun against the current branch. |
-| AgentCore Runtime | **Deployed and verified 2026-08-19**, `READY` in `us-east-1`. The deployed artefact predates the current branch. |
-| Lambda Function URL | **Deployed and verified 2026-08-19** as the public same-origin web/API surface; serves an earlier build. |
-| DynamoDB | **Deployed and verified 2026-08-19** as authoritative shared workspace state. |
+| Bedrock inference | **Verified live 2026-08-22** with Nova Lite through Strands, reached via AgentCore. |
+| AgentCore Runtime | **Deployed and verified live 2026-08-22**, `READY` in `us-east-1`, running the current release. |
+| Lambda Function URL | **Deployed and verified 2026-08-22** as the public same-origin web/API surface, running the current release. |
+| DynamoDB | **Deployed and verified 2026-08-22** as authoritative shared workspace state. |
 | EventBridge | **Implemented only in an un-deployed pilot stack; zero deployed rules.** |
 | Amazon Location | **Adapter implemented; live service unverified and absent from judge path.** |
 | Public demo URL | **Deployed and observed.** Recheck in a private browser before submission. |

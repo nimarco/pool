@@ -33,8 +33,27 @@ GENERATED_CACHE='^\./(agentcore/\.cache|build/demo-lambda)/'
 FAIL=0
 scan() {
   local label="$1" pattern="$2"
-  local hits
-  hits=$(grep -rInE "${EXCLUDES[@]}" "$pattern" . 2>/dev/null | grep -vE "$GENERATED_CACHE" || true)
+  local raw status hits
+
+  # grep's own exit status, kept rather than discarded: 0 is "matched", 1 is "no match",
+  # and **2 is "the scan failed"**. The old form ended in `|| true`, which collapsed all
+  # three into success — so a tree grep could not read reported "clean", which is the one
+  # answer a secret scanner must never give by accident. Errors go to a file rather than
+  # /dev/null for the same reason: the message is the evidence that the check did not run.
+  local errors
+  errors=$(mktemp)
+  raw=$(grep -rInE "${EXCLUDES[@]}" "$pattern" . 2>"$errors")
+  status=$?
+  if (( status >= 2 )); then
+    echo "✗ $label — the scan itself failed, so 'clean' would be a guess"
+    head -4 "$errors"
+    rm -f "$errors"
+    FAIL=1
+    return
+  fi
+  rm -f "$errors"
+
+  hits=$(printf '%s' "$raw" | grep -vE "$GENERATED_CACHE" || true)
   if [[ -n "$hits" ]]; then
     echo "✗ $label"
     echo "$hits" | head -8

@@ -562,13 +562,19 @@ thing that changed is a supplier fact somebody imported ninety seconds ago.
 
 Open **Why this worked** and read three lines, not all six:
 
-> 22 bags were already due, and 2 more were bought early under permission those members had
-> already given. · Together that reached the supplier's 16-unit minimum. · It fills 3
-> complete cases with nothing left over. · Pool compared 2 supplier prices and took the one
-> at $6.25 a unit, ahead of $9.75.
+> Together that reached the supplier's 16-unit minimum. · It fills 3 complete cases with
+> nothing left over. · Pool compared 2 supplier prices and took the one at $6.25 a unit,
+> ahead of $9.75. · Collect from Central Quad pavilion — the best of 4 pickup points for
+> this group.
 
-That last line matters: both sheets are still on file, and the evaluator picked the better
+That third line matters: both sheets are still on file, and the evaluator picked the better
 one. Nothing was deleted to make this work.
+
+**Read the timing line off the screen rather than from here.** It is the one figure in this
+block that moves with the calendar — how much of the demand was already due against how
+much was pulled forward under permission members had already given depends on today's date
+relative to their cadences. Both readings are true; quoting a fixed one would eventually
+have the presenter saying a number the page does not show.
 
 And point at paper towels, still standing, still refused on the supplier minimum. The world
 changed for one product, not for the demo.

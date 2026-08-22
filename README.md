@@ -40,12 +40,21 @@ that separated them.
 **On location:** Pool never asks your browser for a position, and never claims you are near
 the people in the demo. The community is invented, and the page says so before you start.
 
-**On the hosted URL.** A public Lambda Function URL was deployed and verified on
-2026-08-19 — `BUILD_HISTORY.md` #0048 — and that deployment is **five phases behind this
-branch**: it predates typed product requirements, the strategy engine, coordination events
-and the `/verify` experience described above. Its current reachability has not been
-reverified here, and it is named as a configured deployment target rather than as a live
-demonstration of this code. Run it locally to see what this repository actually does.
+**The hosted URL** runs this branch:
+
+**<https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/verify>**
+
+Deployed and verified **2026-08-22**. The walkthrough above was driven against it: a
+declaration saved over HTTPS produced a coordination event, one bounded run, a refused
+option, a viable one, and a provisional order — on a real DynamoDB table, with no card
+touched.
+
+**What is live, exactly.** The judge path you just read about runs the real Strands loop
+with the **deterministic offline planner** on the Lambda — that is deliberate, and the
+Lambda has no permission to call a model. Live model execution is a separate, explicitly
+requested action that goes Lambda → **Bedrock AgentCore Runtime** → Strands → Bedrock →
+the same typed tools, and it was verified live on 2026-08-22 with
+`us.amazon.nova-lite-v1:0`. Both are described precisely under [AWS](#aws).
 
 ---
 
@@ -518,20 +527,23 @@ obligations: [`services/agent/pool/data/CATALOG_LICENSE.md`](services/agent/pool
 ## AWS
 
 **Status language on this page is about when something was last observed, not about what
-is plausible.** Every line below was verified on the date its entry in `BUILD_HISTORY.md`
-records. The most recent cloud work was **#0048, 2026-08-19**; everything since — typed
-product requirements, the strategy engine, coordination events, the `/verify` experience,
-targeted questions, reversible preferences and immutable run history — is **local and
-offline only, and has never been deployed or driven by a live model**. Nothing here claims
-a deployment that has not happened, and nothing here re-uses an old observation to describe
-current code.
+is plausible.** Every line below carries the date it was observed.
+
+Both deployed artefacts now run this branch, and they do different jobs. The **Lambda**
+serves the web app and the reduced API and runs coordination in-process with the
+deterministic offline planner; its execution role can reach DynamoDB and
+`bedrock-agentcore:InvokeAgentRuntime`, and **nothing else** — it cannot call a model. The
+**AgentCore Runtime** is where a live model runs, reached only when the live agent action
+is explicitly requested. Keeping the paid path behind one deliberate action, rather than
+under every page load, is a cost decision (AGENTS.md §3.3) and the reason the judge
+walkthrough is free to repeat.
 
 | Service | Role | Status |
 | --- | --- | --- |
-| Bedrock | Model inference via Strands | **Verified 2026-08-19** — `us.amazon.nova-lite-v1:0`; discovery, recovery and lock branches driven by real runs (`make verify-bedrock`, `make verify-recovery`). Not rerun against this branch |
-| AgentCore Runtime | Hosted agent entrypoint | **Deployed and verified 2026-08-19** — `agentcore_app.py`, `READY` in `us-east-1`, live invocations proving AgentCore → Strands → Bedrock → Pool tools. **The deployed artefact predates this branch**; current status not reverified |
-| Lambda Function URL | The public judge demo: web app + reduced API | **Deployed and verified 2026-08-19** — full lifecycle on a real DynamoDB table. **Serves an earlier build**; reachability not reverified |
-| DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified 2026-08-19** — the complete 13-step lifecycle runs on the real table with identical economics |
+| Bedrock | Model inference via Strands | **Verified live 2026-08-22** — `us.amazon.nova-lite-v1:0`, reached through AgentCore, 2 of 8 iterations, 5,513 in / 133 out tokens, terminated `completed`. Earlier discovery/recovery/lock branches verified 2026-08-19 |
+| AgentCore Runtime | Hosted agent entrypoint, and the only path to a live model | **Deployed and verified live 2026-08-22** — `Pool_PoolCoordinator-TmVqSN9H56` version 7, `READY` in `us-east-1`, one bounded synthetic invocation proving AgentCore → Strands → Bedrock → Pool tools |
+| Lambda Function URL | The public judge demo: web app + reduced API | **Deployed and verified 2026-08-22** — this branch, `/verify` hard-loads, full declaration → event → run → order over HTTPS on the real table. Runs the **offline planner**; it has no model permission |
+| DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified 2026-08-22** — shared by both artefacts, which is why they are deployed together |
 | API Gateway + Lambda | Pilot-shaped API | In `PoolStack`, which is **not** what the public demo deploys |
 | S3 + CloudFront | Pilot-shaped web hosting | In `PoolStack`. The public demo needs neither |
 | EventBridge | Optional future background scan | Implemented only in the un-deployed `PoolStack`; **zero rules exist in the deployed judge account** |

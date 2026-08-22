@@ -107,7 +107,7 @@ secret-scan-selftest: ## Prove the secret scanner still detects planted secrets
 # by hand. Reporting "all checks passed" while silently skipping a whole application is
 # the kind of green tick this project exists not to produce (#audit P2).
 .PHONY: qa
-qa: lint typecheck test test-web build secret-scan ## Everything CI would run
+qa: lint typecheck test test-web build secret-scan secret-scan-selftest ## Everything CI would run
 	@echo "✅ all checks passed"
 
 # ----------------------------------------------------------------- cloud

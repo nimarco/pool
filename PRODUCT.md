@@ -195,12 +195,12 @@ Real, and safe to rely on:
 - **Committed supplier sheets** — `demo-data/riverbend-split-case.csv`,
   `demo-data/riverbend-case-programme.csv`, `demo-data/MANIFEST.json`. Really parsed,
   digest-pinned, imported in that order.
-- **A configured public-demo deployment target** on AWS Lambda + DynamoDB, with the
-  coordinator on Amazon Bedrock AgentCore Runtime. Deployed and verified **2026-08-19**
-  (`BUILD_HISTORY.md` #0048) at
-  `https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/`. That artefact
-  predates typed product requirements, the strategy engine, coordination events and the
-  `/verify` experience; its current reachability has not been reverified.
+- **A deployed public demo** on AWS Lambda + DynamoDB at
+  `https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/`, running the
+  current release and verified **2026-08-22**. Its judge path runs the deterministic
+  offline planner; live model execution is a separate explicitly-requested action on
+  Amazon Bedrock AgentCore Runtime, verified live the same day with
+  `us.amazon.nova-lite-v1:0`.
 - **Stored proof of real invocations** — run ids, `created_by_run` lineage on the
   resulting pool, tool sequences, outcomes, terminations, and authoritative readback from
   the same workspace the browser reads.

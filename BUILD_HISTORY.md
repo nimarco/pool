@@ -7236,3 +7236,121 @@ scanner, are both small concrete stories about how a system knows what it actual
 `README.md`, `PRODUCT.md`, `docs/DEMO_SCRIPT.md`, `docs/HACKATHON_SCORECARD.md`,
 `docs/RELEASE_CHECKLIST.md`, `docs/DEVPOST_DRAFT.md`,
 `services/agent/tests/test_presentation_truth.py`.
+
+---
+
+### #0062 — [2026-08-22] — Both deployed artefacts now speak the same schema, and one live run proves it
+`[AWS]` `[ARCHITECTURE]` `[DEMO]` `[ARTICLE-2]`
+
+**Goal / user intent**
+Phase 5, cloud half. Deploy the accepted release candidate `db26e94`, verify the judge
+path on real infrastructure, and spend exactly one bounded live model invocation.
+
+**Resource ledger**
+
+| Resource | Before | After |
+| --- | --- | --- |
+| `PoolDemoStack` Lambda | 2026-08-19 build | **`db26e94`**, updated 2026-08-22T03:28:10Z |
+| `Pool_PoolCoordinator-TmVqSN9H56` | version 6, 2026-08-19 | **version 7**, `READY`, 2026-08-22T03:42:58Z |
+| DynamoDB `pool-demo-state` | shared, TTL on | unchanged, shared by both |
+| EventBridge rules | none | **none** |
+| IAM | — | **byte-identical**, both roles |
+
+Nothing created, nothing deleted, no cleanup owed. Both deploys were single-resource
+changes, confirmed by diff before mutation and by stack events after.
+
+**The bug that made this necessary, and what it teaches**
+
+The Lambda was deployed first, and the live agent action immediately failed:
+
+```
+ValueError: 'attribute_constrained' is not a valid SubstitutionPolicy
+```
+
+Two deployed artefacts share one authoritative DynamoDB table. Updating one gave it a
+`SubstitutionPolicy` member the other had never heard of, and the older one crashed
+deserialising rows the newer one had written — inside `build_member_objective →
+list_needs → from_dict`, before any agent reasoning happened at all.
+
+Worth stating plainly because the design is otherwise good: `from_dict` tolerates *missing*
+keys everywhere, which is what makes adding a field safe. It cannot tolerate an *unknown
+enum value*, which is what makes adding a policy unsafe — and the asymmetry is invisible
+until two versions of the code read one table. **A shared table makes two deployments one
+deployment.** The repair was to deploy the second artefact, not to loosen the enum: a
+runtime that silently accepted a policy it does not implement would be worse than one that
+refuses to start.
+
+It also surfaced from the right place — a security probe, not a member — and the system
+failed loudly rather than partially: no run recorded, no pool, no write.
+
+**The one live verification**
+
+Fresh synthetic workspace, member workflow through the deployed Lambda, then one
+invocation of the live action.
+
+- Service **Amazon Bedrock AgentCore Runtime**, `Pool_PoolCoordinator`, `us-east-1`
+- Run `run_787aa5b33e91`, trigger `member_scan`, `classification: success`, `live: true`
+- Provider **`bedrock` / `us.amazon.nova-lite-v1:0`**
+- **2 of 8** iterations, 5,513 in / 133 out tokens, terminated `completed`, 8,984 ms
+- Tool sequence: `record_no_action` — *"There are no standing declarations to
+  investigate."*
+- Pools created by the live run: **0**. Payment rows: **0**. HITL decisions: 0.
+
+The outcome is a truthful no-action, and the reason is worth recording rather than
+dressing up: the member's only declaration had already been served by the in-process run
+that their save caused, so `build_member_objective` correctly handed the model an empty
+objective. A richer live trace — the model choosing among strategies and adapting to a
+refusal — would need the live action invoked *before* the judge path serves the
+declaration, which is a second live invocation and was not authorised. It is not reported
+as something it was not.
+
+What it does establish, on real infrastructure: the runtime reads current
+`attribute_constrained` rows without error, a real model drives the real Strands loop,
+the tool surface is the approved one, the bounds hold, and nothing was charged or bought.
+
+**The judge path on real AWS**, same session, offline planner on the Lambda: declaration
+`need_c0a213df2b9f` → event → run `run_1b953d5eca25` → Kestrel considered and refused,
+Harbourstone viable → `pool_afb6982e61b7`, 18 provisional units, 0 payment rows, 3.35 s.
+`/verify` hard-loads at `/verify`, `/verify/` and with a query string.
+
+**The distinction the documentation now makes explicitly.** The public judge experience
+runs the deterministic offline planner on the Lambda, which holds **no model permission at
+all** — its role reaches DynamoDB and `bedrock-agentcore:InvokeAgentRuntime` and nothing
+else. A live model is reachable only through the AgentCore Runtime, only when the live
+action is explicitly requested. Keeping the paid path behind one deliberate action rather
+than under every page load is the cost decision in AGENTS.md §3.3, and it is why the
+walkthrough is free to repeat.
+
+**A scanner that could not fail, repaired**
+
+`scripts/secret_scan.sh` ended each pattern with `2>/dev/null … || true`. grep exits 0 on
+match, 1 on no-match and **2 on error**, and that form collapsed all three into success —
+so a tree it could not read reported `✓ clean`. It now keeps the status, treats `>= 2` as a
+failed scan rather than a clean one, and prints the error it used to swallow. Proved both
+ways: a planted key is detected, and an unreadable subdirectory now fails instead of
+passing. `secret-scan-selftest` joined the `qa` target, since the self-test is what caught
+this and it was not in the canonical run.
+
+**AWS / external services touched** — CloudFormation (`PoolDemoStack`,
+`AgentCore-Pool-default`), Lambda, Bedrock AgentCore Runtime, Bedrock (`nova-lite`, one
+invocation), DynamoDB, CloudWatch Logs, CDK asset buckets. Read-only: STS, IAM,
+`bedrock-agentcore-control`. **No live payment, no purchase, no schedules.**
+
+**Validation**
+Canonical QA green, no waived failures. Deployment diffs inspected before both mutations;
+IAM captured before and after and compared byte for byte.
+
+**What we learned**
+The interesting failure was not in the agent. It was in the seam between two things that
+were each individually correct and were deployed at different times against one shared
+store — and the only reason it was caught before a judge saw it is that the phase insisted
+on *hard-loading and probing the deployment* rather than trusting that a green deploy meant
+a working system.
+
+**Article fodder**
+Article 2. Shared-state coordination across two independently deployed artefacts, and the
+schema-compatibility rule that falls out of it, is a concrete AgentCore-shaped story.
+
+**Relevant commits / files**
+`README.md`, `PRODUCT.md`, `docs/HACKATHON_SCORECARD.md`, `docs/RELEASE_CHECKLIST.md`,
+`docs/DEVPOST_DRAFT.md`, `scripts/secret_scan.sh`, `Makefile`.

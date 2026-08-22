@@ -198,19 +198,27 @@ def test_readme_describes_the_product_run_as_its_own_proof():
 def test_the_readme_dates_every_cloud_claim_it_makes():
     """A live claim with no observation date behind it is the one that rots quietly.
 
-    Deployment happened once, at a known commit, and everything since is local. So each
-    row in the AWS table carries the date it was observed, and the reader is told plainly
-    that the deployed artefact is older than the branch they are reading.
+    Every ``Verified`` row in the AWS table has to carry the date somebody observed it —
+    *a* date, checked by shape rather than by value, because pinning the literal turns a
+    guard about honesty into a guard about the calendar. This one was written pinned and
+    failed the day the deployment was refreshed, which is the wrong reason to fail.
+
+    The second half is the distinction the deployment actually has: the public judge
+    surface runs the deterministic planner and holds no model permission, and a live model
+    is reachable only through AgentCore. Blurring those two is the specific overclaim this
+    page is most likely to drift into.
     """
+    import re
+
     readme = _read("README.md")
     aws = readme[readme.index("## AWS") :]
-    for line in aws.splitlines():
-        if not line.startswith("| ") or "Verified" not in line:
-            continue
-        assert "2026-08-19" in line, line
+    rows = [ln for ln in aws.splitlines() if ln.startswith("| ") and "Verified" in ln]
+    assert rows, "the AWS table has no verified rows to check"
+    for line in rows:
+        assert re.search(r"\b20\d\d-\d\d-\d\d\b", line), line
 
-    assert "predates this branch" in aws or "predates typed product requirements" in readme
-    assert "has never been deployed or driven by a live model" in aws
+    assert "no model permission" in aws
+    assert "only path to a live model" in aws or "only when the live agent action" in aws
 
 
 def test_the_rehearsal_quotes_figures_the_screen_will_actually_show():
@@ -346,11 +354,16 @@ def test_the_rehearsal_quotes_figures_the_screen_will_actually_show():
     # of them out loud is worse television. What it may never do is quote a line the run
     # did not produce, so every fact in that blockquote has to come back out of the run.
     block = flat.split("Open **Why this worked** and read three lines, not all six:")[1]
-    block = block.split("That last line matters")[0]
+    block = block.split("That third line matters")[0]
     quoted_facts = [
         piece.strip(" *·") for piece in block.split(" · ") if piece.strip(" *·")
     ]
     assert len(quoted_facts) >= 4, quoted_facts
+    # The timing line is deliberately *not* among them. How much demand was already due
+    # against how much was pulled forward moves with today's date relative to the seeded
+    # cadences, so a script that quoted it would come true and then stop being true on a
+    # calendar boundary — which is how this guard first fired. The script now tells the
+    # presenter to read that one off the screen.
     for fact in quoted_facts:
         assert fact in result["facts"], (
             f"the rehearsal quotes a line this run did not produce: {fact}"

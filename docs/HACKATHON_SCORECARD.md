@@ -22,7 +22,7 @@ work
 | Architecture diagram | ✅ | [`architecture.svg`](architecture.svg) |
 | Demo video ≤ 5 minutes | ⬜ | One-run rehearsal script exists; video intentionally not recorded yet |
 | AWS Builder ID / entrant eligibility | ⬜ | Human-only checks |
-| Live demo | ⬜ | A Lambda Function URL was deployed and verified 2026-08-19 (#0048). It serves a build five phases older than this branch, and its current reachability is unverified. Redeploy and recheck from a private browser before submitting |
+| Live demo | ✅ | Deployed and verified **2026-08-22** at <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/verify>, running the current release. Recheck from a private browser before submitting |
 | Problem, users and why it matters in video | 🟡 | Covered by the ~4:50 rehearsal script; recording remains |
 | Good Neighbor framing | ✅ | Collective value inside an existing Community |
 
@@ -57,13 +57,13 @@ work
 
 | Component | Status |
 | --- | --- |
-| Amazon Bedrock / Nova Lite through Strands | **Verified 2026-08-19**; not rerun against this branch |
+| Amazon Bedrock / Nova Lite through Strands | **Verified live 2026-08-22** through AgentCore — `us.amazon.nova-lite-v1:0`, run `run_787aa5b33e91`, 2 of 8 iterations, 5,513 in / 133 out tokens |
 | The `/verify` judge path — declare → event → bounded run → order → proof | **Locally and browser verified 2026-08-21** on this branch: three fresh-workspace rehearsals, six actions each, one clarification run and one coordination run apiece, plus two truthful no-action flows. Never deployed |
 | Immutable run→strategy history | **Locally verified 2026-08-21**: run A's listing is byte-identical after runs B and C |
 | Reversible preferences (A→B→C) | **Locally and browser verified 2026-08-21**: distinct revisions, events and runs; withdrawal and restoration; zero payment rows |
-| Amazon Bedrock AgentCore Runtime | **Deployed and verified 2026-08-19**, `READY`, `us-east-1`. Deployed artefact predates this branch; status not reverified |
-| Lambda Function URL judge surface | **Deployed and verified 2026-08-19**; serves an earlier build |
-| DynamoDB authoritative state | **Deployed and verified 2026-08-19** |
+| Amazon Bedrock AgentCore Runtime | **Deployed and verified live 2026-08-22** — `Pool_PoolCoordinator-TmVqSN9H56` v7, `READY`, `us-east-1`. The only path to a live model |
+| Lambda Function URL judge surface | **Deployed and verified 2026-08-22** — this branch; `/verify` hard-loads; runs the offline planner and holds no model permission |
+| DynamoDB authoritative state | **Deployed and verified 2026-08-22** — one table shared by both artefacts |
 | CloudWatch logs / structured run records | **Deployed and verified 2026-08-19**, retention bounded |
 | Same-run proof presentation patch | **Deployed and rehearsed 2026-08-19**; exact pool/run relationship survived the completed lifecycle and reload. The current `/verify` proof is **locally and browser verified only** |
 | EventBridge | Definition exists only in un-deployed pilot stack; **zero deployed rules** |

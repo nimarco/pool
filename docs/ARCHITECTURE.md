@@ -442,12 +442,15 @@ It is never presented as evidence that Bedrock works; every run records its
 Four legs are **cloud-verified** — observed working on a real account, not merely
 synthesizing:
 
+Each row carries the date it was observed, because a status with no date behind it is the
+one that quietly stops being true.
+
 | Service | Status |
 | --- | --- |
-| Amazon Bedrock | **Verified.** `us.amazon.nova-lite-v1:0` drives the real Strands loop and the real tools on both the discovery path (`make verify-bedrock`) and the consequential recovery-and-lock path (`make verify-recovery`). |
-| Bedrock AgentCore Runtime | **Verified.** `agentcore_app.py` deployed, `READY` in `us-east-1`, invoked from a public browser through the demo bridge. |
-| DynamoDB | **Verified.** The complete lifecycle runs on a real table with identical economics; the first live write found a `Decimal` bug no fake could have. |
-| Lambda Function URL | **Verified.** The public judge demo — the SPA and the reduced API from one function, on one origin. |
+| Amazon Bedrock | **Verified live 2026-08-22.** `us.amazon.nova-lite-v1:0` drives the real Strands loop and the real tools, reached through AgentCore. Earlier, 2026-08-19: the discovery path (`make verify-bedrock`) and the consequential recovery-and-lock path (`make verify-recovery`). |
+| Bedrock AgentCore Runtime | **Deployed and verified live 2026-08-22.** `agentcore_app.py` at the current release, `READY` in `us-east-1`, invoked through the demo bridge. **The only path to a live model.** |
+| DynamoDB | **Verified 2026-08-22.** One table shared by both deployed artefacts — which is why they are deployed together. The complete lifecycle runs on it with identical economics; the first live write found a `Decimal` bug no fake could have. |
+| Lambda Function URL | **Deployed and verified 2026-08-22.** The public judge demo — the SPA and the reduced API from one function, on one origin. Runs the **deterministic offline planner**; its execution role holds no model permission. |
 
 Still **implemented but never called against the live service**: the EventBridge
 definition in the un-deployed pilot stack and the Amazon Location adapter. The judge

@@ -1340,6 +1340,164 @@ def test_none_of_this_applies_when_public_mode_is_off():
     assert client.get("/api/threads/nope?workspace=demo").json() != {"detail": "not found"}
 
 
+# ------------------------------------------------------- whose declaration is this
+
+
+#: A seeded synthetic neighbour, with standing declarations of their own. Their id is on
+#: the community screen of every session, which is exactly why it must not be usable as
+#: an argument.
+VICTIM = "hh_moreau"
+VICTIM_PRODUCT = "prod_coffee_beans"
+
+
+def _need_body(household_id: str, product_id: str = "prod_rice_jasmine", **extra) -> dict:
+    from datetime import date, timedelta
+
+    return {
+        "household_id": household_id,
+        "product_id": product_id,
+        "quantity": 2,
+        "cadence_days": 30,
+        "expected_next_need_date": (date.today() + timedelta(days=12)).isoformat(),
+        "flexibility_days": 5,
+        "max_spend_cents": 20_000,
+        **extra,
+    }
+
+
+def _become_a_member(client: TestClient, ws: str = WS) -> str:
+    post(client, "/api/onboarding", ws=ws,
+         json={"display_name": "Marco", "autonomy_mode": "ask_me"})
+    return get(client, "/api/state", ws=ws).json()["consumer"]["household_id"]
+
+
+def _needs_of(client: TestClient, household_id: str, ws: str = WS) -> list[dict]:
+    return [
+        n
+        for n in get(client, "/api/needs", ws=ws).json()["needs"]
+        if n["household_id"] == household_id
+    ]
+
+
+def test_a_member_declares_for_themselves(client):
+    """The ordinary case, and the one every other test here is measured against."""
+    me = _become_a_member(client)
+    created = post(client, "/api/needs", ws=WS, json=_need_body(me))
+    assert created.status_code == 200, created.text
+    assert created.json()["household_id"] == me
+    assert len(_needs_of(client, me)) == 1
+
+
+def test_a_member_edits_their_own_declaration(client):
+    me = _become_a_member(client)
+    need_id = post(client, "/api/needs", ws=WS, json=_need_body(me)).json()["need_id"]
+    amended = post(
+        client, f"/api/needs/{need_id}", ws=WS, json=_need_body(me, quantity=5)
+    )
+    assert amended.status_code == 200, amended.text
+    assert amended.json()["quantity"] == 5
+    assert _needs_of(client, me)[0]["quantity"] == 5
+
+
+def test_naming_a_seeded_household_does_not_declare_for_them(client):
+    """The reproduced attack: an anonymous visitor choosing *whose* rules to write.
+
+    Judge mode has no authentication, and every workspace is seeded with synthetic
+    neighbours whose ids are visible on the community screen. ``household_id`` in the body
+    was therefore a field in which a stranger could pick a victim — and a declaration
+    written for a seeded member moves the standing demand every economic figure in that
+    session is computed from. The server owns the identity now, so the row lands on the
+    caller's own account and the named household is untouched.
+    """
+    me = _become_a_member(client)
+    before = _needs_of(client, VICTIM)
+    assert before, "the seeded neighbour is supposed to have declarations of their own"
+
+    created = post(client, "/api/needs", ws=WS, json=_need_body(VICTIM))
+    assert created.status_code == 200, created.text
+    assert created.json()["household_id"] == me
+
+    assert _needs_of(client, VICTIM) == before
+    assert len(_needs_of(client, me)) == 1
+
+
+def test_amending_a_seeded_households_declaration_is_refused(client):
+    """Overriding the identity turns the attack into the service's existing refusal."""
+    from pool.api import app as api
+
+    _become_a_member(client)
+    theirs = next(
+        n
+        for n in api._repo.list_needs(WS)
+        if n.household_id == VICTIM and n.product_id == VICTIM_PRODUCT
+    )
+    before = theirs.to_dict()
+
+    refused = post(
+        client,
+        f"/api/needs/{theirs.id}",
+        ws=WS,
+        json=_need_body(VICTIM, product_id=VICTIM_PRODUCT, quantity=99),
+    )
+    assert refused.status_code == 400
+    assert "declared it" in refused.json()["detail"]
+    assert api._repo.get_need(WS, theirs.id).to_dict() == before
+
+
+def test_the_attack_creates_no_event_and_no_run_for_the_victim(client):
+    """Nothing was owed on the victim's behalf, so nothing was spent on it either."""
+    from pool.api import app as api
+
+    me = _become_a_member(client)
+    post(client, "/api/needs", ws=WS, json=_need_body(VICTIM))
+    api._repo.list_needs(WS)
+
+    events = api._repo.list_coordination_events(WS)
+    assert [e.household_id for e in events] == [me]
+    assert all(e.household_id != VICTIM for e in events)
+
+
+def test_one_sessions_declaration_cannot_reach_another_sessions_member(client):
+    """Cross-workspace, on top of cross-household. Two isolations, both server-owned."""
+    from pool.api import app as api
+
+    mine = _become_a_member(client, WS)
+    theirs = _become_a_member(client, OTHER_WS)
+    assert mine == theirs, "the consumer id is a server constant, the partition is not"
+
+    before = get(client, "/api/needs", ws=OTHER_WS).json()["needs"]
+    post(client, "/api/needs", ws=WS, json=_need_body(mine))
+
+    assert get(client, "/api/needs", ws=OTHER_WS).json()["needs"] == before
+    assert [n["household_id"] for n in _needs_of(client, mine, ws=WS)] == [mine]
+    assert api._repo.list_coordination_events(OTHER_WS) == []
+
+
+def test_the_local_api_still_declares_on_behalf_of_synthetic_participants():
+    """The privileged path the regression harnesses use is deliberately unchanged.
+
+    The fix is a property of the *public* boundary. Locally the API is the four-surface
+    development application, and the outcome matrix, the showcase and the operator
+    console all legitimately act as seeded members. Removing the id everywhere would have
+    broken them to fix a problem they do not have.
+    """
+    import importlib
+
+    from pool.api import app as api
+
+    module = importlib.reload(api)
+    try:
+        assert module._public.enabled is False
+        local = TestClient(module.app)
+        local.get("/api/state?workspace=demo")
+        created = local.post("/api/needs?workspace=demo", json=_need_body(VICTIM))
+        assert created.status_code == 200, created.text
+        assert created.json()["household_id"] == VICTIM
+    finally:
+        module._repo.reset("demo")
+        importlib.reload(api)
+
+
 def test_the_published_endpoint_counts_are_the_real_ones():
     """The README, the architecture doc and this module's own docstring all quote these.
 

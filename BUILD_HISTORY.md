@@ -7354,3 +7354,193 @@ schema-compatibility rule that falls out of it, is a concrete AgentCore-shaped s
 **Relevant commits / files**
 `README.md`, `PRODUCT.md`, `docs/HACKATHON_SCORECARD.md`, `docs/RELEASE_CHECKLIST.md`,
 `docs/DEVPOST_DRAFT.md`, `scripts/secret_scan.sh`, `Makefile`.
+
+
+### #0063 — [2026-08-23] — Historical proof stops guessing, and the public boundary stops taking the client's word
+`[ARCHITECTURE]` `[SECURITY]` `[FRONTEND]` `[AGENT]` `[DEMO]` `[ARTICLE-2]`
+
+**Goal / user intent**
+An independent audit of the release candidate found the architecture sound and worth
+freezing, and five things that had to be true before submission. Fix exactly those, prove
+each one, and change nothing else. The four that turned out to matter most: a historical
+proof surface that could display evidence about a moment it was not evidence about; a
+public endpoint that let an anonymous visitor choose *whose* standing rules to write; a
+proof panel that called a deterministic planner a model; and a set of submission documents
+that had drifted apart on which of the two deployed paths actually runs a model.
+
+**Starting state**
+`d5ac806`. Everything below was reproducible on it.
+
+**The two defects, reproduced before they were fixed**
+
+*Clarification lineage.* `services/events._clarification_view` answered "which plan shaped
+this declaration's questions" by listing every plan for the household and product and
+taking `plans[-1]`. A plan's id digests the world it was made against, so a member whose
+Community moved — one neighbour declaring the same coffee is enough — legitimately gets a
+second plan. Reproduced against `d5ac806` on the canonical coffee fixture:
+
+```
+plan A            = cpl_76807bdeb8abe0f8  (run_plan_a)
+plan B, made later= cpl_828e138d3703dfe8  (run_plan_b)
+proof for A shows = cpl_828e138d3703dfe8  (run_plan_b)   <- false historical evidence
+```
+
+Not a display bug. The storage layer held no link at all, so *every* rule for recovering
+one later — newest, active, matching product — is a guess, and the guess is wrong in the
+direction that flatters the system: a plan made after the fact, presented as the reason
+somebody was asked something before it.
+
+*Public need ownership.* `POST /api/needs` and `POST /api/needs/{id}` took `household_id`
+from the request body. `amend_need` checks that it matches the stored declaration's owner,
+which stops one member rewriting another's rules *given an authenticated caller* — and the
+public demo has none. Every workspace is seeded with synthetic neighbours whose ids are on
+the community screen. Three tests written against `d5ac806` failed there and pass here:
+naming `hh_moreau` created a declaration owned by `hh_moreau`, amended `hh_moreau`'s
+seeded declaration, and wrote a coordination event with `household_id: hh_moreau` — moving
+the standing demand every economic figure in that session is computed from.
+
+**Decision**
+
+1. **A coordination event permanently records the clarification plan that shaped the
+   revision it was written for.** One new field, `CoordinationEvent.clarification_plan_id`,
+   set once at creation and never rewritten. `_clarification_view` became a primary-key
+   read. No searching, ever.
+2. **The public member boundary owns the declaring identity.** In public mode the server
+   resolves the consumer household and overwrites whatever the body claimed.
+3. **Proof vocabulary derives from the stored run provider.** An `offline` run reports
+   *planner iterations* and *0 model tokens*; a `bedrock` run may say model, because one
+   ran.
+4. **`/verify` stops diverting and stops trapping.** The old scripted walkthrough is no
+   longer offered on the verification path, and the declaration form starts on the
+   quantity that world's fixture is written around.
+5. **One AWS truth, in every current document.**
+
+**Why**
+
+*Why the caller states the plan rather than the server deducing it.* A plan is chosen
+while somebody is still deciding and read back long afterwards, by which time several may
+exist. The only moment the answer is knowable is the moment the form was given it, so that
+is when it is recorded. The reference is validated against the declaration — the plan must
+be that member's, about that product, in that Community — so the worst a client can name
+is one of its own plans for the product it is declaring. That is strictly better evidence
+than *any* later reconstruction, and an unstated lineage records nothing rather than
+something plausible. **Omitting the proof is honest; rebuilding it is not.**
+
+Rejected: a generic event-sourced audit log. The project needs one immutable reference,
+not a mechanism, and `RunStrategyReference` (#0060) had already established the pattern —
+what a run was *shown* is stored as transmitted, never re-derived.
+
+*Why the public identity is overwritten rather than rejected.* It matches the convention
+`/api/onboarding/payment-method` already set: the household is a server constant and there
+is no field to point elsewhere. A refusal would also have to say whether the named
+household exists. An *update* naming somebody else's declaration still fails, because
+`amend_need` compares the stored owner against the resolved identity — the attack becomes
+the refusal the service already had. Scoped to public mode on purpose: locally the API is
+the four-surface development application, and the outcome matrix, the showcase and the
+operator console legitimately act as seeded members. One consequence worth stating: on the
+deployed URL, `?operator=1` "act as" can no longer declare or amend for a synthetic
+participant. That is the hole, not a feature — a URL parameter anybody can add is not a
+privileged path.
+
+*Why the proof vocabulary is derived rather than reworded.* The panel printed **Model
+calls: 5 of 8** two lines above **provider: offline** and **0 in · 0 out**. A sceptical
+reader who noticed would be right to discount everything else on the page. Rewording it
+once would have left the next surface free to drift, so the words come from
+`run.model_provider` — the value the coordinator actually recorded — and where one word is
+true of both paths (*control plane*, *chose*) it is preferred over a word that has to be
+switched.
+
+*Why quantity 3 is scoped to `/verify` and nothing else.* The verification fixture's
+supplier sells in cases of six; three bags is what that world is written around. The form
+defaulted to two, which produces a *truthful* "Pool could assemble an order, but not one
+you would be in" — a correct answer and a terrible first impression, reached by a default
+nobody chose. `defaultQuantity()` returns 3 only inside the verification partition. The
+economics, the case allocation and the meaning of any quantity are untouched, the field
+stays editable, and two still refuses. Verified both ways after the patch:
+
+```
+quantity 2: outcome=no_action     order=none          Harbourstone viable — without you
+quantity 3: outcome=pool_created  order=18 units      Kestrel not_cheaper, Harbourstone viable
+```
+
+**Implementation** — *implemented and tested; not deployed.*
+
+- `domain/models.py` — `CoordinationEvent.clarification_plan_id`. A plain string, not an
+  enum: #0062's lesson is that two deployments sharing one table tolerate a *missing* key
+  and not an unknown enum value, and a legacy row must read as "nothing recorded".
+- `services/clarification.lineage_reference` — validates or refuses; empty in, empty out.
+  A superseded plan is accepted, because it is the honest answer for a declaration saved
+  against it and the proof shows its status.
+- `services/events` — writes the reference at creation only; `_clarification_view` is now
+  a primary-key read with the household/product scan deleted.
+- `api/app.py` — `NeedRequest.clarification_plan_id`; `_lineage_for` validates *before*
+  the declaration is written, so a bad reference costs a 400 and leaves nothing behind;
+  `_declaring_household` resolves the public identity.
+- Web — `useClarification` exposes `planId`, both declaration forms send it; `why.tsx`
+  gains `vocabularyFor(provider)` and a `ClarificationProofBlock` with its own provider;
+  `chosen.defaultQuantity()`; `offersJudgeWalkthrough()`; the `Recommended` tag became
+  *Reaches more current demand* / *More options*; the zero-question copy stopped claiming
+  any brand is acceptable.
+
+**The copy that was wrong in the opposite direction**
+When a plan selects no questions, `policy_from_answers` still walks the *full* approved
+set and reads every unanswered question as unchanged. Measured: roast `MEDIUM`, form
+`WHOLE_BEAN`, caffeine `CAFFEINATED` — three hard requirements. The screen said "Pool will
+treat any brand it can source as acceptable", which describes a permission the server does
+not grant. It now says other brands can be considered *within the requirements already
+saved from the product you picked*. The label change is the same class of error in
+miniature: "Recommended" is Pool telling somebody their preferences should be looser, and
+it has no basis for that — a preference genuinely held is not worse for reaching less.
+
+**AWS / external services touched** — **None.** No deployment, no AgentCore, no Bedrock,
+no payment, no purchase. Every figure quoted here came from local execution.
+
+**Cost-relevant activity** — none. Zero model tokens spent.
+
+**Validation**
+- Both defects reproduced against `d5ac806` and refused after: the lineage script above,
+  and three ownership tests that fail on the old handler.
+- A → B → C over the real HTTP endpoints with dispatch on: flexible under plan A →
+  `pool_1ea75c229c04`, 18 provisional units, 0 payment rows; a later plan B created; A's
+  proof still plan A (now marked `superseded`, which is the truth); exact-only revision →
+  no plan; flexible again under plan C. Each of the three stored events read back
+  correctly *after all three existed*.
+- `test_run_strategy_history.py` green — the immutable run→strategy proof is unchanged.
+- Canonical `make qa` green, no waived failures: ruff, ESLint, TypeScript, **1,300** agent
+  tests, **75** infrastructure tests, **180** frontend tests (**1,555** total), production
+  build, secret scan and secret-scan self-test. Baseline before this patch was 1,278 / 75
+  / 154, so the patch added 22 backend and 26 frontend tests.
+
+**Failures / dead ends**
+The first version of the reload-stability test asserted the whole clarification view was
+byte-identical across a later plan being made. It failed, correctly: `status` had moved
+from `active` to `superseded`. The plan's *identity* is history and must not move; its
+status is a live fact about the world and should. The test now says exactly that, which is
+a better assertion than the one that passed would have been.
+
+**What we learned**
+Both defects are the same mistake at different layers: **answering a question about the
+past by looking at the present.** The lineage view searched current rows for a historical
+fact; the ownership check compared a client-supplied identity against a client-supplied
+identity. In each case the fix was to move the fact to the moment it was actually known —
+write the plan reference when the form is submitted, resolve the identity on the server —
+rather than to improve the guess. A third instance was hiding in plain sight in the copy:
+"Model calls" was the interface asserting something about a run instead of reading it.
+
+**Article fodder**
+Article 2. "Historical proof must be stored, not reconstructed" now has two independent
+instances in this codebase — run→strategy listings (#0060) and clarification lineage — and
+the second one was found by an auditor rather than by us, which is the honest and more
+interesting version of the story. Article 3 gets the smaller one: an interface that
+describes its own execution has to derive the description from the execution record.
+
+**Evidence worth preserving**
+The before/after lineage transcript, the A → B → C HTTP walk, and the quantity 2 vs 3
+outcome pair — all reproducible from the tests added here.
+
+**Relevant commits / files**
+`services/agent/pool/domain/models.py`, `services/agent/pool/services/clarification.py`,
+`services/agent/pool/services/events.py`, `services/agent/pool/api/app.py`,
+`apps/web/src/{api.ts,chosen.ts,preferences.tsx,use-clarification.ts}`,
+`apps/web/src/views/{about,needs,onboarding,why}.tsx`, `README.md`, `PRODUCT.md`,
+`docs/{ARCHITECTURE,ARTICLE_NOTES,DEMO_SCRIPT,DEVPOST_DRAFT,HACKATHON_SCORECARD,RELEASE_CHECKLIST}.md`.

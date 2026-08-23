@@ -24,6 +24,7 @@ deterministic reconciliation, and neither is a thing the model decides.
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 
 import pytest
@@ -560,9 +561,8 @@ def test_the_technical_record_shows_the_set_as_well_as_the_choice(coffee_ctx):
     """
     from pool.services import events as events_service
 
-    need = _declare(coffee_ctx)
     offered = ids(clar.candidates(coffee_ctx, COMMUNITY_ID, A_MEDIUM, MEMBER))
-    clar.record_plan(
+    plan = clar.record_plan(
         ctx=coffee_ctx,
         community_id=COMMUNITY_ID,
         household_id=MEMBER,
@@ -570,7 +570,10 @@ def test_the_technical_record_shows_the_set_as_well_as_the_choice(coffee_ctx):
         question_ids=[offered[-1], offered[0]],
         run_id="run_clarify",
     )
-    events_service.record_declaration_event(coffee_ctx, need, COMMUNITY_ID)
+    need = _declare(coffee_ctx)
+    events_service.record_declaration_event(
+        coffee_ctx, need, COMMUNITY_ID, clarification_plan_id=plan.id
+    )
 
     proof = events_service.explain(coffee_ctx, need.id)
     assert proof is not None
@@ -593,6 +596,279 @@ def test_an_exact_only_declaration_reports_that_nothing_was_asked(coffee_ctx):
     events_service.record_declaration_event(coffee_ctx, need, COMMUNITY_ID)
     proof = events_service.explain(coffee_ctx, need.id)
     assert proof is not None and proof["clarification"] is None
+
+
+def test_an_exact_only_event_refuses_a_plan_even_when_one_is_offered(coffee_ctx):
+    """Naming a plan does not make one apply.
+
+    Exact-only answered no questions, so the lineage is empty *because of what the
+    declaration says*, not because the caller happened to leave the field out. A client
+    that sends a real plan id beside an exact-only save must not be able to attach
+    clarification proof to a declaration nothing clarified.
+    """
+    from pool.services import events as events_service
+
+    plan = _plan(coffee_ctx)
+    need = _declare(coffee_ctx, exact=True)
+    event = events_service.record_declaration_event(
+        coffee_ctx, need, COMMUNITY_ID, clarification_plan_id=plan.id
+    )
+    assert event is not None and event.clarification_plan_id == ""
+    proof = events_service.explain(coffee_ctx, need.id)
+    assert proof is not None and proof["clarification"] is None
+
+
+# ----------------------------------------------------- lineage is frozen, not searched
+
+
+def _plan(ctx, *, household=MEMBER, product=A_MEDIUM, run_id="run_clarify", question_ids=None):
+    """One clarification plan, recorded the way a bounded planner run records it."""
+    offered = ids(clar.candidates(ctx, COMMUNITY_ID, product, household))
+    return clar.record_plan(
+        ctx=ctx,
+        community_id=COMMUNITY_ID,
+        household_id=household,
+        product_id=product,
+        question_ids=list(question_ids if question_ids is not None else offered),
+        run_id=run_id,
+    )
+
+
+def _replan(ctx, **kwargs):
+    """A *second* plan for the same member and product, made after the world moved.
+
+    A plan's id digests the world it was made against, so producing a different one means
+    genuinely changing that world. Another member declaring the same coffee moves the
+    standing-demand counts the candidates carry, which is exactly the situation the old
+    lookup got wrong.
+    """
+    other = next(
+        h.id
+        for h in ctx.repo.list_households(WS)
+        if h.id not in {MEMBER, OTHER}
+        and not any(
+            n.active and n.household_id == h.id and n.product_id == A_MEDIUM
+            for n in ctx.repo.list_needs(WS)
+        )
+    )
+    needs_service.declare_need(
+        ctx=ctx,
+        community_id=COMMUNITY_ID,
+        data=needs_service.NeedInput(
+            household_id=other,
+            product_id=A_MEDIUM,
+            quantity=4,
+            cadence_days=30,
+            expected_next_need_date=date.today() + timedelta(days=9),
+            flexibility_days=8,
+            max_spend_cents=20_000,
+        ),
+    )
+    return _plan(ctx, **kwargs)
+
+
+def test_a_later_plan_does_not_re_describe_an_earlier_declaration(coffee_ctx):
+    """The release-blocking defect, reproduced and refused.
+
+    A declaration saved under plan A, then a plan B for the same member and product.
+    Historical proof for A must still be A. The old view searched for the newest plan by
+    household and product, so B silently became the record of what shaped A — false
+    historical evidence about the one surface whose whole purpose is being checkable.
+    """
+    from pool.services import events as events_service
+
+    plan_a = _plan(coffee_ctx, run_id="run_plan_a")
+    need = _declare(coffee_ctx)
+    event = events_service.record_declaration_event(
+        coffee_ctx, need, COMMUNITY_ID, clarification_plan_id=plan_a.id
+    )
+    assert event is not None and event.clarification_plan_id == plan_a.id
+
+    plan_b = _replan(coffee_ctx, run_id="run_plan_b")
+    assert plan_b.id != plan_a.id
+
+    proof = events_service.explain(coffee_ctx, need.id)
+    assert proof is not None
+    assert proof["clarification"]["plan_id"] == plan_a.id
+    assert proof["clarification"]["run_id"] == "run_plan_a"
+
+
+def test_the_superseded_plan_is_shown_as_superseded_rather_than_swapped(coffee_ctx):
+    """Recording plan A afterwards does not mean pretending A is still current."""
+    from pool.services import events as events_service
+
+    plan_a = _plan(coffee_ctx, run_id="run_plan_a")
+    need = _declare(coffee_ctx)
+    events_service.record_declaration_event(
+        coffee_ctx, need, COMMUNITY_ID, clarification_plan_id=plan_a.id
+    )
+    _replan(coffee_ctx, run_id="run_plan_b")
+
+    proof = events_service.explain(coffee_ctx, need.id)
+    assert proof is not None
+    assert proof["clarification"]["plan_id"] == plan_a.id
+    assert proof["clarification"]["status"] == ClarificationPlanStatus.SUPERSEDED.value
+
+
+def test_reading_the_proof_again_does_not_move_it(coffee_ctx):
+    """A pure read, twice, either side of a third plan being made.
+
+    Everything the plan *was* is unchanged: the same row, the same run, the same
+    questions offered and asked. The one field that does move is ``status``, and it
+    should — the plan has genuinely been superseded since, and saying otherwise would be
+    the surface asserting the world had not moved.
+    """
+    from pool.services import events as events_service
+
+    plan_a = _plan(coffee_ctx, run_id="run_plan_a")
+    need = _declare(coffee_ctx)
+    events_service.record_declaration_event(
+        coffee_ctx, need, COMMUNITY_ID, clarification_plan_id=plan_a.id
+    )
+    first = events_service.explain(coffee_ctx, need.id)
+    _replan(coffee_ctx, run_id="run_plan_b")
+    second = events_service.explain(coffee_ctx, need.id)
+
+    assert first is not None and second is not None
+    assert {k: v for k, v in first["clarification"].items() if k != "status"} == {
+        k: v for k, v in second["clarification"].items() if k != "status"
+    }
+    assert first["clarification"]["status"] == ClarificationPlanStatus.ACTIVE.value
+    assert second["clarification"]["status"] == ClarificationPlanStatus.SUPERSEDED.value
+
+
+def test_every_revision_carries_its_own_lineage(coffee_ctx):
+    """A → B → C, each event answering for itself.
+
+    A: flexible under plan A. B: the same member goes exact-only — no plan at all. C:
+    flexible again, under a plan made later. Three events, three different answers, and
+    none of them moved when the next one was written.
+    """
+    from pool.services import events as events_service
+
+    plan_a = _plan(coffee_ctx, run_id="run_plan_a")
+    a = _declare(coffee_ctx)
+    event_a = events_service.record_declaration_event(
+        coffee_ctx, a, COMMUNITY_ID, clarification_plan_id=plan_a.id
+    )
+
+    b = _declare(coffee_ctx, exact=True)
+    event_b = events_service.record_declaration_event(coffee_ctx, b, COMMUNITY_ID)
+
+    plan_c = _replan(coffee_ctx, run_id="run_plan_c")
+    c = _declare(coffee_ctx)
+    event_c = events_service.record_declaration_event(
+        coffee_ctx, c, COMMUNITY_ID, clarification_plan_id=plan_c.id
+    )
+
+    assert event_a is not None and event_b is not None and event_c is not None
+    # One declaration, three revisions, three distinct events.
+    assert len({event_a.id, event_b.id, event_c.id}) == 3
+    assert event_a.clarification_plan_id == plan_a.id
+    assert event_b.clarification_plan_id == ""
+    assert event_c.clarification_plan_id == plan_c.id
+
+    # And each event still answers for itself, read back after all three exist.
+    assert _plan_of(coffee_ctx, event_a) == plan_a.id
+    assert _plan_of(coffee_ctx, event_b) is None
+    assert _plan_of(coffee_ctx, event_c) == plan_c.id
+
+
+def _plan_of(ctx, event):
+    from pool.services import events as events_service
+
+    view = events_service._clarification_view(ctx, event)
+    return view["plan_id"] if view else None
+
+
+def test_a_plan_belonging_to_another_member_cannot_attach(coffee_ctx):
+    theirs = _plan(coffee_ctx, household=OTHER)
+    with pytest.raises(clar.ClarificationError, match="another member"):
+        clar.lineage_reference(
+            coffee_ctx,
+            community_id=COMMUNITY_ID,
+            household_id=MEMBER,
+            product_id=A_MEDIUM,
+            plan_id=theirs.id,
+        )
+
+
+def test_a_plan_about_another_product_cannot_attach(coffee_ctx):
+    other_product = _plan(coffee_ctx, product=B_DARK)
+    with pytest.raises(clar.ClarificationError, match="another product"):
+        clar.lineage_reference(
+            coffee_ctx,
+            community_id=COMMUNITY_ID,
+            household_id=MEMBER,
+            product_id=A_MEDIUM,
+            plan_id=other_product.id,
+        )
+
+
+def test_a_plan_from_another_community_cannot_attach(coffee_ctx):
+    mine = _plan(coffee_ctx)
+    with pytest.raises(clar.ClarificationError, match="another community"):
+        clar.lineage_reference(
+            coffee_ctx,
+            community_id="com_elsewhere",
+            household_id=MEMBER,
+            product_id=A_MEDIUM,
+            plan_id=mine.id,
+        )
+
+
+def test_a_plan_id_that_does_not_exist_is_refused(coffee_ctx):
+    with pytest.raises(clar.ClarificationError, match="does not exist"):
+        clar.lineage_reference(
+            coffee_ctx,
+            community_id=COMMUNITY_ID,
+            household_id=MEMBER,
+            product_id=A_MEDIUM,
+            plan_id="cpl_invented",
+        )
+
+
+def test_naming_no_plan_records_no_lineage(coffee_ctx):
+    """Absent is absent. Nothing is reconstructed from what happens to be lying around."""
+    _plan(coffee_ctx)
+    assert (
+        clar.lineage_reference(
+            coffee_ctx,
+            community_id=COMMUNITY_ID,
+            household_id=MEMBER,
+            product_id=A_MEDIUM,
+            plan_id="",
+        )
+        == ""
+    )
+
+
+def test_lineage_survives_dynamodb_shaped_storage(coffee_ctx):
+    """Repository parity: the reference is a field on the row, in both backends.
+
+    A ``CoordinationEvent`` round-trips through ``to_dict``/``from_dict`` on the DynamoDB
+    path, and a field that did not survive that would leave the deployed demo silently
+    back on the old behaviour — no proof at all, rather than the wrong proof.
+    """
+    from pool.domain.models import CoordinationEvent
+    from pool.services import events as events_service
+
+    plan = _plan(coffee_ctx)
+    need = _declare(coffee_ctx)
+    event = events_service.record_declaration_event(
+        coffee_ctx, need, COMMUNITY_ID, clarification_plan_id=plan.id
+    )
+    assert event is not None
+
+    restored = CoordinationEvent.from_dict(json.loads(json.dumps(event.to_dict())))
+    assert restored.clarification_plan_id == plan.id
+    assert _plan_of(coffee_ctx, restored) == plan.id
+
+    # And a row written before the field existed reads as "nothing recorded" rather than
+    # raising or falling back to a search.
+    legacy = {k: v for k, v in event.to_dict().items() if k != "clarification_plan_id"}
+    assert CoordinationEvent.from_dict(legacy).clarification_plan_id == ""
+    assert _plan_of(coffee_ctx, CoordinationEvent.from_dict(legacy)) is None
 
 
 # --------------------------------------------------------------- A → B → C, in full

@@ -422,6 +422,16 @@ class NeedRequest(BaseModel):
     #: a policy and the other is what somebody said, and accepting both would mean two
     #: sources for one permission.
     preferences: PreferenceRequest | None = None
+    #: The clarification plan whose questions the form actually put in front of this
+    #: member, as returned by ``POST /api/products/{id}/clarification``.
+    #:
+    #: Lineage, not authority. It cannot widen a rule, name a question, or change what an
+    #: answer means — it is recorded on the coordination event so historical proof can say
+    #: *which* plan shaped this revision instead of searching for one afterwards and
+    #: finding whichever is newest. Validated against the declaration: a plan belonging to
+    #: another member, another product or another Community is refused rather than
+    #: ignored, and an absent one records no lineage rather than a guessed one.
+    clarification_plan_id: str = Field(default="", max_length=60)
     active: bool = True
 
     def to_input(self) -> needs_service.NeedInput:
@@ -1362,7 +1372,65 @@ def product_clarification(product_id: str, workspace: str = Query("demo")) -> di
     }
 
 
-def _coordination_for(ctx: PoolContext, ws: str, need) -> dict[str, Any] | None:
+def _declaring_household(ctx: PoolContext, claimed: str) -> str:
+    """Whose declaration this request is allowed to write.
+
+    On the **public** surface the answer is the server's and never the client's. Judge
+    mode has no authentication (``docs/PILOT_READINESS.md``) and every workspace is
+    seeded with synthetic neighbours whose ids are visible on the community screen, so a
+    ``household_id`` in a request body was an anonymous visitor's choice of *whose*
+    standing rules to write — and amending a seeded member's declaration moves the demand
+    every other number in that session is computed from. The consumer household is a
+    server constant (``services/onboarding``), exactly as it already is for
+    ``/api/onboarding/payment-method``, so there is no longer a field to point anywhere
+    else.
+
+    Overridden rather than rejected, for the same reason that endpoint takes no id: a
+    refusal would have to say whether the named household exists, and the honest reading
+    of "a member declaring what they buy" is that they are declaring it for themselves.
+    An *update* naming somebody else's declaration still fails, because ``amend_need``
+    compares the stored owner against this resolved identity and refuses the mismatch.
+
+    Off the public surface this is the identity the caller named. The local API is the
+    four-surface development and operator application (``api/public_demo``), and its
+    regression harnesses legitimately declare on behalf of synthetic participants.
+    """
+    if not _public.enabled:
+        return claimed
+    consumer = onboarding.consumer_household(ctx)
+    if consumer is None:
+        raise HTTPException(409, "this session has no member account yet")
+    return consumer.id
+
+
+def _lineage_for(ctx: PoolContext, body: NeedRequest, data: needs_service.NeedInput) -> str:
+    """The clarification plan this save may record, checked before anything is written.
+
+    Validated here rather than at the point of writing the event so a bad reference costs
+    a ``400`` and leaves no declaration behind: the declaration is stored first, and a
+    refusal after it would be a member's input accepted and their proof rejected.
+
+    Only an ``attribute_constrained`` declaration can carry one. Exact-only and family
+    declarations answered no questions, so their lineage is empty — which is a fact about
+    them, not a missing record.
+    """
+    if data.substitution != SubstitutionPolicy.ATTRIBUTE_CONSTRAINED:
+        return ""
+    try:
+        return clarify_service.lineage_reference(
+            ctx,
+            community_id=COMMUNITY_ID,
+            household_id=data.household_id,
+            product_id=data.product_id,
+            plan_id=body.clarification_plan_id,
+        )
+    except clarify_service.ClarificationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+def _coordination_for(
+    ctx: PoolContext, ws: str, need, clarification_plan_id: str = ""
+) -> dict[str, Any] | None:
     """Record that this declaration owes coordination, and dispatch it if configured.
 
     Two writes, in this order and never the other: the declaration is already stored by
@@ -1375,7 +1443,9 @@ def _coordination_for(ctx: PoolContext, ws: str, need) -> dict[str, Any] | None:
     model call happens in the same request is a deployment decision, and making it the
     default would turn seeding a workspace into a bill (AGENTS.md §3.3).
     """
-    event = events_service.record_declaration_event(ctx, need, COMMUNITY_ID)
+    event = events_service.record_declaration_event(
+        ctx, need, COMMUNITY_ID, clarification_plan_id=clarification_plan_id
+    )
     if event is None:
         return None
     if not _should_dispatch(ws):
@@ -1417,13 +1487,17 @@ def create_need(body: NeedRequest, workspace: str = Query("demo")) -> dict[str, 
     _public.spend_action(ws)
     ensure_seeded(ws)
     ctx = ctx_for(ws)
+    data = _need_input(ctx, body)
+    data.household_id = _declaring_household(ctx, data.household_id)
+    plan_id = _lineage_for(ctx, body, data)
     try:
-        need = needs_service.declare_need(
-            ctx=ctx, community_id=COMMUNITY_ID, data=_need_input(ctx, body)
-        )
+        need = needs_service.declare_need(ctx=ctx, community_id=COMMUNITY_ID, data=data)
     except needs_service.NeedError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {**needs_service.need_view(ctx, need), "coordination": _coordination_for(ctx, ws, need)}
+    return {
+        **needs_service.need_view(ctx, need),
+        "coordination": _coordination_for(ctx, ws, need, plan_id),
+    }
 
 
 @app.post("/api/needs/{need_id}")
@@ -1439,9 +1513,12 @@ def update_need(
     _public.spend_action(ws)
     ensure_seeded(ws)
     ctx = ctx_for(ws)
+    data = _need_input(ctx, body)
+    data.household_id = _declaring_household(ctx, data.household_id)
+    plan_id = _lineage_for(ctx, body, data)
     try:
         need = needs_service.amend_need(
-            ctx=ctx, community_id=COMMUNITY_ID, need_id=need_id, data=_need_input(ctx, body)
+            ctx=ctx, community_id=COMMUNITY_ID, need_id=need_id, data=data
         )
     except needs_service.NeedError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -1452,7 +1529,7 @@ def update_need(
     reconciled = coord.reconcile_after_declaration_change(ctx=ctx, need=need)
     return {
         **needs_service.need_view(ctx, need),
-        "coordination": _coordination_for(ctx, ws, need),
+        "coordination": _coordination_for(ctx, ws, need, plan_id),
         "reconciled": reconciled,
     }
 

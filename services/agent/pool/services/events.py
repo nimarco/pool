@@ -53,9 +53,11 @@ from ..domain.models import (
     CoordinationEventStatus,
     NeedDeclaration,
     RunOutcome,
+    SubstitutionPolicy,
     iso,
     utcnow,
 )
+from . import clarification
 from .context import PoolContext
 
 #: How many claims one event may accumulate before a dispatcher refuses it. A failed run
@@ -101,7 +103,11 @@ def is_coordinatable(ctx: PoolContext, need: NeedDeclaration) -> bool:
 
 
 def record_declaration_event(
-    ctx: PoolContext, need: NeedDeclaration, community_id: str = ""
+    ctx: PoolContext,
+    need: NeedDeclaration,
+    community_id: str = "",
+    *,
+    clarification_plan_id: str = "",
 ) -> CoordinationEvent | None:
     """Note that coordination is owed for this declaration, once.
 
@@ -109,9 +115,34 @@ def record_declaration_event(
     event that already exists is a no-op rather than an error: the caller is usually a
     member pressing a button twice, and refusing them would be reporting a duplicate
     submission as a failure.
+
+    ``clarification_plan_id`` names the plan that shaped the questions behind *this*
+    saved revision, and is frozen onto the row here because this is the only moment it
+    is known. It is validated against the declaration before it is written, and it is
+    recorded only for a declaration whose rules a plan could have shaped — an exact-only
+    or family declaration answered no questions, so its lineage is truthfully empty.
+
+    An event that already exists keeps the reference it was created with. The id digests
+    the declaration's material content, so an unchanged re-save is the *same* cause, and
+    re-stamping it with whichever plan happens to be current would be the reload rewriting
+    history that this field exists to prevent.
     """
     if not is_coordinatable(ctx, need):
         return None
+
+    # Only a rule a plan could have shaped. `policy_from_answers` yields
+    # `ATTRIBUTE_CONSTRAINED` exactly when somebody passed the flexibility gate and the
+    # product had something curated to ask about; every other policy is the answer to no
+    # question at all.
+    plan_id = ""
+    if need.substitution == SubstitutionPolicy.ATTRIBUTE_CONSTRAINED:
+        plan_id = clarification.lineage_reference(
+            ctx,
+            community_id=community_id or need.community_id,
+            household_id=need.household_id,
+            product_id=need.product_id,
+            plan_id=clarification_plan_id,
+        )
 
     event_id = event_id_for(need)
     existing = ctx.repo.get_coordination_event(ctx.ws, event_id)
@@ -124,6 +155,7 @@ def record_declaration_event(
         community_id=community_id or need.community_id,
         household_id=need.household_id,
         need_id=need.id,
+        clarification_plan_id=plan_id,
     )
     ctx.repo.put_coordination_event(ctx.ws, event)
     ctx.log(
@@ -444,28 +476,32 @@ def explain(ctx: PoolContext, need_id: str) -> dict[str, Any] | None:
 
 
 def _clarification_view(ctx: PoolContext, event: Any) -> dict[str, Any] | None:
-    """The plan that shaped the questions this declaration's preferences came from.
+    """The plan that shaped the questions *this* declaration revision's preferences came
+    from — read by the id the event froze, and never searched for.
 
-    Looked up by member and product rather than by run id, because the two runs are
-    deliberately not the same one: asking happens while somebody is still deciding, and
-    coordinating happens after they have decided. Tying the record to the coordination
-    run would have meant either running the planner inside it — too late to be of any use
-    — or inventing a link the storage layer does not have.
+    A primary-key read on ``event.clarification_plan_id``. That reference is written once,
+    when the declaration is saved, because that is the only moment the answer is knowable:
+    afterwards the same member and product may hold several plans, and any rule for
+    choosing between them later — newest, active, matching product — resolves to a plan
+    that may never have been in front of anybody. This surface used to take the newest,
+    so generating a second plan silently re-described every earlier revision as having
+    been shaped by it. Historical proof does not guess.
 
-    ``None`` for an exact-only declaration, which is the truthful answer: nothing was
-    asked, because nothing needed to be.
+    ``None`` for an exact-only or family declaration, which is the truthful answer:
+    nothing was asked, because nothing needed to be. ``None`` too when the reference is
+    absent or dangling — a legacy row, or a plan a workspace reset swept — because an
+    omitted proof is honest and a reconstructed one is not.
+
+    A plan whose ``status`` is now ``superseded`` is still the right answer and is shown
+    as it is: it is what the member was asked, and the field says the world has since
+    moved.
     """
-    need = ctx.repo.get_need(ctx.ws, event.need_id)
-    if need is None:
+    plan_id = getattr(event, "clarification_plan_id", "")
+    if not plan_id:
         return None
-    plans = [
-        p
-        for p in ctx.repo.list_clarification_plans(ctx.ws)
-        if p.household_id == need.household_id and p.product_id == need.product_id
-    ]
-    if not plans:
+    plan = ctx.repo.get_clarification_plan(ctx.ws, plan_id)
+    if plan is None:
         return None
-    plan = plans[-1]
     run = ctx.repo.get_run(ctx.ws, plan.run_id) if plan.run_id else None
     return {
         "plan_id": plan.id,

@@ -180,6 +180,19 @@ member's *own* declaration is excluded from those counts, both because it is cir
 evidence about what to ask them and because including it made the digest move every time
 they changed their mind.
 
+**Which plan shaped which declaration is frozen, not searched for.** When a declaration is
+saved, the coordination event it writes records the plan id the form was given
+(`CoordinationEvent.clarification_plan_id`), validated against that member, that product
+and that Community; historical proof then reads it by primary key. The alternative — the
+shape this replaced — was to look the plan up afterwards by household and product and take
+the newest, which can only ever return the *latest* one. So a member who got a second plan
+because the world moved had every earlier revision silently re-described as having been
+shaped by a plan made after it. An exact-only or family declaration records no reference,
+because it answered no questions, and an absent or dangling reference omits the
+clarification proof rather than reconstructing one. The same rule already governs
+`RunStrategyReference`: what a run was *shown* is stored as it was transmitted, never
+re-derived from what those options say today.
+
 | Clarification bound | Default | On hit |
 | --- | --- | --- |
 | `MAX_CLARIFICATION_LISTINGS` | 1 | Refused; the candidates have not changed |
@@ -422,7 +435,8 @@ member's details into an artifact that gets published.
 
 | Concern | Local default | Deployed judge path | Implemented pilot stack, not deployed |
 | --- | --- | --- | --- |
-| Opportunity discovery | Deterministic planner in the real Strands loop | AgentCore Runtime + Bedrock + Strands | Same AgentCore entrypoint |
+| Opportunity discovery, `/verify` (a saved declaration) | Deterministic planner in the real Strands loop | Deterministic planner in Lambda — zero model tokens, and the function holds no model permission | Same, unless configured otherwise |
+| Opportunity discovery, the live agent action | Deterministic planner in the real Strands loop | AgentCore Runtime + Bedrock Nova Lite + Strands | Same AgentCore entrypoint |
 | Remaining lifecycle | Deterministic planner in the real Strands loop | Deterministic planner in Lambda | Deterministic planner unless configured otherwise |
 | State | In-memory | DynamoDB, one table, per-workspace TTL | DynamoDB |
 | Routing | Pure function of coordinates | Same deterministic adapter; labelled simulated | Amazon Location `geo-routes` adapter available |
@@ -447,7 +461,7 @@ one that quietly stops being true.
 
 | Service | Status |
 | --- | --- |
-| Amazon Bedrock | **Verified live 2026-08-22.** `us.amazon.nova-lite-v1:0` drives the real Strands loop and the real tools, reached through AgentCore. Earlier, 2026-08-19: the discovery path (`make verify-bedrock`) and the consequential recovery-and-lock path (`make verify-recovery`). |
+| Amazon Bedrock | **Verified live 2026-08-22.** `us.amazon.nova-lite-v1:0` drives the real Strands loop and the real tools, reached through AgentCore. That run's outcome was a truthful `no_action` — the declaration had already been served, so the objective was correctly empty — which establishes the deployment, the tool surface and the bounds on real infrastructure, and is *not* a live trace of the Kestrel→Harbourstone adaptation. Earlier, 2026-08-19: the discovery path (`make verify-bedrock`) and the consequential recovery-and-lock path (`make verify-recovery`). |
 | Bedrock AgentCore Runtime | **Deployed and verified live 2026-08-22.** `agentcore_app.py` at the current release, `READY` in `us-east-1`, invoked through the demo bridge. **The only path to a live model.** |
 | DynamoDB | **Verified 2026-08-22.** One table shared by both deployed artefacts — which is why they are deployed together. The complete lifecycle runs on it with identical economics; the first live write found a `Decimal` bug no fake could have. |
 | Lambda Function URL | **Deployed and verified 2026-08-22.** The public judge demo — the SPA and the reduced API from one function, on one origin. Runs the **deterministic offline planner**; its execution role holds no model permission. |

@@ -2223,6 +2223,23 @@ class CoordinationEvent:
     terminal_reason: str = ""
     #: The candidate pool this event produced, when it produced one.
     pool_id: str = ""
+    #: The :class:`ClarificationPlan` that shaped the *saved declaration revision* this
+    #: event was written for, or empty when nothing was asked.
+    #:
+    #: **Written once, at creation, and never again.** Everything else on this row is
+    #: dispatch state a run advances; this is history. A declaration's questions are
+    #: planned before it is saved, against a world that has since moved on, and a later
+    #: plan for the same member and product must not be able to re-describe what an
+    #: earlier revision was shaped by. Storing the reference on the event is what makes
+    #: the historical answer a primary-key read rather than a search — and a search over
+    #: household and product is precisely the thing that produced false lineage, because
+    #: it can only ever return the *newest* plan (BUILD_HISTORY #0063).
+    #:
+    #: Empty for an exact-only declaration, which is the truthful answer rather than a
+    #: gap: nothing was asked, because nothing needed to be. Empty, too, for a legacy
+    #: row written before this field existed — and an empty reference omits the
+    #: clarification proof rather than reconstructing one.
+    clarification_plan_id: str = ""
     created_at: str = field(default_factory=lambda: iso(utcnow()))
     claimed_at: str = ""
     ended_at: str = ""

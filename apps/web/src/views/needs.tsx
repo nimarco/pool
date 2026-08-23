@@ -33,7 +33,7 @@ import {
   PreferenceQuestion,
   Reconciliation,
 } from "../api";
-import { ChosenItem, Picked, asChosen } from "../chosen";
+import { ChosenItem, Picked, asChosen, defaultQuantity } from "../chosen";
 import { EXACT } from "../preference-answers";
 import { Preferences } from "../preferences";
 import { useClarification } from "../use-clarification";
@@ -87,7 +87,7 @@ function blankDraft(householdId: string): NeedDraft {
     // pre-selecting somebody else's first catalogue row was the old behaviour this
     // screen exists to remove.
     product_id: "",
-    quantity: 2,
+    quantity: defaultQuantity(),
     cadence_days: DEFAULT_CADENCE,
     expected_next_need_date: nextNeeded,
     flexibility_days: defaultFlexibility(nextNeeded, DEFAULT_CADENCE),
@@ -563,7 +563,8 @@ export function Needs({
    *  each side of the choice reaches. All of it server-owned, and the hook is the only
    *  thing that can buy a model run — see `use-clarification.ts` for the rules. */
   const clarification = useClarification(chosen?.draft.product_id);
-  const { questions, preferences, noun, flexibility, planned, planning } = clarification;
+  const { questions, preferences, noun, flexibility, planned, planId, planning } =
+    clarification;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** What the last save did to orders this member was already in. Server-decided, both
@@ -703,8 +704,15 @@ export function Needs({
     if (!draft) return;
     /* Answers, not a policy. The server decides what they mean, and the older
        `substitution` value is dropped when they travel so there is exactly one source
-       for what this member consented to. */
-    const answered = preferences ? { preferences, substitution: undefined } : {};
+       for what this member consented to.
+
+       `planId` travels beside them as lineage: which plan put *these* questions on the
+       screen. Empty when nothing was planned for this revision — reopening an edit shows
+       the whole approved set, so crediting it to the last plan made would be recording a
+       plan that shaped nothing. */
+    const answered = preferences
+      ? { preferences, substitution: undefined, clarification_plan_id: planId }
+      : {};
     const payload = { ...draft, ...answered, ...override };
     setBusy(true);
     setError(null);

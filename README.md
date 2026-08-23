@@ -218,9 +218,11 @@ labelled, and if it fails it says so. **There is no code path that fabricates a 
 That action is **not on the `/verify` judge path**, which is deliberate. There, a saved
 declaration writes a coordination event and one bounded run answers it in-process, under
 the same bounds and the same tools — so the thing a judge verifies is caused by an
-ordinary member action rather than by pressing a button labelled *run the agent*. Which
-model provider that run uses is the deployment's configuration; locally it is the offline
-deterministic planner, at zero tokens.
+ordinary member action rather than by pressing a button labelled *run the agent*. That run
+uses the **deterministic offline planner**, at zero model tokens, locally *and on the
+deployed URL*: the function serving it has no permission to call a model. The technical
+proof panel names the provider it actually ran on and its wording follows that provider —
+an offline run reports *planner iterations*, never model calls.
 
 The runtime is a *participant* in a workspace, never its owner. The API seeds workspaces,
 resets them, and rations how many exist; the runtime's execution role can read and write
@@ -477,7 +479,7 @@ no background schedule exists there.
 
 | Layer | Local / demo | Would a pilot change it? |
 | --- | --- | --- |
-| Model | Deterministic offline planner, real Strands loop | Swap to `BedrockModel` |
+| Model | Deterministic offline planner, real Strands loop — **locally and on the deployed judge path alike** | Swap to `BedrockModel` |
 | Persistence | In-memory | DynamoDB single table (adapter exists) |
 | Routing | Deterministic function of coordinates | Amazon Location `geo-routes` (adapter exists) |
 | Payments | `LocalSimulatedPaymentProvider` | Stripe **TEST** provider (refuses non-test keys) |
@@ -540,7 +542,7 @@ walkthrough is free to repeat.
 
 | Service | Role | Status |
 | --- | --- | --- |
-| Bedrock | Model inference via Strands | **Verified live 2026-08-22** — `us.amazon.nova-lite-v1:0`, reached through AgentCore, 2 of 8 iterations, 5,513 in / 133 out tokens, terminated `completed`. Earlier discovery/recovery/lock branches verified 2026-08-19 |
+| Bedrock | Model inference via Strands | **Verified live 2026-08-22** — `us.amazon.nova-lite-v1:0`, reached through AgentCore, 2 of 8 iterations, 5,513 in / 133 out tokens, terminated `completed`. The **outcome was a truthful `no_action`**: the member's only declaration had already been served by the in-process run their save caused, so the objective was correctly empty. It establishes the deployment, the tool surface and the bounds on real infrastructure; it is *not* a live trace of the Kestrel→Harbourstone adaptation. Earlier discovery/recovery/lock branches verified 2026-08-19 |
 | AgentCore Runtime | Hosted agent entrypoint, and the only path to a live model | **Deployed and verified live 2026-08-22** — `Pool_PoolCoordinator-TmVqSN9H56` version 7, `READY` in `us-east-1`, one bounded synthetic invocation proving AgentCore → Strands → Bedrock → Pool tools |
 | Lambda Function URL | The public judge demo: web app + reduced API | **Deployed and verified 2026-08-22** — this branch, `/verify` hard-loads, full declaration → event → run → order over HTTPS on the real table. Runs the **offline planner**; it has no model permission |
 | DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified 2026-08-22** — shared by both artefacts, which is why they are deployed together |

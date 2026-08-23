@@ -898,6 +898,109 @@ def test_saving_an_unchanged_edit_cannot_buy_a_second_run(client, monkeypatch):
     assert len(api._repo.list_coordination_events("demo")) == 2
 
 
+# ------------------------------------------------- clarification lineage over HTTP
+
+
+def _plan_over_http(client: TestClient, household_id: str) -> str:
+    """Record a clarification plan the way a bounded planner run records one."""
+    from pool.api import app as api
+    from pool.services import clarification as clar
+
+    ctx = api.ctx_for("demo")
+    offered = [c.question_id for c in clar.candidates(ctx, COMMUNITY_ID, KESTREL, household_id)]
+    return clar.record_plan(
+        ctx=ctx,
+        community_id=COMMUNITY_ID,
+        household_id=household_id,
+        product_id=KESTREL,
+        question_ids=offered,
+        run_id="run_clarify_http",
+    ).id
+
+
+def _flexible_body(household_id: str, **extra) -> dict:
+    return {
+        "household_id": household_id,
+        "product_id": KESTREL,
+        "quantity": 3,
+        "cadence_days": 30,
+        "expected_next_need_date": (date.today() + timedelta(days=12)).isoformat(),
+        "flexibility_days": 11,
+        "max_spend_cents": 20_000,
+        "preferences": {"flexibility": "similar", "keep": ["form", "caffeine"], "accept": {}},
+        **extra,
+    }
+
+
+def test_a_declaration_records_the_plan_it_names(client):
+    from pool.api import app as api
+
+    household_id = _onboard(client)
+    plan_id = _plan_over_http(client, household_id)
+    created = client.post(
+        "/api/needs", json=_flexible_body(household_id, clarification_plan_id=plan_id)
+    ).json()
+
+    event = api._repo.get_coordination_event("demo", created["coordination"]["event_id"])
+    assert event is not None and event.clarification_plan_id == plan_id
+    proof = client.get(f"/api/needs/{created['need_id']}/coordination").json()
+    assert proof["clarification"]["plan_id"] == plan_id
+
+
+def test_a_plan_id_the_declaration_cannot_own_is_refused_and_writes_nothing(client):
+    """A ``400`` before anything is stored, rather than a declaration with false lineage.
+
+    Checked ahead of the write on purpose: the declaration is saved first and the event
+    second, so validating at the point of writing the event would mean accepting somebody's
+    input and then refusing their proof.
+    """
+    from pool.api import app as api
+
+    household_id = _onboard(client)
+    before = len(api._repo.list_needs("demo"))
+
+    refused = client.post(
+        "/api/needs", json=_flexible_body(household_id, clarification_plan_id="cpl_invented")
+    )
+    assert refused.status_code == 400
+    assert "does not exist" in refused.json()["detail"]
+    assert len(api._repo.list_needs("demo")) == before
+    assert api._repo.list_coordination_events("demo") == []
+
+
+def test_another_members_plan_cannot_be_attached_over_http(client):
+    from pool.api import app as api
+
+    household_id = _onboard(client)
+    theirs = _plan_over_http(client, ANCHOR_HOUSEHOLD)
+
+    refused = client.post(
+        "/api/needs", json=_flexible_body(household_id, clarification_plan_id=theirs)
+    )
+    assert refused.status_code == 400
+    assert "another member" in refused.json()["detail"]
+    assert api._repo.list_coordination_events("demo") == []
+
+
+def test_an_exact_only_declaration_over_http_records_no_lineage(client):
+    from pool.api import app as api
+
+    household_id = _onboard(client)
+    plan_id = _plan_over_http(client, household_id)
+    created = client.post(
+        "/api/needs",
+        json={
+            **_flexible_body(household_id, clarification_plan_id=plan_id),
+            "preferences": {"flexibility": "exact", "keep": [], "accept": {}},
+        },
+    ).json()
+
+    event = api._repo.get_coordination_event("demo", created["coordination"]["event_id"])
+    assert event is not None and event.clarification_plan_id == ""
+    proof = client.get(f"/api/needs/{created['need_id']}/coordination").json()
+    assert proof["clarification"] is None
+
+
 # ------------------------------------------------------------ nothing else moved
 
 

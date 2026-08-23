@@ -45,10 +45,15 @@ work
   have repeated-call tests.
 - **Same-run causality is server-owned.** Candidate pools store `created_by_run`; the API
   follows that exact id to the stored run in the same workspace. The Product shows run
-  id, pool id, tool sequence, model, outcome, termination and authoritative readback. It
-  never substitutes “latest run.”
+  id, pool id, tool sequence, **provider**, outcome, termination and authoritative
+  readback. It never substitutes “latest run,” and the proof's vocabulary follows the
+  stored provider — an offline run reports *planner iterations*, never model calls.
 - **State is authoritative.** AgentCore and the public Lambda share one DynamoDB table
   with per-workspace leases, conditional writes, strongly consistent readback and TTL.
+- **Historical proof is frozen, not reconstructed.** A coordination event records the
+  clarification plan that shaped *that* declaration revision, so a later plan for the same
+  member and product cannot re-describe an earlier one. Run→strategy listings are stored
+  as transmitted for the same reason.
 - **No fake demo logic.** The lifecycle, recovery, payment state machine and pickup
   credential flow execute through real services and stored state. Synthetic data and
   simulated rails are labelled.
@@ -57,15 +62,15 @@ work
 
 | Component | Status |
 | --- | --- |
-| Amazon Bedrock / Nova Lite through Strands | **Verified live 2026-08-22** through AgentCore — `us.amazon.nova-lite-v1:0`, run `run_787aa5b33e91`, 2 of 8 iterations, 5,513 in / 133 out tokens |
-| The `/verify` judge path — declare → event → bounded run → order → proof | **Locally and browser verified 2026-08-21** on this branch: three fresh-workspace rehearsals, six actions each, one clarification run and one coordination run apiece, plus two truthful no-action flows. Never deployed |
+| Amazon Bedrock / Nova Lite through Strands | **Verified live 2026-08-22** through AgentCore — `us.amazon.nova-lite-v1:0`, run `run_787aa5b33e91`, 2 of 8 iterations, 5,513 in / 133 out tokens. Outcome a truthful `no_action`: the declaration had already been served, so the objective was correctly empty. Establishes the deployment, the tool surface and the bounds on real infrastructure — **not** a live trace of the Kestrel→Harbourstone adaptation |
+| The `/verify` judge path — declare → event → bounded run → order → proof | **Deployed and verified 2026-08-22** over HTTPS on the real table: declaration → event → run `run_1b953d5eca25` → Kestrel refused, Harbourstone viable → `pool_afb6982e61b7`, 18 provisional units, 0 payment rows, 3.35 s. Earlier, locally and browser verified 2026-08-21: three fresh-workspace rehearsals — a short self-guided flow apiece, one clarification run and one coordination run each — plus two truthful no-action flows. **Runs the deterministic offline planner**, at zero model tokens |
 | Immutable run→strategy history | **Locally verified 2026-08-21**: run A's listing is byte-identical after runs B and C |
 | Reversible preferences (A→B→C) | **Locally and browser verified 2026-08-21**: distinct revisions, events and runs; withdrawal and restoration; zero payment rows |
 | Amazon Bedrock AgentCore Runtime | **Deployed and verified live 2026-08-22** — `Pool_PoolCoordinator-TmVqSN9H56` v7, `READY`, `us-east-1`. The only path to a live model |
 | Lambda Function URL judge surface | **Deployed and verified 2026-08-22** — this branch; `/verify` hard-loads; runs the offline planner and holds no model permission |
 | DynamoDB authoritative state | **Deployed and verified 2026-08-22** — one table shared by both artefacts |
 | CloudWatch logs / structured run records | **Deployed and verified 2026-08-19**, retention bounded |
-| Same-run proof presentation patch | **Deployed and rehearsed 2026-08-19**; exact pool/run relationship survived the completed lifecycle and reload. The current `/verify` proof is **locally and browser verified only** |
+| Same-run proof presentation patch | **Deployed and rehearsed 2026-08-19**; exact pool/run relationship survived the completed lifecycle and reload. The `/verify` proof was **deployed and verified 2026-08-22** in the same session |
 | EventBridge | Definition exists only in un-deployed pilot stack; **zero deployed rules** |
 | Amazon Location | Adapter Implemented and Tested with fakes; live service unverified and absent from judge path |
 | Payments and supplier purchase | **Simulated** everywhere — locally, in tests, and in the deployed stack |

@@ -5,7 +5,30 @@
  * file that also exports helpers breaks fast refresh for every component in it.
  */
 
-import { FamilyCandidate, ProductCandidate } from "./api";
+import { FamilyCandidate, ProductCandidate, api } from "./api";
+
+/** How many units the declaration form starts on.
+ *
+ *  **Two everywhere except the verification world, where it is three.** The scoping is
+ *  the whole point, so it is stated here once rather than reproduced in two forms.
+ *
+ *  `/verify` is a synthetic self-test: a curated community with a supplier whose cases
+ *  hold six, in which three bags is the quantity the fixture is written around. Starting
+ *  a self-guided verification on two put a sceptic one silent step away from the truthful
+ *  *"Pool could assemble an order, but not one you would be in"* — a correct answer, and
+ *  a terrible first impression of a working system, reached by a default nobody chose.
+ *  Three is that world's own canonical starting quantity, so using it is honest rather
+ *  than helpful.
+ *
+ *  What this deliberately does **not** do: change the economics, the case allocation, or
+ *  what any quantity means. The field stays editable, and a visitor who sets it to two
+ *  still gets the truthful no-action answer — which is the behaviour the page promises
+ *  and the one a judge should be able to reproduce. Ordinary products, in ordinary
+ *  workspaces, keep the default they always had.
+ */
+export function defaultQuantity(): number {
+  return api.inVerifyScope() ? 3 : 2;
+}
 
 /** What the member picked: a whole family, or one exact product. */
 export type Picked =

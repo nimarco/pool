@@ -387,6 +387,49 @@ def record_plan(
     return plan
 
 
+# --------------------------------------------------------------------- lineage
+
+
+def lineage_reference(
+    ctx: PoolContext,
+    *,
+    community_id: str,
+    household_id: str,
+    product_id: str,
+    plan_id: str,
+) -> str:
+    """The plan id a coordination event may record as having shaped a declaration.
+
+    Returns the id when the plan is genuinely this member's, about this product, in this
+    Community. Raises on anything else, and returns an empty string when nothing was
+    supplied — an unstated lineage is *absent*, never reconstructed.
+
+    **Why the caller states it rather than this module deducing it.** A plan is made
+    while somebody is still deciding and read back long afterwards, and by then the same
+    member and product may have several: the world moved, a different question became
+    worth asking, and a new plan superseded the old one. Deducing lineage later can
+    therefore only pick the *newest*, which is how an event created under plan A came to
+    display plan B as though it had shaped it. What the form was actually given is known
+    exactly once — at the moment it was given — so that is when it is recorded.
+
+    A superseded plan is accepted. It is the honest answer for a declaration saved
+    against it, and the stored ``status`` says so on the proof surface; refusing it would
+    reject a legitimate save because the world moved while somebody was reading the form.
+    """
+    if not plan_id:
+        return ""
+    plan = ctx.repo.get_clarification_plan(ctx.ws, plan_id)
+    if plan is None:
+        raise ClarificationError("that clarification plan does not exist")
+    if plan.household_id != household_id:
+        raise ClarificationError("that clarification plan belongs to another member")
+    if plan.product_id != product_id:
+        raise ClarificationError("that clarification plan is about another product")
+    if plan.community_id != community_id:
+        raise ClarificationError("that clarification plan belongs to another community")
+    return plan.id
+
+
 # ------------------------------------------------------------------- consequences
 
 

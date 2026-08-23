@@ -117,6 +117,54 @@ describe("asking what is worth asking", () => {
     expect(clarification).toHaveBeenCalledTimes(1);
   });
 
+  it("carries the plan id, so the declaration can record what shaped it", async () => {
+    /* Lineage, not authority. It cannot widen a rule; it exists so the coordination event
+       can name *which* plan asked these questions instead of the proof surface searching
+       for one afterwards and finding whichever is newest. */
+    const { result } = renderHook(() => useClarification("prod_kestrel"));
+    await waitFor(() => expect(result.current.questions).toHaveLength(2));
+    expect(result.current.planId).toBe("");
+
+    act(() => result.current.answer(flexible()));
+    await waitFor(() => expect(result.current.planId).toBe("cpl_x"));
+  });
+
+  it("restores the whole cached plan, not a corner of it", async () => {
+    /* On a re-cross the answer comes from the session cache rather than the server. It
+       used to restore only the counts, leaving the *approved* list on screen beside a
+       plan that had chosen a subset of it — which is now a recorded claim about which
+       questions that plan asked, so the two have to agree. */
+    const { result } = renderHook(() => useClarification("prod_kestrel"));
+    await waitFor(() => expect(result.current.questions).toHaveLength(2));
+
+    act(() => result.current.answer(flexible()));
+    await waitFor(() => expect(result.current.planId).toBe("cpl_x"));
+
+    act(() => result.current.answer({ flexibility: "exact", keep: [], accept: {} }));
+    act(() => result.current.answer(flexible()));
+
+    expect(clarification).toHaveBeenCalledTimes(1);
+    expect(result.current.planId).toBe("cpl_x");
+    expect(result.current.planned).toBe(true);
+    // The agent's subset, in the agent's order — the same list the plan recorded.
+    expect(result.current.questions.map((q) => q.attribute)).toEqual(["roast", "form"]);
+  });
+
+  it("attaches no plan to an edit that asked nothing", async () => {
+    /* Reopening a saved declaration shows the whole approved set and buys no run, so no
+       plan shaped that revision. Sending the last one would credit a plan with questions
+       it never put on the screen. */
+    const { result } = renderHook(() => useClarification("prod_kestrel"));
+    await waitFor(() => expect(result.current.questions).toHaveLength(2));
+
+    act(() => result.current.answer(flexible()));
+    await waitFor(() => expect(result.current.planId).toBe("cpl_x"));
+
+    act(() => result.current.load(flexible()));
+    expect(result.current.planId).toBe("");
+    expect(clarification).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps an answer given below the gate", async () => {
     /* The regression. Ticking a second roast is an answer to a question already asked;
        if that is treated as crossing the gate, the plan arrives, resets the form to its

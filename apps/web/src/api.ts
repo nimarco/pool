@@ -508,6 +508,13 @@ export interface NeedDraft {
    *  the narrowest reading, and a browser assembling a policy could widen one by
    *  omission. */
   preferences?: NeedPreferences;
+  /** The clarification plan whose questions this form actually asked, when one was made.
+   *
+   *  Lineage, not authority — it cannot widen a rule or change what an answer means. It
+   *  travels so the coordination event can record *which* plan shaped this revision;
+   *  reading it back later by searching for the newest plan for the member and product
+   *  is how an old declaration came to display a plan made after it. */
+  clarification_plan_id?: string;
   active: boolean;
 }
 

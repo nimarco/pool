@@ -204,8 +204,9 @@ Real, and safe to rely on:
 - **Stored proof of real invocations** — run ids, `created_by_run` lineage on the
   resulting pool, tool sequences, outcomes, terminations, and authoritative readback from
   the same workspace the browser reads.
-- **A large executed test suite** — 1,277 agent tests, plus infra and web suites, reported
-  green at 1,506 total in `BUILD_HISTORY.md` #0060.
+- **A large executed test suite** — 1,300 agent tests, 75 infrastructure tests and 180
+  frontend tests, reported green at **1,555 total** by `make qa` in `BUILD_HISTORY.md`
+  #0063.
 - **A canonical lifecycle fixture**, not to be paraphrased or adjusted for presentation:
   11 memberships, 10 funded buyers, 1 authorization failure, 1 replacement, 24 units,
   2 cases, 0 surplus, $861.44 all-in against $1,127.76 retail, $266.32 saved, 23.61%,

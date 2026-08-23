@@ -59,12 +59,16 @@ the safe reading is to use that exact phrase and not depend on the hashtag.
 
 | Item | Status | Note |
 | --- | --- | --- |
-| `make qa` green — lint, typecheck, Python tests, web tests, build, secret scan | **Verified** | 734 agent/API/domain tests, 75 infrastructure tests, 20 frontend tests; ruff, ESLint, TypeScript, build and secret scan passed |
+| `make qa` green — lint, typecheck, Python tests, web tests, build, secret scan | **Verified 2026-08-23** | 1,300 agent/API/domain tests, 75 infrastructure tests, 180 frontend tests — **1,555 total**; ruff, ESLint, TypeScript, production build, secret scan and secret-scan self-test all passed, no waived failures |
 | Frontend lint actually runs | **Verified** | ESLint installed and wired into `make lint`; it was referenced but absent until 2026-08-18 |
 | Infrastructure tests green | **Verified** | `infra/test_stack.py`, `infra/test_demo_stack.py` |
 | Production dependency audit clean | **Verified** | `npm audit --omit=dev` → 0 vulnerabilities. Two dev-only Vite/esbuild advisories remain, fixable only by a major upgrade; deferred deliberately |
 | One fresh Product-originated AgentCore run captured after final deploy | **Verified** | Workspace `w0z2b3v2r6c3b0q6l`; `run_3954c1d2d97f` → `pool_e36b32c84ee2`; exact `created_by_run`, stored tools and readback verified |
 | Same live run remains the pool's technical proof after full lifecycle | **Verified** | Completed 10/10 handoffs, reloaded, and deep-linked from Home without using `Run again` |
+| Historical proof is frozen, not reconstructed | **Verified 2026-08-23** | A → B → C over the real endpoints: flexible under plan A → `pool_1ea75c229c04`, 18 provisional units, 0 payment rows; a later plan B for the same member and product; A's proof still plan A. Exact-only revision shows no plan; the run→strategy listing is unchanged (#0063) |
+| Public need creation cannot be pointed at a seeded household | **Verified 2026-08-23** | Reproduced against `d5ac806` and refused now: in public mode the server resolves the declaring identity, an amend naming another member's declaration is a 400, and no event is written for the named household (#0063) |
+| The `/verify` proof never calls the offline planner a model | **Verified 2026-08-23** | Vocabulary derives from the stored `model_provider`; offline runs report *planner iterations* and 0 model tokens. Pinned both ways in `apps/web/src/views/why.test.tsx` |
+| `/verify` offers no scripted-walkthrough diversion, and the form starts on the fixture's own quantity | **Verified 2026-08-23** | Pinned in `apps/web/src/views/verify-flow.test.tsx`; quantity 2 still produces the truthful no-action, quantity 3 forms the 18-unit order |
 | Cost check — no schedules, no always-on resources | **Verified** | Account-wide EventBridge rule count is 0; one existing AgentCore runtime is `READY` and idle between invocations |
 | Resource ledger in BUILD_HISTORY reconciled | **Verified** | No new logical resources; CDK staging bucket measured at 36 objects / 544,983,237 bytes |
 

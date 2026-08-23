@@ -2,9 +2,14 @@
  *
  *  One server read (`/api/needs/{id}/coordination`) behind two audiences. The member-facing
  *  half answers *what happened, and what has not happened*; the technical half answers
- *  *which model, which tools, in what order, under what bounds*. They are the same stored
- *  rows at two levels of detail, which is the property that makes the second one evidence
- *  for the first rather than a parallel story told beside it.
+ *  *which provider, which tools, in what order, under what bounds*. They are the same
+ *  stored rows at two levels of detail, which is the property that makes the second one
+ *  evidence for the first rather than a parallel story told beside it.
+ *
+ *  **The words follow the provider the run recorded.** The public path executes the real
+ *  Strands loop against a deterministic offline planner, so calling its iterations "model
+ *  calls" would be contradicted by the provider and the zero token count printed beside
+ *  them — see `vocabularyFor`.
  *
  *  **Nothing here is reconstructed from what the browser saw.** The old judge demo held its
  *  narrative in React state and lost it on reload; this component fetches, and a refresh
@@ -15,7 +20,7 @@
  *  business and not an answer to anybody else's question (AGENTS.md §4).
  */
 import { useEffect, useState } from "react";
-import { NeedCoordination, StrategyVerdict, api } from "../api";
+import { ClarificationProof, NeedCoordination, StrategyVerdict, api } from "../api";
 import { Empty, Fact, IconArrowLeft } from "../ui";
 
 /** The deterministic refusal codes, in the words a member would use.
@@ -47,6 +52,50 @@ const EXCLUSION_COPY: Record<string, string> = {
 
 function blockerCopy(code: string): string {
   return BLOCKER_COPY[code] ?? code.replace(/_/g, " ");
+}
+
+/** What to call the thing that drove the loop, derived from the run's stored provider.
+ *
+ *  Not cosmetic. The public `/verify` run executes the real Strands loop against the
+ *  **deterministic offline planner** — the same tools, the same bounds, the same guarded
+ *  writes, and no model at all. Calling its iterations "model calls" beside a provider
+ *  reading `offline` and a token count reading zero is a claim the same panel disproves
+ *  two lines further down, and it is the sort of thing a sceptical reader is entitled to
+ *  treat as evidence about everything else on the page.
+ *
+ *  So the vocabulary comes from `run.model_provider`, which is what the coordinator
+ *  actually recorded (`agent/coordinator._build_model`). Where a word works for both —
+ *  *control plane*, *chose* — it is preferred over a word that has to be switched.
+ */
+interface Vocabulary {
+  /** The subject: what a reader should picture making the choices. */
+  actor: string;
+  /** The label above the iteration count. */
+  iterations: string;
+  /** The label above the token count. */
+  tokens: string;
+  /** Whether tokens were spendable at all on this path. */
+  offline: boolean;
+}
+
+const OFFLINE: Vocabulary = {
+  actor: "The offline planner",
+  iterations: "Planner iterations",
+  tokens: "Model tokens",
+  offline: true,
+};
+
+const LIVE: Vocabulary = {
+  actor: "The model",
+  iterations: "Model iterations",
+  tokens: "Tokens",
+  offline: false,
+};
+
+function vocabularyFor(provider: string | undefined): Vocabulary {
+  return provider === "offline" || provider === "" || provider === undefined
+    ? OFFLINE
+    : LIVE;
 }
 
 export function WhyThisOrder({
@@ -276,26 +325,118 @@ function Verdict({ verdict }: { verdict: StrategyVerdict }) {
   );
 }
 
+/** The plan that shaped the questions this declaration's answers came from.
+ *
+ *  Its own run, its own provider, its own budget — planning happens while somebody is
+ *  still deciding and coordination happens after they have decided — so it gets its own
+ *  vocabulary rather than borrowing the coordination run's. On the public path both are
+ *  the offline planner; on a deployment configured for Bedrock either could be live, and
+ *  the words follow whichever actually ran.
+ *
+ *  The plan is read by the id the coordination event froze when the declaration was
+ *  saved, so this is what shaped *this* revision — not whichever plan is newest now.
+ */
+function ClarificationProofBlock({ proof }: { proof: ClarificationProof }) {
+  const words = vocabularyFor(proof.model_provider);
+  const ran = Boolean(proof.run_id);
+  return (
+    <div className="stack-sm">
+      <h3 className="small">What Pool decided to ask, before any of this</h3>
+      <div className="facts">
+        <Fact label="Plan" value={<code>{proof.plan_id}</code>} />
+        <Fact label="Run" value={<code>{proof.run_id || "none"}</code>} />
+        <Fact
+          label="Provider"
+          value={
+            proof.model_id
+              ? `${proof.model_provider} · ${proof.model_id}`
+              : "not run in this workspace"
+          }
+        />
+        <Fact
+          label={words.tokens}
+          value={`${proof.input_tokens} in · ${proof.output_tokens} out`}
+        />
+        {/* A superseded plan is still the right answer for an older revision, and saying
+            so is the point: the world has moved since, and the record has not. */}
+        <Fact label="Plan status" value={proof.status} />
+      </div>
+      <ul className="proof-evals">
+        <li>
+          <strong>Approved:</strong>{" "}
+          {proof.offered.map((q) => (
+            <code key={q}>{q} </code>
+          ))}
+        </li>
+        <li>
+          <strong>Asked, in this order:</strong>{" "}
+          {proof.asked.length === 0 ? (
+            <span className="muted">nothing</span>
+          ) : (
+            proof.asked.map((q) => <code key={q}>{q} </code>)
+          )}
+        </li>
+      </ul>
+      <p className="small muted">
+        {ran ? (
+          <>
+            A separate, earlier run, with its own budget. {words.actor} selected which of
+            the approved questions were worth asking and in what order — a subset of the
+            list above it, and it cannot write one that is not on it.
+          </>
+        ) : (
+          <>
+            No planning run happened in this workspace, so every approved question was
+            asked in the schema&apos;s own order.
+          </>
+        )}{" "}
+        What each answer <em>means</em> was decided by nothing in this table: every answer
+        maps to a fixed rule in <code>services/needs.policy_from_answers</code>, curated
+        under{" "}
+        <code>
+          {proof.family} v{proof.schema_version}
+        </code>
+        .
+      </p>
+    </div>
+  );
+}
+
 function Proof({ data }: { data: NeedCoordination }) {
   const run = data.run;
+  const words = vocabularyFor(run?.model_provider);
   return (
     <div className="panel-pad stack-sm">
       <div className="facts">
         <Fact label="Coordination event" value={<code>{data.event?.event_id}</code>} />
         <Fact label="Run" value={<code>{run?.run_id}</code>} />
-        <Fact label="Model" value={`${run?.model_provider} · ${run?.model_id}`} />
+        {/* Provider first, and never abbreviated away: it is what decides whether any
+            of the words around it may say "model". */}
+        <Fact label="Provider" value={`${run?.model_provider} · ${run?.model_id}`} />
         <Fact label="Objective" value={run?.objective ?? ""} />
         <Fact label="Outcome" value={run?.outcome ?? ""} />
         <Fact label="Ended" value={run?.termination_reason ?? ""} />
         <Fact
-          label="Model calls"
+          label={words.iterations}
           value={`${run?.iterations ?? 0} of ${run?.bounds.max_iterations ?? 0} allowed`}
         />
         <Fact
-          label="Tokens"
+          label={words.tokens}
           value={`${run?.input_tokens ?? 0} in · ${run?.output_tokens ?? 0} out`}
         />
       </div>
+
+      {words.offline ? (
+        <p className="small muted">
+          <strong>This run used the deterministic offline planner.</strong> It is the real
+          Strands loop, the real tool surface and the real bounds, with a planner in place
+          of a model — which is why the token counts above are zero and why you can
+          reproduce this run exactly. No model was called and none could have been: the
+          function serving this page has no permission to call one. Live model execution
+          is a separate, explicitly requested action that goes through Bedrock AgentCore
+          Runtime, and it records its own provider here when it is the one that ran.
+        </p>
+      ) : null}
 
       <div className="stack-sm">
         <h3 className="small">Tools called, in order</h3>
@@ -308,7 +449,7 @@ function Proof({ data }: { data: NeedCoordination }) {
           ))}
         </ol>
         <p className="small muted">
-          The model chose which option to investigate and moved on when the first was
+          {words.actor} chose which option to investigate and moved on when the first was
           refused. It never computed a price, decided who was compatible, or supplied a
           member, a quantity or a supplier term — every one of those came from
           deterministic code, and the tool it calls to form an order takes two identifiers
@@ -323,54 +464,7 @@ function Proof({ data }: { data: NeedCoordination }) {
       </div>
 
       {data.clarification ? (
-        <div className="stack-sm">
-          <h3 className="small">What Pool decided to ask, before any of this</h3>
-          <div className="facts">
-            <Fact label="Plan" value={<code>{data.clarification.plan_id}</code>} />
-            <Fact label="Run" value={<code>{data.clarification.run_id || "none"}</code>} />
-            <Fact
-              label="Model"
-              value={
-                data.clarification.model_id
-                  ? `${data.clarification.model_provider} · ${data.clarification.model_id}`
-                  : "not run in this workspace"
-              }
-            />
-            <Fact
-              label="Tokens"
-              value={`${data.clarification.input_tokens} in · ${data.clarification.output_tokens} out`}
-            />
-          </div>
-          <ul className="proof-evals">
-            <li>
-              <strong>Approved:</strong>{" "}
-              {data.clarification.offered.map((q) => (
-                <code key={q}>{q} </code>
-              ))}
-            </li>
-            <li>
-              <strong>Asked, in this order:</strong>{" "}
-              {data.clarification.asked.length === 0 ? (
-                <span className="muted">nothing</span>
-              ) : (
-                data.clarification.asked.map((q) => (
-                  <code key={q}>{q} </code>
-                ))
-              )}
-            </li>
-          </ul>
-          <p className="small muted">
-            A separate, earlier run, with its own budget. The model chose which of the
-            approved questions were worth asking and in what order — a subset of the list
-            above it, and it cannot write one that is not on it. What each answer{" "}
-            <em>means</em> was decided by nothing in this table: every answer maps to a
-            fixed rule in <code>services/needs.policy_from_answers</code>, curated under{" "}
-            <code>
-              {data.clarification.family} v{data.clarification.schema_version}
-            </code>
-            .
-          </p>
-        </div>
+        <ClarificationProofBlock proof={data.clarification} />
       ) : null}
 
       <div className="stack-sm">

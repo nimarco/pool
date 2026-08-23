@@ -158,6 +158,14 @@ component. Runs are labelled `model_provider="offline"` so nothing can be misrep
 This is the answer to "how do you test an agent without burning money", and it's better
 than mocking the loop because the loop is the part most likely to break.
 
+**The sentence every draft has to get right.** The offline planner is not only a test
+fixture — it is what the *deployed public self-test* runs on, so a judge can reproduce the
+trace for free and the serving function needs no model permission at all. The live Bedrock
+path is a separate, explicitly requested action through AgentCore. Any article beat that
+narrates the public trace as "the model chose…" is describing the wrong component, and the
+proof panel beside it prints `offline` and zero tokens. Whichever surface the article
+shows, name its provider.
+
 **Deliberate architectural subtractions** (worth a section — everyone writes about what
 they added)
 
@@ -180,9 +188,14 @@ they added)
 
 ### Missing — blocks publication
 
-- [ ] A real Bedrock invocation: latency, token counts, actual cost per run
-- [ ] A real AgentCore Runtime deployment: what `agentcore deploy` actually did (the
-      starter toolkit's `configure`/`launch` is retired — the current CLI is CDK-based)
+- [x] A real Bedrock invocation: latency, token counts, actual cost per run — #0019–#0021,
+      and through AgentCore on 2026-08-22 (#0061): 2 of 8 iterations, 5,513 in / 133 out,
+      8,984 ms, outcome a truthful `no_action` because the declaration had already been
+      served. Worth writing up *as* that: "the agent correctly did nothing" is a better
+      section than a staged success.
+- [x] A real AgentCore Runtime deployment: what `agentcore deploy` actually did (the
+      starter toolkit's `configure`/`launch` is retired — the current CLI is CDK-based) —
+      `Pool_PoolCoordinator` v7, `READY` in `us-east-1`, 2026-08-22
 - [ ] A real CloudWatch/AgentCore trace screenshot
 - [ ] A real Amazon Location route matrix response vs. the deterministic estimate — how
       wrong was the great-circle model?
@@ -309,8 +322,8 @@ can put in front of someone's money.
 | Screenshot: host candidates with score components and refusal reasons | 1, 3 | ⬜ |
 | Screenshot: viability panel, all eleven checks | 3 | ⬜ |
 | Real Bedrock run: latency, tokens, cost | 2 | ✅ #0019, #0020, #0021 |
-| Real AgentCore deployment output and trace | 2 | ⬜ blocked |
+| Real AgentCore deployment output and trace | 2 | ✅ #0061 — deployed 2026-08-22; trace screenshot still ⬜ |
 | Real vs. deterministic routing comparison | 2 | ⬜ blocked |
 | `make demo` terminal transcript | all | ✅ reproducible any time |
-| Test output: 514 passing (490 app + 24 infra) | 2 | ✅ |
+| Test output: the canonical `make qa` totals — see `docs/RELEASE_CHECKLIST.md`, which carries the current figures | 2 | ✅ |
 | Synthesized CloudFormation showing the disabled schedule | 2 | ✅ |

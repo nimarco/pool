@@ -59,13 +59,24 @@ export function Preferences({
   const flexible = value.flexibility === "similar";
   const thing = noun || "product";
 
-  /* Grounded, or absent. Nothing here is a nudge Pool cannot justify from stored rows:
-     the recommendation appears when allowing alternatives would genuinely reach more
-     than insisting on one product does, and disappears when it would not. */
+  /* Grounded, or absent — and a statement of fact rather than of advice.
+
+     This used to read "Recommended", which is Pool telling somebody their preferences
+     should be looser. It cannot know that: what it knows is how much standing demand and
+     how many sourceable products each side of the choice currently reaches, which is a
+     count over stored rows and the thing the member is actually weighing. A preference
+     somebody genuinely holds is not worse for reaching less, so the label says what the
+     number is and stops. */
   const reaches = flexibility
     ? flexibility.compatible_requests - flexibility.exact_requests
     : 0;
-  const worthIt = Boolean(flexibility && (reaches > 0 || flexibility.sourceable_alternatives > 0));
+  const tag = !flexibility
+    ? ""
+    : reaches > 0
+      ? "Reaches more current demand"
+      : flexibility.sourceable_alternatives > 0
+        ? "More options"
+        : "";
 
   function setFlexibility(next: "exact" | "similar") {
     onChange(next === "exact" ? EXACT : narrowestSimilar(questions));
@@ -118,7 +129,7 @@ export function Preferences({
           <span>
             <strong>
               Any brand that matches my preferences
-              {worthIt ? <span className="prefs-tag">Recommended</span> : null}
+              {tag ? <span className="prefs-tag">{tag}</span> : null}
             </strong>
             <span className="small muted">
               {questions.length === 0 && !flexible
@@ -240,8 +251,16 @@ export function Preferences({
           </div>
         ) : (
           <p className="small muted prefs-note">
-            There is nothing else to ask about this {thing}, so Pool will treat any brand
-            it can source as acceptable.
+            {/* Deliberately not "any brand is acceptable". No question being worth asking
+                does not mean no requirement is kept: the server reads an unanswered
+                question as unchanged, so every attribute of the {thing} you picked —
+                roast, form, caffeine — stays a hard requirement, and the brand is the
+                only thing that opens up. Saying otherwise would describe a wider
+                permission than the one actually saved
+                (`services/needs.policy_from_answers`). */}
+            Pool found nothing here whose answer would change which orders you could join.
+            Other brands can be considered, within the requirements already saved from the{" "}
+            {thing} you picked — everything about it stays as it is.
           </p>
         )
       ) : null}

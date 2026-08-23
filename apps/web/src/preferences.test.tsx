@@ -221,9 +221,14 @@ describe("what Pool says about being flexible", () => {
     expect(text).toMatch(/cannot tell you whether an order will form/i);
   });
 
-  it("recommends flexibility only where flexibility actually reaches more", () => {
+  it("labels the flexible option with what it reaches, never with advice", () => {
+    /* It used to say "Recommended", which is Pool telling somebody their preferences
+       should be looser. It has no basis for that: a preference genuinely held is not
+       worse for reaching less demand. What it can say is the count, so the label is the
+       count's name and disappears when there is nothing to count. */
     const { view } = renderPrefs(EXACT, { flexibility: REACH });
-    expect(screen.getByText(/Recommended/)).toBeTruthy();
+    expect(screen.getByText(/Reaches more current demand/)).toBeTruthy();
+    expect(screen.queryByText(/Recommended/)).toBeNull();
 
     view.rerender(
       <Preferences
@@ -238,7 +243,29 @@ describe("what Pool says about being flexible", () => {
         }}
       />,
     );
+    expect(screen.queryByText(/Reaches more current demand/)).toBeNull();
+    expect(screen.queryByText(/More options/)).toBeNull();
     expect(screen.queryByText(/Recommended/)).toBeNull();
+  });
+
+  it("says more options, not more demand, when only the catalogue is wider", () => {
+    renderPrefs(EXACT, {
+      flexibility: { exact_requests: 3, compatible_requests: 3, sourceable_alternatives: 4 },
+    });
+    expect(screen.getByText(/More options/)).toBeTruthy();
+    expect(screen.queryByText(/Reaches more current demand/)).toBeNull();
+  });
+
+  it("does not claim any brand is acceptable when nothing was worth asking", () => {
+    /* A plan may legitimately choose no questions. The server still reads every
+       unanswered question as unchanged, so roast, form and caffeine stay hard
+       requirements and only the brand opens up — saying "any brand it can source is
+       acceptable" described a permission wider than the one actually saved. */
+    renderPrefs(narrowestSimilar([]), { questions: [] });
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/treat any brand it can source as acceptable/i);
+    expect(text).toMatch(/within the requirements already saved/i);
+    expect(text).toMatch(/everything about it stays as it is/i);
   });
 
   it("is honest when widening changes nothing today", () => {

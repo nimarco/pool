@@ -130,7 +130,9 @@ export function About({
             <ActorKey />
           </div>
           <p className="small muted prose" style={{ marginTop: 12 }}>
-            The model decides <em>what to do</em>; deterministic code decides every cent,
+            The control plane decides <em>what to do</em> — a model on the live path, a
+            deterministic planner on the repeatable public one, both inside the same
+            Strands loop and the same tools. Deterministic code decides every cent,
             quantity, eligibility check and lifecycle transition.
           </p>
           <details className="inset" style={{ marginTop: 12 }}>
@@ -138,8 +140,9 @@ export function About({
               <strong>Implementation boundary</strong>
             </summary>
             <p className="small muted prose" style={{ marginTop: 10 }}>
-              The pure domain layer performs no I/O and imports no adapter. The model reaches
-              application state only through twelve typed tools, so it cannot author a price.
+              The pure domain layer performs no I/O and imports no adapter. Whatever drives
+              the loop reaches application state only through twelve typed tools, so it
+              cannot author a price.
             </p>
           </details>
           <div className="btn-row" style={{ marginTop: 14 }}>

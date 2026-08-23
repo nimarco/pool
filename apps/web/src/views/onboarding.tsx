@@ -22,7 +22,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Consumer, NeedDraft, Place, api } from "../api";
 import { ChosenCard, ProductSearch } from "../product-search";
-import { ChosenItem, asChosen } from "../chosen";
+import { ChosenItem, asChosen, defaultQuantity } from "../chosen";
 import { EXACT } from "../preference-answers";
 import { Preferences } from "../preferences";
 import { useClarification } from "../use-clarification";
@@ -44,6 +44,21 @@ type Step = "you" | "where" | "buy" | "authority";
  */
 function skipsCommunityChoice(): boolean {
   return api.inVerifyScope();
+}
+
+/** Whether the older scripted walkthrough should be offered from setup at all.
+ *
+ *  Not on the verification path. `/verify` exists precisely to put somebody in the real
+ *  product and get out of the way; offering them a guided harness on the first screen
+ *  sends the one visitor who came to check the claim into the thing the claim is not
+ *  about — and it is the most prominent control on that screen, so it is a diversion by
+ *  default rather than by accident.
+ *
+ *  The walkthrough is not deleted and its regression machinery is untouched: it is still
+ *  reachable directly, which is where an operator or a rehearsal wants it.
+ */
+function offersJudgeWalkthrough(): boolean {
+  return !api.inVerifyScope();
 }
 
 const STEPS: { id: Step; label: string }[] = [
@@ -275,7 +290,7 @@ function BuyStep({
   error: string | null;
 }) {
   const [chosen, setChosen] = useState<ChosenItem | null>(null);
-  const [quantity, setQuantity] = useState(2);
+  const [quantity, setQuantity] = useState(defaultQuantity);
   const [cadence, setCadence] = useState(DEFAULT_CADENCE);
   const [nextNeeded, setNextNeeded] = useState(isoInDays(DEFAULT_NEXT_NEEDED_DAYS));
   /** What this product can be asked about, and what was answered. Setting up is not a
@@ -283,11 +298,11 @@ function BuyStep({
    *  same server mapping, the same typed policy — and the same rule about when a model
    *  call may be bought. */
   const clarify = useClarification(chosen?.draft.product_id);
-  const { questions, preferences } = clarify;
+  const { questions, preferences, planId } = clarify;
 
   const reset = () => {
     setChosen(null);
-    setQuantity(2);
+    setQuantity(defaultQuantity());
     setCadence(DEFAULT_CADENCE);
     setNextNeeded(isoInDays(DEFAULT_NEXT_NEEDED_DAYS));
     clarify.reset();
@@ -301,8 +316,12 @@ function BuyStep({
       household_id: "",
       ...chosen.draft,
       /* Answers, not a policy, and they replace the draft's substitution value so there
-         is exactly one source for what this member consented to. */
-      ...(preferences ? { preferences, substitution: undefined } : {}),
+         is exactly one source for what this member consented to. `planId` is lineage
+         beside them — which plan asked these questions — recorded once on the resulting
+         coordination event rather than searched for afterwards. */
+      ...(preferences
+        ? { preferences, substitution: undefined, clarification_plan_id: planId }
+        : {}),
       quantity,
       cadence_days: cadence,
       expected_next_need_date: nextNeeded,
@@ -529,10 +548,15 @@ function AuthorityStep({
           )}
         </div>
         {/* Unmissable, because this is the one screen where somebody might reasonably
-            wonder whether real money is involved. */}
+            wonder whether real money is involved. And optional, said out loud: a
+            provisional order forms with no payment method at all — a card is only
+            reachable much later, after a fulfiller has accepted and the exact landed
+            price exists. Somebody here to check that Pool coordinates an order should be
+            able to press Finish and go. */}
         <p className="tiny faint">
           Simulated for this demo — no real card, no real charge, and no card details are
-          collected or stored.
+          collected or stored. <strong>You can skip this.</strong> Pool forms and explains
+          a provisional order without one; nothing on that path touches a card.
         </p>
       </div>
 
@@ -570,9 +594,14 @@ export function Onboarding({
 }: {
   consumer: Consumer;
   onDone: () => Promise<void> | void;
-  /** The other way in. Setup is four screens because a member is going to live in this
-   *  product; somebody who has four minutes and wants to check one claim should not have
-   *  to complete it, and the walkthrough performs the same setup for them. */
+  /** The other way in, for a visitor who arrived at the front door. Setup is four
+   *  screens because a member is going to live in this product, and somebody who only
+   *  wants to check one claim should not have to complete it.
+   *
+   *  Withheld from the verification path — see `offersJudgeWalkthrough`. Somebody who
+   *  came through `/verify` has already chosen to test the real product, and the whole
+   *  reason that page exists is that a scripted harness is what a sceptic is trying to
+   *  see past. */
   onJudgeDemo?: () => void;
 }) {
   const [step, setStep] = useState<Step>("you");
@@ -697,7 +726,7 @@ export function Onboarding({
             name={name}
             onName={setName}
             onNext={() => setStep(skipsCommunityChoice() ? "buy" : "where")}
-            onJudgeDemo={onJudgeDemo}
+            onJudgeDemo={offersJudgeWalkthrough() ? onJudgeDemo : undefined}
           />
         ) : null}
         {step === "where" ? (

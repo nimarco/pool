@@ -70,18 +70,32 @@ generic mutation.
 state transitions and final viability never come from model prose. Tool results are the
 values stored and shown to people.
 
-**The deployed discovery path is causal and inspectable:** browser → Lambda → Amazon
-Bedrock AgentCore Runtime → Strands + Amazon Bedrock → typed tools → deterministic
-services → DynamoDB → browser. Candidate-pool creation stores `created_by_run`. The API
-reads that exact pool and run back from the same workspace and displays their ids, tool
-sequence, outcome and termination. It never assumes the latest run created the first
-pool.
+**Two paths, and the difference is stated everywhere it appears.**
 
-**The remaining demo lifecycle is deterministic.** It uses the same Strands loop, typed
-tools, domain arithmetic and state machine with the offline planner in place of a model.
-This keeps routine judge interactions free and repeatable. The drawer labels the split:
-live AgentCore / Bedrock discovery, deterministic lifecycle, simulated payments and
-supplier order.
+*The public self-test* — the one at `/verify`, the one a judge drives — runs on deployed
+**AWS Lambda** and **DynamoDB**, executing the real Strands coordinator loop against a
+**deterministic offline planner**. That is a deliberate choice, not a shortfall: it makes
+every judge's run reproducible and costs them no model tokens, and the function serving it
+holds no permission to call a model at all. Saving a declaration writes a durable
+coordination event; one bounded run answers it in-process; the surface afterwards labels
+the provider it actually ran on and counts *planner iterations* at zero tokens.
+
+*The live agent path* — a separate, explicitly requested action — goes browser → Lambda →
+**Amazon Bedrock AgentCore Runtime** → Strands → **Amazon Bedrock Nova Lite** → the same
+typed tools → the same deterministic services → the same DynamoDB state. We deployed that
+Strands agent to AgentCore and verified Nova Lite against the same table and the same tool
+contracts.
+
+**Both paths are causal and inspectable.** Candidate-pool creation stores
+`created_by_run`. The API reads that exact pool and run back from the same workspace and
+displays their ids, tool sequence, outcome and termination. It never assumes the latest
+run created the first pool, and there is no code path that fabricates a run.
+
+**What the visible public trace shows is the implemented causal result**, and it is the
+same on either path because the tools and the domain are the same: heterogeneous demand,
+a coarse option that looks strongest on the facts available, a deterministic refusal on
+landed economics that no prompt can talk past, a second cohort investigated in response,
+and a provisional group order that fills whole cases with nothing left over.
 
 **The domain is pure.** `domain/` performs no I/O and imports no adapter. Economics,
 viability, Smart Join, timing, host ranking, matching and case fitting can therefore be
@@ -134,9 +148,11 @@ worthwhile should bother nobody, so “no action” is a first-class recorded ou
 
 ## Built with
 
-Deployed judge path: Python, Strands Agents SDK, Amazon Bedrock, Amazon Bedrock AgentCore
-Runtime, AWS Lambda Function URL, Amazon DynamoDB, Amazon CloudWatch, FastAPI, React,
-TypeScript, Vite and AWS CDK.
+Deployed: Python, Strands Agents SDK, AWS Lambda Function URL, Amazon DynamoDB, Amazon
+CloudWatch, FastAPI, React, TypeScript, Vite and AWS CDK — carrying the public self-test,
+which runs the Strands loop against a deterministic planner. Amazon Bedrock AgentCore
+Runtime and Amazon Bedrock (Nova Lite) are deployed and verified live alongside it, and
+carry the live agent action against the same DynamoDB state and the same bounded tools.
 
 Implemented but not deployed on the judge path: API Gateway, S3, CloudFront, EventBridge,
 the Amazon Location `geo-routes` adapter, and a Stripe TEST-only adapter. The deployed
@@ -155,8 +171,9 @@ the demo are simulated.
 | Payments | **Simulated in the demo.** Stripe adapter accepts TEST keys only; Stripe servers have not been verified. |
 | Host compensation | **Computed and recorded; not paid out.** No payout rail exists. |
 | Supplier purchase | **Simulated.** Every purchase record is flagged; no supplier is contacted. |
-| Bedrock inference | **Verified live 2026-08-22** with Nova Lite through Strands, reached via AgentCore. |
+| Bedrock inference | **Verified live 2026-08-22** with Nova Lite through Strands, reached via AgentCore — `us.amazon.nova-lite-v1:0`, 2 of 8 iterations, 5,513 in / 133 out tokens, terminated `completed`. The **outcome was a truthful `no_action`**: the member's only declaration had already been served by the in-process run their save caused, so the objective was correctly empty. It establishes the deployment, the tool surface and the bounds on real infrastructure. It is **not** a live trace of the Kestrel→Harbourstone adaptation, and must never be described as one. |
 | AgentCore Runtime | **Deployed and verified live 2026-08-22**, `READY` in `us-east-1`, running the current release. |
+| The public `/verify` trace | **Produced by the deterministic offline planner**, on deployed Lambda + DynamoDB, inside the real Strands loop. Zero model tokens. Never to be presented as Nova output. |
 | Lambda Function URL | **Deployed and verified 2026-08-22** as the public same-origin web/API surface, running the current release. |
 | DynamoDB | **Deployed and verified 2026-08-22** as authoritative shared workspace state. |
 | EventBridge | **Implemented only in an un-deployed pilot stack; zero deployed rules.** |

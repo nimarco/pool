@@ -45,6 +45,10 @@ export interface Clarification {
   flexibility: FlexibilityContext | null;
   /** Whether `questions` is a chosen subset rather than everything approved. */
   planned: boolean;
+  /** The plan that produced those questions, empty when none was made. Sent with the
+   *  declaration so the coordination event can record what shaped it, once, rather than
+   *  the proof surface searching for a plan afterwards and finding the newest. */
+  planId: string;
   /** A plan is in flight. */
   planning: boolean;
   /** Record an answer to the gate or to any question below it. The only call that can
@@ -62,6 +66,7 @@ export function useClarification(productId: string | undefined): Clarification {
   const [noun, setNoun] = useState("");
   const [flexibility, setFlexibility] = useState<FlexibilityContext | null>(null);
   const [planned, setPlanned] = useState(false);
+  const [planId, setPlanId] = useState("");
   const [planning, setPlanning] = useState(false);
   const asked = useRef(new Map<string, ProductClarification>());
   /** Whether the member was *already* past the gate when the last answer arrived. Read
@@ -80,6 +85,7 @@ export function useClarification(productId: string | undefined): Clarification {
       setNoun("");
       setFlexibility(null);
       setPlanned(false);
+      setPlanId("");
       return;
     }
     let live = true;
@@ -122,7 +128,21 @@ export function useClarification(productId: string | undefined): Clarification {
 
       const seen = asked.current.get(productId);
       if (seen) {
+        /* The whole cached response, not a corner of it. Restoring only the counts left
+           the *approved* list on screen beside a plan that had chosen a subset of it —
+           harmless while nothing read the plan, and wrong the moment the declaration
+           started recording which plan asked what. What is displayed and what is recorded
+           have to be the same plan's questions. */
+        setQuestions(seen.questions);
         setFlexibility(seen.flexibility);
+        setPlanned(seen.planned);
+        setPlanId(seen.plan_id);
+        setNoun(seen.family_noun ?? "");
+        setPreferences((current) =>
+          current && current.flexibility === "similar"
+            ? narrowestSimilar(seen.questions)
+            : current,
+        );
         return;
       }
       setPlanning(true);
@@ -133,6 +153,7 @@ export function useClarification(productId: string | undefined): Clarification {
           setQuestions(plan.questions);
           setFlexibility(plan.flexibility);
           setPlanned(plan.planned);
+          setPlanId(plan.plan_id);
           setNoun(plan.family_noun ?? "");
           /* The questions may now be a subset, and "everything stays as it is" is
              defined over the ones actually asked. Re-deriving it keeps that sentence
@@ -160,6 +181,11 @@ export function useClarification(productId: string | undefined): Clarification {
     setPreferences(saved);
     setFlexibility(null);
     setPlanned(false);
+    /* Reopening a declaration asks nothing, so this edit has no plan of its own. Sending
+       the previous one would attach a plan to a revision it never shaped — and an event
+       whose questions came from nowhere is better recorded as having come from nowhere
+       than credited to the last plan lying around. */
+    setPlanId("");
   }, []);
 
   const reset = useCallback(() => {
@@ -169,6 +195,7 @@ export function useClarification(productId: string | undefined): Clarification {
     setNoun("");
     setFlexibility(null);
     setPlanned(false);
+    setPlanId("");
   }, []);
 
   return {
@@ -177,6 +204,7 @@ export function useClarification(productId: string | undefined): Clarification {
     noun,
     flexibility,
     planned,
+    planId,
     planning,
     answer,
     load,

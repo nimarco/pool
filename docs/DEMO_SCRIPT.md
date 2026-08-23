@@ -43,11 +43,11 @@ is arranged in advance.
 | **0:00** | Hook | `/verify`, already open | *"Group buying sounds simple until everybody buys a slightly different thing and nobody wants to organise the group."* |
 | **0:15** | The member | Start → name → search **Kestrel** → medium roast | *"I normally buy this coffee."* |
 | **0:30** | Consent | Choose **Any brand that matches my preferences** | *"I would take another brand — if it is still the coffee I actually drink."* |
-| **0:45** | The questions | Answer the two or three that appear; add **Dark** | *"The model decides what it needs to clarify. The product schema decides what every answer means."* |
+| **0:45** | The questions | Answer the two or three that appear; add **Dark** | *"Pool's bounded planner selected these questions from an approved product schema. It cannot invent a question, and it cannot decide what an answer means."* |
 | **1:05** | Save | Three bags. Save. Once. | *"That is the only thing I do. There is no run button."* |
-| **1:15** | Consequence | Home has changed on its own | *"Pool found fragmented recurring demand that nobody organised — and it bought a dark roast, because I said dark was fine."* |
+| **1:15** | Consequence | Home has changed on its own | *"Pool found fragmented recurring demand that nobody organised, and coordinated a provisional order around a dark roast — because I said dark was fine. Nothing has been bought and no card has been touched."* |
 | **1:30** | Why | **Why this order?** — considered, refused, chosen, excluded, provisional | *"The option with the most demand behind it is the one that lost money. It only found that out by costing it, and then it tried the other one."* |
-| **1:50** | Proof | Desktop. Expand **Technical proof for this run** | *"The model chooses what to investigate and can adapt. Deterministic code decides what is true — compatibility, cases, economics, and whether an action is allowed at all."* |
+| **1:50** | Proof | Desktop. Expand **Technical proof for this run** | *"This repeatable public run uses the deterministic offline planner inside the real Strands loop, which is why it shows zero model tokens. The control plane chooses what to investigate and can adapt; deterministic code decides what is true — compatibility, cases, economics, and whether an action is allowed at all."* |
 
 Stop there. Do not walk the lifecycle to completion; the claim is already made and the
 order is honestly provisional.
@@ -67,17 +67,30 @@ One browser, mobile-sized (390 × 844), for everything except the last beat.
 
 ## 0:00–0:20 — Where you are, honestly
 
-`/verify` says it before you do: a synthetic community that already has coffee demand in
-it, real software, simulated payments, nobody real represented. Read the three lines under
-*What is real here* rather than paraphrasing them — they are the claim being made.
+Open on the problem, not on the product:
+
+> **"Group buying rarely fails because the demand is missing. It fails because everybody
+> buys a slightly different version of the same thing — and nobody wants the unpaid
+> coordination job."**
+
+Then `/verify` says the rest before you do: a synthetic community that already has coffee
+demand in it, real software, simulated payments, nobody real represented. Read the three
+lines under *What is real here* rather than paraphrasing them — they are the claim being
+made.
 
 Say: **"A dozen households here already buy coffee. They disagree about which coffee.
 Nothing has been arranged for me."**
 
 ## 0:20–0:50 — Becoming a member
 
-Start → a name → join the community. This is ordinary setup and is not the story; move
-through it. Do not linger on the map.
+Start → a name → what you buy → how much Pool may do. This is ordinary setup and is not
+the story; move through it. From `/verify` the community step is skipped, because the page
+has already said which synthetic community this is and that Pool did not ask the browser
+where you are.
+
+**Skip the test card.** It is optional and the screen says so: a provisional order forms
+without any payment method, and nothing on the path this recording takes touches a card.
+Adding one on camera invites the question the whole beat then has to answer.
 
 ## 0:50–1:40 — The one thing a member does
 
@@ -94,8 +107,14 @@ Choose the second. *Now* the questions arrive, and they are about coffee:
 - It has to be whole bean.
 - It has to be caffeinated.
 
-Say: **"I am not choosing a substitution policy. I am telling it what coffee is. And it
-worked out which of those questions were worth asking me — not what my answers mean."**
+Say: **"I am not choosing a substitution policy. I am telling it what coffee is. Pool's
+bounded planner selected these questions from an approved product schema — it cannot
+invent a question, and it cannot decide what an answer means."**
+
+> **Do not oversell this beat.** The coffee schema holds three approved questions and the
+> canonical planner asks all three, so most of what is on screen here could be reproduced
+> deterministically. It is a real capability and a genuinely better form, and it is *not*
+> the why-an-agent claim. That comes two beats later, at the refusal.
 
 Set **three bags a month**, leave whole bean and caffeinated ticked, and add **Dark**
 alongside Medium.
@@ -107,9 +126,11 @@ alongside Medium.
 > me what that opens up."* Do not say it is required for the demo.
 >
 > **On the quantity.** Any quantity works and the answer you get is the real one. Three is
-> the amount this member buys; it also happens to land on this supplier's case boundary.
-> Two produces a truthful *"Pool could assemble an order, but not one you would be in, so
-> it did not form it"* — a good answer and a worse recording.
+> the amount this member buys; it also happens to land on this supplier's case boundary,
+> which is why the form in the verification world starts there. Change it to two and Pool
+> tells you, truthfully, *"it could assemble an order, but not one you would be in, so it
+> did not form it"* — a good answer and a worse recording. The field is a field; nothing
+> here forces a result.
 
 Save. **That is the last thing you do to Pool.**
 
@@ -123,8 +144,9 @@ Home has changed on its own. Read what is actually there:
 - **Not final yet** — a fulfiller's pay is part of the price.
 - 18 units, past the supplier's 12-unit minimum.
 
-Say: **"I asked for a medium roast. It bought a dark one, because I said dark was fine —
-and it never tells me that is a substitute, because it isn't."**
+Say: **"I asked for a medium roast. It formed the order around a dark one, because I said
+dark was fine — and it never tells me that is a substitute, because it isn't. Nothing has
+been bought: this is a provisional order, and nobody's card has been touched."**
 
 ## 2:10–3:00 — Why this order?
 
@@ -143,6 +165,11 @@ One tap from the order card. Take these in order and do not rush the middle one:
 Say: **"The option that looked best on every fact it had is the one that lost money. It
 only found that out by costing it — and it did not give up, it tried the other one."**
 
+> **This is the why-an-agent beat.** Not the targeted questions. A cohort that looks
+> strongest on coarse facts, an authoritative deterministic refusal that no amount of
+> prompting can talk past, and a control plane that responds by investigating a different
+> cohort — that is the thing a lookup table does not do. Give it the time.
+
 ## 3:00–3:30 — Technical proof for this run
 
 Switch to desktop here, once. Expand *Technical proof for this run*.
@@ -151,18 +178,28 @@ The same event id, run id, evaluation ids and pool id as the page above it — b
 the same rows. Point at three things and stop:
 
 - the tool sequence: list, evaluate, evaluate, create;
-- **2 of 3** options costed, **1 of 1** order formed, **5 of 8** model calls;
+- **2 of 3** options costed, **1 of 1** order formed, and the planner-iteration count
+  against its bound;
 - *What Pool decided to ask, before any of this* — the approved question set beside the
   ones actually asked, and its own separate run;
-- provider and model, and the line saying the community is synthetic and payments
-  simulated.
+- **the provider line**, and the paragraph under it, and the line saying the community is
+  synthetic and payments simulated.
 
 Read the numbers off the screen rather than from this page. They are deterministic for the
 canonical fixture and they are still the run's, not the script's.
 
-Say: **"The model chose what to investigate and adapted when it was refused. It never
-computed a price, decided who was compatible, or supplied a member, a quantity or a
+Say the provider sentence, and do not skip it: **"This repeatable public run uses the
+deterministic offline planner inside the real Strands loop, which is why it shows zero
+model tokens. The Lambda serving this page has no permission to call a model at all."**
+
+Then: **"The control plane chose what to investigate and adapted when it was refused. It
+never computed a price, decided who was compatible, or supplied a member, a quantity or a
 supplier term. The tool that forms an order takes two identifiers and nothing else."**
+
+Then the live path, separately and as its own claim: **"That agent is also deployed to
+Amazon Bedrock AgentCore Runtime, where the same Strands loop and the same bounded tools
+run against Amazon Nova Lite on the same DynamoDB state. That was verified live on
+2026-08-22, and it is a different button — see the AWS beat."**
 
 Then reload the page. The explanation is still there, unchanged, and there is still one
 run. Nothing was held in the browser.
@@ -199,10 +236,29 @@ Read the three lines off `/verify` rather than paraphrasing:
   loop and its bounds, and every record you just read.
 
 Then the AWS frame, and **only what has been verified**. Check `README.md` §AWS before
-recording: if this branch has not been deployed and driven by a live model, say so in
-those words — *"this runs the same Strands loop against a deterministic planner locally;
-the cloud path is deployed and verified separately, and the repository says exactly
-when"* — and do not put an old URL on screen.
+recording, and do not put an old URL on screen.
+
+**There is one AWS truth and it has two halves. Say both, and say which is which.**
+
+> **"Everything you have just watched ran on AWS — a Lambda function URL and a DynamoDB
+> table — using the real Strands agent loop with a deterministic offline planner in place
+> of a model. That is deliberate: it makes this run repeatable, and it costs a judge
+> nothing to reproduce. The function serving it has no permission to call a model."**
+>
+> **"The same Strands agent is also deployed to Amazon Bedrock AgentCore Runtime, where it
+> runs against Amazon Nova Lite over the same DynamoDB state and the same bounded tools.
+> That was verified live on 2026-08-22."**
+
+If the live verification is mentioned in any more detail than that, it must be described
+as it actually went (`BUILD_HISTORY` #0061): the run was genuinely live, the provider was
+`bedrock` / `us.amazon.nova-lite-v1:0`, and it correctly recorded **no action**, because
+the member's only declaration had already been served by the in-process run their save had
+caused. It proves the deployment, the tool surface and the bounds on real infrastructure.
+It does **not** show Nova adapting from Kestrel to Harbourstone, and saying it does would
+be describing the offline planner's trace as the model's.
+
+**Never say or imply that the public `/verify` trace was produced by Nova Lite.** It was
+not, the proof panel says so, and a judge who checks will find the contradiction.
 
 **Close on the thesis, not on a feature list:**
 

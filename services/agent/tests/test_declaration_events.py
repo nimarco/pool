@@ -982,6 +982,106 @@ def test_another_members_plan_cannot_be_attached_over_http(client):
     assert api._repo.list_coordination_events("demo") == []
 
 
+def test_a_plan_that_asked_nothing_is_refused_and_writes_nothing(client):
+    """B, over HTTP. The contradiction this check exists for.
+
+    A plan may legitimately ask no questions. Recording it against a declaration whose
+    answers widened the roast produces a proof panel reading "Asked, in this order:
+    nothing" beside a stored policy of ``roast: {MEDIUM, DARK}`` — a contradiction visible
+    on the page, without the reader needing to know what a plan is. Refused before the
+    declaration is written, so nothing survives the refusal.
+    """
+    from pool.api import app as api
+    from pool.services import clarification as clar
+
+    household_id = _onboard(client)
+    empty = clar.record_plan(
+        ctx=api.ctx_for("demo"),
+        community_id=COMMUNITY_ID,
+        household_id=household_id,
+        product_id=KESTREL,
+        question_ids=[],
+        run_id="run_asked_nothing",
+    )
+    before = len(api._repo.list_needs("demo"))
+
+    refused = client.post(
+        "/api/needs", json=_flexible_body(household_id, clarification_plan_id=empty.id)
+    )
+    assert refused.status_code == 400
+    assert "did not ask about" in refused.json()["detail"]
+    # No declaration mutation, and no coordination event.
+    assert len(api._repo.list_needs("demo")) == before
+    assert api._repo.list_coordination_events("demo") == []
+
+
+def test_a_plan_that_asked_something_else_is_refused_over_http(client):
+    """C, over HTTP. It asked about form and caffeine; the answers speak about roast."""
+    from pool.api import app as api
+    from pool.data import product_facts as pf
+    from pool.services import clarification as clar
+
+    household_id = _onboard(client)
+    elsewhere = clar.record_plan(
+        ctx=api.ctx_for("demo"),
+        community_id=COMMUNITY_ID,
+        household_id=household_id,
+        product_id=KESTREL,
+        question_ids=[pf.question_for("form").id, pf.question_for("caffeine").id],
+        run_id="run_elsewhere",
+    )
+
+    refused = client.post(
+        "/api/needs",
+        json={
+            **_flexible_body(household_id, clarification_plan_id=elsewhere.id),
+            "preferences": {
+                "flexibility": "similar",
+                "keep": ["form", "caffeine"],
+                "accept": {"roast": ["MEDIUM", "DARK"]},
+            },
+        },
+    )
+    assert refused.status_code == 400
+    assert "roast" in refused.json()["detail"]
+    assert api._repo.list_coordination_events("demo") == []
+
+
+def test_the_plan_that_asked_what_was_answered_is_accepted_over_http(client):
+    """A and D, over HTTP: the honest save, and the honest *partial* save."""
+    from pool.api import app as api
+    from pool.data import product_facts as pf
+    from pool.services import clarification as clar
+
+    household_id = _onboard(client)
+    roast_only = clar.record_plan(
+        ctx=api.ctx_for("demo"),
+        community_id=COMMUNITY_ID,
+        household_id=household_id,
+        product_id=KESTREL,
+        question_ids=[pf.question_for("roast").id],
+        run_id="run_roast_only",
+    )
+    created = client.post(
+        "/api/needs",
+        json={
+            **_flexible_body(household_id, clarification_plan_id=roast_only.id),
+            # Only what that plan asked. Everything it did not ask stays as it is on the
+            # product, which is the mapper's own narrowest reading.
+            "preferences": {
+                "flexibility": "similar",
+                "keep": [],
+                "accept": {"roast": ["MEDIUM", "DARK"]},
+            },
+        },
+    )
+    assert created.status_code == 200, created.text
+    event = api._repo.get_coordination_event(
+        "demo", created.json()["coordination"]["event_id"]
+    )
+    assert event is not None and event.clarification_plan_id == roast_only.id
+
+
 def test_an_exact_only_declaration_over_http_records_no_lineage(client):
     from pool.api import app as api
 

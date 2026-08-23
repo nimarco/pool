@@ -7401,7 +7401,7 @@ the standing demand every economic figure in that session is computed from.
 
 **Decision**
 
-1. **A coordination event permanently records the clarification plan that shaped the
+1. **A coordination event permanently records the clarification plan submitted with the
    revision it was written for.** One new field, `CoordinationEvent.clarification_plan_id`,
    set once at creation and never rewritten. `_clarification_view` became a primary-key
    read. No searching, ever.
@@ -7420,11 +7420,12 @@ the standing demand every economic figure in that session is computed from.
 *Why the caller states the plan rather than the server deducing it.* A plan is chosen
 while somebody is still deciding and read back long afterwards, by which time several may
 exist. The only moment the answer is knowable is the moment the form was given it, so that
-is when it is recorded. The reference is validated against the declaration — the plan must
+is when it is recorded. The reference is checked against the declaration — the plan must
 be that member's, about that product, in that Community — so the worst a client can name
 is one of its own plans for the product it is declaring. That is strictly better evidence
 than *any* later reconstruction, and an unstated lineage records nothing rather than
-something plausible. **Omitting the proof is honest; rebuilding it is not.**
+something plausible. **Omitting the proof is honest; rebuilding it is not.** A fourth
+check, and the limit of what any of this proves, are in the follow-up below.
 
 Rejected: a generic event-sourced audit log. The project needs one immutable reference,
 not a mechanism, and `RunStrategyReference` (#0060) had already established the pattern —
@@ -7544,3 +7545,68 @@ outcome pair — all reproducible from the tests added here.
 `apps/web/src/{api.ts,chosen.ts,preferences.tsx,use-clarification.ts}`,
 `apps/web/src/views/{about,needs,onboarding,why}.tsx`, `README.md`, `PRODUCT.md`,
 `docs/{ARCHITECTURE,ARTICLE_NOTES,DEMO_SCRIPT,DEVPOST_DRAFT,HACKATHON_SCORECARD,RELEASE_CHECKLIST}.md`.
+
+**Follow-up, same patch — the check the first pass was missing, and the claim it could
+not keep**
+
+A pre-deployment review asked the question the first pass had not: is
+member + product + Community strong enough to support the sentence *"this plan shaped
+this revision"*? It is not, and the probe was unambiguous. Two plans exist for one member
+and product whenever the world moves between them; in the canonical coffee fixture they
+are **identical in `question_ids` and `candidate_question_ids`** and differ only in
+`input_fingerprint`, `run_id`, `created_at` and `status`. Submitting Plan A's answers with
+Plan B's id was accepted, and the panel then cited `run_plan_b`.
+
+The worse variant was the one that mattered, and it was found by asking the same question
+about a *legitimate* plan rather than a substituted one: a plan that asked **nothing** — a
+valid outcome, `test_asking_nothing_is_a_legitimate_plan` — attached to a save whose
+answers widened the roast. Accepted, and the resulting panel reads *"Asked, in this order:
+nothing"* beside a stored policy of `roast: {MEDIUM, DARK}`. A contradiction visible on the
+page itself, without anybody needing to know what a plan is.
+
+So one check was added, in `lineage_reference`: **every attribute the member explicitly
+answered must map to a question the attached plan actually asked.** `narrowestSimilar`
+emits `keep`/`accept` only for displayed questions, so an honest save always passes; a
+plan that asked nothing cannot be recorded against answers about roast. It lives at the
+API boundary rather than in `record_declaration_event`, and the reason is structural: a
+stored declaration cannot say which of its requirements were *answered*, because
+`policy_from_answers` reads an unanswered question as unchanged and every applicable
+attribute lands in `requires` either way. Only the raw answers distinguish "kept because
+they said so" from "kept because nobody asked".
+
+**What was rejected, and why it is worse than nothing.** Requiring the plan to still be
+`active` looks like the obvious fix and inverts the outcome: after a second plan
+supersedes the first, the honest late save — from the form the member is still looking at
+— carries the *superseded* plan, while the newest is exactly what a substituted reference
+would name. It would reject the truthful save and accept the substitution. Per-session
+issuance tracking would work and was refused on scope: new persistence whose only purpose
+is to police a claim, and it breaks a second tab.
+
+**The claim, corrected.** Nothing observable separates two plans one member holds for one
+product that asked the same questions, so the surfaces now say *the plan submitted with
+this revision*, and the docstrings say what was checked: this member, this product, this
+Community, and answers consistent with what that plan asked. The earlier wording in this
+entry — "the plan that shaped the revision" — asserted more than the code can, and the
+sentence is corrected above rather than left to be quoted into an article. Worth recording
+plainly: the first pass fixed a real defect and then described the fix in stronger terms
+than it had earned, which is the same failure mode as "Model calls" three sections up,
+one layer further out.
+
+**Cross-version check, same review.** The `db26e94` tree — the code lineage of the
+deployed AgentCore runtime v7, since everything after it on `main` was documentation and
+one test file — was extracted and run against a `CoordinationEvent` row written by this
+patch through the real `DynamoDBRepository` and boto3's own serialiser.
+`get_coordination_event`, `list_coordination_events` and `from_dict` all succeeded; the
+unknown key is filtered by the same `from_dict` that survives a missing one. The reverse
+holds too: new code reads an old row, the field defaults to `""`, and the proof is omitted
+rather than invented. The whole schema delta is one plain string with a default and **no
+new enum member**, so #0062's actual failure mode — an unknown enum value, not an unknown
+field — is structurally absent rather than merely avoided. One caveat found and traced to
+a dead end: the old dataclass would *strip* the field if it rewrote the row, but
+`put_coordination_event` is reachable only from `services/events`, which only
+`pool/api/app.py` imports, which the runtime never loads — and `agentcore_app.py` calls
+`_coordinator.run` without an `event_id`. The old runtime cannot write a coordination
+event.
+
+**Validation of the follow-up** — six focused regression tests over the new invariant, and
+canonical `make qa` re-run green. No AWS, no model tokens.

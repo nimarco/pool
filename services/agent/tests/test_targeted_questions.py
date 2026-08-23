@@ -828,6 +828,98 @@ def test_a_plan_id_that_does_not_exist_is_refused(coffee_ctx):
         )
 
 
+# ------------------------------------ the plan must be able to have asked the answers
+
+
+def _answered(*attributes):
+    """The attributes a member explicitly answered, as the API derives them."""
+    return set(attributes)
+
+
+def test_a_plan_that_asked_the_answered_question_is_accepted(coffee_ctx):
+    """A. The honest case, and the one every refusal below is measured against."""
+    plan = _plan(coffee_ctx, question_ids=[pf.question_for("roast").id])
+    assert (
+        clar.lineage_reference(
+            coffee_ctx,
+            community_id=COMMUNITY_ID,
+            household_id=MEMBER,
+            product_id=A_MEDIUM,
+            plan_id=plan.id,
+            answered_attributes=_answered("roast"),
+        )
+        == plan.id
+    )
+
+
+def test_a_plan_that_asked_nothing_cannot_hold_an_answer(coffee_ctx):
+    """B, at the service boundary. Asking nothing is legitimate; *recording* it against
+    a declaration that widened a roast is a contradiction the panel would print."""
+    plan = _plan(coffee_ctx, question_ids=[])
+    with pytest.raises(clar.ClarificationError, match="did not ask about"):
+        clar.lineage_reference(
+            coffee_ctx,
+            community_id=COMMUNITY_ID,
+            household_id=MEMBER,
+            product_id=A_MEDIUM,
+            plan_id=plan.id,
+            answered_attributes=_answered("roast"),
+        )
+
+
+def test_a_plan_that_asked_something_else_cannot_hold_this_answer(coffee_ctx):
+    """C. It asked about form and caffeine; the answers speak about roast."""
+    plan = _plan(
+        coffee_ctx,
+        question_ids=[pf.question_for("form").id, pf.question_for("caffeine").id],
+    )
+    with pytest.raises(clar.ClarificationError, match="roast"):
+        clar.lineage_reference(
+            coffee_ctx,
+            community_id=COMMUNITY_ID,
+            household_id=MEMBER,
+            product_id=A_MEDIUM,
+            plan_id=plan.id,
+            answered_attributes=_answered("roast", "form", "caffeine"),
+        )
+
+
+def test_answering_only_some_of_what_was_asked_is_accepted(coffee_ctx):
+    """D. A subset is honest — leaving a question alone is an answer the mapper reads as
+    "unchanged", and it is not evidence that a different plan was in front of them."""
+    plan = _plan(coffee_ctx)  # asks all three
+    assert (
+        clar.lineage_reference(
+            coffee_ctx,
+            community_id=COMMUNITY_ID,
+            household_id=MEMBER,
+            product_id=A_MEDIUM,
+            plan_id=plan.id,
+            answered_attributes=_answered("roast"),
+        )
+        == plan.id
+    )
+
+
+def test_a_save_carrying_no_answers_at_all_is_not_forced_through_the_check(coffee_ctx):
+    """The privileged path. A caller supplying a typed policy directly has no answers, so
+    there is nothing to be consistent with — which is a fact about that request rather
+    than a check being skipped. ``None`` says that; an empty set would say "they answered
+    nothing", which is a different and false statement."""
+    plan = _plan(coffee_ctx, question_ids=[])
+    assert (
+        clar.lineage_reference(
+            coffee_ctx,
+            community_id=COMMUNITY_ID,
+            household_id=MEMBER,
+            product_id=A_MEDIUM,
+            plan_id=plan.id,
+            answered_attributes=None,
+        )
+        == plan.id
+    )
+
+
 def test_naming_no_plan_records_no_lineage(coffee_ctx):
     """Absent is absent. Nothing is reconstructed from what happens to be lying around."""
     _plan(coffee_ctx)

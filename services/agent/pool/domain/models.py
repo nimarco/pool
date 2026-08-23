@@ -2223,17 +2223,26 @@ class CoordinationEvent:
     terminal_reason: str = ""
     #: The candidate pool this event produced, when it produced one.
     pool_id: str = ""
-    #: The :class:`ClarificationPlan` that shaped the *saved declaration revision* this
-    #: event was written for, or empty when nothing was asked.
+    #: The :class:`ClarificationPlan` **submitted with** the declaration revision this
+    #: event was written for, or empty when no answers were asked for.
     #:
     #: **Written once, at creation, and never again.** Everything else on this row is
     #: dispatch state a run advances; this is history. A declaration's questions are
     #: planned before it is saved, against a world that has since moved on, and a later
-    #: plan for the same member and product must not be able to re-describe what an
-    #: earlier revision was shaped by. Storing the reference on the event is what makes
-    #: the historical answer a primary-key read rather than a search — and a search over
-    #: household and product is precisely the thing that produced false lineage, because
-    #: it can only ever return the *newest* plan (BUILD_HISTORY #0063).
+    #: plan for the same member and product must not be able to re-describe an earlier
+    #: revision. Storing the reference on the event is what makes the historical answer a
+    #: primary-key read rather than a search — and a search over household and product is
+    #: precisely the thing that produced false lineage, because it can only ever return
+    #: the *newest* plan (BUILD_HISTORY #0063).
+    #:
+    #: **What it establishes, precisely.** The server checks that the plan belongs to this
+    #: member, this product and this Community, and that the explicit answers accompanying
+    #: the save could have come from the questions that plan asked
+    #: (``services/clarification.lineage_reference``). It does not prove which plan a
+    #: particular browser rendered — two plans this member holds for this product that
+    #: asked the same questions are indistinguishable from stored state, and separating
+    #: them would need per-session issuance state this build deliberately does not keep.
+    #: Surfaces reading this must say what was checked and not more.
     #:
     #: Empty for an exact-only declaration, which is the truthful answer rather than a
     #: gap: nothing was asked, because nothing needed to be. Empty, too, for a legacy

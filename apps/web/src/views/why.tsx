@@ -325,7 +325,7 @@ function Verdict({ verdict }: { verdict: StrategyVerdict }) {
   );
 }
 
-/** The plan that shaped the questions this declaration's answers came from.
+/** The clarification plan submitted with this declaration revision.
  *
  *  Its own run, its own provider, its own budget — planning happens while somebody is
  *  still deciding and coordination happens after they have decided — so it gets its own
@@ -334,7 +334,10 @@ function Verdict({ verdict }: { verdict: StrategyVerdict }) {
  *  the words follow whichever actually ran.
  *
  *  The plan is read by the id the coordination event froze when the declaration was
- *  saved, so this is what shaped *this* revision — not whichever plan is newest now.
+ *  saved, so this is the plan that came with *this* revision — not whichever plan is
+ *  newest now. What the server checked when it stored the reference: this member, this
+ *  product, this Community, and that these answers could have come from the questions
+ *  this plan asked.
  */
 function ClarificationProofBlock({ proof }: { proof: ClarificationProof }) {
   const words = vocabularyFor(proof.model_provider);

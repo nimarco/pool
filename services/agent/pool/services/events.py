@@ -116,11 +116,18 @@ def record_declaration_event(
     member pressing a button twice, and refusing them would be reporting a duplicate
     submission as a failure.
 
-    ``clarification_plan_id`` names the plan that shaped the questions behind *this*
-    saved revision, and is frozen onto the row here because this is the only moment it
-    is known. It is validated against the declaration before it is written, and it is
-    recorded only for a declaration whose rules a plan could have shaped — an exact-only
-    or family declaration answered no questions, so its lineage is truthfully empty.
+    ``clarification_plan_id`` is the plan submitted with *this* revision, frozen onto the
+    row here because this is the only moment it is stated. It is checked against the
+    declaration — this member, this product, this Community — before it is written, and
+    recorded only where a plan could apply at all: an exact-only or family declaration
+    answered no questions, so its lineage is truthfully empty.
+
+    The **answer-consistency** half of the check is the API's, not this function's, and
+    deliberately so. It needs the raw answers, and a stored declaration no longer has
+    them: ``policy_from_answers`` reads an unanswered question as unchanged, so every
+    applicable attribute appears in ``requires`` whether it was answered or merely left
+    alone. Only ``api/app._lineage_for`` holds the answers, so only it can ask whether
+    the attached plan could have asked them.
 
     An event that already exists keeps the reference it was created with. The id digests
     the declaration's material content, so an unchanged re-save is the *same* cause, and
@@ -130,7 +137,7 @@ def record_declaration_event(
     if not is_coordinatable(ctx, need):
         return None
 
-    # Only a rule a plan could have shaped. `policy_from_answers` yields
+    # Only a rule a plan could apply to. `policy_from_answers` yields
     # `ATTRIBUTE_CONSTRAINED` exactly when somebody passed the flexibility gate and the
     # product had something curated to ask about; every other policy is the answer to no
     # question at all.
@@ -476,16 +483,20 @@ def explain(ctx: PoolContext, need_id: str) -> dict[str, Any] | None:
 
 
 def _clarification_view(ctx: PoolContext, event: Any) -> dict[str, Any] | None:
-    """The plan that shaped the questions *this* declaration revision's preferences came
-    from — read by the id the event froze, and never searched for.
+    """The clarification plan submitted with *this* declaration revision — read by the id
+    the event froze, and never searched for.
 
     A primary-key read on ``event.clarification_plan_id``. That reference is written once,
-    when the declaration is saved, because that is the only moment the answer is knowable:
+    when the declaration is saved, because that is the only moment it is stated:
     afterwards the same member and product may hold several plans, and any rule for
     choosing between them later — newest, active, matching product — resolves to a plan
     that may never have been in front of anybody. This surface used to take the newest,
-    so generating a second plan silently re-described every earlier revision as having
-    been shaped by it. Historical proof does not guess.
+    so generating a second plan silently re-described every earlier revision. Historical
+    proof does not guess.
+
+    What the record supports is what was checked when it was written: the plan is this
+    member's, about this product, in this Community, and could have asked what they
+    explicitly answered. Not that a particular browser rendered it.
 
     ``None`` for an exact-only or family declaration, which is the truthful answer:
     nothing was asked, because nothing needed to be. ``None`` too when the reference is

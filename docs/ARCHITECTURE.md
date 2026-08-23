@@ -180,18 +180,37 @@ member's *own* declaration is excluded from those counts, both because it is cir
 evidence about what to ask them and because including it made the digest move every time
 they changed their mind.
 
-**Which plan shaped which declaration is frozen, not searched for.** When a declaration is
-saved, the coordination event it writes records the plan id the form was given
-(`CoordinationEvent.clarification_plan_id`), validated against that member, that product
-and that Community; historical proof then reads it by primary key. The alternative — the
-shape this replaced — was to look the plan up afterwards by household and product and take
-the newest, which can only ever return the *latest* one. So a member who got a second plan
-because the world moved had every earlier revision silently re-described as having been
-shaped by a plan made after it. An exact-only or family declaration records no reference,
-because it answered no questions, and an absent or dangling reference omits the
-clarification proof rather than reconstructing one. The same rule already governs
-`RunStrategyReference`: what a run was *shown* is stored as it was transmitted, never
-re-derived from what those options say today.
+**Which plan a declaration was submitted with is frozen, not searched for.** When a
+declaration is saved, the coordination event it writes records the plan id the form was
+given (`CoordinationEvent.clarification_plan_id`); historical proof then reads it by
+primary key. The alternative — the shape this replaced — was to look the plan up
+afterwards by household and product and take the newest, which can only ever return the
+*latest* one. So a member who got a second plan because the world moved had every earlier
+revision silently re-described by a plan made after it. An exact-only or family
+declaration records no reference, because it answered no questions, and an absent or
+dangling reference omits the clarification proof rather than reconstructing one. The same
+rule already governs `RunStrategyReference`: what a run was *shown* is stored as it was
+transmitted, never re-derived from what those options say today.
+
+**What the reference is checked against, and what it therefore supports.**
+`services/clarification.lineage_reference` refuses a plan belonging to another member,
+another product or another Community, and refuses one that did not ask about an attribute
+the accompanying answers explicitly state — the form can only emit an answer for a
+question it displayed, so an honest save always passes, while a plan that asked nothing
+cannot be recorded against a declaration that widened a roast. It does **not** establish
+that a particular browser rendered that plan. Two plans one member holds for one product
+that asked the same questions are indistinguishable from stored state, and telling them
+apart would need per-session issuance tracking, which this build deliberately does not
+keep: it is state whose only purpose is to police a claim nobody benefits from
+overstating. So the surfaces say *the plan submitted with this revision*, and the honest
+reading of the panel is "this is the plan that came with the save, and it is consistent
+with it" — not "this is provably what was on screen".
+
+A superseded plan is accepted rather than refused, and the reasoning is worth keeping
+because the obvious alternative is actively wrong. After a second plan supersedes the
+first, the *honest* late save — from the form the member is still looking at — carries the
+superseded one, while the newest is exactly what a substituted reference would name.
+Requiring the active plan would reject the truthful save and accept the substitution.
 
 | Clarification bound | Default | On hit |
 | --- | --- | --- |

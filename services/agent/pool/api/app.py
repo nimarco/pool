@@ -426,11 +426,12 @@ class NeedRequest(BaseModel):
     #: member, as returned by ``POST /api/products/{id}/clarification``.
     #:
     #: Lineage, not authority. It cannot widen a rule, name a question, or change what an
-    #: answer means — it is recorded on the coordination event so historical proof can say
-    #: *which* plan shaped this revision instead of searching for one afterwards and
-    #: finding whichever is newest. Validated against the declaration: a plan belonging to
-    #: another member, another product or another Community is refused rather than
-    #: ignored, and an absent one records no lineage rather than a guessed one.
+    #: answer means — it is recorded on the coordination event so historical proof can
+    #: name the plan submitted with this revision instead of searching for one afterwards
+    #: and finding whichever is newest. Checked against the declaration: a plan belonging
+    #: to another member, another product or another Community is refused rather than
+    #: ignored, as is one that did not ask about something these answers explicitly say.
+    #: An absent one records no lineage rather than a guessed one.
     clarification_plan_id: str = Field(default="", max_length=60)
     active: bool = True
 
@@ -1410,12 +1411,30 @@ def _lineage_for(ctx: PoolContext, body: NeedRequest, data: needs_service.NeedIn
     a ``400`` and leaves no declaration behind: the declaration is stored first, and a
     refusal after it would be a member's input accepted and their proof rejected.
 
-    Only an ``attribute_constrained`` declaration can carry one. Exact-only and family
-    declarations answered no questions, so their lineage is empty — which is a fact about
-    them, not a missing record.
+    **This is also the only layer that can check answer-consistency**, which is why the
+    check lives here rather than in ``record_declaration_event``. That function receives a
+    stored ``NeedDeclaration``, and a declaration cannot say which of its requirements
+    were *answered*: ``policy_from_answers`` reads an unanswered question as unchanged, so
+    every applicable attribute appears in ``requires`` either way. Only the raw answers
+    distinguish "kept because they said so" from "kept because nobody asked", and they
+    exist here and nowhere downstream.
+
+    Only an ``attribute_constrained`` declaration can carry a reference. Exact-only and
+    family declarations answered no questions, so their lineage is empty — which is a fact
+    about them, not a missing record. A request carrying a typed ``constraint`` instead of
+    answers passes ``None``: there is nothing to be consistent with, and inventing a
+    constraint for the privileged path would be a check applied where its premise does not
+    hold.
     """
     if data.substitution != SubstitutionPolicy.ATTRIBUTE_CONSTRAINED:
         return ""
+    answered: set[str] | None = None
+    if body.preferences is not None:
+        # What the member explicitly said: the attributes they were asked to keep, and
+        # those they chose values for. The form emits these only for questions it
+        # displayed, which is what makes the check free of false refusals.
+        answers = body.preferences.to_answers()
+        answered = set(answers.keep) | set(answers.accept)
     try:
         return clarify_service.lineage_reference(
             ctx,
@@ -1423,6 +1442,7 @@ def _lineage_for(ctx: PoolContext, body: NeedRequest, data: needs_service.NeedIn
             household_id=data.household_id,
             product_id=data.product_id,
             plan_id=body.clarification_plan_id,
+            answered_attributes=answered,
         )
     except clarify_service.ClarificationError as exc:
         raise HTTPException(400, str(exc)) from exc

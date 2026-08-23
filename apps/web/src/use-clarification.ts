@@ -46,8 +46,8 @@ export interface Clarification {
   /** Whether `questions` is a chosen subset rather than everything approved. */
   planned: boolean;
   /** The plan that produced those questions, empty when none was made. Sent with the
-   *  declaration so the coordination event can record what shaped it, once, rather than
-   *  the proof surface searching for a plan afterwards and finding the newest. */
+   *  declaration so the coordination event can name it once, rather than the proof
+   *  surface searching for a plan afterwards and finding the newest. */
   planId: string;
   /** A plan is in flight. */
   planning: boolean;
@@ -182,9 +182,9 @@ export function useClarification(productId: string | undefined): Clarification {
     setFlexibility(null);
     setPlanned(false);
     /* Reopening a declaration asks nothing, so this edit has no plan of its own. Sending
-       the previous one would attach a plan to a revision it never shaped — and an event
-       whose questions came from nowhere is better recorded as having come from nowhere
-       than credited to the last plan lying around. */
+       the previous one would attach a plan to a revision it was never put in front of —
+       and an event whose questions came from nowhere is better recorded as having come
+       from nowhere than credited to the last plan lying around. */
     setPlanId("");
   }, []);
 

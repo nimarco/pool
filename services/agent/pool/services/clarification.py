@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -397,24 +398,48 @@ def lineage_reference(
     household_id: str,
     product_id: str,
     plan_id: str,
+    answered_attributes: Iterable[str] | None = None,
 ) -> str:
-    """The plan id a coordination event may record as having shaped a declaration.
+    """The plan id a coordination event may record as submitted with a declaration.
 
     Returns the id when the plan is genuinely this member's, about this product, in this
-    Community. Raises on anything else, and returns an empty string when nothing was
-    supplied — an unstated lineage is *absent*, never reconstructed.
+    Community, **and could have asked what this member explicitly answered**. Raises on
+    anything else, and returns an empty string when nothing was supplied — an unstated
+    lineage is *absent*, never reconstructed.
 
-    **Why the caller states it rather than this module deducing it.** A plan is made
+    **What this establishes, exactly.** The event records the clarification plan
+    *submitted with* the revision. The server validates that the plan belongs to this
+    member, this product and this Community, and that the explicit answers accompanying
+    the save could have come from the questions that plan asked. It does **not** prove
+    the plan is the one a particular browser rendered: nothing observable distinguishes
+    two plans this member holds for this product that asked the same questions, and
+    separating them would need per-session issuance state this build deliberately does
+    not keep. Surfaces must say what is checked rather than more than it.
+
+    **Why the caller states the id rather than this module deducing it.** A plan is made
     while somebody is still deciding and read back long afterwards, and by then the same
     member and product may have several: the world moved, a different question became
     worth asking, and a new plan superseded the old one. Deducing lineage later can
     therefore only pick the *newest*, which is how an event created under plan A came to
-    display plan B as though it had shaped it. What the form was actually given is known
-    exactly once — at the moment it was given — so that is when it is recorded.
+    display plan B as its record. What the form was given is stated once, at the moment
+    it was given, and checked against the answers that came back with it.
 
-    A superseded plan is accepted. It is the honest answer for a declaration saved
-    against it, and the stored ``status`` says so on the proof surface; refusing it would
-    reject a legitimate save because the world moved while somebody was reading the form.
+    **Why answer-consistency is the check and "must still be active" is not.** Requiring
+    the active plan is worse than nothing here, and provably so: after a second plan
+    supersedes the first, the honest save — made from the form the member is still
+    looking at — carries the *superseded* one, while the newest is exactly what a caller
+    substituting a plan would send. It would reject the truthful save and accept the
+    substitution. A superseded plan is therefore accepted, and the proof surface shows
+    that status rather than hiding it.
+
+    ``answered_attributes`` is what the member explicitly said — the attributes they were
+    asked to keep, plus those they chose values for. The form can only emit an answer for
+    a question it displayed, so an honest save always satisfies this; a plan that asked
+    nothing cannot be the record for a declaration that widened a roast, and one that
+    asked about form cannot be the record for an answer about roast. ``None`` means no
+    answers accompanied the save at all — a caller supplying a typed policy directly
+    through the privileged path — and there is then nothing to be consistent with, which
+    is a fact about that request rather than a check being skipped.
     """
     if not plan_id:
         return ""
@@ -427,6 +452,20 @@ def lineage_reference(
         raise ClarificationError("that clarification plan is about another product")
     if plan.community_id != community_id:
         raise ClarificationError("that clarification plan belongs to another community")
+    if answered_attributes is not None:
+        asked = set(plan.question_ids)
+        unasked = sorted(
+            attribute
+            for attribute in set(answered_attributes)
+            if (question := product_facts.question_for(attribute)) is not None
+            and question.id not in asked
+        )
+        if unasked:
+            raise ClarificationError(
+                "that clarification plan did not ask about "
+                + ", ".join(unasked)
+                + ", so it cannot be the plan these answers came from"
+            )
     return plan.id
 
 

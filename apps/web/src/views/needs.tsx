@@ -709,7 +709,7 @@ export function Needs({
        `planId` travels beside them as lineage: which plan put *these* questions on the
        screen. Empty when nothing was planned for this revision — reopening an edit shows
        the whole approved set, so crediting it to the last plan made would be recording a
-       plan that shaped nothing. */
+       plan that asked none of what is on screen. */
     const answered = preferences
       ? { preferences, substitution: undefined, clarification_plan_id: planId }
       : {};

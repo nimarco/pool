@@ -317,7 +317,7 @@ function BuyStep({
       ...chosen.draft,
       /* Answers, not a policy, and they replace the draft's substitution value so there
          is exactly one source for what this member consented to. `planId` is lineage
-         beside them — which plan asked these questions — recorded once on the resulting
+         beside them — which plan asked these questions — named once on the resulting
          coordination event rather than searched for afterwards. */
       ...(preferences
         ? { preferences, substitution: undefined, clarification_plan_id: planId }

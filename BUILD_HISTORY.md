@@ -166,7 +166,7 @@ synthesized template — which is how rows 17–21 were found at all.
 | Resource | Service | Created | Purpose | Recurring cost? | Destroy by |
 | --- | --- | --- | --- | --- | --- |
 | `CDKToolkit` | CloudFormation | 2026-08-16 | Bootstrap stack, version 32 | No | Manual (see #0023) |
-| `cdk-hnb659fds-assets-860325090409-us-east-1` | S3 | 2026-08-16 | Deploy staging bucket. Measured after the 2026-08-19 deployment pass: **43 objects, 648,260,603 bytes** (was 36 objects / 544,983,237 bytes on 2026-08-18 — three further deploys of two components, #0048). Every `agentcore deploy` and `deploy-demo` publishes hashed assets that do not expire automatically. Re-measure with `aws s3 ls s3://cdk-hnb659fds-assets-860325090409-us-east-1 --recursive --summarize` | **Yes — 618 MB of S3 storage at this measurement.** Growth is per deploy, not per request | Empty + delete before stack |
+| `cdk-hnb659fds-assets-860325090409-us-east-1` | S3 | 2026-08-16 | Deploy staging bucket. Measured after the 2026-08-23 deployment pass: **55 objects, 873,363,095 bytes** (was 43 objects / 648,260,603 bytes on 2026-08-19, and 36 / 544,983,237 on 2026-08-18). Every `agentcore deploy` and `deploy-demo` publishes hashed assets that do not expire automatically. Re-measure with `aws s3 ls s3://cdk-hnb659fds-assets-860325090409-us-east-1 --recursive --summarize` | **Yes — 833 MB of S3 storage at this measurement.** Growth is per deploy, not per request | Empty + delete before stack |
 | `cdk-hnb659fds-container-assets-860325090409-us-east-1` | ECR | 2026-08-16 | Bootstrap image repo — **empty, 0 images** (CodeZip needs none) | No (empty) | With CDKToolkit |
 | `/cdk-bootstrap/hnb659fds/version` | SSM Parameter | 2026-08-16 | Bootstrap version marker (`32`) | No (standard tier) | With CDKToolkit |
 | `cdk-hnb659fds-cfn-exec-role-…` | IAM Role | 2026-08-16 | CFN execution — **holds `AdministratorAccess`** | No | With CDKToolkit |
@@ -183,7 +183,7 @@ synthesized template — which is how rows 17–21 were found at all.
 | Resource | Service | Created | Purpose | Recurring cost? | Destroy by |
 | --- | --- | --- | --- | --- | --- |
 | `AgentCore-Pool-default` | CloudFormation | 2026-08-16 | Pool runtime stack | No | `make destroy-agent` |
-| `Pool_PoolCoordinator-TmVqSN9H56` | Bedrock AgentCore Runtime | 2026-08-16 | Deployed coordinator, status `READY`. **Version 6** as of 2026-08-19 (#0048); was version 4 (#0031) | **No — billed per invocation only.** No always-on compute; idle session 60 s, max lifetime 300 s | `make destroy-agent` |
+| `Pool_PoolCoordinator-TmVqSN9H56` | Bedrock AgentCore Runtime | 2026-08-16 | Deployed coordinator, status `READY`. **Version 8** as of 2026-08-23 (#0064); was version 7 (#0062), 6 (#0048), 4 (#0031). Same runtime id and same execution role throughout — every bump is a code artifact, never a new runtime | **No — billed per invocation only.** No always-on compute; idle session 60 s, max lifetime 300 s. **v8 has not been invoked** | `make destroy-agent` |
 | `AgentCore-Pool-default-ApplicationAgentPoolCoordina-Ad6KX4akMhNd` | IAM Role | 2026-08-16 | Runtime execution role | No | `make destroy-agent` |
 | `Agent-Appli-6NpmisJ95ByC` | IAM Policy | 2026-08-16 | Inline policy: Bedrock invoke, scoped Logs, X-Ray, config bundles | No | `make destroy-agent` |
 | `ApplicationAgentPoolCoordinatorRuntimeAdditionalCustomPolicy03BEAE200` | IAM Policy | **2026-08-17** (#0030) | Inline policy from `services/agent/iam/agentcore-dynamodb.json`: `GetItem`, `PutItem`, `Query` on `table/pool-demo-state` and nothing else. Verified by `iam simulate-principal-policy`: `DeleteItem`, `BatchWriteItem`, `UpdateItem`, `Scan`, `DeleteTable` all `implicitDeny`, and any other table `implicitDeny`. **Region pinned to `us-east-1` on 2026-08-18** (#0031) — the resource ARN was `arn:aws:dynamodb:*:*:table/pool-demo-state`, granting the runtime a same-named table in every region for no reason. The account segment stays a wildcard deliberately: the role can only act in its own account | No | `make destroy-agent` |
@@ -7610,3 +7610,145 @@ event.
 
 **Validation of the follow-up** — six focused regression tests over the new invariant, and
 canonical `make qa` re-run green. No AWS, no model tokens.
+
+### #0064 — [2026-08-23] — The final-audit patch on real AWS, and a deployment that spent nothing
+`[AWS]` `[ARCHITECTURE]` `[SECURITY]` `[COST]` `[ARTICLE-2]`
+
+**Goal / user intent**
+Ship the reviewed final-audit patch (`1a496df`) to both deployed artefacts, runtime first,
+and prove the four fixes against the deployed application rather than against a local
+copy. Spend no model tokens doing it.
+
+**Why runtime first, when the field is provably backward-compatible**
+#0063's cross-version check established that the v7 runtime reads a `CoordinationEvent`
+carrying `clarification_plan_id` without error — the whole delta is one plain string with a
+default, and #0062's actual failure mode was an unknown *enum value*, not an unknown field.
+So Lambda-first would also have been safe. Runtime-first was chosen anyway because it never
+creates the staggered-version shape at all, and every intermediate state is recoverable: a
+failed runtime deploy leaves v7 serving the old Lambda, and a failed Lambda deploy leaves
+the old function against a runtime that reads both shapes.
+
+**What was deployed**
+
+*AgentCore.* `agentcore validate` → `Valid`. `agentcore deploy --diff --yes` produced a
+one-resource diff, and it is worth quoting because it is the whole change:
+
+```
+[~] AWS::BedrockAgentCore::Runtime .../Runtime
+ └─ [~] AgentRuntimeArtifact .CodeConfiguration.Code.S3.Prefix
+     ├─ [-] 90d72cfa…zip
+     └─ [+] 0e4aefcb…zip
+```
+
+Before deploying, the new asset was unzipped and checked against the working tree: five
+key files — `models.py`, `clarification.py`, `events.py`, `api/app.py`, `agentcore_app.py`
+— **byte-identical by SHA-256**, and `clarification_plan_id` present where the v7 asset had
+zero occurrences. Deploy took 44 s. Runtime `Pool_PoolCoordinator-TmVqSN9H56` went **v7 →
+v8**, `READY`, same runtime id, same execution role ARN. The role's full IAM — trust
+policy, attached policies, every inline document — was captured before and after and is
+**byte-identical by SHA-256** (`97c6674a…`).
+
+*Lambda.* `cdk diff --strict` on `PoolDemoStack`: one resource, `AWS::Lambda::Function`,
+code S3 key only. The one other line is a cosmetic encoding artifact in the stack
+Description — the deployed copy stored the em-dash as `?` — with no resource impact. No IAM
+statement changes, no additions, no deletions, no replacements. Deployed in 18 s. The
+function's role IAM is **byte-identical by SHA-256** before and after
+(`1101ea3d…`), and still holds `bedrock-agentcore:InvokeAgentRuntime` and **zero**
+`bedrock:InvokeModel`.
+
+Resource counts before and after are the same: 1 runtime, 3 stacks, 1 Lambda, 1 table,
+**0 EventBridge rules, 0 EventBridge Scheduler schedules**.
+
+**What the deployed application actually did**
+
+Three fresh synthetic workspaces, so no check contaminated another.
+
+*Canonical `/verify`.* Provider `offline` / `offline-deterministic-planner`, **0 tokens in,
+0 out**, 5 of 8 iterations, tools `list_cohort_strategies → evaluate → evaluate →
+create_candidate_pool_from_strategy`. Kestrel carried **more** demand — 23 units from 8
+people against a 15-unit minimum — and was refused `not_cheaper` at $367.19 all-in against
+$360.00 retail, a **loss of $7.19**. Harbourstone: 20 units available from 7 people, 18
+selected, **3 cases of 6, 0 surplus**, $263.82 against $333.00 retail, **$69.18 saved
+(20.7 %)**, 6 members, pickup Student Union. Provisional, host `recruiting`. Straight from
+the table: **PAYMENT 0, PURCHASE 0, HOST_ASSIGNMENT 0**.
+
+The clarification lineage the patch exists for came back correct on the deployed proof:
+plan `cpl_76807bdeb8abe0f8`, its **own separate run** `run_59a3b4168d88`, provider offline,
+0 tokens — and the asked order (`roast, form, caffeine`) differs from the schema's offered
+order (`form, caffeine, roast`), which is the planner's ordering decision surviving the
+round trip rather than the schema's order being echoed back.
+
+*Quantity 2, separate workspace, same fixture.* `no_action`, **no order**, and both options
+evaluated as viable/refused **without you**. The default moved; the economics did not.
+
+*Ownership, separate workspace.* Naming `hh_moreau` on a create returned 200 with the row
+landing on `hh_navarro` — server-resolved. Amending `hh_moreau`'s seeded declaration
+returned **400, "a need can only be changed by the member who declared it"**. The victim's
+two seeded declarations are unchanged, and the workspace holds exactly **one** coordination
+event, owned by the caller's own consumer.
+
+**A verification this deployment deliberately did not perform**
+The runtime is now v8 and **has not been invoked**. The live Nova Lite verification stands
+where #0062 left it: 2026-08-22, against **v7**, `us.amazon.nova-lite-v1:0`, a truthful
+`no_action`. `agentcore_app.py` and the whole `pool/agent/` tree are byte-identical between
+v7 and v8, so nothing about the live path changed — but "byte-identical code" is not
+"observed running", and the documents now say v8 deployed, v7 live-verified, rather than
+letting one date cover both. Re-verifying would have cost a Bedrock call to learn something
+the previous run already established.
+
+**On the browser check that was not run**
+The judge-door and default-quantity fixes are client-side rendering decisions, and no
+browser automation was available in this session — the sandboxed pane blocks the demo
+origin and no Chrome was connected. They rest instead on two facts: the JS served from the
+deployed URL is **byte-identical by SHA-256** to the local `dist` bundle
+(`bb766574…`), and that bundle's behaviour is pinned by executed component tests
+(`verify-flow.test.tsx`, which fails on the pre-fix code). That is a strong argument and it
+is not a deployed-DOM observation; recorded as the weaker of the two so nobody later quotes
+it as the stronger.
+
+**AWS / external services touched** — CloudFormation (`AgentCore-Pool-default`,
+`PoolDemoStack`), Bedrock AgentCore Runtime (deploy only, **no invocation**), Lambda,
+DynamoDB (read/write through the deployed API, plus read-only `query` for verification),
+IAM (read-only), S3 (CDK asset publish), STS. **No Bedrock model call. No payment. No
+purchase. No schedule.**
+
+**Cost-relevant activity**
+Two deploys, 12 new hashed assets in the CDK staging bucket (43 → 55 objects, 648 MB →
+833 MB — the ledger row is updated). Three synthetic demo workspaces, each ~100 rows with
+the 24-hour TTL. **Zero model tokens.** The dominant standing charge is unchanged and still
+X-Ray Transaction Search, which the AgentCore CLI re-reports on every deploy and which was
+already in the ledger.
+
+**Validation**
+Deployed hard-loads: `/`, `/verify`, `/verify/`, `/verify?from=judge` all 200 with the SPA
+shell, plus the hashed JS (399 KB) and CSS (51 KB) assets. Deployed health reports
+`repository dynamodb`, `model_provider offline`, `payment_provider simulated`,
+`purchase_executor simulated`, `schedules_enabled false`. Canonical QA re-run green after
+the documentation edits.
+
+**One thing the repository caught, and it caught it correctly**
+The first post-deployment QA run failed on
+`test_the_readme_dates_every_cloud_claim_it_makes`. Rewriting the README's Lambda row to be
+*more* specific — "holds `bedrock-agentcore:InvokeAgentRuntime` and no
+`bedrock:InvokeModel`" — dropped the literal phrase **"no model permission"** that the guard
+pins, because blurring the public surface and the live path is the exact overclaim that
+page is most likely to drift into. The guard was right and the row now says both. Worth
+recording rather than quietly fixing: a truth guard whose only failure mode in six weeks
+has been catching a *rewording* is a guard that is doing its job, and the fix was to
+satisfy it rather than to relax it.
+
+**What we learned**
+The useful discipline was checking the *artifact* rather than the deploy log. Unzipping the
+asset and comparing five files by hash before pressing deploy answered "is what I am
+shipping what I reviewed?" in a way that no amount of green CLI output does — and it is the
+same question, one layer down, that the whole final-audit patch was about.
+
+**Article fodder**
+Article 2. A two-artefact deployment against one shared table, ordered to avoid a schema
+window that had already been proved harmless, is a concrete example of choosing the
+cheap-and-boring sequence over the clever one.
+
+**Relevant commits / files**
+Deployed `1a496df`. Docs updated: `README.md`, `PRODUCT.md`, `docs/ARCHITECTURE.md`,
+`docs/HACKATHON_SCORECARD.md`, `docs/RELEASE_CHECKLIST.md`, `docs/ARTICLE_NOTES.md`, and
+the resource ledger above.

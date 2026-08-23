@@ -44,7 +44,7 @@ the people in the demo. The community is invented, and the page says so before y
 
 **<https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/verify>**
 
-Deployed and verified **2026-08-22**. The walkthrough above was driven against it: a
+Deployed and verified **2026-08-23**. The walkthrough above was driven against it: a
 declaration saved over HTTPS produced a coordination event, one bounded run, a refused
 option, a viable one, and a provisional order — on a real DynamoDB table, with no card
 touched.
@@ -543,9 +543,9 @@ walkthrough is free to repeat.
 | Service | Role | Status |
 | --- | --- | --- |
 | Bedrock | Model inference via Strands | **Verified live 2026-08-22** — `us.amazon.nova-lite-v1:0`, reached through AgentCore, 2 of 8 iterations, 5,513 in / 133 out tokens, terminated `completed`. The **outcome was a truthful `no_action`**: the member's only declaration had already been served by the in-process run their save caused, so the objective was correctly empty. It establishes the deployment, the tool surface and the bounds on real infrastructure; it is *not* a live trace of the Kestrel→Harbourstone adaptation. Earlier discovery/recovery/lock branches verified 2026-08-19 |
-| AgentCore Runtime | Hosted agent entrypoint, and the only path to a live model | **Deployed and verified live 2026-08-22** — `Pool_PoolCoordinator-TmVqSN9H56` version 7, `READY` in `us-east-1`, one bounded synthetic invocation proving AgentCore → Strands → Bedrock → Pool tools |
-| Lambda Function URL | The public judge demo: web app + reduced API | **Deployed and verified 2026-08-22** — this branch, `/verify` hard-loads, full declaration → event → run → order over HTTPS on the real table. Runs the **offline planner**; it has no model permission |
-| DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified 2026-08-22** — shared by both artefacts, which is why they are deployed together |
+| AgentCore Runtime | Hosted agent entrypoint, and the only path to a live model | **Deployed 2026-08-23** — `Pool_PoolCoordinator-TmVqSN9H56` **version 8**, `READY` in `us-east-1`, carrying this branch. Version 8 has **not** been invoked. The live Nova Lite verification — one bounded synthetic invocation proving AgentCore → Strands → Bedrock → Pool tools — was performed against **version 7** on 2026-08-22 and was not repeated for this deployment; the coordinator and the runtime entrypoint are byte-identical between the two |
+| Lambda Function URL | The public judge demo: web app + reduced API | **Deployed and verified 2026-08-23** — this branch, `/verify` hard-loads at `/`, `/verify`, `/verify/` and with a query string; full declaration → event → run → order over HTTPS on the real table, Kestrel refused on economics and Harbourstone formed, 0 payment rows. Runs the **offline planner** at zero model tokens and holds **no model permission** — its role carries `bedrock-agentcore:InvokeAgentRuntime` and no `bedrock:InvokeModel` |
+| DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified 2026-08-23** — shared by both artefacts, which is why they are deployed together |
 | API Gateway + Lambda | Pilot-shaped API | In `PoolStack`, which is **not** what the public demo deploys |
 | S3 + CloudFront | Pilot-shaped web hosting | In `PoolStack`. The public demo needs neither |
 | EventBridge | Optional future background scan | Implemented only in the un-deployed `PoolStack`; **zero rules exist in the deployed judge account** |

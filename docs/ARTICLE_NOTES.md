@@ -195,7 +195,8 @@ they added)
       section than a staged success.
 - [x] A real AgentCore Runtime deployment: what `agentcore deploy` actually did (the
       starter toolkit's `configure`/`launch` is retired — the current CLI is CDK-based) —
-      `Pool_PoolCoordinator` v7, `READY` in `us-east-1`, 2026-08-22
+      `Pool_PoolCoordinator` v7, `READY` in `us-east-1`, 2026-08-22; redeployed as v8 on
+      2026-08-23 carrying the final-audit patch, not invoked
 - [ ] A real CloudWatch/AgentCore trace screenshot
 - [ ] A real Amazon Location route matrix response vs. the deterministic estimate — how
       wrong was the great-circle model?

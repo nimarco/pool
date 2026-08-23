@@ -22,7 +22,7 @@ work
 | Architecture diagram | ✅ | [`architecture.svg`](architecture.svg) |
 | Demo video ≤ 5 minutes | ⬜ | One-run rehearsal script exists; video intentionally not recorded yet |
 | AWS Builder ID / entrant eligibility | ⬜ | Human-only checks |
-| Live demo | ✅ | Deployed and verified **2026-08-22** at <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/verify>, running the current release. Recheck from a private browser before submitting |
+| Live demo | ✅ | Deployed and verified **2026-08-23** at <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/verify>, running the final-audit release. Recheck from a private browser before submitting |
 | Problem, users and why it matters in video | 🟡 | Covered by the ~4:50 rehearsal script; recording remains |
 | Good Neighbor framing | ✅ | Collective value inside an existing Community |
 
@@ -62,12 +62,12 @@ work
 
 | Component | Status |
 | --- | --- |
-| Amazon Bedrock / Nova Lite through Strands | **Verified live 2026-08-22** through AgentCore — `us.amazon.nova-lite-v1:0`, run `run_787aa5b33e91`, 2 of 8 iterations, 5,513 in / 133 out tokens. Outcome a truthful `no_action`: the declaration had already been served, so the objective was correctly empty. Establishes the deployment, the tool surface and the bounds on real infrastructure — **not** a live trace of the Kestrel→Harbourstone adaptation |
-| The `/verify` judge path — declare → event → bounded run → order → proof | **Deployed and verified 2026-08-22** over HTTPS on the real table: declaration → event → run `run_1b953d5eca25` → Kestrel refused, Harbourstone viable → `pool_afb6982e61b7`, 18 provisional units, 0 payment rows, 3.35 s. Earlier, locally and browser verified 2026-08-21: three fresh-workspace rehearsals — a short self-guided flow apiece, one clarification run and one coordination run each — plus two truthful no-action flows. **Runs the deterministic offline planner**, at zero model tokens |
+| Amazon Bedrock / Nova Lite through Strands | **Verified live 2026-08-22** through AgentCore runtime **v7** — `us.amazon.nova-lite-v1:0`, run `run_787aa5b33e91`, 2 of 8 iterations, 5,513 in / 133 out tokens. Not repeated for the 2026-08-23 deployment. Outcome a truthful `no_action`: the declaration had already been served, so the objective was correctly empty. Establishes the deployment, the tool surface and the bounds on real infrastructure — **not** a live trace of the Kestrel→Harbourstone adaptation |
+| The `/verify` judge path — declare → event → bounded run → order → proof | **Deployed and verified 2026-08-23** over HTTPS on the real table, on the final-audit release: declaration → event → run `run_8b635f43db71` → Kestrel refused `not_cheaper` (−$7.19 against retail), Harbourstone viable → `pool_39edddc37e7d`, 18 provisional units in 3×6 cases with 0 surplus, $69.18 saved (20.7%), 0 payment rows, provider `offline` at 0 tokens. Earlier the same path on 2026-08-22: `run_1b953d5eca25` → `pool_afb6982e61b7`. Earlier, locally and browser verified 2026-08-21: three fresh-workspace rehearsals — a short self-guided flow apiece, one clarification run and one coordination run each — plus two truthful no-action flows. **Runs the deterministic offline planner**, at zero model tokens |
 | Immutable run→strategy history | **Locally verified 2026-08-21**: run A's listing is byte-identical after runs B and C |
 | Reversible preferences (A→B→C) | **Locally and browser verified 2026-08-21**: distinct revisions, events and runs; withdrawal and restoration; zero payment rows |
-| Amazon Bedrock AgentCore Runtime | **Deployed and verified live 2026-08-22** — `Pool_PoolCoordinator-TmVqSN9H56` v7, `READY`, `us-east-1`. The only path to a live model |
-| Lambda Function URL judge surface | **Deployed and verified 2026-08-22** — this branch; `/verify` hard-loads; runs the offline planner and holds no model permission |
+| Amazon Bedrock AgentCore Runtime | **Deployed 2026-08-23** — `Pool_PoolCoordinator-TmVqSN9H56` **v8**, `READY`, `us-east-1`, carrying this branch. The only path to a live model. v8 has not been invoked; the live Nova Lite run below was against v7 |
+| Lambda Function URL judge surface | **Deployed and verified 2026-08-23** — this branch; `/verify` hard-loads on every form; runs the offline planner at zero model tokens and holds no `bedrock:InvokeModel` |
 | DynamoDB authoritative state | **Deployed and verified 2026-08-22** — one table shared by both artefacts |
 | CloudWatch logs / structured run records | **Deployed and verified 2026-08-19**, retention bounded |
 | Same-run proof presentation patch | **Deployed and rehearsed 2026-08-19**; exact pool/run relationship survived the completed lifecycle and reload. The `/verify` proof was **deployed and verified 2026-08-22** in the same session |

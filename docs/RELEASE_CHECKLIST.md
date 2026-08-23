@@ -35,7 +35,7 @@ line here for a submission decision.
 | README with setup and run instructions | **Verified** | `README.md`; commands are the Makefile's and are run by `make qa` |
 | Architecture diagram | **Verified** | `docs/architecture.svg`, hand-authored, readable at video resolution |
 | Diagram distinguishes deployed from absent services | **Verified** | Solid judge path is deployed; dashed pilot components say implemented but not deployed; EventBridge says zero deployed rules |
-| Public demo URL, reachable with no AWS account | **Verified** | <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/verify> — current release, deployed and driven end to end 2026-08-22. Recheck from a private window before submitting |
+| Public demo URL, reachable with no AWS account | **Verified** | <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/verify> — the final-audit release, deployed and driven end to end 2026-08-23. Recheck from a private window before submitting |
 | Demo stays free to test throughout judging | **TODO (human)** | Depends on credits lasting. `make cost-check` weekly; `make demo-kill` is the emergency stop |
 | Public video, **5 minutes maximum** | **TODO (human)** | Not recorded. Must cover the problem, the users, and why it matters |
 | Video is public and plays without a login | **TODO (human)** | Check in a private window before submitting |
@@ -59,11 +59,12 @@ the safe reading is to use that exact phrase and not depend on the hashtag.
 
 | Item | Status | Note |
 | --- | --- | --- |
-| `make qa` green — lint, typecheck, Python tests, web tests, build, secret scan | **Verified 2026-08-23** | 1,300 agent/API/domain tests, 75 infrastructure tests, 180 frontend tests — **1,555 total**; ruff, ESLint, TypeScript, production build, secret scan and secret-scan self-test all passed, no waived failures |
+| `make qa` green — lint, typecheck, Python tests, web tests, build, secret scan | **Verified 2026-08-23** | 1,308 agent/API/domain tests, 75 infrastructure tests, 180 frontend tests — **1,563 total**; ruff, ESLint, TypeScript, production build, secret scan and secret-scan self-test all passed, no waived failures |
 | Frontend lint actually runs | **Verified** | ESLint installed and wired into `make lint`; it was referenced but absent until 2026-08-18 |
 | Infrastructure tests green | **Verified** | `infra/test_stack.py`, `infra/test_demo_stack.py` |
 | Production dependency audit clean | **Verified** | `npm audit --omit=dev` → 0 vulnerabilities. Two dev-only Vite/esbuild advisories remain, fixable only by a major upgrade; deferred deliberately |
-| One fresh Product-originated AgentCore run captured after final deploy | **Verified** | Workspace `w0z2b3v2r6c3b0q6l`; `run_3954c1d2d97f` → `pool_e36b32c84ee2`; exact `created_by_run`, stored tools and readback verified |
+| One fresh Product-originated AgentCore run captured after final deploy | **Verified against runtime v7** | Workspace `w0z2b3v2r6c3b0q6l`; `run_3954c1d2d97f` → `pool_e36b32c84ee2`; exact `created_by_run`, stored tools and readback verified. **Not repeated after the 2026-08-23 v8 redeploy** — that deployment was code-only and deliberately spent no model tokens |
+| Final-audit release deployed and smoke-tested | **Verified 2026-08-23** | AgentCore v7→v8 (same runtime id, IAM byte-identical), Lambda code-only update. Deployed `/verify`: Kestrel refused `not_cheaper` (−$7.19), Harbourstone viable → 18 units, 3×6 cases, 0 surplus, $69.18 saved (20.7%), 0 payment rows. Quantity 2 in a separate workspace → truthful `no_action`. Seeded-household create overridden to the consumer, amend refused 400, 0 victim events |
 | Same live run remains the pool's technical proof after full lifecycle | **Verified** | Completed 10/10 handoffs, reloaded, and deep-linked from Home without using `Run again` |
 | Historical proof is frozen, not reconstructed | **Verified 2026-08-23** | A → B → C over the real endpoints: flexible under plan A → `pool_1ea75c229c04`, 18 provisional units, 0 payment rows; a later plan B for the same member and product; A's proof still plan A. Exact-only revision shows no plan; the run→strategy listing is unchanged (#0063) |
 | Public need creation cannot be pointed at a seeded household | **Verified 2026-08-23** | Reproduced against `d5ac806` and refused now: in public mode the server resolves the declaring identity, an amend naming another member's declaration is a 400, and no event is written for the named household (#0063) |

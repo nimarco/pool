@@ -481,9 +481,9 @@ one that quietly stops being true.
 | Service | Status |
 | --- | --- |
 | Amazon Bedrock | **Verified live 2026-08-22.** `us.amazon.nova-lite-v1:0` drives the real Strands loop and the real tools, reached through AgentCore. That run's outcome was a truthful `no_action` — the declaration had already been served, so the objective was correctly empty — which establishes the deployment, the tool surface and the bounds on real infrastructure, and is *not* a live trace of the Kestrel→Harbourstone adaptation. Earlier, 2026-08-19: the discovery path (`make verify-bedrock`) and the consequential recovery-and-lock path (`make verify-recovery`). |
-| Bedrock AgentCore Runtime | **Deployed and verified live 2026-08-22.** `agentcore_app.py` at the current release, `READY` in `us-east-1`, invoked through the demo bridge. **The only path to a live model.** |
-| DynamoDB | **Verified 2026-08-22.** One table shared by both deployed artefacts — which is why they are deployed together. The complete lifecycle runs on it with identical economics; the first live write found a `Decimal` bug no fake could have. |
-| Lambda Function URL | **Deployed and verified 2026-08-22.** The public judge demo — the SPA and the reduced API from one function, on one origin. Runs the **deterministic offline planner**; its execution role holds no model permission. |
+| Bedrock AgentCore Runtime | **Deployed 2026-08-23** as `Pool_PoolCoordinator-TmVqSN9H56` **v8**, `READY` in `us-east-1`, carrying this branch. **The only path to a live model.** The live invocation through the demo bridge was verified on 2026-08-22 against **v7**; `agentcore_app.py` and the coordinator are byte-identical between the two versions, and v8 has not been invoked. |
+| DynamoDB | **Verified 2026-08-23.** One table shared by both deployed artefacts — which is why they are deployed together. The complete lifecycle runs on it with identical economics; the first live write found a `Decimal` bug no fake could have. |
+| Lambda Function URL | **Deployed and verified 2026-08-23.** The public judge demo — the SPA and the reduced API from one function, on one origin. Runs the **deterministic offline planner** at zero model tokens; its execution role holds `bedrock-agentcore:InvokeAgentRuntime` and no `bedrock:InvokeModel`. |
 
 Still **implemented but never called against the live service**: the EventBridge
 definition in the un-deployed pilot stack and the Amazon Location adapter. The judge

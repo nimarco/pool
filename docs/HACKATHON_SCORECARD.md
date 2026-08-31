@@ -22,7 +22,7 @@ work
 | Architecture diagram | ✅ | [`architecture.svg`](architecture.svg) |
 | Demo video ≤ 5 minutes | ⬜ | One-run rehearsal script exists; video intentionally not recorded yet |
 | AWS Builder ID / entrant eligibility | ⬜ | Human-only checks |
-| Live demo | ✅ | Deployed and verified **2026-08-23** at <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/verify>, running the final-audit release. Recheck from a private browser before submitting |
+| Live demo | ⚠️ | Deployed and verified **2026-08-23** at <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/verify>, running the final-audit release. **Recheck from a different network, not just a private window** — a private window shares the machine's resolvers, and the failure this catches is a DNS-level category block on `*.lambda-url.*.on.aws` (Cisco Umbrella returns a block page with an untrusted certificate, so a judge sees `ERR_CERT_AUTHORITY_INVALID`). The CloudFront distribution that fixes it is implemented and not yet deployed (#0065) |
 | Problem, users and why it matters in video | 🟡 | Covered by the ~4:50 rehearsal script; recording remains |
 | Good Neighbor framing | ✅ | Collective value inside an existing Community |
 

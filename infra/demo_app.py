@@ -6,21 +6,27 @@ CloudFront, S3, an EventBridge scan. A public hackathon demo needs none of it, a
 AGENTS.md §3.7 says to build the smallest architecture the current milestone needs —
 so this is a separate stack, deployed and destroyed on its own.
 
-It synthesizes to **eight CloudFormation resources**: a DynamoDB table, a log group, an
-execution role and its policy, the function, its URL, and the two Lambda permissions a
-public Function URL requires. Four of those are things CDK adds for the other four.
+It synthesizes to **nine CloudFormation resources**: a DynamoDB table, a log group, an
+execution role and its policy, the function, its URL, the two Lambda permissions a public
+Function URL requires, and a CloudFront distribution. Four of those are things CDK adds
+for the others.
 
 What a judge gets: a URL. No AWS account, no CLI, no credentials, no configuration.
 
-    browser ──HTTPS──▶ Lambda Function URL ──▶ one Lambda
-                                                 ├─ serves the built SPA (same origin)
-                                                 ├─ serves the 24 allowlisted API paths
-                                                 ├─ DynamoDB: this session's demo state
-                                                 └─ InvokeAgentRuntime, bound to this
-                                                    session's workspace
-                                                          │
-                                    AgentCore Runtime ◀───┘
-                                      └─ the same DynamoDB table, the same partition
+    browser ──HTTPS──▶ CloudFront ──▶ Lambda Function URL ──▶ one Lambda
+                        │                                      ├─ serves the built SPA
+                        │                                      │  (same origin)
+                        │                                      ├─ serves the 24
+                        │                                      │  allowlisted API paths
+                        │                                      ├─ DynamoDB: this session's
+                        │                                      │  demo state
+                        │                                      └─ InvokeAgentRuntime,
+                        │                                         bound to this session's
+                        │                                         workspace
+                        │                                              │
+                        └─ caches /assets/* only    AgentCore Runtime ◀─┘
+                           (content-hashed names)     └─ the same DynamoDB table,
+                                                         the same partition
 
 **Why a Function URL and not API Gateway.** The gateway would add a resource, a stage,
 and a second place for CORS to be wrong, and buys nothing here: there is one function,
@@ -31,6 +37,17 @@ and is deleted with the function.
 origin access control, a bucket policy, a distribution, and a cache invalidation step
 on every deploy. The built app is 196 KB. Serving it from the function means one
 deployable unit, one origin, and therefore no cross-origin request to secure at all.
+
+**Why there is a CloudFront distribution anyway, and why that is not the same decision.**
+The paragraph above rejected S3 as an *origin*. This adds a CDN in *front* of the origin
+the function already is, and buys one thing: a hostname filtered networks will resolve.
+`*.lambda-url.*.on.aws` is a blocked category on Cisco Umbrella and its peers — this
+university's own resolvers answer the demo's hostname with a block-page address and a
+certificate no browser trusts, which reaches a visitor as `ERR_CERT_AUTHORITY_INVALID`
+and reads as "their demo is broken" (#0065). Everything the S3 paragraph was protecting
+survives: no bucket, no invalidation step, one origin, one browser origin. Only
+`/assets/*` is cached, and Vite content-hashes those filenames, so a rebuilt asset is a
+new URL rather than a purge someone has to remember.
 
 **Why DynamoDB is here and the AgentCore runtime's in-memory store is not enough.**
 The runtime holds state in the microVM, which is right for a one-shot agent invocation
@@ -54,6 +71,16 @@ per-request; the table is PAY_PER_REQUEST; the log group is capped at 14 days. R
 concurrency caps how much of any of it can happen at once. The only path that spends
 model tokens is the live action, which is capped per session and per day in application
 code and can be switched off with one environment variable.
+
+**A distribution does not change that shape.** CloudFront has no hourly charge — an idle
+distribution bills nothing, unlike every resource in `test_demo_stack.py`'s `ALWAYS_ON`
+list, which is why it was removed from it rather than left there and worked around. It
+bills per request and per GB egressed, both inside a perpetual free tier (1 TB out and
+10 M HTTPS requests per month) that a hackathon demo cannot plausibly exhaust; the
+`/assets/*` cache makes it *cheaper* than before by not waking the function for static
+bytes. Access logging is off, so it creates no bucket and no log ingestion. It is
+deleted by `cdk destroy` along with everything else — slowly, because CloudFront
+disables a distribution before removing it, but with no charge while that happens.
 """
 
 from __future__ import annotations
@@ -66,6 +93,9 @@ from aws_cdk import (
     Duration,
     RemovalPolicy,
     Stack,
+    aws_certificatemanager as acm,
+    aws_cloudfront as cloudfront,
+    aws_cloudfront_origins as origins,
     aws_dynamodb as dynamodb,
     aws_iam as iam,
     aws_lambda as lambda_,
@@ -117,6 +147,57 @@ TABLE_NAME = os.environ.get("POOL_DEMO_TABLE", "pool-demo-state")
 #: and throttles the function to nothing.
 RESERVED_CONCURRENCY = int(os.environ.get("POOL_DEMO_CONCURRENCY", "0"))
 
+#: Optional vanity hostname for the CDN, and the ACM certificate that proves it.
+#:
+#: Both or neither. A domain without a certificate is a distribution CloudFront will
+#: refuse to create, and a certificate without a domain is a no-op — so a half-configured
+#: deploy is a synthesis-time error here rather than a rollback ten minutes in.
+#:
+#: The certificate must already exist **in us-east-1**, which is the only region
+#: CloudFront reads viewer certificates from. It is deliberately referenced by ARN rather
+#: than requested here: an ACM certificate issued by CDK needs DNS validation, DNS
+#: validation from CDK needs a Route 53 hosted zone, and a hosted zone is $0.50 a month
+#: whether or not anyone visits (AGENTS.md §3.5 — "explicitly call out anything that can
+#: keep accruing cost while nobody is developing"). Pointing an existing name at the
+#: distribution with one CNAME at whatever registrar already holds it costs nothing.
+#:
+#: Unset — the default, and what is deployed — the distribution answers on its own
+#: ``*.cloudfront.net`` name, which needs no domain, no certificate and no DNS record.
+DEMO_DOMAIN = os.environ.get("POOL_DEMO_DOMAIN", "")
+DEMO_CERT_ARN = os.environ.get("POOL_DEMO_CERT_ARN", "")
+
+#: How long CloudFront waits for this function to answer.
+#:
+#: This number has to be read together with the three deadlines on the function below,
+#: because the CDN is now the *outermost* layer and its default would have been the
+#: shortest: 30 s, against a live agent action whose own wall-clock bound is 45 s. A
+#: judge pressing the live button would have been shown a CloudFront 504 while the
+#: function was still working and the runtime was still writing — the same inverted
+#: nesting as #0030, one layer further out.
+#:
+#: 60 s is the ceiling CloudFront allows without a service-quota increase, so it is what
+#: is set, and it is honestly not enough to cover the *worst* case: if the AgentCore
+#: runtime wedges, the function's own bridge read timeout also fires at 60 s, and which
+#: of the two lands first is a race. That path surfaces as a 504 from the CDN instead of
+#: the structured loop-fault the function would have returned. The ordinary path — the
+#: agent finishing, or hitting its own 45 s bound — is comfortably inside this and comes
+#: back through the CDN unchanged. The raw Function URL stays public, so a judge who hits
+#: the race has a route that does not involve CloudFront at all.
+CDN_ORIGIN_TIMEOUT = Duration.seconds(int(os.environ.get("POOL_DEMO_CDN_TIMEOUT", "60")))
+
+#: Error status codes CloudFront will cache on its own initiative, pinned to zero.
+#:
+#: CloudFront applies a 10 s "error caching minimum TTL" to these regardless of the cache
+#: policy, so ``CACHING_DISABLED`` alone does not stop it. For a stateful demo that is a
+#: real trap: a judge who trips a validation error or a quota refusal would keep being
+#: served that refusal for ten seconds after the condition cleared, and the retry that
+#: should have worked would look like a broken app. Naming each code with a zero TTL
+#: leaves the origin's own body and status untouched and only removes the caching.
+#:
+#: 429 is deliberately absent because CloudFront never caches it, and asserting a policy
+#: over a code that has none would be a claim the template cannot keep.
+CDN_UNCACHED_ERRORS = (400, 403, 404, 405, 500, 502, 503, 504)
+
 
 class PoolDemoStack(Stack):
     def __init__(
@@ -125,6 +206,8 @@ class PoolDemoStack(Stack):
         construct_id: str,
         bundle_path: str | None = None,
         agentcore_runtime_arn: str | None = None,
+        domain_name: str | None = None,
+        certificate_arn: str | None = None,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -136,6 +219,15 @@ class PoolDemoStack(Stack):
         runtime_arn = (
             AGENTCORE_RUNTIME_ARN if agentcore_runtime_arn is None else agentcore_runtime_arn
         )
+        domain = DEMO_DOMAIN if domain_name is None else domain_name
+        cert_arn = DEMO_CERT_ARN if certificate_arn is None else certificate_arn
+        if bool(domain) != bool(cert_arn):
+            raise ValueError(
+                "POOL_DEMO_DOMAIN and POOL_DEMO_CERT_ARN must be set together: a custom "
+                "domain needs a us-east-1 ACM certificate that covers it, and a "
+                "certificate with no domain changes nothing. Set both, or neither and "
+                "take the *.cloudfront.net name."
+            )
 
         for key, value in PROJECT_TAGS.items():
             cdk.Tags.of(self).add(key, value)
@@ -312,8 +404,112 @@ class PoolDemoStack(Stack):
             # cross-origin request to allow. Anything that needs one is not this demo.
         )
 
+        # ------------------------------------------------------------- cdn
+        # **Why a CDN was added to a stack whose whole point is being small.**
+        #
+        # Not for latency, and not for cost. For *reachability*. `*.lambda-url.*.on.aws`
+        # is a category block on filtered networks — Cisco Umbrella on this university's
+        # own resolvers returns its block-page address for the demo's hostname and serves
+        # a certificate signed by a CA no browser trusts, so the demo presents as
+        # `NET::ERR_CERT_AUTHORITY_INVALID`. Not a Pool bug and not an AWS outage: the
+        # name never resolved to AWS. Attacker use of Function URLs for phishing and C2
+        # is why the category exists, and no amount of correctness on our side removes a
+        # demo URL from it.
+        #
+        # `*.cloudfront.net` is not in that category. The distribution is bought for the
+        # hostname; the caching below is a side benefit.
+        #
+        # This does not walk back the "one Lambda serves the web app too" decision above.
+        # That decision was about not *replacing* the function's static serving with S3 —
+        # a bucket, an origin access control, a bucket policy and an invalidation step on
+        # every deploy. None of that is here. There is still one origin, one deployable
+        # unit, and one browser origin, so there is still no cross-origin request to
+        # secure; the app and the API arrive from the same CloudFront hostname exactly as
+        # they arrived from the same Function URL hostname.
+        origin = origins.FunctionUrlOrigin(url, read_timeout=CDN_ORIGIN_TIMEOUT)
+
+        # The Host header must **not** reach the origin. A Function URL authorises against
+        # its own hostname, so forwarding the viewer's `Host` (the CloudFront name) gets
+        # the request rejected at the origin — `ALL_VIEWER` is the wrong policy here and
+        # `ALL_VIEWER_EXCEPT_HOST_HEADER` is the whole reason it exists. Everything else a
+        # request carries does travel, which matters because the demo identifies a visitor's
+        # workspace with a **query parameter**, not a cookie.
+        dynamic = cloudfront.BehaviorOptions(
+            origin=origin,
+            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            # The default is GET/HEAD, which would turn every mutation in the demo into a
+            # 403 from the CDN. Every lifecycle action in this product is a POST.
+            allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
+            # Nothing dynamic is cached, at all. The alternative is worse than slow: two
+            # workspaces share a path and differ only in a query parameter, so any cache
+            # policy that dropped the query string from the key would serve one visitor's
+            # pool to another. `CACHING_DISABLED` cannot make that mistake.
+            cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
+            origin_request_policy=cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+            compress=True,
+        )
+
+        distribution = cloudfront.Distribution(
+            self,
+            "DemoCdn",
+            comment="Pool public demo — reachable hostname in front of the Function URL",
+            default_behavior=dynamic,
+            additional_behaviors={
+                # The only cacheable surface. Vite content-hashes every filename under
+                # `/assets/`, so a cached object can never be stale — a rebuilt asset is a
+                # different URL — and `index.html`, which is what names those URLs, is
+                # served by the uncached default behaviour above. That is what keeps the
+                # "no invalidation step on every deploy" property true with a CDN in
+                # front: correctness here comes from the filenames, not from remembering
+                # to purge. It is also most of the bytes (a ~200 KB bundle plus the
+                # product imagery), which now leave the edge instead of waking the
+                # function.
+                "/assets/*": cloudfront.BehaviorOptions(
+                    origin=origin,
+                    viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                    allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+                    cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
+                    compress=True,
+                ),
+            },
+            # Cheapest edge footprint, same choice as `PoolStack` makes.
+            price_class=cloudfront.PriceClass.PRICE_CLASS_100,
+            # No access logs. They would need an S3 bucket this stack does not have, and
+            # a bucket that survives `cdk destroy` is exactly the orphan shape of #0023.
+            # CloudWatch on the function already records every request that reaches it.
+            enable_logging=False,
+            error_responses=[
+                cloudfront.ErrorResponse(http_status=code, ttl=Duration.seconds(0))
+                for code in CDN_UNCACHED_ERRORS
+            ],
+            # Absent unless both are configured — see the constants. With neither, this is
+            # the `*.cloudfront.net` name and the default CloudFront certificate.
+            domain_names=[domain] if domain else None,
+            certificate=(
+                acm.Certificate.from_certificate_arn(self, "DemoCert", cert_arn)
+                if cert_arn
+                else None
+            ),
+            # Only meaningful alongside a custom certificate; CloudFront's own shared
+            # certificate does not take a floor.
+            minimum_protocol_version=(
+                cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021 if cert_arn else None
+            ),
+        )
+
         # ------------------------------------------------------------- outputs
-        CfnOutput(self, "DemoUrl", value=url.url)
+        # `DemoUrl` is the URL a judge is given, and it is now the CDN's — that is the
+        # point of the change, and `make demo-url` reads this key. The Function URL is
+        # still public and still works; it is published separately, below, because it is
+        # the fallback and the thing to curl when the question is "is the CDN the
+        # problem?", not the address to hand out.
+        CfnOutput(
+            self,
+            "DemoUrl",
+            value=f"https://{domain}" if domain else f"https://{distribution.domain_name}",
+        )
+        CfnOutput(self, "FunctionUrl", value=url.url)
+        CfnOutput(self, "CdnDistributionId", value=distribution.distribution_id)
         CfnOutput(self, "FunctionName", value=fn.function_name)
         CfnOutput(self, "TableName", value=table.table_name)
         CfnOutput(

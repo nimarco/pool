@@ -154,8 +154,11 @@ which runs the Strands loop against a deterministic planner. Amazon Bedrock Agen
 Runtime and Amazon Bedrock (Nova Lite) are deployed and verified live alongside it, and
 carry the live agent action against the same DynamoDB state and the same bounded tools.
 
-Implemented but not deployed on the judge path: API Gateway, S3, CloudFront, EventBridge,
-the Amazon Location `geo-routes` adapter, and a Stripe TEST-only adapter. The deployed
+Implemented but not deployed on the judge path: API Gateway, S3, EventBridge, the Amazon
+Location `geo-routes` adapter, and a Stripe TEST-only adapter. Amazon CloudFront is
+implemented *for* the judge path and not yet deployed to it: the demo's Function URL
+hostname falls in a category filtered networks block, which reaches a visitor as a
+certificate error rather than as a demo. The deployed
 account has zero EventBridge rules. Routing, payments and the supplier purchase shown in
 the demo are simulated.
 

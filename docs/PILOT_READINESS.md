@@ -61,10 +61,10 @@ which, because the distinction is the whole value of this document.
 | First real inference | ✅ verified | `make verify-bedrock`, then `make verify-recovery` for the consequential branch. |
 | DynamoDB | ✅ verified | `POOL_REPOSITORY=dynamodb`. The full lifecycle has run on a real table. |
 | AgentCore Runtime | ✅ verified | `agentcore deploy` (official `@aws/agentcore` CLI; config in `agentcore/`). Requires a CDK bootstrap in the account first. |
-| Public judge demo | ✅ verified | `make deploy-demo` — one Lambda, one Function URL, one table. |
+| Public judge demo | ✅ verified | `make deploy-demo` — one Lambda, one Function URL, one table. A CloudFront distribution in front of the Function URL is **implemented and not yet deployed** (#0065): `*.lambda-url.*.on.aws` is blocked as a category by filtered resolvers. |
 | Amazon Location | ⬜ never called | `ROUTING_PROVIDER=aws_location`. Uses `geo-routes`, so no calculator resource to provision. |
 | EventBridge background scan | ⬜ never enabled | Ships **disabled**. Enabling it starts recurring model invocations. |
-| Pilot-shaped stack (API Gateway, S3, CloudFront) | ⬜ never deployed | `make deploy` then `make deploy-web`. The public demo needs none of it. |
+| Pilot-shaped stack (API Gateway, S3, CloudFront) | ⬜ never deployed | `make deploy` then `make deploy-web`. The public demo needs none of it — note that the demo stack now has a CloudFront distribution of its own, for reachability rather than for hosting, and it is a separate resource in a separate stack. |
 
 Verification order and the exact commands are in the README and `docs/COST_NOTES.md`.
 

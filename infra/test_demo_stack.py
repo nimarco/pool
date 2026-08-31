@@ -1,7 +1,7 @@
 """Public judge demo — infrastructure tests.
 
 The demo stack is small enough to read, which is exactly why it is worth pinning: the
-risk is not complexity, it is that something quietly grows. These assert the four
+risk is not complexity, it is that something quietly grows. These assert the five
 claims the stack is deployed on.
 
 1. **Nothing always-on, nothing unbounded.** Per-request billing, capped retention,
@@ -12,6 +12,10 @@ claims the stack is deployed on.
    rather than trusted to a default.
 4. **The whole thing tears down** — every resource is DESTROY, and the log group is in
    the stack rather than created implicitly by Lambda and left behind (#0023).
+5. **A judge can actually reach it.** The CDN added in #0065 exists because
+   `*.lambda-url.*.on.aws` is a blocked category on filtered networks, and putting a
+   cache in front of a stateful same-origin app has four silent failure modes that a
+   successful deploy will not reveal. `TestCdn` covers each one.
 
 Runs offline: synthesis needs no AWS credentials.
 """
@@ -88,6 +92,16 @@ def public_demo_constant(name: str):
             return ast.literal_eval(node.value)
     raise AssertionError(f"{name} is not a module-level constant of public_demo.py")
 
+#: Resource types whose presence would mean this stack bills while nobody is looking.
+#:
+#: ``AWS::CloudFront::Distribution`` **was** in this list and was removed in #0065, when a
+#: distribution was deliberately added to make the demo reachable from filtered networks.
+#: The removal is a correction, not an exemption: CloudFront has no hourly or idle charge,
+#: so it never belonged beside EC2, RDS, a NAT gateway or a load balancer, all of which bill
+#: by the hour with zero traffic. It bills per request and per GB, both inside a perpetual
+#: free tier. The properties that *could* make a distribution cost money while idle —
+#: access logging into a bucket, real-time logs, Origin Shield — are asserted absent by
+#: ``TestCdn`` instead, which is a tighter check than this list could express anyway.
 ALWAYS_ON = [
     "AWS::EC2::Instance",
     "AWS::RDS::DBInstance",
@@ -97,10 +111,16 @@ ALWAYS_ON = [
     "AWS::ECS::Service",
     "AWS::ElastiCache::CacheCluster",
     "AWS::Redshift::Cluster",
-    "AWS::CloudFront::Distribution",
     "AWS::ApiGatewayV2::Api",
     "AWS::Events::Rule",
 ]
+
+#: The managed policies the CDN is pinned to, by the id CloudFront publishes for them.
+#: Asserting the id rather than the shape is deliberate: these are AWS-managed and the
+#: template only ever carries the reference, so the id *is* the contract.
+CACHING_DISABLED = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+CACHING_OPTIMIZED = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+ALL_VIEWER_EXCEPT_HOST_HEADER = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
 
 
 @pytest.fixture(scope="module")
@@ -133,6 +153,24 @@ def function_env(template: Template) -> dict:
     fns = template.find_resources("AWS::Lambda::Function")
     assert len(fns) == 1, "the demo is one function; a second one is a design change"
     return next(iter(fns.values()))["Properties"]["Environment"]["Variables"]
+
+
+@pytest.fixture(scope="module")
+def cdn(template: Template) -> dict:
+    """The distribution's config — one, in front of the one function."""
+    dists = template.find_resources("AWS::CloudFront::Distribution")
+    assert len(dists) == 1, "one distribution in front of one origin"
+    return next(iter(dists.values()))["Properties"]["DistributionConfig"]
+
+
+def behavior(cdn: dict, path: str) -> dict:
+    """The cache behaviour that serves ``path``, or the default one for ``*``."""
+    if path == "*":
+        return cdn["DefaultCacheBehavior"]
+    matches = [b for b in cdn.get("CacheBehaviors", []) if b["PathPattern"] == path]
+    patterns = [b["PathPattern"] for b in cdn.get("CacheBehaviors", [])]
+    assert matches, f"no behaviour for {path}; the stack has {patterns}"
+    return matches[0]
 
 
 class TestCostSafety:
@@ -523,16 +561,28 @@ class TestSharedWorkspaceContract:
 
 
 class TestShape:
-    def test_the_public_entry_point_is_a_function_url(self, template: Template):
+    def test_the_origin_is_a_function_url(self, template: Template):
         """API Gateway would be a second resource, a second stage, and a second place
-        for CORS to be wrong."""
+        for CORS to be wrong.
+
+        The *public entry point* is now the CDN — see ``TestCdn`` — but what sits behind
+        it is still one Function URL and not a gateway. The URL is also still `NONE`
+        auth and still directly reachable: the CDN was added for a hostname filtered
+        networks resolve, not to hide the origin, and keeping the origin public leaves a
+        fallback for the one path where the CDN's 60 s ceiling can fire first (#0065).
+        """
         template.has_resource_properties("AWS::Lambda::Url", {"AuthType": "NONE"})
         assert template.find_resources("AWS::ApiGateway::RestApi") == {}
         assert template.find_resources("AWS::ApiGatewayV2::Api") == {}
 
     def test_the_web_app_ships_inside_the_function(self, function_env, template: Template):
-        """No bucket, no distribution, no invalidation step — and no cross-origin
-        request to secure, because the app and the API share an origin."""
+        """No bucket, no invalidation step — and no cross-origin request to secure,
+        because the app and the API still share an origin.
+
+        A CDN in front of the function does not change any of that: it caches
+        `/assets/*`, whose filenames Vite content-hashes, so a redeploy publishes new
+        URLs rather than needing a purge. What was rejected was S3 as the *origin*.
+        """
         assert function_env["PUBLIC_DEMO_WEB_ROOT"] == "/var/task/web"
         assert template.find_resources("AWS::S3::Bucket") == {}
 
@@ -554,10 +604,15 @@ class TestShape:
         assert tags["Component"] == "PublicDemo"
 
     def test_the_stack_stays_small(self, template: Template):
-        """A guard against drift, not a rule about the number eight. If this stack
-        grows, that should be a decision someone made, not a diff nobody read."""
+        """A guard against drift, not a rule about the number nine. If this stack
+        grows, that should be a decision someone made, not a diff nobody read.
+
+        It was eight against a ceiling of ten. The CloudFront distribution added in
+        #0065 is the ninth, and the ceiling moved with it so the headroom is what it
+        was — moving the ceiling is the decision being recorded, which is the point.
+        """
         resources = template.to_json()["Resources"]
-        assert len(resources) <= 10, sorted(resources)
+        assert len(resources) <= 11, sorted(resources)
 
     def test_the_live_action_can_be_deployed_switched_off(self, bundle):
         """A deployment with no runtime ARN must still be a valid, safe stack — and
@@ -572,3 +627,170 @@ class TestShape:
         )
         body = json.dumps(Template.from_stack(stack).to_json())
         assert "bedrock-agentcore:InvokeAgentRuntime" not in body
+
+
+class TestCdn:
+    """The distribution added in #0065, and the four ways it could have broken the demo.
+
+    It exists for one reason: `*.lambda-url.*.on.aws` is a blocked category on filtered
+    resolvers (Cisco Umbrella on this university's network answers the demo's hostname
+    with a block-page address and an untrusted certificate), so a judge on such a network
+    sees `ERR_CERT_AUTHORITY_INVALID` and reads it as a broken demo. `*.cloudfront.net`
+    is not in that category.
+
+    Putting a CDN in front of a stateful, mutating, same-origin app has four specific
+    failure modes, and every one of them is silent — the deploy succeeds and the demo
+    misbehaves. Each has a test here.
+    """
+
+    def test_the_host_header_never_reaches_the_origin(self, cdn):
+        """The one misconfiguration that breaks everything.
+
+        A Function URL authorises against its own hostname. Forward the viewer's `Host`
+        — which `ALL_VIEWER`, the obvious-looking policy, does — and every request is
+        rejected at the origin. `ALL_VIEWER_EXCEPT_HOST_HEADER` exists for exactly this
+        pairing, and it must be the policy on the dynamic path.
+        """
+        assert (
+            behavior(cdn, "*")["OriginRequestPolicyId"] == ALL_VIEWER_EXCEPT_HOST_HEADER
+        )
+
+    def test_one_workspace_can_never_be_served_anothers_state(self, cdn):
+        """Why the dynamic path is uncached rather than briefly cached.
+
+        The demo identifies a visitor's workspace with a **query parameter**, not a
+        cookie. Any cache policy that dropped the query string from the key would hand
+        one visitor another's pool — a correctness failure wearing a performance
+        feature's clothes. `CachingDisabled` cannot make that mistake at any TTL.
+        """
+        assert behavior(cdn, "*")["CachePolicyId"] == CACHING_DISABLED
+
+    def test_every_mutation_survives_the_cdn(self, cdn):
+        """CloudFront's default is GET/HEAD, which would 403 every action in the product.
+
+        Onboarding, declaring a need, advancing a pool, the live agent run — all POST.
+        A distribution that allows only reads turns a working demo into a read-only one.
+        """
+        allowed = set(behavior(cdn, "*")["AllowedMethods"])
+        assert {"POST", "PUT", "PATCH", "DELETE", "OPTIONS"} <= allowed
+
+    def test_the_cdn_does_not_become_the_shortest_deadline(self, cdn, function_env):
+        """The #0030 inversion, one layer further out.
+
+        CloudFront's default origin timeout is 30 s. The agent's own wall-clock bound is
+        45 s, so the default would have shown a judge a CDN 504 while the function was
+        still working and the runtime was still writing — the exact failure where shared
+        state changes and the browser is told nothing happened. The CDN's ceiling has to
+        sit outside the agent's bound.
+        """
+        agent_bound = int(function_env["WORKFLOW_TIMEOUT_SECONDS"])
+        cdn_timeout = cdn["Origins"][0]["CustomOriginConfig"]["OriginReadTimeout"]
+        assert cdn_timeout > agent_bound, (
+            f"CDN would cut the agent off: {cdn_timeout}s vs the agent's {agent_bound}s"
+        )
+
+    def test_a_cleared_error_is_not_served_for_ten_more_seconds(self, cdn):
+        """CloudFront applies a 10 s error-caching TTL regardless of the cache policy.
+
+        On a stateful demo that means a quota refusal or a validation error keeps being
+        served after the condition clears, and the retry that should have worked looks
+        like a broken app. Every code CloudFront will cache is pinned to zero.
+        """
+        ttls = {e["ErrorCode"]: e["ErrorCachingMinTTL"] for e in cdn["CustomErrorResponses"]}
+        assert ttls, "no error caching configured; CloudFront's 10 s default would apply"
+        assert set(ttls.values()) == {0}, ttls
+
+    def test_static_assets_are_cached_because_their_names_are_hashed(self, cdn):
+        """The one safe thing to cache, and the reason no invalidation step is needed.
+
+        Vite content-hashes everything under `/assets/`, so a cached object cannot go
+        stale — a rebuilt asset is a different URL. `index.html`, which names those URLs,
+        is served by the uncached default behaviour.
+        """
+        assets = behavior(cdn, "/assets/*")
+        assert assets["CachePolicyId"] == CACHING_OPTIMIZED
+        assert set(assets["AllowedMethods"]) == {"GET", "HEAD"}
+        assert "OriginRequestPolicyId" not in assets or not assets["OriginRequestPolicyId"], (
+            "assets need no viewer forwarding, and forwarding Host would break the origin"
+        )
+
+    def test_the_distribution_bills_nothing_while_idle(self, cdn, template: Template):
+        """Why CloudFront was removed from ALWAYS_ON rather than exempted from it.
+
+        A distribution has no hourly charge; it bills per request and per GB, inside a
+        perpetual free tier. What *could* cost money with no visitors is the optional
+        machinery — access logs need a bucket (and a bucket that outlives `cdk destroy`
+        is the orphan shape of #0023), real-time logs bill per record, Origin Shield adds
+        a surcharge and a second region. None of it is here.
+        """
+        assert "Logging" not in cdn, "access logging would need a bucket this stack lacks"
+        assert template.find_resources("AWS::S3::Bucket") == {}
+        assert template.find_resources("AWS::CloudFront::RealtimeLogConfig") == {}
+        origin = cdn["Origins"][0]
+        assert "OriginShield" not in origin
+        assert cdn["PriceClass"] == "PriceClass_100", "cheapest edge footprint"
+
+    def test_the_judge_facing_url_is_the_reachable_one(self, template: Template):
+        """`DemoUrl` is what `make demo-url` prints and what gets handed out, so it has
+        to be the CDN's name — the Function URL is published separately as the origin
+        and the fallback, not as the address to share."""
+        outputs = template.to_json()["Outputs"]
+        demo_url = json.dumps(outputs["DemoUrl"]["Value"])
+        assert "DemoCdn" in demo_url, f"DemoUrl does not point at the distribution: {demo_url}"
+        assert "FunctionUrl" in outputs, "the origin should still be published, separately"
+
+    def test_the_default_deployment_needs_no_domain_and_no_certificate(self, cdn):
+        """What is actually deployed: the `*.cloudfront.net` name.
+
+        A custom domain is supported and unset. Requesting an ACM certificate from CDK
+        would need DNS validation, which would need a Route 53 hosted zone, which is
+        $0.50 a month whether or not anyone visits (AGENTS.md §3.5).
+        """
+        assert "Aliases" not in cdn
+        assert "ViewerCertificate" not in cdn or not cdn.get("ViewerCertificate")
+
+    def test_a_custom_domain_is_wired_when_both_halves_are_given(self, bundle):
+        """The optional path is real, not aspirational."""
+        app = cdk.App(outdir="cdk.out.demotest")
+        stack = PoolDemoStack(
+            app,
+            "DomainStack",
+            bundle_path=bundle,
+            agentcore_runtime_arn=ARN,
+            domain_name="pool.example.com",
+            certificate_arn="arn:aws:acm:us-east-1:111111111111:certificate/abc-123",
+            env=cdk.Environment(account="111111111111", region="us-east-1"),
+        )
+        rendered = Template.from_stack(stack).to_json()
+        config = [
+            r["Properties"]["DistributionConfig"]
+            for r in rendered["Resources"].values()
+            if r["Type"] == "AWS::CloudFront::Distribution"
+        ][0]
+        assert config["Aliases"] == ["pool.example.com"]
+        assert config["ViewerCertificate"]["MinimumProtocolVersion"] == "TLSv1.2_2021"
+        assert rendered["Outputs"]["DemoUrl"]["Value"] == "https://pool.example.com"
+        # An imported certificate is a reference, not a resource: the stack stays nine.
+        assert len(rendered["Resources"]) == 9, sorted(rendered["Resources"])
+
+    @pytest.mark.parametrize(
+        "domain,cert",
+        [
+            ("pool.example.com", ""),
+            ("", "arn:aws:acm:us-east-1:111111111111:certificate/abc-123"),
+        ],
+    )
+    def test_half_a_custom_domain_fails_at_synthesis_not_at_deploy(self, bundle, domain, cert):
+        """A domain with no certificate is a distribution CloudFront refuses to create.
+        Failing here costs a second; failing in CloudFormation costs a rollback."""
+        app = cdk.App(outdir="cdk.out.demotest")
+        with pytest.raises(ValueError, match="must be set together"):
+            PoolDemoStack(
+                app,
+                "HalfDomainStack",
+                bundle_path=bundle,
+                agentcore_runtime_arn=ARN,
+                domain_name=domain,
+                certificate_arn=cert,
+                env=cdk.Environment(account="111111111111", region="us-east-1"),
+            )

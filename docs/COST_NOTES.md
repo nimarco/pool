@@ -49,6 +49,17 @@ bridge's 60 s read timeout on `invoke_agent_runtime`, then the Lambda's own 90 s
 timeout. Deployments set the inner bound to 45 in both places the agent can run, so
 the nesting holds whichever path executes.
 
+**The CloudFront distribution added in #0065 (implemented, not yet deployed) adds a rung
+that is not strictly outermost, and this is a known limit rather than an oversight.** Its
+origin timeout is 60 s — the ceiling CloudFront allows without a service-quota increase —
+so it sits *outside* the agent's 45 s bound, which is the case that matters, and *inside*
+the Lambda's 90 s. The ordinary path is unaffected. The exception is a wedged AgentCore
+runtime: the bridge's read timeout and the CDN's both fire at 60 s, and which lands first
+is a race, so that one path can reach the browser as a CDN `504` rather than the
+structured `loop_fault` the function would have returned. The Function URL is left public
+precisely so that path has a route that does not traverse the CDN. `POOL_DEMO_CDN_TIMEOUT`
+raises the ceiling on an account whose quota has been increased.
+
 A run that hits a bound terminates **loudly** — recorded as `outcome=loop_fault` with the
 specific bound in `termination_reason` — never as a silent truncation that resembles a
 normal result. `tests/test_agent_bounds.py` proves each of these by driving a deliberately
@@ -64,6 +75,7 @@ One coordination run at defaults:
 | Lambda | 1 invocation, ≤ 60 s | 1024 MB |
 | DynamoDB | tens of on-demand reads/writes | Small demo dataset |
 | Location `geo-routes` | ≤ 1 matrix call, ≤ 100 cells | Cached per run so repeated tool calls cannot re-bill |
+| CloudFront | 1 request in, ≤ 1 request to the origin | Implemented, not yet deployed (#0065). No hourly charge; per-request and per-GB, inside the perpetual free tier (1 TB, 10 M requests/month). `/assets/*` is cached at the edge, so it **removes** Lambda invocations rather than adding cost |
 | CloudWatch | a few KB | 14-day retention |
 
 The demo scenario is three runs. In offline mode all three cost **zero**.

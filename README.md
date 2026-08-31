@@ -547,7 +547,8 @@ walkthrough is free to repeat.
 | Lambda Function URL | The public judge demo: web app + reduced API | **Deployed and verified 2026-08-23** — this branch, `/verify` hard-loads at `/`, `/verify`, `/verify/` and with a query string; full declaration → event → run → order over HTTPS on the real table, Kestrel refused on economics and Harbourstone formed, 0 payment rows. Runs the **offline planner** at zero model tokens and holds **no model permission** — its role carries `bedrock-agentcore:InvokeAgentRuntime` and no `bedrock:InvokeModel` |
 | DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified 2026-08-23** — shared by both artefacts, which is why they are deployed together |
 | API Gateway + Lambda | Pilot-shaped API | In `PoolStack`, which is **not** what the public demo deploys |
-| S3 + CloudFront | Pilot-shaped web hosting | In `PoolStack`. The public demo needs neither |
+| S3 | Pilot-shaped web hosting | In `PoolStack`. The public demo needs it for nothing — its web app ships inside the function |
+| CloudFront | Reachable hostname in front of the demo's Function URL | **Implemented, not yet deployed** (#0065) — added to `PoolDemoStack` because `*.lambda-url.*.on.aws` is a blocked *category* on filtered resolvers (Cisco Umbrella answers the demo's hostname with a block page and an untrusted certificate, so a judge behind one sees a certificate error, not Pool). Caches `/assets/*` only; every dynamic path is uncached, because the workspace travels as a query parameter. Separately, `PoolStack` uses it for pilot-shaped hosting |
 | EventBridge | Optional future background scan | Implemented only in the un-deployed `PoolStack`; **zero rules exist in the deployed judge account** |
 | Amazon Location | `geo-routes`, no provisioned calculator | Implemented, unverified |
 | CloudWatch | Structured run records, retention capped at 14 days | In both stacks |

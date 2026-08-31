@@ -213,7 +213,7 @@ configuration, not the money. See #0023.
 **No always-on compute exists.** The runtime bills only while an invocation is in flight;
 six invocations totalling ~30 s of processing is the entire compute spend so far.
 
-**Public judge demo — `PoolDemoStack` (8 resources, deployed 2026-08-16, entry #0025)**
+**Public judge demo — `PoolDemoStack` (8 resources deployed 2026-08-16, entry #0025; 9 synthesized since #0065)**
 
 **Live URL: <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/>**
 
@@ -227,6 +227,13 @@ six invocations totalling ~30 s of processing is the entire compute spend so far
 | `DemoApi/ServiceRole` | IAM Role | `PoolDemoStack-DemoApiServiceRoleD1A1B4D5-kT16gVvbahFM`. **DynamoDB grant narrowed 2026-08-18** (#0031) from `grant_read_write_data` to the five actions the code issues — `GetItem`, `PutItem`, `Query`, `UpdateItem`, `BatchWriteItem`. Removed: `Scan`, `DeleteItem`, `DescribeTable`, `BatchGetItem`, `ConditionCheckItem`, `GetRecords`, `GetShardIterator` | No | With the stack |
 | Role default policy | IAM Policy | `PoolD-DemoA-IgvYHVbqMZn9` — DynamoDB on one table, `InvokeAgentRuntime` on one runtime ARN | No | With the stack |
 | 2 x invoke permission | Lambda Permission | `...-DemoApiinvokefunctionEB041109-WxR1cOdgWRyn`, `...-DemoApiinvokefunctionurl07DCB729-roeUn4lhuRUD` | No | With the stack |
+| `DemoCdn` | CloudFront Distribution, PriceClass_100, no access logging | **Not deployed.** Implemented 2026-08-31 (#0065); the stack synthesizes nine resources and eight are deployed. No physical name exists until a deploy creates one, and this row stays unfilled rather than carrying a guess | No hourly charge; per-request and per-GB inside the perpetual free tier | With the stack |
+
+**The ledger above is what is deployed, not what the stack synthesizes.** Those diverged on
+2026-08-31: `PoolDemoStack` now describes a CloudFront distribution that has never been
+created, because the deploy needs credentials this session did not have. Until `make
+deploy-demo` runs, the live URL is still the Function URL — which is exactly the hostname
+filtered networks block, and the reason the distribution exists (#0065).
 
 **No reserved concurrency, and not by choice.** Lambda enforces
 `account_limit - sum(reserved) >= 10`, and this account's limit **is** 10 — so any
@@ -7752,3 +7759,171 @@ cheap-and-boring sequence over the clever one.
 Deployed `1a496df`. Docs updated: `README.md`, `PRODUCT.md`, `docs/ARCHITECTURE.md`,
 `docs/HACKATHON_SCORECARD.md`, `docs/RELEASE_CHECKLIST.md`, `docs/ARTICLE_NOTES.md`, and
 the resource ledger above.
+
+### #0065 — [2026-08-31] — The demo URL was never unreachable; it was uninvited
+`[AWS]` `[ARCHITECTURE]` `[COST]` `[ARTICLE-2]`
+
+**Goal / user intent**
+The deployed demo stopped loading on the university network — Chrome showed
+`NET::ERR_CERT_AUTHORITY_INVALID` for
+`5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws`. Diagnose it, then stop it
+from being a thing a judge can experience.
+
+**What it actually was**
+
+Not AWS, not the certificate, not the function. The name never resolved to AWS at all.
+The Mac's resolvers are this university's (`128.252.0.100` and four more), which run Cisco
+Umbrella DNS filtering, and for this hostname they answer with Umbrella's block-page
+address:
+
+| Resolver | Answer |
+| --- | --- |
+| University DNS | `146.112.61.110` — Umbrella block page |
+| Cloudflare `1.1.1.1` | `54.158.6.91` — the real function |
+
+The block page then presents a certificate it minted for our hostname:
+
+```
+subject: O=OpenDNS, Inc., CN=5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws
+issuer:  O=Cisco, CN=Cisco Umbrella Secondary SubCA chi-SG
+root:    O=Cisco, CN=Cisco Umbrella Root CA
+```
+
+`security find-certificate` finds **zero** matching roots in the System keychain, so Chrome
+correctly refuses it. Chrome was right; the diagnosis that it was "an AWS problem" would
+have been wrong.
+
+The function was fine throughout, and this is worth stating precisely because the
+temptation was to go looking for a bug in it. Resolving the hostname through `1.1.1.1` and
+pinning it with `curl --resolve`: **HTTP 200**, valid Amazon certificate, and the response
+body was Pool's own `<title>Pool</title>` shell. `example.com` and `github.com` resolved
+normally through the same university resolvers, so this is a **targeted category block**,
+not blanket interception. No Umbrella roaming client is installed locally — the block
+follows the network, not the machine.
+
+**Why this was worth infrastructure rather than a workaround**
+
+The judge-facing consequence is the whole point. `*.lambda-url.*.on.aws` is a category
+filtering vendors block *on purpose*, because attackers use Function URLs for phishing and
+C2 — nothing about Pool being correct removes it from that category. A judge opening the
+submission link from a filtered university or corporate network gets a browser security
+interstitial, and the reasonable reading of that is "this project is broken", or worse.
+Every existing mitigation is on the wrong side of the problem: switching resolvers, a
+hotspot, an `/etc/hosts` pin (which also rots, because Function URL addresses rotate) all
+require the *visitor* to do something.
+
+`*.cloudfront.net` is not in that category, so a CloudFront distribution in front of the
+existing Function URL fixes it with nothing asked of the visitor. **The distribution was
+bought for the hostname.** Caching is a side effect, and a small one.
+
+**Why this is not a reversal of "one Lambda serves the web app too"**
+
+`infra/demo_app.py` argues against S3 + CloudFront, and that argument still stands, because
+it was about S3 as an *origin*: a bucket, an origin access control, a bucket policy and an
+invalidation step on every deploy. None of that exists here. There is still one origin, one
+deployable unit, and one browser origin — the SPA and the API arrive from the same
+CloudFront hostname exactly as they arrived from the same Function URL hostname, so there
+is still no cross-origin request to secure. What changed is that the origin is now reached
+through a name that resolves everywhere.
+
+**Four ways this could have silently broken the demo**
+
+A CDN in front of a stateful, mutating, same-origin app fails quietly: the deploy succeeds
+and the product misbehaves. Each has a test in `TestCdn`.
+
+1. **The `Host` header.** A Function URL authorises against its own hostname, so forwarding
+   the viewer's `Host` — which `ALL_VIEWER`, the obvious-looking managed policy, does — gets
+   every request rejected *at the origin*. `ALL_VIEWER_EXCEPT_HOST_HEADER` exists for this
+   exact pairing.
+2. **The cache key.** Pool identifies a visitor's workspace with a **query parameter**, not
+   a cookie. Any policy that dropped the query string from the key would serve one
+   visitor's pool to another — a correctness failure dressed as a performance feature. The
+   dynamic path is `CachingDisabled`, which cannot make that mistake at any TTL.
+3. **The methods.** CloudFront's default is GET/HEAD. Every lifecycle action in this product
+   is a POST, so the default would have shipped a read-only demo that looked deployed.
+4. **The deadline, again (#0030).** CloudFront's default origin timeout is 30 s, against a
+   live agent action whose own wall-clock bound is 45 s — the CDN would have become the
+   *shortest* deadline and cut the function off mid-write, the one failure mode where shared
+   state changes and the browser is told nothing happened. It is set to 60 s, which is the
+   ceiling CloudFront allows without a quota increase.
+
+**An honest limit on that fourth one.** 60 s is not enough to cover the worst case. If the
+AgentCore runtime wedges, the function's own bridge read timeout also fires at 60 s, and
+which of the two lands first is a race — that path can surface as a CDN `504` instead of the
+structured loop-fault the function would have returned. The ordinary path (the agent
+finishing, or hitting its own 45 s bound) is comfortably inside the ceiling. The Function URL
+was deliberately left public as the fallback, which is also why `AWS_IAM` + origin access
+control was *not* chosen: locking the origin to CloudFront would have removed the only route
+that bypasses this race.
+
+A fifth, smaller trap: CloudFront applies a 10 s error-caching TTL regardless of the cache
+policy, so a quota refusal or validation error would keep being served for ten seconds after
+the condition cleared, and the retry that should have worked would look like a broken app.
+Every status code CloudFront will cache is pinned to `ErrorCachingMinTTL: 0`. `429` is
+deliberately absent from that list because CloudFront never caches it, and configuring a
+policy for a code that has none would be a claim the template cannot keep.
+
+**Cost, and a correction to a test**
+
+`test_demo_stack.py` listed `AWS::CloudFront::Distribution` in `ALWAYS_ON` — resource types
+whose presence would mean the stack bills while nobody is looking — and asserted there were
+none. Adding one required removing it from that list, so it is worth being explicit that this
+is a **correction rather than an exemption**: CloudFront has no hourly or idle charge, and
+never belonged beside EC2, RDS, a NAT gateway or a load balancer, all of which bill by the
+hour with zero traffic. It bills per request and per GB, both inside a perpetual free tier
+(1 TB egress, 10 M requests per month) that a hackathon demo cannot plausibly exhaust. The
+`/assets/*` cache makes the deployment *cheaper* than before by not waking the function for
+static bytes.
+
+The properties that genuinely could cost money at idle are asserted absent instead, which is
+a tighter check than the list could express: no access logging (it would need an S3 bucket
+this stack does not have, and a bucket outliving `cdk destroy` is the orphan shape of #0023),
+no real-time logs, no Origin Shield. `PriceClass_100`, matching `PoolStack`.
+
+**Custom domain: implemented, unset, and deliberately not requested from CDK**
+
+`POOL_DEMO_DOMAIN` + `POOL_DEMO_CERT_ARN` wire an alias and a `TLSv1.2_2021` floor onto the
+distribution; setting one without the other raises at synthesis rather than rolling back a
+deploy. Both are unset, and what deploys is the `*.cloudfront.net` name — which needs no
+domain, no certificate and no DNS record, and is what "easiest and free" resolves to.
+
+The certificate is referenced **by ARN** rather than requested in CDK on purpose: a
+CDK-issued ACM certificate needs DNS validation, DNS validation from CDK needs a Route 53
+hosted zone, and a hosted zone is $0.50 a month whether or not anyone visits — exactly what
+AGENTS.md §3.5 says to call out. Pointing an already-owned name at the distribution with one
+CNAME at its existing registrar costs nothing.
+
+**Status — read this before quoting anything above as done**
+
+**Implemented and tested; not deployed.** This session had no AWS credentials (`aws sts
+get-caller-identity` → `NoCredentials`), and no AWS resource was created, modified or
+destroyed. Zero model tokens were spent.
+
+Verified offline: the stack synthesizes to **nine** resources, every one
+`DeletionPolicy: Delete`; the template carries `OriginProtocolPolicy: https-only`,
+`OriginReadTimeout: 60`, `CachingDisabled` + `AllViewerExceptHostHeader` on the default
+behaviour, `CachingOptimized` + GET/HEAD on `/assets/*`, eight zeroed error TTLs, no
+`Logging`, no `Aliases`, no `ViewerCertificate`. The custom-domain path was synthesized
+separately and produces the alias, the TLS floor, a `https://pool.example.com` `DemoUrl`,
+and still nine resources — an imported certificate is a reference, not a resource.
+`test_demo_stack.py` is **62 green**, 12 of them new; the whole infrastructure suite
+(`test_stack.py test_demo_stack.py`) is **86 green**, and the application suite is
+**1,308 green** — the one application file touched was a comment in `public_demo.py`
+about which AWS-owned domain HSTS is being asserted over. `make lint`, which covers
+`services/agent` and the web app, passes clean. `make demo-synth` renders the template
+against the real bundle: nine resources, and `DemoUrl` resolving to the distribution's
+`DomainName` rather than to the function.
+
+A note for anyone running these: `pytest -q` with no arguments in `infra/` collects 489
+errors and takes three and a half minutes, because it recurses into the `cdk.out.*`
+directories and tries to import the vendored `tests/` inside every `asset.*` bundle. That
+is why the Makefile names both files explicitly. Nothing is wrong with the suite.
+
+**What a deploy still owes.** The distribution's hostname does not exist until it is
+created, so five documents still publish the Function URL as the live address —
+`README.md`, `PRODUCT.md`, `docs/HACKATHON_SCORECARD.md`, `docs/RELEASE_CHECKLIST.md` and
+the ledger above. Those statements are all still *true*: the Function URL stays public and
+still works. They are pointing at the hostname that filtered networks block, which is the
+thing to fix at deploy time, not before. `DemoUrl` is now the CDN's URL and `make demo-url`
+reads it, so the replacement value comes from the deploy itself. A first request through a
+new distribution should also be expected to take a few seconds while it propagates.

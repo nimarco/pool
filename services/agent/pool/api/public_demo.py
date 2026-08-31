@@ -188,10 +188,12 @@ CONTENT_SECURITY_POLICY = "; ".join(
 #: gaps an external review found (#audit P2).
 #:
 #: ``Strict-Transport-Security`` carries no ``preload`` and no ``includeSubDomains``
-#: beyond this host: the demo is served from an AWS-owned Function URL domain, and
-#: asserting a policy over a domain this project does not control would be overreach with
-#: a two-year memory. Browsers ignore the header entirely over plain HTTP, so a local run
-#: is unaffected.
+#: beyond this host: the demo is served from an AWS-owned domain it does not control —
+#: the Function URL's, and, since #0065, the CloudFront distribution's in front of it —
+#: and asserting a policy over such a domain would be overreach with a two-year memory.
+#: The reasoning is unchanged by the CDN, and would only change if Pool were served from
+#: a name this project owns. Browsers ignore the header entirely over plain HTTP, so a
+#: local run is unaffected.
 #:
 #: ``Permissions-Policy`` denies the capability set outright. Pool asks for none of it —
 #: the map is a synthetic coarse-grid rendering and never requests a real position — so

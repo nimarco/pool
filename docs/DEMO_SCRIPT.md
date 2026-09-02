@@ -8,6 +8,16 @@ a different claim and because the machinery behind it is still real.
 
 All of them are navigation-and-timing rehearsals, not word-for-word voiceovers.
 
+> **Live invocation is switched off on the public deployment (2026-09-02).**
+> `PUBLIC_DEMO_AGENTCORE_ENABLED=false`, so `/api/demo/config` reports
+> `live_agent_available: false` and every beat below — including the ones that say to press
+> **Ask Pool to check now** — runs the same bounded Strands loop with the deterministic
+> offline planner, at zero model tokens. That is deliberate: it is what makes the judge
+> demo repeatable and unable to spend a token. Nothing in the *navigation* changes.
+> To rehearse the AgentCore/Nova route instead, re-arm it on your own deployment with
+> `aws lambda update-function-configuration --environment` and set the flag back to `true`;
+> the invocation-budget notes below apply only in that state.
+
 The line everything hangs off:
 
 > **Nobody organised the group. Pool noticed.**

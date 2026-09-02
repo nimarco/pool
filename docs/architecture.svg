@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 760" width="1280" height="760" role="img" aria-labelledby="title desc" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
   <title id="title">Pool — deployed judge architecture and implementation boundary</title>
-  <desc id="desc">People reach a React app served by one Lambda Function URL, which signs an invocation of Amazon Bedrock AgentCore Runtime. Inside the runtime, a bounded Strands agent loop calls Amazon Bedrock for inference and reaches the world only through twelve typed Pool tools. Those tools call deterministic orchestration services over a pure domain layer that performs no I/O, backed by a single DynamoDB table and CloudWatch run records. The browser reads the exact run and resulting pool back from that table. Payments, the supplier purchase and routing are simulated adapters. EventBridge exists only in an un-deployed pilot stack; the deployed judge account has zero EventBridge rules.</desc>
+  <desc id="desc">Pool runs one bounded Strands agent over two execution routes. The public judge route: a browser reaches CloudFront, which fronts one Lambda Function URL serving both the React app and 36 of 55 API paths; saving a declaration writes a coordination event and one bounded Strands run answers it in-process with a deterministic offline planner in the model position, spending zero model tokens — that function holds no permission to call a model. The separate AgentCore route: the Lambda signs an InvokeAgentRuntime call to Amazon Bedrock AgentCore Runtime, where the same bounded Strands loop uses Amazon Bedrock Nova Lite for inference. Both routes reach the world only through the same 17 typed Pool tools (12 lifecycle, 3 cohort-strategy, 2 clarification) with no shell and no SQL, which call deterministic orchestration services over a pure domain layer that performs no I/O, backed by a single DynamoDB table and CloudWatch run records. The browser reads the exact run and resulting pool back from that table. Payments, the supplier purchase and routing are simulated adapters. EventBridge exists only in an un-deployed pilot stack; the deployed judge account has zero EventBridge rules.</desc>
 
   <!-- Hand-authored rather than auto-laid-out. A generated flowchart of this graph came
        out 1474 x 2902, which is illegible in a README and useless in a video frame; a
@@ -17,7 +17,7 @@
 
   <!-- ─────────────────────────────────────────────────────── title -->
   <text x="40" y="52" font-size="25" font-weight="600" fill="#17150f" letter-spacing="-0.3">Pool — deployed judge architecture + implementation boundary</text>
-  <text x="40" y="76" font-size="13.5" fill="#575145">Solid AWS path is deployed. Dashed components are implemented but absent from the judge stack. The model decides; deterministic code verifies and writes.</text>
+  <text x="40" y="76" font-size="13.5" fill="#575145">Public /verify: CloudFront → Lambda → Strands + offline deterministic planner — 0 model tokens. AgentCore route: Strands + Nova Lite. Same tools, same table.</text>
 
   <!-- ─────────────────────────────────────────────────────── people -->
   <rect x="40" y="104" width="236" height="146" rx="10" fill="#ffffff" stroke="#ded7c9"/>
@@ -35,10 +35,10 @@
   <text x="318" y="128" font-size="10.5" font-weight="700" letter-spacing="1.2" fill="#384b5e">EDGE — AWS</text>
   <g font-size="13.5" fill="#17150f">
     <text x="318" y="154">React app (Vite)</text>
-    <text x="318" y="182">Lambda Function URL</text>
+    <text x="318" y="182">CloudFront → Lambda Function URL</text>
   </g>
   <text x="318" y="199" font-size="11.5" fill="#575145">one function serves the SPA and the API</text>
-  <text x="318" y="216" font-size="11.5" fill="#575145">from one origin — 32 of 49 API paths reachable</text>
+  <text x="318" y="216" font-size="11.5" fill="#575145">from one origin — 36 of 55 API paths reachable</text>
   <text x="318" y="238" font-size="11.5" fill="#384b5e">The browser never holds an AWS credential</text>
 
   <!-- ─────────────────────────────────────────────────────── agent -->
@@ -61,7 +61,7 @@
   <text x="1068" y="162" font-size="13" font-weight="600" fill="#17150f">Amazon Bedrock</text>
   <text x="1068" y="181" font-size="11.5" fill="#575145">model inference</text>
   <text x="1068" y="197" font-size="11.5" fill="#575145">nova-lite, via Strands</text>
-  <text x="1068" y="213" font-size="11.5" fill="#575145">offline planner when local</text>
+  <text x="1068" y="213" font-size="11.5" fill="#575145">AgentCore route only</text>
 
   <!-- ─────────────────────────────────────────────────── connectors -->
   <line x1="276" y1="177" x2="298" y2="177" stroke="#8a8272" stroke-width="1.4" marker-end="url(#a)"/>
@@ -70,17 +70,17 @@
   <line x1="1042" y1="186" x2="1052" y2="186" stroke="#8a8272" stroke-width="1.4" marker-end="url(#a)"/>
 
   <path d="M928 232 V276" stroke="#3d6b4c" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
-  <text x="940" y="262" font-size="11.5" fill="#3d6b4c">the only way out: 12 typed tools</text>
+  <text x="940" y="262" font-size="11.5" fill="#3d6b4c">the only way out: 17 typed tools</text>
 
   <!-- ────────────────────────────────────────────── deterministic -->
   <rect x="40" y="284" width="1200" height="186" rx="10" fill="#ffffff" stroke="#b6c4d2"/>
   <text x="58" y="308" font-size="10.5" font-weight="700" letter-spacing="1.2" fill="#384b5e">DETERMINISTIC — determines WHAT IS TRUE</text>
 
   <rect x="58" y="320" width="256" height="132" rx="8" fill="#e5ebf1" stroke="#b6c4d2"/>
-  <text x="72" y="342" font-size="13" font-weight="600" fill="#17150f">agent/tools.py — 12 tools</text>
-  <text x="72" y="361" font-size="11.5" fill="#575145">typed · narrow · no shell, no SQL</text>
+  <text x="72" y="342" font-size="13" font-weight="600" fill="#17150f">agent/tools.py — 17 typed tools</text>
+  <text x="72" y="361" font-size="11.5" fill="#575145">12 lifecycle · 3 strategy · 2 clarify</text>
   <text x="72" y="378" font-size="11.5" fill="#575145">4 read · 1 record · 6 act · 1 end</text>
-  <text x="72" y="395" font-size="11.5" fill="#575145">each consequential one idempotent</text>
+  <text x="72" y="395" font-size="11.5" fill="#575145">no shell, no SQL · idempotent</text>
   <text x="72" y="412" font-size="11.5" fill="#575145">by an explicit key</text>
   <text x="72" y="437" font-size="11.5" fill="#384b5e">results projected before the model sees</text>
   <text x="72" y="450" font-size="11.5" fill="#384b5e">them — 35.8k → 19.2k input tokens</text>
@@ -131,7 +131,7 @@
   <g font-size="13" font-weight="600" fill="#3f3a31">
     <text x="674" y="562">EventBridge — background scan</text>
     <text x="674" y="606">Amazon Location — geo-routes</text>
-    <text x="674" y="650">API Gateway · S3 · CloudFront — the pilot-shaped stack</text>
+    <text x="674" y="650">API Gateway · S3 — the pilot-shaped stack</text>
   </g>
   <text x="674" y="580" font-size="11.5" fill="#6f6759">Pilot-stack code only. Deployed judge account: zero EventBridge rules.</text>
   <text x="674" y="624" font-size="11.5" fill="#6f6759">Adapter exists and is tested; never called against the live service.</text>
@@ -147,5 +147,5 @@
     <rect x="990" y="700" width="11" height="11" rx="2" fill="#f2efe9" stroke="#c6bdab" stroke-dasharray="3 2"/>
     <text x="1010" y="710" fill="#575145">dashed — implemented, not deployed</text>
   </g>
-  <text x="40" y="740" font-size="11.5" fill="#6f6759">Synthetic community, synthetic suppliers, simulated payments and a simulated supplier purchase. Bedrock, AgentCore Runtime, DynamoDB and the Lambda Function URL are verified on a real account.</text>
+  <text x="40" y="740" font-size="11.5" fill="#6f6759">Synthetic community, synthetic suppliers, simulated payments and supplier purchase. Bedrock, AgentCore Runtime, DynamoDB, CloudFront and the Lambda Function URL verified on a real account (2026-09-02).</text>
 </svg>

@@ -124,8 +124,11 @@ export function Verify({
               you can read afterwards.
             </li>
             <li>
-              <strong>Synthetic:</strong> the community, the households, the products and
-              the supplier quotes. No real person or roaster is represented.
+              <strong>Synthetic:</strong> the community, the households and the supplier
+              quotes — no real person is represented, and the two roasters in the coffee
+              story, Kestrel Roastworks and Harbourstone, are invented. Product identities
+              are <strong>real</strong>: a dated Open Food Facts snapshot, credited under
+              About.
             </li>
             <li>
               <strong>Simulated:</strong> payments. No card is charged, authorised, or

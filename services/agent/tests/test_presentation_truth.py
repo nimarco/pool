@@ -16,7 +16,7 @@ def test_architecture_diagram_uses_current_counts_bounds_and_effect_kinds():
     svg = _read("docs/architecture.svg")
     effects = Counter(kind for _, kind in TOOL_SURFACE)
 
-    assert "32 of 49 API paths reachable" in svg
+    assert "36 of 55 API paths reachable" in svg
     assert "45 s cooperative" in svg
     assert (
         f'{effects["read"]} read · {effects["record"]} record · '
@@ -26,7 +26,7 @@ def test_architecture_diagram_uses_current_counts_bounds_and_effect_kinds():
     assert "created_by_run proves causality" in svg
 
     for stale in (
-        "14 of 45", "28 of 44", "29 of 45", "23 allowlisted", "25 calls · 120 s",
+        "14 of 45", "28 of 44", "29 of 45", "32 of 49", "23 allowlisted", "25 calls · 120 s",
         "Created disabled",
     ):
         assert stale not in svg

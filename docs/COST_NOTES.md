@@ -49,7 +49,7 @@ bridge's 60 s read timeout on `invoke_agent_runtime`, then the Lambda's own 90 s
 timeout. Deployments set the inner bound to 45 in both places the agent can run, so
 the nesting holds whichever path executes.
 
-**The CloudFront distribution added in #0065 (implemented, not yet deployed) adds a rung
+**The CloudFront distribution added in #0065 (deployed 2026-09-02) adds a rung
 that is not strictly outermost, and this is a known limit rather than an oversight.** Its
 origin timeout is 60 s — the ceiling CloudFront allows without a service-quota increase —
 so it sits *outside* the agent's 45 s bound, which is the case that matters, and *inside*
@@ -75,7 +75,7 @@ One coordination run at defaults:
 | Lambda | 1 invocation, ≤ 60 s | 1024 MB |
 | DynamoDB | tens of on-demand reads/writes | Small demo dataset |
 | Location `geo-routes` | ≤ 1 matrix call, ≤ 100 cells | Cached per run so repeated tool calls cannot re-bill |
-| CloudFront | 1 request in, ≤ 1 request to the origin | Implemented, not yet deployed (#0065). No hourly charge; per-request and per-GB, inside the perpetual free tier (1 TB, 10 M requests/month). `/assets/*` is cached at the edge, so it **removes** Lambda invocations rather than adding cost |
+| CloudFront | 1 request in, ≤ 1 request to the origin | **Deployed 2026-09-02** (#0065), distribution `EMOLZSGVY7HTN`. No hourly charge; per-request and per-GB, inside the perpetual free tier (1 TB, 10 M requests/month). `/assets/*` is cached at the edge, so it **removes** Lambda invocations rather than adding cost |
 | CloudWatch | a few KB | 14-day retention |
 
 The demo scenario is three runs. In offline mode all three cost **zero**.

@@ -446,7 +446,8 @@ member's details into an artifact that gets published.
 - **The Stripe adapter refuses any key that is not `sk_test_`**, unconditionally.
 - **Secrets never enter the CDK template**, because that would put them in `cdk.out` and
   possibly in version control. An infra test asserts it.
-- **The model reaches the world through twelve typed tools** and nothing else.
+- **The model reaches the world through seventeen typed tools** (12 lifecycle, 3
+  cohort-strategy, 2 clarification) and nothing else.
 
 ---
 

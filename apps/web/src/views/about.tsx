@@ -141,7 +141,7 @@ export function About({
             </summary>
             <p className="small muted prose" style={{ marginTop: 10 }}>
               The pure domain layer performs no I/O and imports no adapter. Whatever drives
-              the loop reaches application state only through twelve typed tools, so it
+              the loop reaches application state only through seventeen typed tools, so it
               cannot author a price.
             </p>
           </details>

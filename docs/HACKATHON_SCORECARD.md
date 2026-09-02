@@ -13,7 +13,7 @@ work
 
 | Requirement | Status | Evidence / remaining gate |
 | --- | :-: | --- |
-| Strands Agents SDK is load-bearing | ✅ | Real Strands event loop, hooks and twelve typed tools |
+| Strands Agents SDK is load-bearing | ✅ | Real Strands event loop, hooks and seventeen typed tools (12 lifecycle, 3 cohort-strategy, 2 clarification) |
 | Created during submission period | ✅ | Repository history begins 2026-08-15 |
 | Repository pushed | ✅ | `origin/main` exists; final patch still must be pushed after QA |
 | Repository publicly reachable | ⬜ | Human/private-window check before submission |
@@ -22,7 +22,7 @@ work
 | Architecture diagram | ✅ | [`architecture.svg`](architecture.svg) |
 | Demo video ≤ 5 minutes | ⬜ | One-run rehearsal script exists; video intentionally not recorded yet |
 | AWS Builder ID / entrant eligibility | ⬜ | Human-only checks |
-| Live demo | ⚠️ | Deployed and verified **2026-08-23** at <https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/verify>, running the final-audit release. **Recheck from a different network, not just a private window** — a private window shares the machine's resolvers, and the failure this catches is a DNS-level category block on `*.lambda-url.*.on.aws` (Cisco Umbrella returns a block page with an untrusted certificate, so a judge sees `ERR_CERT_AUTHORITY_INVALID`). The CloudFront distribution that fixes it is implemented and not yet deployed (#0065) |
+| Live demo | ✅ | Deployed and verified **2026-09-02** at <https://d38kno05ygcarw.cloudfront.net/verify> — CloudFront distribution `EMOLZSGVY7HTN`, `Deployed` and enabled. This hostname is what fixes the DNS-level category block on `*.lambda-url.*.on.aws` that made the raw Function URL unreachable behind Cisco Umbrella and its peers (#0065); the Function URL remains the origin. Coffee and paper-towels flows re-driven end to end against it on 2026-09-02, both `model_provider=offline`, 0 model tokens |
 | Problem, users and why it matters in video | 🟡 | Covered by the ~4:50 rehearsal script; recording remains |
 | Good Neighbor framing | ✅ | Collective value inside an existing Community |
 

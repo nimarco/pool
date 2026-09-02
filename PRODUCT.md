@@ -196,7 +196,7 @@ Real, and safe to rely on:
   `demo-data/riverbend-case-programme.csv`, `demo-data/MANIFEST.json`. Really parsed,
   digest-pinned, imported in that order.
 - **A deployed public demo** on AWS Lambda + DynamoDB at
-  `https://5hhaadit5pdarllqmbj24u4ybm0ixsyj.lambda-url.us-east-1.on.aws/`, running the
+  `https://d38kno05ygcarw.cloudfront.net/verify`, running the
   current release and verified **2026-08-23**. Its judge path runs the deterministic
   offline planner at zero model tokens; live model execution is a separate
   explicitly-requested action on Amazon Bedrock AgentCore Runtime, verified live on

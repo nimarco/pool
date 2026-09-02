@@ -61,7 +61,7 @@ People declare what they routinely need. Pool then:
 ## How I built it
 
 **Strands is load-bearing.** The coordinator uses a real Strands event loop to choose
-which of twelve typed tools to call, whether an opportunity deserves investigation,
+which of seventeen typed tools to call, whether an opportunity deserves investigation,
 which bounded recovery to attempt, and when to stop. It has no shell, arbitrary SQL or
 generic mutation.
 
@@ -155,10 +155,10 @@ Runtime and Amazon Bedrock (Nova Lite) are deployed and verified live alongside 
 carry the live agent action against the same DynamoDB state and the same bounded tools.
 
 Implemented but not deployed on the judge path: API Gateway, S3, EventBridge, the Amazon
-Location `geo-routes` adapter, and a Stripe TEST-only adapter. Amazon CloudFront is
-implemented *for* the judge path and not yet deployed to it: the demo's Function URL
-hostname falls in a category filtered networks block, which reaches a visitor as a
-certificate error rather than as a demo. The deployed
+Location `geo-routes` adapter, and a Stripe TEST-only adapter. Amazon CloudFront **is
+deployed and is the canonical judge URL** (2026-09-02): the demo's raw Function URL
+hostname falls in a category filtered networks block, which reached a visitor as a
+certificate error rather than as a demo, and CloudFront is what fixes it. The deployed
 account has zero EventBridge rules. Routing, payments and the supplier purchase shown in
 the demo are simulated.
 
@@ -166,7 +166,7 @@ the demo are simulated.
 
 | Claim | Current evidence |
 | --- | --- |
-| Strands is load-bearing | **Tested and deployed.** The coordinator runs through Strands and twelve typed tools. |
+| Strands is load-bearing | **Tested and deployed.** The coordinator runs through Strands and seventeen typed tools. |
 | Bounded agent loop | **Tested and deployed.** Bounds and repeated-call faults have executed tests. |
 | Deterministic truth boundary | **Tested.** Domain and service suites assert money, policy, matching, state and viability. |
 | End-to-end lifecycle | **Tested and deployed.** The deterministic 13-stage scenario was observed against the public DynamoDB-backed demo. |

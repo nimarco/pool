@@ -598,7 +598,7 @@ account-wide step that grants `AdministratorAccess` to a CloudFormation executio
 It is deliberately not automated here (`AGENTS.md` §3.5).
 
 See [`docs/COST_NOTES.md`](docs/COST_NOTES.md) for the resource ledger and
-[`AGENTS.md`](AGENTS.md) §3 for the cost rules every change is held to.
+`AGENTS.md` §3 for the cost rules every change is held to.
 
 ---
 
@@ -644,7 +644,9 @@ docs/              architecture, pilot readiness, thesis, demo script, scorecard
 - [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) — everything that must be true before submitting, with the human-only items left as TODO rather than assumed
 - [`docs/COST_NOTES.md`](docs/COST_NOTES.md) — every resource that can accrue cost
 - [`BUILD_HISTORY.md`](BUILD_HISTORY.md) — decisions, rejected approaches, and what broke
-- [`AGENTS.md`](AGENTS.md) — the operating manual any agent working here must follow
+- `AGENTS.md` — the operating manual any agent working here must follow. Deliberately
+  **not** in this repository: it is local contributor instruction, not part of the
+  project, so section references to it above will not resolve to a file here
 
 ## Licence
 

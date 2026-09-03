@@ -70,10 +70,13 @@ export function Verify({
             <li>Save.</li>
           </ol>
           <p className="small">
-            That is the whole of it. Saving is what causes Pool to look; there is no
-            &ldquo;run&rdquo; button, and pressing one would be the thing this page exists
-            to avoid. When it has finished, Home will have changed — and every row that
-            changed can tell you why.
+            That is the whole of it. Saving is what causes Pool to look; nothing on this
+            path asks you to press &ldquo;run&rdquo;. Home does carry an{" "}
+            <strong>Ask Pool to check now</strong> button, and on this deployment it runs
+            the same bounded loop with the same deterministic planner, at zero model
+            tokens — live model invocation is switched off here, so there is no control
+            that spends one. When it has finished, Home will have changed — and every row
+            that changed can tell you why.
           </p>
           <p className="small muted">
             <strong>What changes is a real answer, not necessarily an order.</strong> A

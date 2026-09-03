@@ -272,22 +272,37 @@ class PoolDemoStack(Stack):
             # or the browser can be shown the world as it was before the agent ran.
             "DYNAMODB_CONSISTENT_READS": "true",
             # The API Lambda never calls Bedrock. The deterministic offline planner backs
-            # the free lifecycle actions — advancing a pool, the scripted showcase — so
-            # those are repeatable and unaffected by model variance. The product's
-            # discovery action goes to AgentCore, which has its own model configuration.
+            # every action a visitor can reach — discovery, advancing a pool, the scripted
+            # showcase — so all of them are repeatable and unaffected by model variance.
+            # With the kill switch below off, this is the only planner the public demo
+            # runs, which is what makes the judge path a zero-token path.
             "MODEL_PROVIDER": "offline",
             "ROUTING_PROVIDER": "deterministic",
             "PAYMENT_PROVIDER": "simulated",
             "PURCHASE_EXECUTOR": "simulated",
             "SCHEDULES_ENABLED": "false",
             # Kill switch for the only paid path, independent of the demo itself.
-            "PUBLIC_DEMO_AGENTCORE_ENABLED": "true",
+            #
+            # Off for the public judge demo, deliberately. With it on, the product's own
+            # "Ask Pool to check now" routes to AgentCore/Nova before any local fallback,
+            # so a judge pressing the primary button spends model tokens — and, if that
+            # invocation fails, gets an error, no pool, and a lease-length lockout rather
+            # than a result. Off, the same button runs the same bounded Strands loop with
+            # the deterministic planner, and the API refuses the paid route before taking
+            # a lease, spending a quota unit, or reaching AWS. The runtime stays deployed;
+            # set this back to "true" to re-arm it on a deployment of your own.
+            "PUBLIC_DEMO_AGENTCORE_ENABLED": "false",
             "AGENTCORE_RUNTIME_ARN": runtime_arn,
             "AGENTCORE_QUALIFIER": "DEFAULT",
             # Abuse and cost bounds. Environment variables so they can be tightened on
             # the deployed function in seconds, without a rebuild (AGENTS.md §3.1).
-            "PUBLIC_DEMO_MAX_ACTIONS_PER_SESSION": "40",
-            "PUBLIC_DEMO_MAX_ACTIONS_PER_DAY": "600",
+            # 40 was a cap a genuine visitor could hit halfway through: one hands-on run
+            # — scan, advance, answer two decisions, accept the host job, open pickup,
+            # then issue and redeem ten credentials — is around thirty actions. These are
+            # free, deterministic, server-side operations; the cap exists to stop a
+            # script, not a judge. Matches the dataclass default in `public_demo.py`.
+            "PUBLIC_DEMO_MAX_ACTIONS_PER_SESSION": "100",
+            "PUBLIC_DEMO_MAX_ACTIONS_PER_DAY": "1200",
             "PUBLIC_DEMO_MAX_LIVE_PER_SESSION": "3",
             "PUBLIC_DEMO_MAX_LIVE_PER_DAY": "40",
             "PUBLIC_DEMO_MAX_NEW_SESSIONS_PER_DAY": "300",

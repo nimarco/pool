@@ -170,3 +170,9 @@ cdk.out.demotest/
 # produces is committed; these are only there so a rebuild does not hammer a
 # volunteer-run service.
 .catalog-cache/
+
+# Rendered demo video. The markdown, the captions and the still frames are committed;
+# the three MP4 deliveries are ~90MB together and are uploaded to the submission host
+# rather than carried in every clone. Rebuild with the pipeline in
+# docs/VIDEO_MEDIA_MANIFEST.md §7.
+video/*.mp4

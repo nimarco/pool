@@ -337,7 +337,11 @@ function BuyStep({
   return (
     <div className="stack-sm">
       <h1 className="display onboard-title">What do you buy regularly?</h1>
-      <p className="lede">
+      {/* `lede-settled` is a phone rule and nothing else: once a product is on screen
+          this paragraph is describing a step the member is already halfway through, and
+          on a 390px screen it is four lines standing between them and the quantity
+          field. It stays at every other width, where it costs nothing. */}
+      <p className={`lede${chosen ? " lede-settled" : ""}`}>
         This is the only thing Pool ever needs from you. It watches for other people
         nearby who need the same thing, and works out whether buying together is cheaper.
       </p>

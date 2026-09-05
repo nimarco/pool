@@ -290,7 +290,13 @@ function OpportunityCard({
                   ? `you save ${savings}`
                   : `${savings} ${pool.is_estimate ? "estimated" : "less than retail"}`
                 : provisional
-                  ? "not final — a host's pay is part of the price"
+                  ? /* The reason is only carried here when nothing else on the card is
+                       carrying it. While the job is open, the host note under the facts
+                       says the same thing at full size, and printing it twice inside
+                       200px made a caption out of the explanation. */
+                    pool.host
+                    ? "not final — a host's pay is part of the price"
+                    : "not final yet"
                   : "fixed once a host accepts"}
             </p>
           </div>
@@ -331,17 +337,37 @@ function OpportunityCard({
             Three provisional sentences used to sit around this one. What survives is the
             arithmetic, plus the two facts a member can act on: whether anybody is
             carrying it, and that nothing has been charged. */}
-        <p className="tiny faint">
-          {pool.provisional_units >= pool.threshold_units
-            ? `${pool.provisional_units} ${pool.unit}s — past the supplier's ${pool.threshold_units}-${pool.unit} minimum`
-            : `${pool.provisional_units} of the ${pool.threshold_units} ${pool.unit}s the supplier will sell`}
-          {pool.host
-            ? ` · ${pool.host.display_name} is carrying it`
-            : " · host still needed"}
-          {pool.funded_units > 0
-            ? ` · ${pool.funded_units} authorised`
-            : " · nothing charged yet"}
-        </p>
+        {/* The same three facts, as three objects rather than one sentence. On a phone
+            the sentence wrapped to two lines of 12px in which "host still needed" and
+            "nothing charged yet" — the two a member can act on, and the two a stranger
+            most needs to see — were interior clauses. Nothing here is new; the punctuation
+            became layout. */}
+        <ul className="pool-facts">
+          <li>
+            {pool.provisional_units >= pool.threshold_units
+              ? `${pool.provisional_units} ${pool.unit}s — past the supplier's ${pool.threshold_units}-${pool.unit} minimum`
+              : `${pool.provisional_units} of the ${pool.threshold_units} ${pool.unit}s the supplier will sell`}
+          </li>
+          <li>
+            {pool.host ? `${pool.host.display_name} is carrying it` : "Host needed"}
+          </li>
+          <li>
+            {pool.funded_units > 0 ? `${pool.funded_units} authorised` : "Nothing charged"}
+          </li>
+        </ul>
+
+        {/* What the unfilled job actually is, where the gap is stated.
+            "Host needed" is a status; on its own it asks the member to already know that
+            Pool's hosts are paid neighbours rather than volunteers, which is the single
+            most misread thing about the product. One line, and only while the job is
+            open. The role is `PRODUCT.md`'s: a paid local fulfiller who collects the bulk
+            order and distributes it. */}
+        {!pool.host ? (
+          <p className="tiny faint pool-host-note">
+            A neighbour collects the order, runs the pickup, and is paid for it — their
+            pay is inside the price above.
+          </p>
+        ) : null}
 
         {whyItWorked.length > 0 ? (
           <details className="inset">

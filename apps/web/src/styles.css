@@ -2025,6 +2025,20 @@ select.control {
   .facts {
     grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
   }
+  /* Two short number fields are a row on a phone, not a column. Stacked, "how many" and
+     "how often" cost 160px of a 844px screen to ask two questions whose answers are one
+     and two characters long. The labels are longer than the answers, so both reserve two
+     lines and the two inputs share a baseline rather than stepping. Anything marked
+     `field-wide` — the date, and its consequence note — still takes the whole row. */
+  .field-grid {
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 12px 14px;
+  }
+  .field-grid > .field:not(.field-wide) > .field-label {
+    min-height: 2.9em;
+    display: flex;
+    align-items: flex-end;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2335,6 +2349,13 @@ select.control {
   display: flex;
   flex-direction: column;
   gap: 22px;
+  /* A flex item's automatic minimum is its content's minimum, so the wizard was as wide
+     as the longest unbreakable thing inside it — on a phone, a preference pill — and
+     grew or shrank by however many pixels that string happened to measure. It sat 18px
+     past its own column, and every paragraph inside it was laid out against a width no
+     layout rule had chosen. It is the column now; the pills wrap, which is what
+     `prefs-options` was already asking for. */
+  min-width: 0;
 }
 .onboard-title {
   font-size: 34px;
@@ -2834,14 +2855,58 @@ select.control {
     font-size: 27px;
   }
 }
+/* On a phone the two money figures are the screen, and stacking them turned the one
+   comparison a member came back for into two unrelated numbers 90px apart — the second
+   of which was usually below the fold once the pickup point had wrapped. Side by side
+   they are read as a pair, which is what they are. Collection keeps the full row,
+   because a pickup point's name is the one string here that genuinely needs it. */
 @media (max-width: 430px) {
   .your-grid {
-    grid-template-columns: 1fr;
-    gap: 14px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 14px;
   }
   .your-grid > div:last-child {
-    grid-column: auto;
+    grid-column: 1 / -1;
   }
+  .your-value {
+    font-size: 30px;
+  }
+  .your-value-sm {
+    font-size: 19px;
+    line-height: 1.2;
+  }
+}
+
+/* The three standing facts about a forming order — how far past the minimum it is, who
+   is carrying it, and what has been charged. A list rather than a sentence, so each one
+   is a thing the eye can land on. Wraps to as many lines as it needs; on a phone that is
+   usually two, with the two actionable facts sharing the second. */
+.pool-facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.pool-facts li {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--ink-muted);
+  background: var(--paper-sunken);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+/* The two a member can act on read at full strength; the arithmetic is context. */
+.pool-facts li:first-child {
+  color: var(--ink-faint);
+  white-space: normal;
+}
+.pool-host-note {
+  margin: -2px 0 0;
+  max-width: 46ch;
 }
 
 /* ================================================================== record */
@@ -3536,6 +3601,13 @@ select.control {
 .prefs-pill {
   display: inline-flex;
   align-items: center;
+  /* Wrapping inside the pill is what stops the pill sizing the page. Unwrappable, its
+     minimum width was the whole string — "Medium — yours  22 units standing", 251px —
+     and because every ancestor up to the wizard is a flex column, that minimum became
+     the width of the panel, of the paragraphs in it, and of the step. A phone layout was
+     being decided by how many units of one roast happened to be standing. At any width
+     that fits, this still renders on one line. */
+  flex-wrap: wrap;
   gap: 7px;
   padding: 9px 12px;
   min-height: 44px;
@@ -3660,6 +3732,20 @@ select.control {
   gap: 10px;
   flex-wrap: wrap;
   margin-bottom: 4px;
+}
+/* Said, not implied. Set apart from the chips beside it — this is not another verdict,
+   it is the outcome. */
+.why-chosen {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--moss);
+  white-space: nowrap;
+}
+.why-verdict.is-chosen {
+  background: color-mix(in srgb, var(--moss) 5%, var(--paper-raised));
 }
 .why-verdict p {
   margin: 0;
@@ -3866,5 +3952,122 @@ select.control {
   .standing-shape li {
     grid-template-columns: minmax(0, 1fr) 56px auto;
     gap: 8px;
+  }
+}
+
+/* ============================================================ phone proportions
+ *
+ * One screen, one idea.
+ *
+ * Last in the file on purpose. Everything here is an override of a rule defined above
+ * it, and a media query adds no specificity — a phone rule written beside the desktop
+ * one it is narrowing silently loses to every base rule declared later in the sheet.
+ *
+ * Nothing below changes what any screen says. It exists because the consumer product is
+ * a phone product: the member screens were laid out at desktop proportions and then
+ * allowed to reflow, which is how a result four numbers long ended up two viewport
+ * heights tall. The rule applied throughout is that a member should be able to read the
+ * answer without scrolling, and scroll only to reach the next question.
+ */
+@media (max-width: 560px) {
+  /* A salutation is not the page. It was already smaller than the shared title; on a
+     phone it also gives back the 20px it was borrowing from the order underneath it. */
+  .title-greeting {
+    font-size: 21px;
+  }
+  /* The chrome above the answer. 102px of topbar on an 844px screen is 12% of the
+     product spent saying where you already are. */
+  .topbar-inner {
+    min-height: 50px;
+    padding-block: 7px;
+    gap: 8px;
+  }
+  .nav button {
+    min-height: 32px;
+    padding: 5px 10px;
+  }
+  .brand-name {
+    font-size: 21px;
+  }
+  .main {
+    padding-block: 18px 56px;
+  }
+  /* Panels sit closer together than they do on a desktop column, where the whitespace
+     between them is doing work a phone's viewport edge already does. */
+  .stack {
+    gap: 20px;
+  }
+  .stack-sm {
+    gap: 14px;
+  }
+
+  /* ---- the declaration form
+   *
+   * The step's lede explains what the step is for. Once somebody has picked a product,
+   * they have demonstrably understood it, and on a phone those four lines are the
+   * difference between seeing the quantity field and not. Desktop keeps it: there, the
+   * space is free. */
+  .lede-settled {
+    display: none;
+  }
+  /* ---- what flexibility costs and reaches
+   *
+   * The counts stay — they are the honest part of this screen and the member is
+   * genuinely weighing them. They stop being set at the same weight as the choice they
+   * annotate. */
+  .prefs-reach {
+    font-size: 12.5px;
+    line-height: 1.42;
+    padding: 10px 12px;
+  }
+  /* The counted demand beside each roast is context on a choice, not the choice. It
+     keeps its place in the pill and gives back the weight. Touch targets are untouched:
+     every pill and checkbox keeps its 44px. */
+  .prefs-reach-tag {
+    font-size: 11.5px;
+  }
+  /* A pill broken across two lines is two half-pills. On a phone this one rarely fits
+     beside the option it qualifies, so it takes its own line whole. */
+  .prefs-tag {
+    display: inline-block;
+    margin-left: 0;
+    margin-top: 4px;
+  }
+  .prefs-radio > span > strong,
+  .prefs-check > span > strong {
+    display: block;
+  }
+  /* Four nested boxes — page, wizard panel, inset, fieldset — were spending 128px of a
+     390px screen on their own edges, and the sentences inside were being set to 258px.
+     The nesting is right; its gutters were sized for a desktop column. */
+  .onboard-panel {
+    padding: 18px 13px;
+  }
+  .inset {
+    padding: 13px 12px;
+  }
+  .prefs {
+    padding: 12px 11px;
+  }
+
+  /* ---- the community's own demand
+   *
+   * The count and what it counts are one statement. Stacked, the number sat alone above
+   * its caption with two thirds of the row empty beside it. */
+  .standing-summary .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .standing-summary .stat-label {
+    max-width: none;
+  }
+
+  /* ---- watching
+   *
+   * "7" and "48" are the whole content of a watching row. At 22px they were the same
+   * size as the sentence explaining them. */
+  .watch-figures .stat-value {
+    font-size: 30px;
   }
 }

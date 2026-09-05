@@ -212,3 +212,60 @@ describe("historical clarification proof", () => {
     expect(screen.queryByText("What Pool decided to ask, before any of this")).toBeNull();
   });
 });
+
+function verdict(over: Partial<apiModule.StrategyVerdict> = {}): apiModule.StrategyVerdict {
+  return {
+    strategy_id: "st_harbourstone",
+    evaluation_id: "ev_1",
+    product: "Harbourstone Coffee Whole bean coffee, 2 lb — dark roast",
+    viable: true,
+    blocker_code: "",
+    matched_units: 18,
+    minimum_units: 12,
+    selected_units: 18,
+    cases: 3,
+    case_units: 6,
+    surplus_units: 0,
+    all_in_display: "$263.82",
+    retail_baseline_display: "$333.00",
+    net_savings_display: "$69.18",
+    net_savings_pct: "20.7%",
+    includes_your_declaration: true,
+    ...over,
+  };
+}
+
+describe("which option Pool actually took", () => {
+  afterEach(cleanup);
+
+  function showVerdicts(investigated: apiModule.StrategyVerdict[], chosen: apiModule.StrategyVerdict | null) {
+    vi.spyOn(apiModule.api, "needCoordination").mockResolvedValue(
+      coordination({}, { investigated, chosen }),
+    );
+    render(
+      <WhyThisOrder
+        needId="need_1"
+        productName="Kestrel medium roast"
+        unit="bag"
+        onBack={() => {}}
+      />,
+    );
+  }
+
+  it("says so on the chosen one, rather than leaving a saving to imply it", async () => {
+    const taken = verdict();
+    showVerdicts([taken], taken);
+
+    expect(await screen.findByText("Chosen")).toBeTruthy();
+    expect(screen.getByText("Saves $69.18")).toBeTruthy();
+  });
+
+  it("marks a viable option Pool did not take as viable, and not as chosen", async () => {
+    /* This is the distinction the whole screen exists to draw: an option can be worth
+       doing and still not be the one. A green edge says both. */
+    showVerdicts([verdict({ strategy_id: "st_other", evaluation_id: "ev_2" })], null);
+
+    expect(await screen.findByText("Worth doing")).toBeTruthy();
+    expect(screen.queryByText("Chosen")).toBeNull();
+  });
+});

@@ -343,7 +343,11 @@ function Verdict({
   const shortOfMinimum = verdict.matched_units < verdict.minimum_units;
 
   return (
-    <div className={`why-verdict${verdict.viable ? " is-ok" : " is-no"}`}>
+    <div
+      className={`why-verdict${verdict.viable ? " is-ok" : " is-no"}${
+        selected ? " is-chosen" : ""
+      }`}
+    >
       <div className="why-verdict-head">
         <strong>{verdict.product}</strong>
         <span className={`chip ${verdict.viable ? "chip-ok" : "chip-warn"}`}>
@@ -353,6 +357,11 @@ function Verdict({
               : "Worth doing"
             : blockerChip(verdict.blocker_code)}
         </span>
+        {/* Which one Pool actually took. The saving on the chip implied it and the green
+            edge implied it, and between two cards a stranger reads in about two seconds
+            neither of them says it. A viable option that was *not* taken shows "Worth
+            doing" and no tag, which is the distinction this page exists to draw. */}
+        {selected ? <span className="why-chosen">Chosen</span> : null}
       </div>
 
       <div className="stat-row">

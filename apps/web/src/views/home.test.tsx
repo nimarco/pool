@@ -376,6 +376,81 @@ describe("the member's own stake in a pool", () => {
   });
 });
 
+describe("the standing facts about a forming order", () => {
+  it("states the minimum, the open job and the untouched card as three separate facts", async () => {
+    const forming = poolView({
+      status: "forming",
+      provisional_units: 18,
+      threshold_units: 12,
+      funded_units: 0,
+      host: null,
+    });
+    vi.spyOn(apiModule.api, "pool").mockResolvedValue({ ...forming, members: [ROSA_MEMBERSHIP] });
+    renderHome([forming]);
+
+    /* Three list items rather than one sentence. The two a member can act on used to be
+       interior clauses of a wrapped 12px line, which is where they were being missed. */
+    const minimum = await screen.findByText(/18 tubs — past the supplier's 12-tub minimum/);
+    const facts = minimum.closest("ul");
+    expect(facts).toBeTruthy();
+    expect(
+      [...(facts as HTMLElement).querySelectorAll("li")].map((li) => li.textContent),
+    ).toEqual([
+      "18 tubs — past the supplier's 12-tub minimum",
+      "Host needed",
+      "Nothing charged",
+    ]);
+  });
+
+  it("says what the open job is, because 'host needed' assumes the reader knows", async () => {
+    const forming = poolView({ status: "forming", funded_units: 0, host: null });
+    vi.spyOn(apiModule.api, "pool").mockResolvedValue({ ...forming, members: [ROSA_MEMBERSHIP] });
+    renderHome([forming]);
+
+    expect(await screen.findByText(/A neighbour collects the order, runs the pickup/)).toBeTruthy();
+  });
+
+  it("drops the note once somebody is carrying it, and names them instead", async () => {
+    const carried = poolView({
+      status: "forming",
+      funded_units: 0,
+      host: {
+        household_id: "hh_okafor",
+        display_name: "Ada O.",
+        reward_display: "$14.00",
+        handled_orders: 2,
+        supplier_distance_km: 3.1,
+      },
+    });
+    vi.spyOn(apiModule.api, "pool").mockResolvedValue({ ...carried, members: [ROSA_MEMBERSHIP] });
+    renderHome([carried]);
+
+    expect(await screen.findByText("Ada O. is carrying it")).toBeTruthy();
+    expect(screen.queryByText(/A neighbour collects the order/)).toBeNull();
+  });
+
+  it("does not explain a host's pay twice on one card", async () => {
+    /* The figure caption and the host note were both carrying the same reason, 200px
+       apart. While the job is open the note has it; the caption only says the price is
+       not settled. */
+    const forming = poolView({
+      status: "forming",
+      savings_pct: "",
+      has_final_offer: false,
+      funded_units: 0,
+      host: null,
+    });
+    vi.spyOn(apiModule.api, "pool").mockResolvedValue({
+      ...forming,
+      members: [{ ...ROSA_MEMBERSHIP, final_cost_display: "", savings_pct: "" }],
+    });
+    renderHome([forming]);
+
+    expect(await screen.findByText("not final yet")).toBeTruthy();
+    expect(screen.queryByText(/not final — a host's pay is part of the price/)).toBeNull();
+  });
+});
+
 describe("a pool buying an authorised substitute", () => {
   it("says what the member actually declared, since the card shows the other product", async () => {
     const shown = poolView();

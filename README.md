@@ -47,7 +47,8 @@ the people in the demo. The community is invented, and the page says so before y
 
 **<https://d38kno05ygcarw.cloudfront.net/verify>**
 
-Deployed and verified **2026-09-02**. CloudFront distribution `EMOLZSGVY7HTN`, `Deployed`
+Deployed and verified **2026-09-05** (`6414aa1`, the commit the submission film was
+recorded against). CloudFront distribution `EMOLZSGVY7HTN`, `Deployed`
 and enabled, in front of the demo's Lambda Function URL. Use this hostname, not the raw
 Function URL underneath it: `*.lambda-url.*.on.aws` is a blocked *category* on Cisco
 Umbrella and its peers, so a judge on a filtered university or corporate network gets a
@@ -61,8 +62,10 @@ Strands loop with the **deterministic offline planner** on the Lambda, at zero m
 tokens — that is deliberate, and the Lambda has no permission to call a model. Live model
 execution is a separate action that goes Lambda → **Bedrock AgentCore Runtime** → Strands
 → Bedrock → the same typed tools; it was verified live on 2026-08-22 with
-`us.amazon.nova-lite-v1:0`, and it is **switched off on the public demo** (observed
-2026-09-02) so that no visitor can spend a model token. Both are described precisely
+`us.amazon.nova-lite-v1:0`, and it is **switched off on the public demo** (re-observed
+2026-09-05: `/api/demo/config` reports `live_agent_available: false`, and the deployed
+function carries `PUBLIC_DEMO_AGENTCORE_ENABLED=false`) so that no visitor can spend a
+model token. Both are described precisely
 under [AWS](#aws).
 
 ---
@@ -558,11 +561,11 @@ walkthrough is free to repeat.
 | --- | --- | --- |
 | Bedrock | Model inference via Strands | **Verified live 2026-08-22** — `us.amazon.nova-lite-v1:0`, reached through AgentCore, 2 of 8 iterations, 5,513 in / 133 out tokens, terminated `completed`. The **outcome was a truthful `no_action`**: the member's only declaration had already been served by the in-process run their save caused, so the objective was correctly empty. It establishes the deployment, the tool surface and the bounds on real infrastructure; it is *not* a live trace of the Kestrel→Harbourstone adaptation. Earlier discovery/recovery/lock branches verified 2026-08-19 |
 | AgentCore Runtime | Hosted agent entrypoint, and the only path to a live model | **Deployed 2026-08-23, status re-observed 2026-09-02** — `Pool_PoolCoordinator-TmVqSN9H56` **version 8**, `READY` in `us-east-1`, carrying this branch. Version 8 has **not** been invoked, and the public demo cannot invoke it: live invocation is switched off there (2026-09-02). The live Nova Lite verification — one bounded synthetic invocation proving AgentCore → Strands → Bedrock → Pool tools — was performed against **version 7** on 2026-08-22 and was not repeated for this deployment; the coordinator and the runtime entrypoint are byte-identical between the two |
-| Lambda Function URL | The demo's origin, behind CloudFront: web app + reduced API | **Deployed and verified 2026-09-02** — the canonical judge URL is the CloudFront hostname in front of it. this branch, `/verify` hard-loads at `/`, `/verify`, `/verify/` and with a query string; full declaration → event → run → order over HTTPS on the real table, Kestrel refused on economics and Harbourstone formed, 0 payment rows. Runs the **offline planner** at zero model tokens and holds **no model permission** — its role carries `bedrock-agentcore:InvokeAgentRuntime` and no `bedrock:InvokeModel` |
+| Lambda Function URL | The demo's origin, behind CloudFront: web app + reduced API | **Deployed and verified 2026-09-05** (`6414aa1`) — the canonical judge URL is the CloudFront hostname in front of it. Redeployed from 2026-09-02 for the web bundle only: the `cdk diff` was one resource and one line, the code asset key, with no IAM and no environment change. A smoke run against the deployed stack returned `model_provider: offline`, `model_id: offline-deterministic-planner`, `input_tokens: 0`, `output_tokens: 0`, and a pool the bounded loop formed. `/verify` hard-loads at `/`, `/verify`, `/verify/` and with a query string; full declaration → event → run → order over HTTPS on the real table, Kestrel refused on economics and Harbourstone formed, 0 payment rows. Runs the **offline planner** at zero model tokens and holds **no model permission** — its role carries `bedrock-agentcore:InvokeAgentRuntime` and no `bedrock:InvokeModel` |
 | DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified 2026-08-23** — shared by both artefacts, which is why they are deployed together |
 | API Gateway + Lambda | Pilot-shaped API | In `PoolStack`, which is **not** what the public demo deploys |
 | S3 | Pilot-shaped web hosting | In `PoolStack`. The public demo needs it for nothing — its web app ships inside the function |
-| CloudFront | Reachable hostname in front of the demo's Function URL, and the canonical judge URL | **Deployed and verified 2026-09-02** — distribution `EMOLZSGVY7HTN`, `Deployed` and enabled, serving `https://d38kno05ygcarw.cloudfront.net/verify` over HTTP/2 with HSTS and a strict CSP. Added to `PoolDemoStack` because `*.lambda-url.*.on.aws` is a blocked *category* on filtered resolvers (Cisco Umbrella answers the demo's hostname with a block page and an untrusted certificate, so a judge behind one sees a certificate error, not Pool). Caches `/assets/*` only; every dynamic path is uncached, because the workspace travels as a query parameter. Separately, `PoolStack` uses it for pilot-shaped hosting |
+| CloudFront | Reachable hostname in front of the demo's Function URL, and the canonical judge URL | **Deployed and verified 2026-09-05** (cache invalidated; `/verify` serves the bundle this branch builds) — distribution `EMOLZSGVY7HTN`, `Deployed` and enabled, serving `https://d38kno05ygcarw.cloudfront.net/verify` over HTTP/2 with HSTS and a strict CSP. Added to `PoolDemoStack` because `*.lambda-url.*.on.aws` is a blocked *category* on filtered resolvers (Cisco Umbrella answers the demo's hostname with a block page and an untrusted certificate, so a judge behind one sees a certificate error, not Pool). Caches `/assets/*` only; every dynamic path is uncached, because the workspace travels as a query parameter. Separately, `PoolStack` uses it for pilot-shaped hosting |
 | EventBridge | Optional future background scan | Implemented only in the un-deployed `PoolStack`; **zero rules exist in the deployed judge account** |
 | Amazon Location | `geo-routes`, no provisioned calculator | Implemented, unverified |
 | CloudWatch | Structured run records, retention capped at 14 days | In both stacks |

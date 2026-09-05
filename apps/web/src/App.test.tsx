@@ -413,13 +413,13 @@ describe("moving between screens keeps the member's own state", () => {
     const user = await home();
 
     await user.click(screen.getByRole("button", { name: "What you buy" }));
-    expect(await screen.findByText(/Not enough of it yet/)).toBeTruthy();
+    expect(await screen.findByText(/12 of 18 bags declared nearby/)).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Home" }));
     await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
 
     await user.click(screen.getByRole("button", { name: "What you buy" }));
-    expect(await screen.findByText(/Not enough of it yet/)).toBeTruthy();
+    expect(await screen.findByText(/12 of 18 bags declared nearby/)).toBeTruthy();
   });
 
   /* The other half of the same rule: leaving the showcase *is* a change of world, so

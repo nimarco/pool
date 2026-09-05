@@ -141,27 +141,31 @@ export function Preferences({
       </div>
 
       {flexible && flexibility ? (
+        /* Counted demand, and the one thing it does not entitle anybody to expect. The
+           clause about prices and minimums stays: it is the anti-promise this whole
+           surface is built around, and the counts above it read as a forecast without
+           it. What went was the connective tissue between them. */
         <p className="small muted prefs-reach">
           {reaches > 0 ? (
             <>
               {flexibility.exact_requests === 0
                 ? `Nobody else here has asked for this exact ${thing}. `
                 : `${plural(flexibility.exact_requests, "other member has", "other members have")} asked for this exact ${thing}. `}
-              Allowing alternatives puts you alongside{" "}
-              <strong>{plural(flexibility.compatible_requests, "request", "requests")}</strong>{" "}
-              Pool could combine you with, across{" "}
-              {plural(flexibility.sourceable_alternatives + 1, "product", "products")} it can
-              source.
+              Allowing alternatives reaches{" "}
+              <strong>{plural(flexibility.compatible_requests, "request", "requests")}</strong>
+              , across{" "}
+              {plural(flexibility.sourceable_alternatives + 1, "product", "products")} Pool
+              can source.
             </>
           ) : (
             <>
-              Right now this changes nothing you can see:{" "}
+              This changes nothing you can see yet:{" "}
               {plural(flexibility.compatible_requests, "standing request", "standing requests")}{" "}
-              either way. It still lets Pool act if somebody declares something similar later.
+              either way.
             </>
           )}{" "}
           Pool cannot tell you whether an order will form — that depends on prices and
-          minimums it checks at the time.
+          minimums.
         </p>
       ) : null}
 
@@ -241,13 +245,15 @@ export function Preferences({
                 It never guesses what an answer means: each one maps to a fixed rule, and
                 anything you leave alone stays exactly as it is on the {thing} you picked.
               </p>
+              {/* Moved in here from a standing paragraph beneath the questions. It
+                  answers the same question the summary above it asks, so it was the
+                  second answer to a question the reader had not asked yet. */}
+              <p className="small muted">
+                Pool only ever buys one exact {thing}. These answers decide which ones it
+                is allowed to consider for you — nothing here widens on its own, and you
+                can change any of it later.
+              </p>
             </details>
-
-            <p className="small muted prefs-note">
-              Pool only ever buys one exact {thing}. These answers decide which ones it is
-              allowed to consider for you — nothing here widens on its own, and you can
-              change any of it later.
-            </p>
           </div>
         ) : (
           <p className="small muted prefs-note">
@@ -285,20 +291,20 @@ function Consequence({ question, thing }: { question: PreferenceQuestion; thing:
   if (!reach || !reach.varies) return null;
 
   if (question.kind === "keep") {
+    /* The same two ratios, as ratios. This was a twenty-one-word sentence per checkbox,
+       and there are two checkboxes: forty-two words of near-identical prose whose content
+       is four numbers, sitting directly beneath the choice they describe. */
     return (
-      <span className="small muted">
-        Insisting on this leaves {reach.keep.sourceable_products} of{" "}
-        {reach.any.sourceable_products} {thing}s Pool can source, and{" "}
-        {plural(reach.keep.standing_units, "unit", "units")} of other members&apos; standing
-        demand against {reach.any.standing_units}.
+      <span className="small faint">
+        keeps {reach.keep.sourceable_products} of {reach.any.sourceable_products} {thing}s
+        · {reach.keep.standing_units} of {reach.any.standing_units} units
       </span>
     );
   }
+  /* The guardrail, kept, at a quarter of the length. Pool must not read as nudging
+     somebody towards a preference they do not hold in order to reach more demand. */
   return (
-    <span className="small muted">
-      Each answer shows the standing demand it would let Pool combine you with. More is not
-      better on its own — it is only worth having if you would genuinely accept it.
-    </span>
+    <span className="small muted">Only pick what you would actually accept.</span>
   );
 }
 

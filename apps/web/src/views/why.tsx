@@ -54,6 +54,36 @@ function blockerCopy(code: string): string {
   return BLOCKER_COPY[code] ?? code.replace(/_/g, " ");
 }
 
+/** The refusal as a chip, in two or three words.
+ *
+ *  A separate table from `BLOCKER_COPY` because it answers a different question. The
+ *  sentence completes "…but {x}"; the chip is what the eye lands on before reading
+ *  anything, and has to survive being read alone beside the numbers that caused it. */
+const BLOCKER_CHIP: Record<string, string> = {
+  not_cheaper: "Costs more",
+  below_minimum: "Not enough demand",
+  no_bulk_offer: "No bulk supplier",
+  no_retail_baseline: "No price to compare",
+  no_compatible_demand: "Nothing compatible",
+  quote_stale: "Quote too old",
+  routing_unavailable: "No route",
+};
+
+function blockerChip(code: string): string {
+  return BLOCKER_CHIP[code] ?? "Not worth doing";
+}
+
+/** Pluralise the unit the member actually declared.
+ *
+ *  This used to be the literal string "bags" everywhere on this page, which is wrong for
+ *  every declaration that is not coffee: the paper-towels refusal read "7 bags were
+ *  available against a 48-bag minimum" beside a Home row that correctly said packs. The
+ *  noun travels from the caller, which is the only place that knows it — the coordination
+ *  payload carries quantities, not the word for them. */
+function units(n: number, unit: string): string {
+  return `${n} ${n === 1 ? unit : `${unit}s`}`;
+}
+
 /** What to call the thing that drove the loop, derived from the run's stored provider.
  *
  *  Not cosmetic. The public `/verify` run executes the real Strands loop against the
@@ -101,11 +131,16 @@ function vocabularyFor(provider: string | undefined): Vocabulary {
 export function WhyThisOrder({
   needId,
   productName,
+  unit,
   onBack,
 }: {
   needId: string;
   /** What the member called it, for the heading. The server names the *bought* product. */
   productName: string;
+  /** The singular noun this declaration is counted in — "bag", "pack", "tub". Passed by
+   *  the caller because the coordination payload carries quantities and not the word for
+   *  them, and a hardcoded "bags" is wrong on every row that is not coffee. */
+  unit: string;
   onBack: () => void;
 }) {
   const [data, setData] = useState<NeedCoordination | null>(null);
@@ -132,6 +167,16 @@ export function WhyThisOrder({
   const refused = investigated.filter((v) => !v.viable);
   const chosen = data.chosen ?? null;
   const exclusions = Object.entries(data.exclusion_codes ?? {}).filter(([, n]) => n > 0);
+  /* How much demand stood behind each option before anything was costed, joined onto the
+     verdict it produced. Two payload fields describing one option: the listing carries
+     the headcount, the evaluation carries the arithmetic, and splitting them across two
+     cards made the reader hold six numbers to compare two products. */
+  const standingFor = new Map(considered.map((o) => [o.strategy_id, o]));
+  /* Options the run listed but never costed. When every option was costed the verdicts
+     below are a superset of the listing, and printing both is the same table twice. */
+  const uncosted = considered.filter(
+    (o) => !investigated.some((v) => v.strategy_id === o.strategy_id),
+  );
 
   return (
     <div className="stack">
@@ -141,11 +186,10 @@ export function WhyThisOrder({
       </button>
 
       <header className="stack-sm">
-        <h1 className="title">{order ? "Why this order?" : "Why no order yet?"}</h1>
-        <p className="lede">
-          You said you buy {productName}. Pool looked for other people near you who buy
-          something close enough, and worked out whether buying together was actually
-          worth it.
+        <h1 className="title">{order ? "Why this order?" : "Why not yet?"}</h1>
+        <p className="small muted">
+          {productName}
+          {refused.length > 0 && chosen ? " · more demand isn't cheaper" : ""}
         </p>
       </header>
 
@@ -158,83 +202,60 @@ export function WhyThisOrder({
               run did, which was correctly nothing, and without this the page would read
               as though the order on their Home screen had no cause. */}
           {order && !order.formed_by_this_run ? (
-            <section className="panel">
-              <div className="panel-head">
-                <h2>You are back in this order</h2>
-              </div>
-              <div className="panel-pad stack-sm">
-                <p className="small">
-                  Your rules allow <strong>{order.product}</strong> again, so Pool put you
-                  back into the order it had taken you out of — the same one, not a new
-                  one. It was worked out by an earlier run, and the reasoning below is
-                  that run&apos;s.
-                </p>
-                <p className="small muted">
-                  Nothing was charged and nothing was committed. Your place is provisional
-                  and you will be asked before anything is.
-                </p>
-              </div>
-            </section>
+            <div className="banner">
+              <span>
+                <strong>Back in this order.</strong> Your rules allow {order.product}{" "}
+                again. The reasoning below is the earlier run&apos;s.
+              </span>
+            </div>
           ) : null}
 
-          {/* 1. What Pool considered. Options, before any of them was costed. */}
+          {/* The comparison. What each option cost, side by side and in the same slots,
+              so two products can be told apart without reading either of them.
+
+              This replaced two cards that between them printed the demand behind an
+              option, then a sentence saying none of it had a price yet, then the same
+              option again with the price. The headcount now sits on the verdict it
+              produced, which is the only place it was ever an argument. */}
           <section className="panel">
             <div className="panel-head">
-              <h2>What Pool considered</h2>
+              <h2>{order ? "What Pool worked out" : "What Pool found"}</h2>
             </div>
             <div className="panel-pad stack-sm">
-              <p className="small">
-                {considered.length === 0
-                  ? "Nothing this time — the order you are in already served this, so there was nothing new to assemble."
-                  : `Nobody buys the identical bag, so there was more than one order Pool could have assembled. It found ${considered.length}.`}
-              </p>
-              <ul className="why-options">
-                {considered.map((option) => (
-                  <li key={option.strategy_id}>
-                    <strong>{option.product}</strong>
-                    <span className="small muted">
-                      {" "}
-                      — {option.compatible_units} bags standing from{" "}
-                      {option.compatible_declarations} people, against a supplier minimum of{" "}
-                      {option.lowest_supplier_minimum_units}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {considered.length > 0 ? (
+              {investigated.length === 0 ? (
                 <p className="small muted">
-                  At this point none of them had a price. Clearing a supplier&apos;s
-                  minimum is necessary and nowhere near enough.
+                  Nothing new to assemble — the order you are in already serves this.
                 </p>
               ) : null}
-            </div>
-          </section>
-
-          {/* 2. What was actually costed, and what each answer was. */}
-          <section className="panel">
-            <div className="panel-head">
-              <h2>What Pool worked out</h2>
-            </div>
-            <div className="panel-pad stack-sm">
               {investigated.map((verdict) => (
-                <Verdict key={verdict.evaluation_id} verdict={verdict} />
+                <Verdict
+                  key={verdict.evaluation_id}
+                  verdict={verdict}
+                  unit={unit}
+                  standing={standingFor.get(verdict.strategy_id) ?? null}
+                  selected={Boolean(chosen && chosen.strategy_id === verdict.strategy_id)}
+                />
               ))}
-              {refused.length > 0 && chosen ? (
+              {uncosted.length > 0 ? (
                 <p className="small muted">
-                  The one with the most demand behind it is the one that did not work. That
-                  only became clear after the full cost — fulfilment and card processing
-                  included — was worked out.
+                  {uncosted.length === 1 ? "One further option was" : `${uncosted.length} further options were`}{" "}
+                  listed and not costed: {uncosted.map((o) => o.product).join(", ")}.
                 </p>
               ) : null}
             </div>
           </section>
 
-          {/* 3. Who could not join, in aggregate. Never a roster. */}
+          {/* Who could not join, and what has not happened. Both load-bearing, both
+              closed: a page that ends in four disclaimers every single time trains the
+              reader to stop at the third card. Counts, never a roster. */}
           {exclusions.length > 0 ? (
-            <section className="panel">
-              <div className="panel-head">
-                <h2>Who could not join</h2>
-              </div>
+            <details className="panel why-fold">
+              <summary>
+                <span>Who could not join</span>
+                <span className="small muted">
+                  {exclusions.reduce((n, [, c]) => n + c, 0)} people
+                </span>
+              </summary>
               <div className="panel-pad stack-sm">
                 <ul className="why-exclusions">
                   {exclusions.map(([code, count]) => (
@@ -245,31 +266,29 @@ export function WhyThisOrder({
                     </li>
                   ))}
                 </ul>
-                <p className="small muted">
-                  Nobody&apos;s preferences were bent to make this work. Pool never widens
-                  what somebody agreed to.
-                </p>
+                <p className="small muted">No preferences were bent to make this work.</p>
               </div>
-            </section>
+            </details>
           ) : null}
 
-          {/* 4. What has NOT happened. Load-bearing, so it is a section rather than a note. */}
-          <section className="panel">
-            <div className="panel-head">
-              <h2>What has not happened</h2>
-            </div>
+          <details className="panel why-fold">
+            <summary>
+              <span>Nothing has been charged, ordered or assigned</span>
+            </summary>
             <div className="panel-pad">
               <ul className="why-not-yet">
                 <li>No card has been charged, and none has been authorised.</li>
                 <li>Nobody has agreed to collect and hand out the order yet.</li>
-                <li>
-                  The exact price comes later, once somebody has taken that job — the
-                  figure above is an estimate.
-                </li>
+                {order ? (
+                  <li>
+                    The exact price comes later, once somebody has taken that job — the
+                    figure above is an estimate.
+                  </li>
+                ) : null}
                 <li>Nothing has been ordered from the supplier.</li>
               </ul>
             </div>
-          </section>
+          </details>
 
           {/* 5. The proof, one layer down and closed by default. */}
           <section className="panel">
@@ -292,35 +311,108 @@ export function WhyThisOrder({
   );
 }
 
-function Verdict({ verdict }: { verdict: StrategyVerdict }) {
+/** One option and what it cost, as numbers in fixed slots.
+ *
+ *  This was a paragraph, and the paragraph was wrong. It opened
+ *  "{matched} bags were available against a {minimum}-bag minimum, so there was plenty"
+ *  on **every** refusal — including `below_minimum`, where the whole refusal is that
+ *  there was not nearly enough. Seven packs against a minimum of forty-eight were
+ *  described to the member as plenty, on the one screen whose job is an honest no.
+ *
+ *  The fix is structural rather than a better sentence. What is worth reading differs by
+ *  blocker: a below-minimum refusal is a quantity pair, a not-cheaper refusal is a money
+ *  pair, and everything else has no figures to show because none were reached. The slots
+ *  say which is which, so the same two positions can be compared down a column without
+ *  reading either row. */
+function Verdict({
+  verdict,
+  unit,
+  standing,
+  selected,
+}: {
+  verdict: StrategyVerdict;
+  unit: string;
+  /** The listing row this verdict came from, for the headcount behind the demand. */
+  standing: { compatible_declarations: number } | null;
+  /** Whether this is the option the run actually formed an order from. */
+  selected: boolean;
+}) {
+  /* A price pair is only shown when one was reached. `$0.00` is the payload's way of
+     saying "never costed", and printing it beside a real baseline would read as free. */
+  const priced = verdict.all_in_display !== "$0.00";
+  const shortOfMinimum = verdict.matched_units < verdict.minimum_units;
+
   return (
     <div className={`why-verdict${verdict.viable ? " is-ok" : " is-no"}`}>
       <div className="why-verdict-head">
         <strong>{verdict.product}</strong>
         <span className={`chip ${verdict.viable ? "chip-ok" : "chip-warn"}`}>
-          {verdict.viable ? "Worth doing" : "Not worth doing"}
+          {verdict.viable
+            ? selected
+              ? `Saves ${verdict.net_savings_display}`
+              : "Worth doing"
+            : blockerChip(verdict.blocker_code)}
         </span>
       </div>
-      {verdict.viable ? (
-        <p className="small">
-          {verdict.selected_units} bags for {verdict.cases} full{" "}
-          {verdict.cases === 1 ? "case" : "cases"} of {verdict.case_units}, nothing left
-          over. {verdict.all_in_display} all in, against {verdict.retail_baseline_display}{" "}
-          buying separately — {verdict.net_savings_display} saved,{" "}
-          {verdict.net_savings_pct}.
-        </p>
-      ) : (
-        <p className="small">
-          {verdict.matched_units} bags were available against a {verdict.minimum_units}-bag
-          minimum, so there was plenty — but {blockerCopy(verdict.blocker_code)}.{" "}
-          {verdict.all_in_display !== "$0.00" ? (
-            <>
-              {verdict.all_in_display} all in, against {verdict.retail_baseline_display}{" "}
-              buying separately.
-            </>
-          ) : null}
-        </p>
-      )}
+
+      <div className="stat-row">
+        {/* Quantity first when quantity is the answer, money first when money is. */}
+        {verdict.viable || !shortOfMinimum ? (
+          <>
+            <Figure
+              label="together"
+              value={priced ? verdict.all_in_display : units(verdict.matched_units, unit)}
+            />
+            <Figure
+              label={priced ? "buying separately" : "supplier minimum"}
+              value={
+                priced
+                  ? verdict.retail_baseline_display
+                  : units(verdict.minimum_units, unit)
+              }
+            />
+            {verdict.viable ? (
+              <Figure
+                label="you all save"
+                value={verdict.net_savings_pct}
+                tone="ok"
+              />
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Figure label="declared" value={units(verdict.matched_units, unit)} />
+            <Figure label="required" value={units(verdict.minimum_units, unit)} />
+          </>
+        )}
+      </div>
+
+      <p className="tiny faint">
+        {verdict.viable
+          ? `${units(verdict.selected_units, unit)} · ${verdict.cases} full ${
+              verdict.cases === 1 ? "case" : "cases"
+            } of ${verdict.case_units} · nothing left over`
+          : standing
+            ? `${units(verdict.matched_units, unit)} standing from ${standing.compatible_declarations} people — ${blockerCopy(verdict.blocker_code)}`
+            : blockerCopy(verdict.blocker_code)}
+      </p>
+    </div>
+  );
+}
+
+function Figure({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "ok";
+}) {
+  return (
+    <div className={`stat${tone ? ` is-${tone}` : ""}`}>
+      <span className="stat-value">{value}</span>
+      <span className="stat-label">{label}</span>
     </div>
   );
 }
@@ -410,36 +502,24 @@ function Proof({ data }: { data: NeedCoordination }) {
   const words = vocabularyFor(run?.model_provider);
   return (
     <div className="panel-pad stack-sm">
+      {/* The five facts a sceptical reader is here for, before anything else. Everything
+          below the fold in this panel is still present and still exact — what changed is
+          that three paragraphs and eleven identifiers no longer stand between the reader
+          and the outcome, the provider and the token count. */}
       <div className="facts">
-        <Fact label="Coordination event" value={<code>{data.event?.event_id}</code>} />
-        <Fact label="Run" value={<code>{run?.run_id}</code>} />
-        {/* Provider first, and never abbreviated away: it is what decides whether any
-            of the words around it may say "model". */}
-        <Fact label="Provider" value={`${run?.model_provider} · ${run?.model_id}`} />
-        <Fact label="Objective" value={run?.objective ?? ""} />
         <Fact label="Outcome" value={run?.outcome ?? ""} />
-        <Fact label="Ended" value={run?.termination_reason ?? ""} />
-        <Fact
-          label={words.iterations}
-          value={`${run?.iterations ?? 0} of ${run?.bounds.max_iterations ?? 0} allowed`}
-        />
+        {/* Provider first among the rest, and never abbreviated away: it is what decides
+            whether any of the words around it may say "model". */}
+        <Fact label="Provider" value={`${run?.model_provider} · ${run?.model_id}`} />
         <Fact
           label={words.tokens}
           value={`${run?.input_tokens ?? 0} in · ${run?.output_tokens ?? 0} out`}
         />
+        <Fact
+          label={words.iterations}
+          value={`${run?.iterations ?? 0} of ${run?.bounds.max_iterations ?? 0} allowed`}
+        />
       </div>
-
-      {words.offline ? (
-        <p className="small muted">
-          <strong>This run used the deterministic offline planner.</strong> It is the real
-          Strands loop, the real tool surface and the real bounds, with a planner in place
-          of a model — which is why the token counts above are zero and why you can
-          reproduce this run exactly. No model was called and none could have been: the
-          function serving this page has no permission to call one. Live model execution
-          is a separate, explicitly requested action that goes through Bedrock AgentCore
-          Runtime, and it records its own provider here when it is the one that ran.
-        </p>
-      ) : null}
 
       <div className="stack-sm">
         <h3 className="small">Tools called, in order</h3>
@@ -451,80 +531,110 @@ function Proof({ data }: { data: NeedCoordination }) {
             </li>
           ))}
         </ol>
-        <p className="small muted">
-          {words.actor} chose which option to investigate and moved on when the first was
-          refused. It never computed a price, decided who was compatible, or supplied a
-          member, a quantity or a supplier term — every one of those came from
-          deterministic code, and the tool it calls to form an order takes two identifiers
-          and nothing else.
-        </p>
-        <p className="small muted">
-          The options above are stored as they were handed to that run, not looked up
-          again now. The same option can be offered to a later run with different numbers
-          behind it — somebody else declares, an order forms — and a record that re-read
-          them today would be today&apos;s listing wearing an older date.
-        </p>
       </div>
-
-      {data.clarification ? (
-        <ClarificationProofBlock proof={data.clarification} />
-      ) : null}
 
       <div className="stack-sm">
         <h3 className="small">Deterministic verdicts</h3>
         <ul className="proof-evals">
           {(data.investigated ?? []).map((v) => (
             <li key={v.evaluation_id}>
-              <code>{v.evaluation_id}</code> · {v.product} ·{" "}
-              <strong>{v.viable ? "viable" : v.blocker_code}</strong> · matched{" "}
-              {v.matched_units}/{v.minimum_units} · {v.cases}×{v.case_units} cases ·
-              surplus {v.surplus_units} · {v.net_savings_display} ({v.net_savings_pct})
+              {v.product} · <strong>{v.viable ? "viable" : v.blocker_code}</strong> ·
+              matched {v.matched_units}/{v.minimum_units} · {v.cases}×{v.case_units} cases
+              · surplus {v.surplus_units} · {v.net_savings_display} ({v.net_savings_pct})
             </li>
           ))}
         </ul>
       </div>
 
-      <div className="facts">
-        <Fact
-          label="Options offered"
-          value={`${(data.considered ?? []).length}, cap ${run?.bounds.max_strategy_listings ?? 0} listing`}
-        />
-        {/* Which run was shown the listing above. Named only when it is not this one,
-            because "the listing this run received" is the ordinary case and labelling it
-            every time would imply the two can drift apart more often than they do. The
-            listing itself is stored as it was transmitted, so it is what that run saw
-            rather than what the same options would say today. */}
-        {data.evidence_run_id && data.evidence_run_id !== run?.run_id ? (
-          <Fact
-            label="Listing shown to"
-            value={<code>{data.evidence_run_id}</code>}
-          />
-        ) : null}
-        <Fact
-          label="Options costed"
-          value={`${(data.investigated ?? []).length} of ${run?.bounds.max_strategy_evaluations ?? 0} allowed`}
-        />
-        <Fact
-          label="Orders formed"
-          value={`${data.order ? 1 : 0} of ${run?.bounds.max_strategy_pool_creations ?? 0} allowed`}
-        />
-        <Fact label="Order" value={<code>{data.order?.pool_id ?? "none"}</code>} />
-        <Fact
-          label="Order formed by"
-          value={
-            data.order
-              ? data.order.formed_by_this_run
-                ? "this run"
-                : <code>{data.order.created_by_run}</code>
-              : "—"
-          }
-        />
-      </div>
+      {/* Identifiers, bounds and the three paragraphs that qualify them. Diagnostic
+          value is unchanged — every field is still rendered and still copyable — but a
+          judge reading the panel for the first time gets the verdict before the ledger. */}
+      <details className="proof-more">
+        <summary className="small">Identifiers, bounds and how to read this</summary>
+        <div className="stack-sm" style={{ marginTop: 12 }}>
+          <div className="facts">
+            <Fact label="Coordination event" value={<code>{data.event?.event_id}</code>} />
+            <Fact label="Run" value={<code>{run?.run_id}</code>} />
+            <Fact label="Objective" value={run?.objective ?? ""} />
+            <Fact label="Ended" value={run?.termination_reason ?? ""} />
+            <Fact
+              label="Options offered"
+              value={`${(data.considered ?? []).length}, cap ${run?.bounds.max_strategy_listings ?? 0} listing`}
+            />
+            {/* Which run was shown the listing above. Named only when it is not this one,
+                because "the listing this run received" is the ordinary case and labelling
+                it every time would imply the two can drift apart more often than they do.
+                The listing itself is stored as it was transmitted, so it is what that run
+                saw rather than what the same options would say today. */}
+            {data.evidence_run_id && data.evidence_run_id !== run?.run_id ? (
+              <Fact label="Listing shown to" value={<code>{data.evidence_run_id}</code>} />
+            ) : null}
+            <Fact
+              label="Options costed"
+              value={`${(data.investigated ?? []).length} of ${run?.bounds.max_strategy_evaluations ?? 0} allowed`}
+            />
+            <Fact
+              label="Orders formed"
+              value={`${data.order ? 1 : 0} of ${run?.bounds.max_strategy_pool_creations ?? 0} allowed`}
+            />
+            <Fact label="Order" value={<code>{data.order?.pool_id ?? "none"}</code>} />
+            <Fact
+              label="Order formed by"
+              value={
+                data.order
+                  ? data.order.formed_by_this_run
+                    ? "this run"
+                    : <code>{data.order.created_by_run}</code>
+                  : "—"
+              }
+            />
+          </div>
 
-      <p className="small muted">
-        Synthetic community, simulated payments, no supplier contacted. The software is
-        real; the people and the money are not.
-      </p>
+          <ul className="proof-evals">
+            {(data.investigated ?? []).map((v) => (
+              <li key={v.evaluation_id}>
+                <code>{v.evaluation_id}</code> · {v.product}
+              </li>
+            ))}
+          </ul>
+
+          {words.offline ? (
+            <p className="small muted">
+              <strong>This run used the deterministic offline planner.</strong> It is the
+              real Strands loop, the real tool surface and the real bounds, with a planner
+              in place of a model — which is why the token counts above are zero and why
+              you can reproduce this run exactly. No model was called and none could have
+              been: the function serving this page has no permission to call one. Live
+              model execution is a separate, explicitly requested action that goes through
+              Bedrock AgentCore Runtime, and it records its own provider here when it is
+              the one that ran.
+            </p>
+          ) : null}
+
+          <p className="small muted">
+            {words.actor} chose which option to investigate and moved on when the first was
+            refused. It never computed a price, decided who was compatible, or supplied a
+            member, a quantity or a supplier term — every one of those came from
+            deterministic code, and the tool it calls to form an order takes two identifiers
+            and nothing else.
+          </p>
+          <p className="small muted">
+            The options above are stored as they were handed to that run, not looked up
+            again now. The same option can be offered to a later run with different numbers
+            behind it — somebody else declares, an order forms — and a record that re-read
+            them today would be today&apos;s listing wearing an older date.
+          </p>
+
+          {data.clarification ? (
+            <ClarificationProofBlock proof={data.clarification} />
+          ) : null}
+
+          <p className="small muted">
+            Synthetic community, simulated payments, no supplier contacted. The software is
+            real; the people and the money are not.
+          </p>
+        </div>
+      </details>
     </div>
   );
 }

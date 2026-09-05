@@ -34,6 +34,7 @@ import {
   Reconciliation,
 } from "../api";
 import { ChosenItem, Picked, asChosen, defaultQuantity } from "../chosen";
+import { outlookHasDetail, outlookHeadline } from "../labels";
 import { EXACT } from "../preference-answers";
 import { Preferences } from "../preferences";
 import { useClarification } from "../use-clarification";
@@ -52,6 +53,63 @@ const SUBSTITUTION: { value: string; label: string }[] = [
   { value: "same_product_other_variant", label: "Same brand — another flavour or scent is fine" },
   { value: "structured_category_match", label: "Any equivalent product in the same category" },
 ];
+
+/** The stored substitution policy in two or three words, for a list row.
+ *
+ *  A declaration's flexibility is the decision the member spent a whole form making, and
+ *  it was the one thing their own list did not show them: three rows carried an identical
+ *  spend limit and none of them said whether Pool could buy another brand.
+ *
+ *  Every member of `SubstitutionPolicy` is named, and the fallback is the raw value
+ *  rather than a guess. `group_declared` is the one that is not a substitution rule at
+ *  all — the member named a family, so any member of it is what they asked for, and
+ *  calling that "another brand" would describe a permission they did not give. The
+ *  domain draws that distinction deliberately (`domain/models.SubstitutionPolicy`) and a
+ *  row that blurred it would be the interface overstating its own authority. */
+const FLEXIBILITY: Record<string, string> = {
+  exact_only: "exact only",
+  same_product_other_variant: "same brand, any variant",
+  approved_products: "your approved list",
+  approved_brands: "your approved brands",
+  structured_category_match: "any brand that fits",
+  attribute_constrained: "any brand that fits",
+  group_declared: "any in this family",
+};
+
+function flexibilityTag(need: NeedRow): string {
+  return FLEXIBILITY[need.substitution] ?? need.substitution.replace(/_/g, " ");
+}
+
+/** How many declarations exist for each product, most first.
+ *
+ *  The community section's job is one claim — *this many people near you buy this, and
+ *  nobody organised any of it* — and a fifty-row table was making the reader assemble
+ *  that claim themselves. This counts rows by product name and nothing more: no average,
+ *  no total across products, no derived quantity. Four lines, then a count of the rest,
+ *  with the full table unchanged behind the button it was always behind.
+ */
+const SHAPE_ROWS = 4;
+
+function standingShape(rows: NeedRow[]): {
+  rows: { product: string; count: number }[];
+  more: number;
+  top: number;
+} {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    counts.set(row.product_name, (counts.get(row.product_name) ?? 0) + 1);
+  }
+  const ordered = [...counts.entries()]
+    .map(([product, count]) => ({ product, count }))
+    .sort((a, b) => b.count - a.count || a.product.localeCompare(b.product));
+  return {
+    rows: ordered.slice(0, SHAPE_ROWS),
+    more: Math.max(0, ordered.length - SHAPE_ROWS),
+    /* The widest bar, so the bars are a comparison between these products rather than a
+       proportion of a total that would mean nothing here. */
+    top: ordered.length > 0 ? ordered[0].count : 1,
+  };
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -463,30 +521,68 @@ function Reconciled({ rows }: { rows: Reconciliation[] }) {
       <p className="small">
         <strong>What that changed.</strong>
       </p>
-      <ul className="small muted reconciled-list">
+      <ul className="small reconciled-list">
         {rows.map((row) => (
           <li key={row.pool_id}>
+            {/* The state first, in three words, and the guarantee after it in one clause.
+                These used to narrate the whole round trip — "so Pool put you back into the
+                order it had taken you out of" — which is a system explaining its own
+                bookkeeping to somebody who only needs to know where they now stand. What
+                is load-bearing is that nothing was charged, and that survives. */}
             {row.restored ? (
               <>
-                Your rules allow it again, so Pool put you back into the order it had
-                taken you out of. Nothing is charged and nothing is committed — you will
-                be asked before anything is.
+                <strong>Back in this order.</strong>{" "}
+                <span className="muted">
+                  Your rules allow it again. Nothing charged — Pool asks first.
+                </span>
               </>
             ) : row.withdrawn ? (
               <>
-                Pool took you out of an order your new rules no longer allow. Nobody was
-                charged, and the other members' order is unaffected.
+                <strong>No longer in this order.</strong>{" "}
+                <span className="muted">
+                  Your new rules no longer allow it. Nothing charged.
+                </span>
               </>
             ) : (
               <>
-                One order you are in has already been paid for and placed with the
-                supplier, so Pool left it exactly as it is. Your new rules apply from the
-                next one.
+                <strong>This one is already placed.</strong>{" "}
+                <span className="muted">
+                  It was paid for and ordered, so Pool left it alone. Your new rules apply
+                  from the next one.
+                </span>
               </>
             )}
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** How one declaration currently stands, on the member's own list.
+ *
+ *  Two claims are kept apart here and always have been: *as things stand* is a read-only
+ *  recomputation, and "Pool evaluated this and declined" belongs to a run. The tag is what
+ *  carries that distinction, so it stays.
+ *
+ *  What changed is the sentence beside it. For `short` — the one state whose whole content
+ *  is a pair of quantities — the row now shows the pair, taken from the same
+ *  `units_available` / `units_needed` the server interpolated into its own sentence, so
+ *  the two cannot disagree. Every other state keeps that sentence verbatim, because for
+ *  those the sentence is the only carrier: "no verified supplier yet" is not a number.
+ */
+function Outlook({ outlook, unit }: { outlook: NeedOutlook; unit: string }) {
+  const short = outlook.state === "short" && outlook.units_needed > 0;
+  const detail = short
+    ? `${outlook.units_available} of ${outlook.units_needed} ${unit}s declared nearby`
+    : outlookHasDetail(outlook.state)
+      ? outlook.blocker || outlook.reason
+      : "";
+  return (
+    <div className="tiny muted" style={{ marginTop: 4 }}>
+      <span className="outlook-tag">As things stand</span>{" "}
+      <strong>{outlookHeadline(outlook.state, outlook.headline)}</strong>
+      {detail ? ` — ${detail}` : ""}
     </div>
   );
 }
@@ -611,6 +707,10 @@ export function Needs({
   const others = needs.filter((n) => n.household_id !== identity.id && n.active);
   const standing = needs.filter((n) => n.active);
   const byNeed = new Map(outlook.map((o) => [o.need_id, o]));
+  /* The same rows, grouped by what they are for. A count per product name and nothing
+     else — no averaging, no rollup across products, and the full table is still one click
+     away with every field it always had. */
+  const shape = standingShape(standing);
 
   const openAdd = () => {
     setError(null);
@@ -739,8 +839,7 @@ export function Needs({
       <header className="stack-sm">
         <h1 className="title">What you buy</h1>
         <p className="lede">
-          Tell Pool what you restock and roughly when. Saving a need never commits money
-          — it is what lets Pool notice that other people near you need the same thing.
+          What you restock, and roughly when. Saving never commits money.
         </p>
       </header>
 
@@ -831,19 +930,22 @@ export function Needs({
                         <Chip>never early</Chip>
                       )}
                     </div>
+                    {/* Three lines, not five. What it is, how much and how often, how
+                        flexible — then the one thing that changes, which is what Pool
+                        currently makes of it.
+
+                        The spend limit that used to sit here was word-for-word identical
+                        on every row, so it carried no information per row and pushed the
+                        status down; it lives in the editor, one click away, where it can
+                        be changed. What replaced it is the flexibility rule — the
+                        decision the member actually made, and the only field on this row
+                        that was missing. */}
                     <div className="tiny muted">
-                      {n.quantity} {n.unit} · about every {n.cadence_days} days · you
-                      normally restock {n.routine_lead_days} days ahead
-                    </div>
-                    <div className="tiny faint">
-                      Will not join below {n.min_savings_pct}% saving, and never above{" "}
-                      {n.max_spend_display}
+                      {n.quantity} {n.unit} · every {n.cadence_days} days ·{" "}
+                      {flexibilityTag(n)}
                     </div>
                     {byNeed.get(n.need_id) ? (
-                      <div className="tiny muted" style={{ marginTop: 4 }}>
-                        <span className="outlook-tag">As things stand</span>{" "}
-                        {byNeed.get(n.need_id)!.reason}
-                      </div>
+                      <Outlook outlook={byNeed.get(n.need_id)!} unit={n.unit} />
                     ) : null}
                   </div>
                   <div className="row-tail">
@@ -873,10 +975,37 @@ export function Needs({
           </button>
         }
       >
-        <p className="small muted prose">
-          {standing.length} independent declarations. Pool finds the overlap; members do
-          not create or organise a group.
-        </p>
+        {/* The count is the argument, so the count is what is set large. The table is
+            still here and still complete — one click away, under the same button as
+            before — but a fifty-row, eight-column grid of other people's spend limits was
+            the first thing a member saw about their own community, and on a phone it took
+            the page from about twelve hundred pixels to nearly six thousand.
+
+            The shape below is a group-by over the rows already on screen. Nothing is
+            aggregated that the table does not also show, and no number is derived: each
+            line is a count of declarations for one product name. */}
+        <div className="standing-summary">
+          <div className="stat">
+            <span className="stat-value">{standing.length}</span>
+            <span className="stat-label">independent declarations, none organised</span>
+          </div>
+          <ul className="standing-shape">
+            {shape.rows.map((row) => (
+              <li key={row.product}>
+                <span className="standing-product">{row.product}</span>
+                <span className="standing-bar" aria-hidden="true">
+                  <span style={{ width: `${(row.count / shape.top) * 100}%` }} />
+                </span>
+                <span className="tiny faint">
+                  {row.count} {row.count === 1 ? "person" : "people"}
+                </span>
+              </li>
+            ))}
+            {shape.more > 0 ? (
+              <li className="tiny faint standing-more">+ {shape.more} more</li>
+            ) : null}
+          </ul>
+        </div>
         {!hasPool ? (
           <div className="stack-sm" style={{ marginTop: 14 }}>
             <div className="btn-row">

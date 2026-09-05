@@ -56,6 +56,31 @@ export function blockingRuleExplanation(facts: Record<string, unknown>): string 
   return "";
 }
 
+/** The four or five words beside a declaration's status chip.
+ *
+ * Normally the server's, verbatim. The exception is `in_pool`, and it is the reason this
+ * lives here rather than inline in a view: `relevance._WATCHING_HEADLINES` maps eight of
+ * the nine outlook states and `in_pool` is the one it misses, so the table's default —
+ * "Pool is watching this" — is served for the single state `relevance.consumer_status`
+ * documents as *not* watching. Home rendered it beside a Coordinating chip while Orders
+ * said "YOU ARE IN THIS", about the same order, for the same member.
+ *
+ * Corrected in one place because two screens read this field. Fixing it in the view that
+ * happened to be looked at would have left the other one still saying the opposite.
+ */
+export function outlookHeadline(state: string, headline: string): string {
+  if (state === "in_pool") return "In an order";
+  return headline || "Pool is watching this";
+}
+
+/** Whether the outlook's own sentence adds anything to that headline.
+ *
+ * False for `in_pool`, where the sentence ("Pool is already coordinating this one.") is
+ * the headline again in longer words. */
+export function outlookHasDetail(state: string): boolean {
+  return state !== "in_pool";
+}
+
 /** How Pool describes its own standing permission over one member's money.
  *
  * `autonomy_display.mode` is the master switch: every other stored limit is only

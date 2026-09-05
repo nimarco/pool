@@ -239,14 +239,14 @@ function nextStep(pool: PoolView): { next: string; needsYou: string } {
   switch (pool.status) {
     case "forming":
       return {
-        next: "Pool is still gathering compatible demand near you. Nothing is committed.",
+        next: "Still gathering compatible demand nearby.",
         needsYou: "Nothing yet — Pool will ask if this becomes worth doing.",
       };
     case "host_recruiting":
     case "host_selected":
       return {
-        next: "Pool ranked the people willing to carry it and offered the job to the best fit. A host has to accept before the price is exact.",
-        needsYou: "Nothing right now. The amount above can still move, so Pool has not asked you to commit.",
+        next: "Offered to the best-ranked host. The price is exact once one accepts.",
+        needsYou: "Nothing yet — the amount can still move.",
       };
     case "final_offer":
     case "funding":
@@ -353,12 +353,16 @@ function YourOrder({
           </div>
         </div>
 
+        {/* Two questions, two answers, one line each — and the third sentence that used
+            to sit under the meter ("Nothing is authorized yet") folded into the second,
+            where it belongs. Three separate ways of saying nothing has happened yet is
+            not three times the reassurance. */}
         <div className="your-next">
           <p className="small">
-            <strong>What happens next.</strong> {step.next}
+            <strong>Next.</strong> {step.next}
           </p>
           <p className="small muted">
-            <strong>Does Pool need anything from you?</strong> {step.needsYou}
+            <strong>From you.</strong> {step.needsYou}
           </p>
         </div>
 
@@ -366,13 +370,19 @@ function YourOrder({
             exists, so it sits under it rather than over it. */}
         <div className="your-group">
           <Meter value={pool.provisional_units} max={pool.threshold_units} />
+          {/* Past the minimum the interesting number is the margin, below it the gap —
+              "18 of 12" is arithmetically true and reads as a mistake. */}
           <p className="tiny faint">
-            {pool.provisional_units} {pool.unit}s together with {pool.buyer_count}{" "}
-            {pool.buyer_count === 1 ? "buyer" : "buyers"} — the supplier will not sell
-            fewer than {pool.threshold_units}.
+            {pool.provisional_units >= pool.threshold_units
+              ? `${pool.provisional_units} ${pool.unit}s — past the supplier's ${pool.threshold_units}-${pool.unit} minimum`
+              : `${pool.provisional_units} of the ${pool.threshold_units} ${pool.unit}s the supplier will sell`}{" "}
+            · {pool.buyer_count} {pool.buyer_count === 1 ? "buyer" : "buyers"}
+            {pool.host
+              ? ` · ${pool.host.display_name} is carrying it`
+              : " · host still needed"}
             {pool.funded_units > 0
-              ? ` ${pool.funded_units} authorized so far.`
-              : " Nothing is authorized yet."}
+              ? ` · ${pool.funded_units} authorised`
+              : " · nothing charged yet"}
           </p>
         </div>
       </div>
@@ -431,10 +441,20 @@ function OverviewTab({ pool }: { pool: PoolView }) {
               </p>
             </>
           ) : (
-            <p className="small muted">
-              Still recruiting. Candidates are ranked on capacity, vehicle, distance and
-              the minimum pay each of them will accept — offering does not claim the job.
-            </p>
+            <>
+              <div className="display" style={{ fontSize: 26 }}>
+                Nobody yet
+              </div>
+              {/* The ranking inputs were a sentence about an algorithm. What a member
+                  needs is what the job is and that nobody has taken it; how candidates
+                  are ordered is the operations surface's question. */}
+              <p className="small muted" style={{ marginTop: 6 }}>
+                A neighbour receives the delivery, hands it out, and is paid for it.
+              </p>
+              <p className="tiny faint" style={{ marginTop: 6 }}>
+                Being offered the job does not claim it.
+              </p>
+            </>
           )}
         </div>
         <div className="panel panel-pad">
@@ -444,10 +464,12 @@ function OverviewTab({ pool }: { pool: PoolView }) {
           <div className="display" style={{ fontSize: 26 }}>
             {pool.pickup_site}
           </div>
+          {/* `pickup_permission` is a stored enum, and printing it raw ("permission:
+              demo") put a field name in front of a member. Public or not is the part
+              that means anything here; the value itself is on the operations surface. */}
           <p className="small muted" style={{ marginTop: 6 }}>
-            {pool.pickup_is_public ? "A public spot on campus" : "Not a public site"}
-            {pool.pickup_permission ? ` · permission: ${pool.pickup_permission}` : ""} ·
-            selected for the members who joined.
+            {pool.pickup_is_public ? "A public spot on campus" : "Not a public site"} ·
+            chosen for the members who joined
           </p>
         </div>
       </section>
@@ -466,8 +488,7 @@ function OverviewTab({ pool }: { pool: PoolView }) {
           </div>
           <div className="panel-pad">
             <p className="small muted" style={{ marginBottom: 14 }}>
-              Buyers, supplier, host and Pool must all pass. Every check runs, so a refusal
-              returns the complete blocking list.
+              Buyers, supplier, host and Pool must all pass.
             </p>
             <details className="inset">
               <summary className="small">

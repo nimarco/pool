@@ -49,7 +49,11 @@ import {
   shortTime,
   statusCopy,
 } from "../api";
-import { autonomyModeCopy, blockingRuleExplanation } from "../labels";
+import {
+  autonomyModeCopy,
+  blockingRuleExplanation,
+  outlookHeadline,
+} from "../labels";
 import { ProductSearch } from "../product-search";
 import { Picked } from "../chosen";
 import { productImage, productInitials } from "../products";
@@ -187,7 +191,7 @@ function OpportunityCard({
   /** The declaration behind this order, when the server could name one. Its absence is
    *  why the older execution-trace link is still the fallback. */
   whyNeedId: string;
-  onWhy: (needId: string, productName: string) => void;
+  onWhy: (needId: string, productName: string, unit: string) => void;
   /** Why this order worked, as the run that formed it established — supplier minimum,
    *  case fit, which tier won, which pickup point. Empty unless the run on screen is
    *  the one that produced this pool, because these are facts about *that* run rather
@@ -220,13 +224,12 @@ function OpportunityCard({
         <Chip tone={s.tone}>{s.label}</Chip>
       </div>
       <div className="panel-pad stack-sm">
-        <div className="row-between" style={{ alignItems: "flex-start", gap: 18 }}>
-          <div className="pool-product">
-            {/* The same photograph the member picked from. Small, because the product is
-                settled by now and the money is what they came back for. */}
-            <PoolThumb pool={pool} />
-            <div>
-            <div className="display" style={{ fontSize: 30, lineHeight: 1.1 }}>
+        <div className="pool-product">
+          {/* The same photograph the member picked from. Small, because the product is
+              settled by now and the money is what they came back for. */}
+          <PoolThumb pool={pool} />
+          <div>
+            <div className="display" style={{ fontSize: 26, lineHeight: 1.1 }}>
               {pool.brand ? <span className="pool-brand">{pool.brand}</span> : null}
               {pool.product_name}
             </div>
@@ -236,50 +239,79 @@ function OpportunityCard({
                 allowed by the substitution rule you set.
               </p>
             ) : null}
-            {mine ? (
-              <p className="small" style={{ marginTop: 8 }}>
-                <strong>
-                  Your {mine.units} {pool.unit}
-                  {mine.units === 1 ? "" : "s"}
-                  {myCost ? ` · ${provisional ? "about " : ""}${myCost}` : ""}
-                </strong>
-                {myCost && mine.baseline_display
-                  ? ` instead of ${mine.baseline_display} buying alone`
-                  : ""}
-              </p>
-            ) : null}
-            <p className="small muted" style={{ marginTop: mine ? 4 : 6 }}>
-              {mine
-                ? `With ${others} ${others === 1 ? "other" : "others"} · collect from ${pool.pickup_site}`
-                : `${pool.buyer_count} members · ${pool.provisional_units} units · collect from ${pool.pickup_site}`}
-              {pool.host ? ` · ${pool.host.display_name} is carrying it` : ""}
-              {startsAt && (pool.status === "distributing" || pool.status === "purchased")
-                ? ` · ${shortTime(startsAt)}`
-                : ""}
-            </p>
-            </div>
           </div>
-          {savings ? (
-            <div className="figure-tail">
-              <div className="figure-value sm figure-accent">{savings}</div>
-              <div className="small faint">
-                {mine ? "you save" : pool.is_estimate ? "estimated" : "less than retail"}
-              </div>
-            </div>
-          ) : (
-            /* Not a dash. Before a fulfiller accepts there is no exact price, because
-               their pay is part of it — so the slot names the invariant that is holding
-               rather than leaving an empty figure, and it never contradicts the
-               estimate shown on the line above it. */
-            <div className="figure-tail">
-              <div className="fact-value">{provisional ? "Not final yet" : "Not priced yet"}</div>
-              <div className="small faint" style={{ maxWidth: "20ch" }}>
-                {provisional
-                  ? "a fulfiller's pay is part of the price"
-                  : "fixed once a fulfiller accepts"}
-              </div>
-            </div>
-          )}
+        </div>
+
+        {/* The same three slots the order's own page uses, in the same classes.
+
+            The money was previously a 13.5px clause inside a sentence — "Your 3 bags ·
+            about $60.85 instead of $73.50 buying alone" — on a screen whose largest text
+            was the greeting. The identical figure was already set at 31px one click away,
+            on the order detail, which is the screen almost nobody opens. Nothing new is
+            being designed here; the presentation that was right is being used where the
+            member actually is. Money leads rather than quantity because Home is a result
+            and the record is a record. */}
+        <div className="your-grid">
+          <div>
+            <span className="figure-label">
+              {mine ? (provisional ? "What you pay, about" : "What you pay") : "The order"}
+            </span>
+            <p className="your-value">
+              {mine
+                ? myCost || "not settled yet"
+                : `${pool.provisional_units} ${pool.unit}s`}
+            </p>
+            <p className="tiny faint">
+              {mine
+                ? `your ${mine.units} ${pool.unit}${mine.units === 1 ? "" : "s"}`
+                : `${pool.buyer_count} ${pool.buyer_count === 1 ? "member" : "members"}`}
+            </p>
+          </div>
+          <div>
+            <span className="figure-label">
+              {mine && mine.baseline_display ? "Buying alone" : "Together"}
+            </span>
+            <p className="your-value">
+              {mine && mine.baseline_display
+                ? mine.baseline_display
+                : /* Not a dash. Before a host accepts there is no exact price, because
+                     their pay is part of it — so the slot names the invariant that is
+                     holding rather than leaving an empty figure. */
+                  provisional
+                  ? "Not final yet"
+                  : "Not priced yet"}
+            </p>
+            {/* The saving when there is one, and why there is not one when there is not.
+                A forming order has a real baseline and no settled percentage, so the
+                caption carries the reason rather than the card going quiet about it. */}
+            <p className="tiny faint">
+              {savings
+                ? mine
+                  ? `you save ${savings}`
+                  : `${savings} ${pool.is_estimate ? "estimated" : "less than retail"}`
+                : provisional
+                  ? "not final — a host's pay is part of the price"
+                  : "fixed once a host accepts"}
+            </p>
+          </div>
+          <div>
+            <span className="figure-label">Pickup</span>
+            <p className="your-value your-value-sm">{pool.pickup_site}</p>
+            {/* Joined rather than concatenated: the separator used to be emitted whenever
+                a start time existed, and the time itself only when the pool had reached
+                distribution — so a forming order printed "with 5 others ·" and stopped. */}
+            <p className="tiny faint">
+              {[
+                mine ? `with ${others} ${others === 1 ? "other" : "others"}` : "",
+                startsAt &&
+                (pool.status === "distributing" || pool.status === "purchased")
+                  ? shortTime(startsAt)
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          </div>
         </div>
 
         {/* A pool that did not go ahead has to say so where the member is, not only on
@@ -294,14 +326,21 @@ function OpportunityCard({
         {/* "24 of the 16 units this supplier will sell" is arithmetically true and reads
             as a mistake, which is what happens whenever a minimum is described as a
             target. Once the order is over the line the interesting number is the margin;
-            below it, it is the gap. */}
-        <p className="small muted">
+            below it, it is the gap.
+
+            Three provisional sentences used to sit around this one. What survives is the
+            arithmetic, plus the two facts a member can act on: whether anybody is
+            carrying it, and that nothing has been charged. */}
+        <p className="tiny faint">
           {pool.provisional_units >= pool.threshold_units
-            ? `${pool.provisional_units} units — past the supplier's ${pool.threshold_units}-unit minimum.`
-            : `${pool.provisional_units} units of the ${pool.threshold_units} this supplier will sell.`}
+            ? `${pool.provisional_units} ${pool.unit}s — past the supplier's ${pool.threshold_units}-${pool.unit} minimum`
+            : `${pool.provisional_units} of the ${pool.threshold_units} ${pool.unit}s the supplier will sell`}
+          {pool.host
+            ? ` · ${pool.host.display_name} is carrying it`
+            : " · host still needed"}
           {pool.funded_units > 0
-            ? ` ${pool.funded_units} have a payment authorised for the exact amount.`
-            : ""}
+            ? ` · ${pool.funded_units} authorised`
+            : " · nothing charged yet"}
         </p>
 
         {whyItWorked.length > 0 ? (
@@ -328,7 +367,7 @@ function OpportunityCard({
               "Why this order?" reads the same rows and puts the deterministic proof one
               disclosure down, so nobody has to choose between the two. */}
           {whyNeedId ? (
-            <button className="btn btn-sm" onClick={() => onWhy(whyNeedId, pool.product_name)}>
+            <button className="btn btn-sm" onClick={() => onWhy(whyNeedId, pool.product_name, pool.unit)}>
               <ActorTag actor="agent" label="Why this order?" />
             </button>
           ) : pool.execution_proof ? (
@@ -419,6 +458,12 @@ function FirstUseCard({ onStartNeed }: { onStartNeed: (picked: Picked) => void }
  *  rather than silently hiding it. Losing a contrast is the worse failure: the whole
  *  claim being made is that Pool keeps what it found. */
 function sameAnswer(reasonCode: string, state: string): boolean {
+  /* An empty code is not an unmapped code. `already_coordinated` results carry no reason
+     because there is no blocker to name, and treating that absence as "a different
+     answer" printed the run's headline as history directly beneath the identical current
+     blocker — "Pool is already coordinating this one." twice in one row. Nothing to
+     contrast is not a contrast. */
+  if (!reasonCode) return true;
   const equivalent: Record<string, string> = {
     no_bulk_offer: "no_supply",
     no_retail_baseline: "no_supply",
@@ -465,14 +510,42 @@ function WatchingRow({
    *  wording differs". */
   lastRun: { headline: string; at: string; reasonCode: string } | null;
   onOpenPool: (id: string) => void;
-  onWhy: (needId: string, productName: string) => void;
+  onWhy: (needId: string, productName: string, unit: string) => void;
 }) {
   const unit = (n: number) => (n === 1 ? demand.unit : `${demand.unit}s`);
   const together = demand.compatible_units + demand.my_units;
   const status = outlook?.status ?? "watching";
   const filledElsewhere =
     outlook?.state === "case_boundary" || outlook?.state === "not_in_round";
-  const blocker = outlook?.blocker || outlook?.reason || "";
+  /* The member is in an order for this. Home leads with one order — the server's
+     `opportunity` — so a second one reaches this screen only as a row here, and the row
+     has to say which it is.
+
+     It said the opposite. `relevance._WATCHING_HEADLINES` covers eight of the nine
+     outlook states and `in_pool` is the missing one, so the server's own default —
+     "Pool is watching this" — was served for the single state `consumer_status`
+     documents as *not* watching, and rendered beside a Coordinating chip while Orders
+     said "YOU ARE IN THIS". Overridden here rather than in the server table so the fix
+     ships with the web app; the table entry is still worth adding. */
+  const inOrder = outlook?.state === "in_pool";
+  const label = outlookHeadline(outlook?.state ?? "", outlook?.headline ?? "");
+  /* The one state whose blocker *is* a pair of quantities, so the pair can carry it and
+     the sentence saying the same thing twice can go. Every other state keeps its
+     sentence: "no verified supplier yet" is not a number.
+
+     Read from the outlook rather than from `demand`, because the outlook's own
+     `units_available` / `units_needed` are the two values the server interpolated into
+     the sentence being replaced (`relevance` builds it from `best.matched_units` and
+     `best.minimum_units`). Taking them from anywhere else would let the numbers and the
+     sentence they stand in for drift apart. */
+  const shortOfDemand = Boolean(
+    outlook &&
+      outlook.state === "short" &&
+      outlook.units_needed > 0 &&
+      !filledElsewhere,
+  );
+  const blocker =
+    inOrder || shortOfDemand ? "" : outlook?.blocker || outlook?.reason || "";
   /* History only when the answer has actually changed. A run that found what is still
      true has nothing to contrast, and printing it twice makes the row look like it is
      insisting; the line therefore appears exactly when the world has moved since the
@@ -490,7 +563,7 @@ function WatchingRow({
     <div className="watch-row">
       <div className="watch-head">
         <span className="watch-name">{demand.product_name}</span>
-        <StatusChip status={status} label={outlook?.headline ?? "Pool is watching this"} />
+        <StatusChip status={status} label={label} />
         {/* Present whatever the answer was. "Pool looked and decided not to" is exactly
             as much of an answer as an order, and a link that only appeared on success
             would make the refusal look like nothing happened. The screen behind it says
@@ -498,7 +571,7 @@ function WatchingRow({
         {need ? (
           <button
             className="linkish watch-why"
-            onClick={() => onWhy(need.need_id, demand.product_name)}
+            onClick={() => onWhy(need.need_id, demand.product_name, demand.unit)}
           >
             {status === "coordinating" ? "Why this order?" : "Why not yet?"}
           </button>
@@ -511,7 +584,32 @@ function WatchingRow({
           who buys this is in the order that just formed, so it renders as "nobody else
           near you buys this yet" — the exact misreading the demand line exists to
           prevent. The blocker below already says an order formed. */}
-      {filledElsewhere ? null : (
+      {/* The two numbers that are the whole answer, as numbers.
+          "Not enough of it yet: 7 packs declared nearby, and the supplier will not sell
+          fewer than 48" is one sentence carrying one comparison, and the comparison is
+          what a reader is trying to extract from it. Shown only when a minimum is known
+          and is the thing in the way; every other state keeps its sentence, because for
+          those the blocker is not a quantity. */}
+      {shortOfDemand && outlook ? (
+        <div className="stat-row watch-figures">
+          <div className="stat">
+            <span className="stat-value">{outlook.units_available}</span>
+            <span className="stat-label">
+              {unit(outlook.units_available)} declared
+            </span>
+          </div>
+          <div className="stat">
+            <span className="stat-value">{outlook.units_needed}</span>
+            <span className="stat-label">required</span>
+          </div>
+          {demand.compatible_members > 0 ? (
+            <div className="stat">
+              <span className="stat-value">{demand.compatible_members + 1}</span>
+              <span className="stat-label">people near you</span>
+            </div>
+          ) : null}
+        </div>
+      ) : filledElsewhere ? null : (
         <p className="watch-demand">
           {demand.compatible_members > 0 ? (
             <>
@@ -534,18 +632,18 @@ function WatchingRow({
           The sentence is the server's. Home used to compose its own from `has_supplier`
           while Needs printed `relevance.need_outlook`'s — the same question answered
           twice, in two tenses, on two screens, with neither showing the other half. */}
-      {outlook ? (
+      {outlook && (blocker || ((filledElsewhere || inOrder) && outlook.pool_id)) ? (
         <p className="watch-blocker">
           {blocker}
-          {filledElsewhere && outlook.pool_id ? (
+          {(filledElsewhere || inOrder) && outlook.pool_id ? (
             <>
-              {" "}
+              {blocker ? " " : ""}
               <button
                 className="linkish"
                 type="button"
                 onClick={() => onOpenPool(outlook.pool_id)}
               >
-                See that order
+                {inOrder ? "Open the order" : "See that order"}
               </button>
             </>
           ) : null}
@@ -681,8 +779,8 @@ function RunNow({
           scheduler running, and saying so is cheaper than implying a background job
           that does not exist (AGENTS.md §8). */}
       <p className="tiny faint prose">
-        In the real product Pool does this by itself on the community&apos;s pool day.
-        Nothing is scheduled in this demo account, so it starts when you press the button.
+        Normally automatic on the community&apos;s pool day. Nothing is scheduled in this
+        demo account.
       </p>
       {running ? (
         <CoordinatorWait live={liveDiscovery} region={region} objective={objective} />
@@ -760,7 +858,7 @@ export function Home({
   /** Open "why this order?" for one declaration. Passed down rather than fetched here:
    *  the explanation is one server read about one declaration, and the row only has to
    *  know which declaration it is about. */
-  onWhy: (needId: string, productName: string) => void;
+  onWhy: (needId: string, productName: string, unit: string) => void;
   liveDiscovery: boolean;
   region: string | null;
 }) {
@@ -811,13 +909,30 @@ export function Home({
     state.activity.length,
   ]);
 
+  /* `state.activity.length` is load-bearing and was missing.
+   *
+   *  The effect above clears `detail` on every activity write — that is how a run's
+   *  result reaches this card — but this one, which is the only thing that puts a record
+   *  back, did not watch the same signal. A run that changed neither the pool id nor its
+   *  status (asking Pool to check again, which answers `already_coordinated`) therefore
+   *  cleared the record and never refetched it, and `myMembership` fell to null for a
+   *  member who was still in the pool. The card then rendered its *non-member* branch:
+   *  "6 members · 18 units" and "Not priced yet", replacing a price the member had
+   *  already been shown. Same pool, same session, two different claims about whether they
+   *  were in it. */
   useEffect(() => {
     if (!poolId) {
       setDetail(null);
       return;
     }
     api.pool(poolId).then(setDetail).catch(() => setDetail(null));
-  }, [poolId, poolStatus, state.workspace, state.decisions.length]);
+  }, [
+    poolId,
+    poolStatus,
+    state.workspace,
+    state.decisions.length,
+    state.activity.length,
+  ]);
 
   /* Retired declarations are excluded: `/api/needs` serves the whole table so the
      community view can show it, and a member who has stopped buying something should
@@ -894,7 +1009,11 @@ export function Home({
     <div className="stack">
       <header className="row-between">
         <div>
-          <h1 className="title">
+          {/* A salutation, not the page's identity. At the shared 40px it was the
+              largest thing on Home — larger than the order, and three times the size of
+              the price inside it. Other pages keep `.title` because their heading is
+              what the page *is*; this one is a greeting. */}
+          <h1 className="title title-greeting">
             {greeting()}, {identity.display_name.split(" ")[0]}
           </h1>
           <p className="small muted" style={{ marginTop: 4 }}>
@@ -1000,7 +1119,15 @@ export function Home({
       {standing.length > 0 ? (
         <section className="panel">
           <div className="panel-head">
-            <h2>What Pool is watching</h2>
+            {/* Home leads with one order. A member in two reaches this panel with a row
+                that is *in* the second one, and "What Pool is watching" is then a claim
+                the row beneath it contradicts — so the heading widens exactly when that
+                happens, and stays as it is the rest of the time. */}
+            <h2>
+              {standing.some((d) => byOutlook.get(d.need_id)?.state === "in_pool")
+                ? "Everything else you buy"
+                : "What Pool is watching"}
+            </h2>
             <span className="spacer" />
             <button className="btn btn-sm btn-ghost" onClick={() => onStartNeed(null)}>
               Add something

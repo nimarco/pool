@@ -11,6 +11,15 @@
  *  member action, on the ordinary member screen, and is the only thing that causes
  *  anything.
  *
+ *  **Why almost all of it is behind one disclosure.** This page used to argue its case in
+ *  five paragraphs above the button, and the button sat three phone screens down. Every
+ *  one of those paragraphs was true and none of them was doing the job the first screen
+ *  has: what this is, what to do, and where to press. The truth did not move out of the
+ *  product — it moved *below the fold*, into "How this demo works", which is open to
+ *  anybody in one click and is where a sceptic looks anyway. What stayed above it is the
+ *  one boundary nobody should have to click for: this community is synthetic and the
+ *  money is simulated.
+ *
  *  The workspace is separate for two reasons that are not presentational: the curated
  *  coffee community is deliberately not part of the canonical seed, and saving a
  *  declaration here dispatches its coordination event in the same request, which would be
@@ -36,90 +45,77 @@ export function Verify({
   }, []);
 
   return (
-    <div className="stack">
+    <div className="stack verify">
       <header className="stack-sm">
         <h1 className="title">Verify this yourself</h1>
         <p className="lede">
-          You are about to use Pool as a member of a synthetic community that already has
-          coffee demand in it — a dozen households who buy coffee and disagree about which
-          coffee. Nothing has been arranged for you.
+          You are joining a synthetic community that already buys coffee. Nothing here has
+          been arranged for you.
         </p>
       </header>
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>What to do</h2>
-        </div>
+      <ol className="verify-steps">
+        <li>
+          Add a coffee you drink — <strong>three bags a month</strong>.
+        </li>
+        <li>Say whether another brand would do.</li>
+        <li>
+          <strong>Answer them the way you actually buy.</strong>
+        </li>
+        <li>Save.</li>
+      </ol>
+
+      <div className="row-actions">
+        <button className="btn btn-primary" onClick={onStart}>
+          Start — add what you buy
+        </button>
+        <button className="btn btn-ghost" onClick={onHome}>
+          Look at Home first
+        </button>
+      </div>
+
+      {/* The one boundary that does not get to be a click away. Six words, above the
+          fold, on first paint — and the link into the whole of it. */}
+      <p className="verify-badge">
+        Synthetic community · simulated payments · real software
+      </p>
+
+      <details className="panel why-fold">
+        <summary>
+          <span>How this demo works</span>
+          <span className="small muted">what is real, and what is not</span>
+        </summary>
         <div className="panel-pad stack-sm">
-          <ol className="verify-steps">
-            <li>
-              Open <strong>What you buy</strong> and add a coffee you drink — say{" "}
-              <strong>three bags a month</strong>.
-            </li>
-            <li>
-              Say whether you would take another brand. If you would, Pool looks at what it
-              can source and what other members have asked for, and asks only the questions
-              whose answers would change which orders you could join.
-            </li>
-            <li>
-              <strong>Answer them the way you actually buy.</strong> Each answer shows the
-              standing demand it would let Pool combine you with, so you can see what a
-              narrower answer costs you — but a preference you do not hold is not worth
-              having, and Pool will not push you off one.
-            </li>
-            <li>Save.</li>
-          </ol>
-          <p className="small">
-            That is the whole of it. Saving is what causes Pool to look; nothing on this
-            path asks you to press &ldquo;run&rdquo;. Home does carry an{" "}
-            <strong>Ask Pool to check now</strong> button, and on this deployment it runs
-            the same bounded loop with the same deterministic planner, at zero model
-            tokens — live model invocation is switched off here, so there is no control
-            that spends one. When it has finished, Home will have changed — and every row
-            that changed can tell you why.
+          <h3 className="small">What saving does</h3>
+          <p className="small muted">
+            Saving is what causes Pool to look; nothing on this path asks you to press
+            &ldquo;run&rdquo;. Home does carry an <strong>Ask Pool to check now</strong>{" "}
+            button, and on this deployment it runs the same bounded loop with the same
+            deterministic planner, at zero model tokens — live model invocation is
+            switched off here, so there is no control that spends one. When it has
+            finished, Home will have changed, and every row that changed can tell you why.
           </p>
           <p className="small muted">
             <strong>What changes is a real answer, not necessarily an order.</strong> A
-            narrow set of answers can leave Pool watching — there is compatible demand, but
-            not enough of it under your rules to buy against, and it will say so in those
-            words. A broader set exposes more of what is already standing here. Both are the
-            software working; neither is arranged in advance, and nothing on this page knows
-            which one you will get.
+            narrow set of answers can leave Pool watching — there is compatible demand,
+            but not enough of it under your rules to buy against, and it will say so in
+            those words. A broader set exposes more of what is already standing here. Both
+            are the software working; neither is arranged in advance, and nothing on this
+            page knows which one you will get.
           </p>
           <p className="small muted">
             Quantity matters for the same reason. Three is suggested because it lands on a
-            supplier&apos;s case boundary in this particular community — try two instead and
-            Pool will tell you, truthfully, that it could assemble an order but not one you
-            would be in, so it did not form it.
+            supplier&apos;s case boundary in this particular community — try two instead
+            and Pool will tell you, truthfully, that it could assemble an order but not one
+            you would be in, so it did not form it.
           </p>
           <p className="small muted">
-            You will be a member of <strong>Demo University</strong>, which is the only
-            community here — Pool has not asked your browser where you are and has not
-            guessed, which is what makes this behave identically wherever it is opened. It
-            is invented, and so is everyone in it, so nothing here implies a partnership
-            with a real institution.
+            Nothing is one-way. Every answer stays editable afterwards, including the first
+            one — narrow your rules and Pool takes you out of an order they no longer
+            allow; widen them again and it puts you back.
           </p>
-          <p className="small muted">
-            Nothing is one-way. Every answer stays editable afterwards, including the
-            first one — narrow your rules and Pool takes you out of an order they no
-            longer allow; widen them again and it puts you back.
-          </p>
-          <div className="row-actions">
-            <button className="btn btn-primary" onClick={onStart}>
-              Start — add what you buy
-            </button>
-            <button className="btn btn-ghost" onClick={onHome}>
-              Look at Home first
-            </button>
-          </div>
-        </div>
-      </section>
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>What is real here, and what is not</h2>
-        </div>
-        <div className="panel-pad stack-sm">
+          <h3 className="small">What is real here, and what is not</h3>
           <ul className="verify-facts">
             <li>
               <strong>Real:</strong> the compatibility engine, the supplier maths, the case
@@ -134,8 +130,14 @@ export function Verify({
               About.
             </li>
             <li>
-              <strong>Simulated:</strong> payments. No card is charged, authorised, or
-              stored, and no supplier is contacted.
+              <strong>Simulated:</strong> payments and the supplier order. No card is
+              charged, authorised, or stored, and no supplier is contacted.
+            </li>
+            <li>
+              <strong>Demo University</strong> is the only community here, and it is
+              invented — Pool has not asked your browser where you are and has not guessed,
+              which is what makes this behave identically wherever it is opened. Nothing
+              here implies a partnership with a real institution.
             </li>
             {health ? (
               <li>
@@ -152,7 +154,7 @@ export function Verify({
             is swept automatically.
           </p>
         </div>
-      </section>
+      </details>
     </div>
   );
 }

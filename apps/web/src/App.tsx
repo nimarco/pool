@@ -121,7 +121,11 @@ export default function App() {
   /** Which declaration "Why this order?" is about. One server read behind it, so the
    *  screen survives a reload — the old judge demo held its narrative in React state and
    *  lost it, which is the failure this replaces. */
-  const [why, setWhy] = useState<{ needId: string; productName: string } | null>(null);
+  const [why, setWhy] = useState<{
+    needId: string;
+    productName: string;
+    unit: string;
+  } | null>(null);
   const [busyDecision, setBusyDecision] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [scenario, setScenario] = useState<ScenarioResult | null>(null);
@@ -771,8 +775,8 @@ export default function App() {
                 void openPoolDetail(poolId, { tab: "activity", deep: "execution" })
               }
               onStartNeed={startNeed}
-              onWhy={(needId, productName) => {
-                setWhy({ needId, productName });
+              onWhy={(needId, productName, unit) => {
+                setWhy({ needId, productName, unit });
                 navigate("why");
               }}
               liveDiscovery={Boolean(demoConfig?.live_agent_available)}
@@ -784,6 +788,7 @@ export default function App() {
             <WhyThisOrder
               needId={why.needId}
               productName={why.productName}
+              unit={why.unit}
               onBack={() => navigate("home")}
             />
           ) : null}
@@ -953,16 +958,21 @@ export default function App() {
 
       <footer className="footer">
         <div className="wrap footer-inner">
+          {/* One line, four links, on every screen — so it is the place the demo
+              boundary is stated, and the reason none of the product screens has to state
+              it again. It said the same thing twice before ("a safe demo environment —
+              synthetic people, simulated money, real software"), which is the pattern the
+              whole product had: the same disclosure in six places, each one shorter than
+              the last but never the only one. */}
           <span>
-            Pool coordinates group purchases inside one community.{" "}
+            <button className="linkish" onClick={() => setPanelOpen(true)}>
+              Synthetic community · simulated payments · real software
+            </button>{" "}
+            ·{" "}
             <button className="linkish" onClick={() => navigate("about")}>
               What Pool is
             </button>{" "}
             ·{" "}
-            <button className="linkish" onClick={() => setPanelOpen(true)}>
-              {communityName} is a safe demo environment
-            </button>{" "}
-            — synthetic people, simulated money, real software.{" "}
             {/* The one door to everything a judge or an operator needs: how this
                 community works, where the money went, what the agent actually ran, and
                 the console that drives a multi-person demo alone. A member never has to

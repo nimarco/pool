@@ -303,7 +303,10 @@ describe("the proof action on Home", () => {
     });
 
     await userEvent.click(screen.getByRole("button", { name: /why this order/i }));
-    expect(onWhy).toHaveBeenCalledWith("need_rosa_whey", shown.product_name);
+    /* The unit travels with the declaration. The explanation counts in it, and the only
+       screen that knows the member declared tubs rather than bags is this one — the
+       coordination payload carries quantities and not the noun for them. */
+    expect(onWhy).toHaveBeenCalledWith("need_rosa_whey", shown.product_name, shown.unit);
   });
 });
 
@@ -319,13 +322,15 @@ describe("the member's own stake in a pool", () => {
     });
     renderHome([shown]);
 
-    expect(await screen.findByText(/Your 2 tubs/)).toBeTruthy();
-    // Her own final cost and her own baseline, both server strings.
-    expect(screen.getByText(/\$71\.83/)).toBeTruthy();
-    expect(screen.getByText(/instead of \$93\.98 buying alone/)).toBeTruthy();
+    expect(await screen.findByText(/your 2 tubs/)).toBeTruthy();
+    // Her own final cost and her own baseline, both server strings, each in its own slot.
+    expect(screen.getByText("$71.83")).toBeTruthy();
+    expect(screen.getByText("What you pay")).toBeTruthy();
+    expect(screen.getByText("$93.98")).toBeTruthy();
+    expect(screen.getByText("Buying alone")).toBeTruthy();
     // Her saving, not the group's.
-    expect(screen.getByText("23.5%")).toBeTruthy();
-    expect(screen.queryByText("23.6%")).toBeNull();
+    expect(screen.getByText(/you save 23\.5%/)).toBeTruthy();
+    expect(screen.queryByText(/23\.6%/)).toBeNull();
     expect(screen.getByText(/^Pool found something for you$/)).toBeTruthy();
   });
 
@@ -349,8 +354,8 @@ describe("the member's own stake in a pool", () => {
     renderHome([shown]);
 
     expect(await screen.findByText(/Pool found overlapping demand/)).toBeTruthy();
-    expect(screen.queryByText(/Your 2 tubs/)).toBeNull();
-    expect(screen.getByText("23.6%")).toBeTruthy();
+    expect(screen.queryByText(/your 2 tubs/)).toBeNull();
+    expect(screen.getByText(/23\.6%/)).toBeTruthy();
   });
 
   it("says which invariant is holding instead of showing an empty price", async () => {
@@ -367,7 +372,7 @@ describe("the member's own stake in a pool", () => {
 
     // A dash here would read as a missing number rather than as a rule being enforced.
     expect(await screen.findByText(/Not priced yet/)).toBeTruthy();
-    expect(screen.getByText(/fixed once a fulfiller accepts/)).toBeTruthy();
+    expect(screen.getByText(/fixed once a host accepts/)).toBeTruthy();
   });
 });
 
@@ -421,7 +426,7 @@ describe("a pool buying an authorised substitute", () => {
     vi.spyOn(apiModule.api, "pool").mockResolvedValue({ ...shown, members: [ROSA_MEMBERSHIP] });
     renderHome([shown]);
 
-    expect(await screen.findByText(/Your 2 tubs/)).toBeTruthy();
+    expect(await screen.findByText(/your 2 tubs/)).toBeTruthy();
     expect(screen.queryByText(/A substitute for the/)).toBeNull();
   });
 });
@@ -600,10 +605,13 @@ describe("before Pool has run", () => {
 
     expect(await screen.findByText(/What Pool is watching/)).toBeTruthy();
     const row = document.querySelector(".watch-row") as HTMLElement;
-    // The demand this member did not organise, as a count of people.
-    expect(row.textContent).toMatch(/6 people near you/);
-    expect(row.textContent).toMatch(/18 bags standing/);
-    expect(row.textContent).toMatch(/3 of them yours/);
+    /* The demand this member did not organise, and the quantity that is missing — as the
+       two numbers themselves rather than as a sentence containing them. Both come from
+       the outlook the server sent, so they are the values it built its own sentence
+       from. */
+    expect(row.textContent).toMatch(/6\s*people near you/);
+    expect(row.textContent).toMatch(/18\s*bags declared/);
+    expect(row.textContent).toMatch(/24\s*required/);
     // The state, in the five-word grammar, with its reason beside it.
     expect(row.textContent).toMatch(/Watching/);
     expect(row.textContent).toMatch(/Not enough demand yet/);

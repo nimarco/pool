@@ -154,7 +154,11 @@ describe("declaring a standing need", () => {
     ]);
 
     expect(await screen.findByText(/As things stand/)).toBeTruthy();
-    expect(screen.getByText(/supplier will not sell fewer than 48/)).toBeTruthy();
+    /* The quantities themselves, from the outlook's own `units_available` /
+       `units_needed` — the two values the server interpolated into its sentence, so the
+       row and that sentence cannot come apart. */
+    expect(screen.getByText(/4 of 48 packs declared nearby/)).toBeTruthy();
+    expect(screen.getByText(/Not enough demand yet/)).toBeTruthy();
   });
 
   it("offers the action rather than only describing it", async () => {

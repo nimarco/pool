@@ -223,8 +223,7 @@ describe("setting up an account", () => {
     await userEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 
     const text = (document.body.textContent ?? "").replace(/\s+/g, " ");
-    expect(text).toMatch(/simulated for this demo/i);
-    expect(text).toMatch(/no real card, no real charge/i);
+    expect(text).toMatch(/simulated — no real card, no charge, nothing stored/i);
     // A public demo must never present a field that looks like it wants a card number.
     expect(document.querySelector('input[autocomplete*="cc-"]')).toBeNull();
     expect(text).not.toMatch(/card number|cvv|expiry/i);

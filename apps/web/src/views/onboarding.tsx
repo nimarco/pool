@@ -487,8 +487,7 @@ function AuthorityStep({
     <div className="stack-sm">
       <h1 className="display onboard-title">How much should Pool handle?</h1>
       <p className="lede">
-        Pool never spends more than your limits allow. This decides whether it checks with
-        you first when everything already fits.
+        Only when everything already fits your limits.
       </p>
 
       <fieldset className="onboard-choices">
@@ -523,9 +522,11 @@ function AuthorityStep({
           </label>
         ))}
       </fieldset>
+      {/* One reassurance, not three. This screen carried four overlapping promises that
+          nothing would be spent — a lede, this line, a payment note and a demo note —
+          and four ways of saying the same thing is not four times the trust. */}
       <p className="tiny faint">
-        Either way Pool stops and asks whenever a limit would be crossed. You can change
-        this at any time.
+        Either way Pool stops and asks if a limit would be crossed. Change it any time.
       </p>
 
       <div className="inset stack-sm">
@@ -536,8 +537,7 @@ function AuthorityStep({
               {hasPayment ? <span className="chip chip-ok">added</span> : null}
             </div>
             <p className="small muted" style={{ marginTop: 4 }}>
-              Nothing is charged now. Pool only ever authorises the exact final amount,
-              after you have seen it.
+              Pool only ever authorises the exact final amount, after you have seen it.
             </p>
           </div>
           {hasPayment ? null : (
@@ -554,9 +554,9 @@ function AuthorityStep({
             price exists. Somebody here to check that Pool coordinates an order should be
             able to press Finish and go. */}
         <p className="tiny faint">
-          Simulated for this demo — no real card, no real charge, and no card details are
-          collected or stored. <strong>You can skip this.</strong> Pool forms and explains
-          a provisional order without one; nothing on that path touches a card.
+          Simulated — no real card, no charge, nothing stored.{" "}
+          <strong>You can skip this:</strong> an order forms and explains itself without
+          one.
         </p>
       </div>
 

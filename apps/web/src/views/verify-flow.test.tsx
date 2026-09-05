@@ -372,13 +372,20 @@ describe("what the declaration caused, afterwards", () => {
     inVerifyScope(true);
     vi.spyOn(apiModule.api, "needCoordination").mockResolvedValue(coordination);
     render(
-      <WhyThisOrder needId="need_1" productName="Kestrel Medium Roast" onBack={() => {}} />,
+      <WhyThisOrder
+        needId="need_1"
+        productName="Kestrel Medium Roast"
+        unit="bag"
+        onBack={() => {}}
+      />,
     );
 
     await waitFor(() =>
       expect(screen.getAllByText("Harbourstone Dark Roast").length).toBeGreaterThan(0),
     );
-    expect(screen.getByRole("heading", { name: "What has not happened" })).toBeTruthy();
+    expect(
+      screen.getByText("Nothing has been charged, ordered or assigned"),
+    ).toBeTruthy();
 
     await userEvent.click(screen.getByRole("button", { name: "Show" }));
     expect(document.body.textContent).toContain("cev_1");
@@ -390,7 +397,12 @@ describe("what the declaration caused, afterwards", () => {
     inVerifyScope(true);
     vi.spyOn(apiModule.api, "needCoordination").mockResolvedValue(coordination);
     render(
-      <WhyThisOrder needId="need_1" productName="Kestrel Medium Roast" onBack={() => {}} />,
+      <WhyThisOrder
+        needId="need_1"
+        productName="Kestrel Medium Roast"
+        unit="bag"
+        onBack={() => {}}
+      />,
     );
     await waitFor(() =>
       expect(screen.getAllByText("Harbourstone Dark Roast").length).toBeGreaterThan(0),

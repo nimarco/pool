@@ -98,7 +98,7 @@ const OFFLINE_PLAN: NonNullable<NeedCoordination["clarification"]> = {
 
 async function openProof(data: NeedCoordination) {
   vi.spyOn(apiModule.api, "needCoordination").mockResolvedValue(data);
-  render(<WhyThisOrder needId="need_1" productName="Kestrel medium roast" onBack={() => {}} />);
+  render(<WhyThisOrder needId="need_1" productName="Kestrel medium roast" unit="bag" onBack={() => {}} />);
   await waitFor(() =>
     expect(
       screen.getByRole("heading", { name: "Technical proof for this run" }),

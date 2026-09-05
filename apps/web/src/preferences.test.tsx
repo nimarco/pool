@@ -316,8 +316,9 @@ describe("what each answer would reach", () => {
     const questions = withReach();
     renderPrefs(narrowestSimilar(questions), { questions });
     const text = document.body.textContent ?? "";
-    expect(text).toMatch(/Insisting on this leaves 5 of 6 coffees Pool can source/);
-    expect(text).toMatch(/29 units of other members' standing demand against 36/);
+    // Both currencies, as ratios rather than as a sentence per checkbox.
+    expect(text).toMatch(/keeps 5 of 6 coffees/);
+    expect(text).toMatch(/29 of 36 units/);
   });
 
   it("never turns a count into a forecast", () => {
@@ -343,7 +344,7 @@ describe("what each answer would reach", () => {
     }
     expect(text).toMatch(/cannot tell you whether an order will form/i);
     /* And it does not tell anybody what to pick. */
-    expect(text).toMatch(/only worth having if you would genuinely accept it/i);
+    expect(text).toMatch(/only pick what you would actually accept/i);
     expect(text).not.toMatch(/you should|we recommend you|pick dark/i);
   });
 

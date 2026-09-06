@@ -92,3 +92,40 @@ export function autonomyModeCopy(mode: string): string {
   if (mode === "ask_me") return "No — Pool always asks first";
   return mode.replace(/_/g, " ");
 }
+
+/* ------------------------------------------------------------------ community */
+
+/** What to call the member's community on a consumer surface.
+ *
+ *  Two shapes, because one word cannot do both jobs: a badge sits alone in the top bar,
+ *  and a label sits inside a sentence.
+ *
+ *  On the verification walkthrough both are generic, and that is a product decision
+ *  rather than a cosmetic one. The fixture genuinely is one invented campus, and naming
+ *  it in the top bar of every screen made Pool look like a product for universities —
+ *  the opposite of what it is. Pool coordinates wherever people are dense enough to
+ *  share a pickup: apartment blocks, neighbourhoods, workplaces. A campus is one case of
+ *  that, not the shape of the thing.
+ *
+ *  The synthetic community is still named in full, one tap away, inside the demo sheet
+ *  the badge opens. This moves the disclosure to where it is the subject; it does not
+ *  remove it.
+ *
+ *  Everywhere else — the ordinary product, the operator surfaces, the record — a
+ *  community's real name is its real name.
+ */
+export function communityBadge(name: string, verifying: boolean): string {
+  return verifying ? "Demo" : name;
+}
+
+/** The same thing, worded to sit inside a sentence: *standing needs across …*,
+ *  *elsewhere in …*. `sentenceStart` capitalises it for the one slot that begins a
+ *  line. */
+export function communityLabel(
+  name: string,
+  verifying: boolean,
+  opts: { sentenceStart?: boolean } = {},
+): string {
+  if (!verifying) return name;
+  return opts.sentenceStart ? "Your area" : "your area";
+}

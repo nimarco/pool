@@ -63,9 +63,9 @@ async function pastName(name = "Jordan") {
   await userEvent.click(screen.getByRole("button", { name: /continue/i }));
 }
 
-/** Through the location step. Named after the consequence, like the button is. */
+/** Through the location step. Named after the button, which is named after the act. */
 async function pastWhere() {
-  await userEvent.click(screen.getByRole("button", { name: /join demo university/i }));
+  await userEvent.click(screen.getByRole("button", { name: /share my location/i }));
 }
 
 describe("setting up an account", () => {
@@ -121,10 +121,10 @@ describe("setting up an account", () => {
     expect(screen.getByRole("button", { name: /continue/i })).toHaveProperty("disabled", false);
   });
 
-  it("asks where you are without asking the browser", async () => {
+  it("asks for location without asking the browser for one", async () => {
     /* The location step's entire contract. If this ever starts calling geolocation, the
-       deployed Permissions-Policy would have to be weakened and a judge's real position
-       would be collected for a community that does not exist. */
+       deployed Permissions-Policy would have to be weakened and a real position would be
+       collected for a community that does not exist. */
     const geo = vi.fn();
     Object.defineProperty(navigator, "geolocation", {
       value: { getCurrentPosition: geo, watchPosition: geo },
@@ -134,33 +134,56 @@ describe("setting up an account", () => {
     renderOnboarding();
     await pastName();
 
-    expect(screen.getByRole("heading", { name: /works street by street/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /find people near you/i })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /share my location/i }));
     expect(geo).not.toHaveBeenCalled();
   });
 
-  it("says plainly that the community is invented and was not guessed", async () => {
+  it("says the location is synthetic, and never that one was obtained", async () => {
     renderOnboarding();
     await pastName();
 
     const text = (document.body.textContent ?? "").replace(/\s+/g, " ");
-    expect(text).toMatch(/Demo University/);
-    expect(text).toMatch(/24 members/);
-    expect(text).toMatch(/Demo University is invented/i);
-    // Why a synthetic area exists at all — without it, "invented" reads as a limitation
-    // rather than as the thing that makes the demo reproducible.
-    expect(text).toMatch(/behave the same way wherever it is opened/i);
-    // And the sentence that makes this work for a judge in any city on earth.
-    expect(text).toMatch(/has not asked your browser where you are/i);
-    // No institution is implied, which is the other thing a synthetic campus could be
-    // read as claiming.
-    expect(text).toMatch(/not a real institution/i);
+    // The substitution, and the one thing a reader would otherwise have to assume.
+    expect(text).toMatch(/Synthetic location for this demo/i);
+    expect(text).toMatch(/did not ask your browser where you are/i);
 
-    /* Shown as the shape the real product has: a list you were found near and choose
-       from. The previous version named the community and offered no interaction, which
-       was honest and taught nothing — a reader could not tell whether Pool asks you,
-       guesses, or has exactly one community in the world. */
-    expect(text).toMatch(/Communities near you/i);
-    expect(screen.getByRole("button", { name: /join demo university/i })).toBeTruthy();
+    /* The failure this screen is built to avoid. Any of these would tell somebody that a
+       real position was read, which is the single thing that did not happen. */
+    for (const lie of [
+      /location shared/i,
+      /location detected/i,
+      /your location is/i,
+      /we found you/i,
+      /located you/i,
+      /\bnearby:/i,
+    ]) {
+      expect(text).not.toMatch(lie);
+    }
+  });
+
+  it("is about coordinating locally, not about one campus", async () => {
+    /* The reason this replaced the community picker. Naming the synthetic campus was
+       honest and made Pool look like a product for universities; Pool coordinates
+       wherever people are dense enough to share a pickup. */
+    renderOnboarding();
+    await pastName();
+
+    const text = (document.body.textContent ?? "").replace(/\s+/g, " ");
+    expect(text).toMatch(/people close enough to share a pickup/i);
+    expect(text).not.toMatch(/Demo University/i);
+    expect(text).not.toMatch(/campus/i);
+    expect(text).not.toMatch(/university/i);
+  });
+
+  it("hands straight to the declaration step, with no confirmation in between", async () => {
+    /* One tap, one consequence. A confirmation state here would either repeat the
+       sentence above it or imply a lookup that did not happen. */
+    renderOnboarding();
+    await pastName();
+    await pastWhere();
+
+    expect(screen.getByRole("heading", { name: /what do you buy regularly/i })).toBeTruthy();
   });
 
   it("reuses the real catalogue search rather than a setup-only picker", async () => {

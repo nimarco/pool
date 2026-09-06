@@ -2378,6 +2378,34 @@ select.control {
   outline-offset: 3px;
 }
 
+/* The location step's one picture: a pin on a soft disc, sized so it is what the eye
+   lands on between the sentence and the button.
+
+   Deliberately not a map. A map here would have to show either a real place Pool is not
+   coordinating in, or an invented one presented as real — and the whole point of this
+   screen is that no position was taken. */
+.locate {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0 20px;
+}
+.locate-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--moss-soft);
+  border: 1.5px solid var(--moss-line);
+  color: var(--moss);
+}
+/* Short measure, so the disclosure reads as a footnote rather than as a paragraph the
+   screen is asking anybody to work through. */
+.locate-note {
+  max-width: 46ch;
+}
+
 .onboard-steps {
   list-style: none;
   margin: 0;
@@ -3999,6 +4027,12 @@ select.control {
   }
   .stack-sm {
     gap: 14px;
+  }
+
+  /* The disc gives back a little of its breathing room on a phone; the pin does not
+     shrink, because it is the only thing on the screen that is not type. */
+  .locate {
+    padding: 18px 0 14px;
   }
 
   /* ---- the declaration form

@@ -103,6 +103,15 @@ export const IconCross = ({ size }: { size?: number }) => (
     <path d="M4 4l8 8M12 4l-8 8" />
   </Icon>
 );
+/** A location pin. The only icon in the set that is ever drawn large — the setup
+ *  screen uses it at 40px as the one picture on the page — so the head is a circle
+ *  rather than a dot, which holds its shape when the stroke scales up with it. */
+export const IconPin = ({ size }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M8 14.2c3-3.1 4.6-5.6 4.6-7.6a4.6 4.6 0 1 0-9.2 0c0 2 1.6 4.5 4.6 7.6Z" />
+    <circle cx="8" cy="6.5" r="1.7" />
+  </Icon>
+);
 export const IconDot = ({ size }: { size?: number }) => (
   <Icon size={size}>
     <circle cx="8" cy="8" r="3.2" />

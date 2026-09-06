@@ -131,6 +131,13 @@ async function nameYourself(name = "Jordan") {
   await userEvent.click(screen.getByRole("button", { name: /continue/i }));
 }
 
+/** Through the location step, which both worlds now show. It used to be skipped here,
+ *  because it named the synthetic community and `/verify` had already done that; the
+ *  screen names no community now, so there is nothing left to duplicate. */
+async function shareLocation() {
+  await userEvent.click(screen.getByRole("button", { name: /share my location/i }));
+}
+
 async function chooseTheCoffee() {
   await userEvent.type(screen.getByLabelText(/what do you buy/i), "kestrel");
   await userEvent.click(await screen.findByRole("option", { name: /Kestrel Medium Roast/i }));
@@ -179,6 +186,7 @@ describe("setting up inside the verification world", () => {
     inVerifyScope(true);
     render(<Onboarding consumer={FRESH} onDone={() => {}} />);
     await nameYourself();
+    await shareLocation();
     await chooseTheCoffee();
 
     const quantity = screen.getByLabelText(/how many/i) as HTMLInputElement;
@@ -189,7 +197,7 @@ describe("setting up inside the verification world", () => {
     inVerifyScope(false);
     render(<Onboarding consumer={FRESH} onDone={() => {}} />);
     await nameYourself();
-    await userEvent.click(screen.getByRole("button", { name: /join demo university/i }));
+    await shareLocation();
     await chooseTheCoffee();
 
     const quantity = screen.getByLabelText(/how many/i) as HTMLInputElement;
@@ -200,6 +208,7 @@ describe("setting up inside the verification world", () => {
     inVerifyScope(true);
     render(<Onboarding consumer={FRESH} onDone={() => {}} />);
     await nameYourself();
+    await shareLocation();
     await chooseTheCoffee();
     await userEvent.click(screen.getByRole("button", { name: /add this/i }));
 
@@ -216,6 +225,7 @@ describe("setting up inside the verification world", () => {
     inVerifyScope(true);
     render(<Onboarding consumer={FRESH} onDone={() => {}} />);
     await nameYourself();
+    await shareLocation();
     await chooseTheCoffee();
 
     const quantity = screen.getByLabelText(/how many/i) as HTMLInputElement;

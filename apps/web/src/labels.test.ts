@@ -8,7 +8,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { autonomyModeCopy, blockingRuleExplanation, groupSavingsCaption } from "./labels";
+import {
+  autonomyModeCopy,
+  blockingRuleExplanation,
+  communityBadge,
+  communityLabel,
+  groupSavingsCaption,
+} from "./labels";
 
 describe("the group saving caption", () => {
   it("marks a candidate pool's total as an estimate", () => {
@@ -90,5 +96,35 @@ describe("standing autonomy, in a member's words", () => {
 
   it("does not guess at a mode it has never seen", () => {
     expect(autonomyModeCopy("some_future_mode")).toBe("some future mode");
+  });
+});
+
+describe("what a consumer surface calls the community", () => {
+  it("names it, in the ordinary product", () => {
+    expect(communityBadge("Riverside Apartments", false)).toBe("Riverside Apartments");
+    expect(communityLabel("Riverside Apartments", false)).toBe("Riverside Apartments");
+    expect(communityLabel("Riverside Apartments", false, { sentenceStart: true })).toBe(
+      "Riverside Apartments",
+    );
+  });
+
+  it("is generic on the verification walkthrough, in both shapes", () => {
+    /* The fixture is one invented campus. Naming it in the top bar of every screen made
+       Pool look like a product for universities, which is the opposite of what it is —
+       and the demo sheet the badge opens still states the name in full. */
+    expect(communityBadge("Demo University", true)).toBe("Demo");
+    expect(communityLabel("Demo University", true)).toBe("your area");
+    expect(communityLabel("Demo University", true, { sentenceStart: true })).toBe("Your area");
+  });
+
+  it("never leaks a campus into a consumer sentence", () => {
+    for (const shape of [
+      communityBadge("Demo University", true),
+      communityLabel("Demo University", true),
+      communityLabel("Demo University", true, { sentenceStart: true }),
+    ]) {
+      expect(shape).not.toMatch(/university/i);
+      expect(shape).not.toMatch(/campus/i);
+    }
   });
 });

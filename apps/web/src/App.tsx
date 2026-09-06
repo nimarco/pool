@@ -13,6 +13,7 @@ import {
   resetWorkspaceId,
 } from "./api";
 import { BrandMark } from "./brand";
+import { communityBadge, communityLabel } from "./labels";
 import { Picked } from "./chosen";
 import { IconArrowLeft, IconCross } from "./ui";
 import { About } from "./views/about";
@@ -549,6 +550,10 @@ export default function App() {
   }, [refresh]);
 
   const communityName = state?.community?.name ?? "Demo University";
+  /* The verification walkthrough presents the community generically — see
+     `labels.communityBadge`. The name itself is unchanged, and the demo sheet the badge
+     opens still states it in full. */
+  const verifying = api.inVerifyScope();
 
   return (
     <div className="shell">
@@ -616,7 +621,7 @@ export default function App() {
               title="Demo environment, controls, and what is real here"
             >
               <span className="env-dot" aria-hidden="true" />
-              {communityName}
+              {communityBadge(communityName, verifying)}
             </button>
           </div>
         </div>
@@ -816,7 +821,7 @@ export default function App() {
           {!showcase && !needsOnboarding && view === "needs" ? (
             <Needs
               identity={identity}
-              communityName={communityName}
+              communityName={communityLabel(communityName, verifying)}
               initialProduct={pendingProduct}
               onConsumeInitialProduct={() => setPendingProduct(null)}
               onFind={findOpportunities}

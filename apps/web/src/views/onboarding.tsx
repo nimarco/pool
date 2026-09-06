@@ -20,31 +20,15 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Consumer, NeedDraft, Place, api } from "../api";
+import { Consumer, NeedDraft, api } from "../api";
 import { ChosenCard, ProductSearch } from "../product-search";
 import { ChosenItem, asChosen, defaultQuantity } from "../chosen";
 import { EXACT } from "../preference-answers";
 import { Preferences } from "../preferences";
 import { useClarification } from "../use-clarification";
-import { IconArrowRight, IconCheck } from "../ui";
+import { IconArrowRight, IconCheck, IconPin } from "../ui";
 
 type Step = "you" | "where" | "buy" | "authority";
-
-/** Whether the "which community" step is a decision at all.
- *
- *  It is, in the product: the list comes from the device, it can have several entries,
- *  and picking one is consent to be matched with those people. It is not, on the
- *  verification walkthrough — that page has already said which synthetic community the
- *  visitor is about to be a member of, that Pool has not asked their browser where they
- *  are, and that there is exactly one. Asking them to press a button to confirm a thing
- *  they have just read and pressed a button about is ceremony, and this walkthrough is
- *  measured in how few actions stand between a sceptic and the evidence.
- *
- *  Narrow on purpose: the ordinary member still sees the step and the disclosure on it.
- */
-function skipsCommunityChoice(): boolean {
-  return api.inVerifyScope();
-}
 
 /** Whether the older scripted walkthrough should be offered from setup at all.
  *
@@ -92,11 +76,10 @@ function defaultFlexibility(nextNeeded: string, cadence: number): number {
 function Progress({ current }: { current: Step }) {
   /* A step nobody is going to be shown is not a step, and counting it would promise a
      screen that never arrives. */
-  const steps = STEPS.filter((s) => !(s.id === "where" && skipsCommunityChoice()));
-  const index = steps.findIndex((s) => s.id === current);
+  const index = STEPS.findIndex((s) => s.id === current);
   return (
     <ol className="onboard-steps" aria-label="Setup progress">
-      {steps.map((s, i) => (
+      {STEPS.map((s, i) => (
         <li
           key={s.id}
           className={i < index ? "is-done" : i === index ? "is-current" : ""}
@@ -183,91 +166,66 @@ function YouStep({
 
 /* ------------------------------------------------------------------- 2. where */
 
-/** Where you are — asked honestly, and answered without taking a coordinate.
+/** Location — asked the way the shipped product would ask it, and answered without
+ *  taking a position.
  *
- *  Pool is a local product: it only works if the people it matches you with are close
- *  enough to share one pickup. So "where are you" is a real question, and in the real
- *  product the answer would come from the device.
+ *  Pool is a local product: it can only coordinate people close enough to collect from
+ *  one place. So "where are you" is the first real question, and in the shipped product
+ *  the answer comes from the device.
  *
- *  It does not come from the device here, and that is deliberate rather than lazy.
- *  This demo's community is an invented campus at invented coordinates, and a judge
- *  running it could be in any city on Earth. Taking a real position and quietly treating
- *  it as a room on that campus would be a lie about the exact thing location is for —
- *  and taking one only to discard it would be collecting a sensitive value for nothing.
- *  The deployed `Permissions-Policy` denies geolocation outright, and this pass leaves
- *  that alone.
+ *  It does not come from the device here, and that is deliberate rather than lazy. The
+ *  demo's community sits at invented coordinates and somebody running it could be in any
+ *  city on Earth. Taking a real position and quietly treating it as a room on a synthetic
+ *  map would be a lie about the exact thing location is for — and taking one only to
+ *  discard it would be collecting a sensitive value for nothing. The deployed
+ *  `Permissions-Policy` denies geolocation outright, and this screen leaves that alone:
+ *  it never touches `navigator.geolocation`, and it never says a position was read.
+ *  Nothing on it reports "shared", "detected", a place name, or a coordinate, because
+ *  none of those happened.
  *
- *  So the step orients instead: it names the local network, shows what being inside it
- *  is worth in real numbers off the server, and says plainly that the network is
- *  synthetic. Nobody has to be anywhere in particular for that to be true. */
-function WhereStep({
-  place,
-  onNext,
-  onBack,
-}: {
-  place: Place | null;
-  onNext: () => void;
-  onBack: () => void;
-}) {
+ *  What replaced the earlier version is a change of subject, not of honesty. That one
+ *  named the synthetic community — *Demo University · 24 members · 4 pickup points* —
+ *  which was true and made Pool look like a product for one campus. Pool coordinates
+ *  wherever people are dense enough to share a pickup: apartment blocks, neighbourhoods,
+ *  workplaces. A campus is one case of that, not the shape of the thing. So the screen
+ *  states the mechanism, offers the one action, and puts the substitution in a line small
+ *  enough not to become the subject of the screen.
+ *
+ *  The button advances, and that is the whole consequence. A confirmation state here
+ *  would either repeat the sentence above it or imply a lookup that did not happen. */
+function WhereStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   return (
     <div className="stack-sm">
-      <h1 className="display onboard-title">Pool works street by street.</h1>
+      <h1 className="display onboard-title">Find people near you</h1>
       <p className="lede">
-        The people it finds for you have to be close enough to collect from the same
-        place, so the one thing it needs first is which local network you are in.
+        Pool uses your location to coordinate orders with people close enough to share a
+        pickup.
       </p>
 
-      {/* Presented as what it is in the real product — a list you were found near and
-          choose from — rather than as a single fact stated at you. The previous version
-          named Demo University and offered no interaction, which was honest and taught
-          nothing: a reader could not tell whether Pool works by asking you, by guessing,
-          or by having exactly one community in the world.
-
-          The list has one entry here, and saying so is better than hiding the shape. */}
-      <div className="inset stack-sm">
-        <div className="row-between" style={{ alignItems: "baseline" }}>
-          <span className="section-title">Communities near you</span>
-          <span className="tiny faint">1 found</span>
-        </div>
-
-        <button className="community-choice" onClick={onNext}>
-          <span className="community-choice-body">
-            <span className="row-title">
-              {place?.community_name ?? "Demo University"}
-              {place?.synthetic ? <span className="chip">demo</span> : null}
-            </span>
-            <span className="small muted">
-              {place ? `${place.member_count} members` : "—"}
-              {place ? ` · ${place.pickup_site_count} pickup points` : ""}
-              {place ? " · everyone within a short walk of one of them" : ""}
-            </span>
-          </span>
-          <IconArrowRight />
-        </button>
-
-        {/* The truth boundary, stated where the decision is made rather than buried in a
-            policy page. It is what lets this screen work identically for a judge in
-            another hemisphere. */}
-        <p className="small muted prose">
-          In the real product this list comes from your device. It does not here: Pool has
-          not asked your browser where you are and has not guessed. Demo University is
-          invented and so is everyone in it, which is what makes the demo behave the same
-          way wherever it is opened — and it is not a real institution, so nothing here
-          implies a partnership with one.
-        </p>
+      {/* The one picture on the screen. Not a map: a map would either show a real place
+          Pool is not coordinating in, or an invented one presented as real. */}
+      <div className="locate">
+        <span className="locate-mark" aria-hidden="true">
+          <IconPin size={40} />
+        </span>
       </div>
 
       <div className="btn-row">
-        {/* Named after the consequence. "Continue" would make the row above decorative,
-            and joining a community is the thing this screen is for. */}
         <button className="btn btn-primary btn-lg" onClick={onNext}>
-          Join {place?.community_name ?? "the demo community"}
+          Share my location
           <IconArrowRight />
         </button>
         <button className="btn" onClick={onBack}>
           Back
         </button>
       </div>
+
+      {/* One line, because this screen is about the product rather than about the demo.
+          The second clause is the thing a reader would otherwise have to assume, and it
+          is what the geolocation test exists to protect. */}
+      <p className="tiny faint locate-note">
+        Synthetic location for this demo — Pool did not ask your browser where you are.
+      </p>
     </div>
   );
 }
@@ -709,10 +667,6 @@ export function Onboarding({
     }
   };
 
-  const visibleSteps = STEPS.filter(
-    (s) => !(s.id === "where" && skipsCommunityChoice()),
-  );
-
   return (
     <div className="onboard">
       <Progress current={step} />
@@ -723,19 +677,18 @@ export function Onboarding({
         /* The step is a region that replaces itself, so a screen reader should hear the
            new one rather than silently land in the middle of it. */
         role="group"
-        aria-label={`Step ${visibleSteps.findIndex((s) => s.id === step) + 1} of ${visibleSteps.length}`}
+        aria-label={`Step ${STEPS.findIndex((s) => s.id === step) + 1} of ${STEPS.length}`}
       >
         {step === "you" ? (
           <YouStep
             name={name}
             onName={setName}
-            onNext={() => setStep(skipsCommunityChoice() ? "buy" : "where")}
+            onNext={() => setStep("where")}
             onJudgeDemo={offersJudgeWalkthrough() ? onJudgeDemo : undefined}
           />
         ) : null}
         {step === "where" ? (
           <WhereStep
-            place={consumer.place}
             onNext={() => setStep("buy")}
             onBack={() => setStep("you")}
           />
@@ -745,7 +698,7 @@ export function Onboarding({
             added={added}
             onAdd={addNeed}
             onNext={() => setStep("authority")}
-            onBack={() => setStep(skipsCommunityChoice() ? "you" : "where")}
+            onBack={() => setStep("where")}
             busy={busy}
             error={error}
           />

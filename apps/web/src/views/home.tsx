@@ -52,6 +52,7 @@ import {
 import {
   autonomyModeCopy,
   blockingRuleExplanation,
+  communityLabel,
   outlookHeadline,
 } from "../labels";
 import { ProductSearch } from "../product-search";
@@ -1043,7 +1044,9 @@ export function Home({
             {greeting()}, {identity.display_name.split(" ")[0]}
           </h1>
           <p className="small muted" style={{ marginTop: 4 }}>
-            {state.community?.name ?? "Demo University"}
+            {communityLabel(state.community?.name ?? "Demo University", api.inVerifyScope(), {
+              sentenceStart: true,
+            })}
             {member?.community_membership
               ? ` · verified by ${member.community_membership.verification_method.replace(/_/g, " ")}`
               : ""}
@@ -1188,7 +1191,10 @@ export function Home({
         <ElsewhereCard
           pools={elsewhere}
           onOpenPool={onOpenPool}
-          communityName={state.community?.name ?? "your community"}
+          communityName={communityLabel(
+            state.community?.name ?? "your community",
+            api.inVerifyScope(),
+          )}
         />
       ) : null}
 

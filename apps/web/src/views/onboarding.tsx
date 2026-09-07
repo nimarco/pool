@@ -20,6 +20,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { changeScreen } from "../screen-change";
 import { Consumer, NeedDraft, api } from "../api";
 import { ChosenCard, ProductSearch } from "../product-search";
 import { ChosenItem, asChosen, defaultQuantity } from "../chosen";
@@ -258,12 +259,17 @@ function BuyStep({
   const clarify = useClarification(chosen?.draft.product_id);
   const { questions, preferences, planId } = clarify;
 
+  /* Saving a declaration puts the search screen back so another can be added. That is a
+     screen change like any other, and it used to happen in the frame the form vanished:
+     the button appeared to go somewhere wrong and then correct itself. */
   const reset = () => {
-    setChosen(null);
-    setQuantity(defaultQuantity());
-    setCadence(DEFAULT_CADENCE);
-    setNextNeeded(isoInDays(DEFAULT_NEXT_NEEDED_DAYS));
-    clarify.reset();
+    changeScreen(() => {
+      setChosen(null);
+      setQuantity(defaultQuantity());
+      setCadence(DEFAULT_CADENCE);
+      setNextNeeded(isoInDays(DEFAULT_NEXT_NEEDED_DAYS));
+      clarify.reset();
+    }, "back");
   };
 
   const flexibility = defaultFlexibility(nextNeeded, cadence);
@@ -321,6 +327,14 @@ function BuyStep({
         </ul>
       ) : null}
 
+      {/* Picking a product and saving one are two screens inside this step, and the
+          second replaces the first in place. Without the swap, "Add this" repaints the
+          search screen in the same frame the form vanishes, which looks like the button
+          went to the wrong place and then corrected itself. */}
+      <div
+        key={chosen ? "declare" : "search"}
+        className={`step-enter ${chosen ? "step-fwd" : "step-back"}`}
+      >
       {chosen ? (
         <div className="inset stack-sm">
           <div className="chosen-product">
@@ -395,15 +409,16 @@ function BuyStep({
         </div>
       ) : (
         <ProductSearch
-          onSelect={(picked) => setChosen(asChosen(picked))}
+          onSelect={(picked) => changeScreen(() => setChosen(asChosen(picked)))}
           onUnresolved={(query) => {
             void api
               .customProduct(query)
-              .then((product) => setChosen(asChosen({ kind: "product", product })))
+              .then((product) => changeScreen(() => setChosen(asChosen({ kind: "product", product }))))
               .catch(() => {});
           }}
         />
       )}
+      </div>
 
       <div className="btn-row">
         <button className="btn btn-primary btn-lg" onClick={onNext} disabled={added.length === 0}>
@@ -567,6 +582,18 @@ export function Onboarding({
   onJudgeDemo?: () => void;
 }) {
   const [step, setStep] = useState<Step>("you");
+  /* Which way the wizard just moved. A step that slides in from the right when you
+     pressed Back is telling you the opposite of what happened, so the direction is
+     carried rather than assumed. */
+  const [dir, setDir] = useState<1 | -1>(1);
+  const go = (next: Step) => {
+    const order = STEPS.map((s) => s.id);
+    const forward = order.indexOf(next) >= order.indexOf(step);
+    changeScreen(() => {
+      setDir(forward ? 1 : -1);
+      setStep(next);
+    }, forward ? "fwd" : "back");
+  };
   const [name, setName] = useState("");
   const [mode, setMode] = useState("ask_me");
   const [added, setAdded] = useState<{ item: ChosenItem; quantity: number }[]>([]);
@@ -671,7 +698,8 @@ export function Onboarding({
     <div className="onboard">
       <Progress current={step} />
       <div
-        className="onboard-panel"
+        key={step}
+        className={`onboard-panel step-enter ${dir === 1 ? "step-fwd" : "step-back"}`}
         ref={headingRef}
         tabIndex={-1}
         /* The step is a region that replaces itself, so a screen reader should hear the
@@ -683,22 +711,22 @@ export function Onboarding({
           <YouStep
             name={name}
             onName={setName}
-            onNext={() => setStep("where")}
+            onNext={() => go("where")}
             onJudgeDemo={offersJudgeWalkthrough() ? onJudgeDemo : undefined}
           />
         ) : null}
         {step === "where" ? (
           <WhereStep
-            onNext={() => setStep("buy")}
-            onBack={() => setStep("you")}
+            onNext={() => go("buy")}
+            onBack={() => go("you")}
           />
         ) : null}
         {step === "buy" ? (
           <BuyStep
             added={added}
             onAdd={addNeed}
-            onNext={() => setStep("authority")}
-            onBack={() => setStep("where")}
+            onNext={() => go("authority")}
+            onBack={() => go("where")}
             busy={busy}
             error={error}
           />
@@ -710,7 +738,7 @@ export function Onboarding({
             hasPayment={hasPayment}
             onAddPayment={() => void addPayment()}
             onFinish={() => void finish()}
-            onBack={() => setStep("buy")}
+            onBack={() => go("buy")}
             busy={busy}
             paymentBusy={paymentBusy}
             error={error}

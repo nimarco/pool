@@ -23,6 +23,8 @@ import { WhyThisOrder } from "./views/why";
 import { Onboarding } from "./views/onboarding";
 import { CommunityView } from "./views/community";
 import { DemoPanel, Identity } from "./views/demo-panel";
+import { changeScreen, Direction } from "./screen-change";
+import { ScreenSwap } from "./screen-swap";
 import { Home } from "./views/home";
 import { Needs } from "./views/needs";
 import { OperationsView } from "./views/operations";
@@ -207,6 +209,17 @@ export default function App() {
       : NOBODY);
   const needsOnboarding = Boolean(consumer && !consumer.onboarded);
 
+  /* What counts as "a different screen" for the swap. The showcase is a different world
+     rather than a different screen, and a pool record is a different screen per pool —
+     moving between two of them should read as a move, not as a redraw in place. */
+  const screenId = needsOnboarding
+    ? "onboarding"
+    : showcase
+      ? `showcase:${showcase}${showcase === "pool" ? `:${openPool?.pool_id ?? ""}` : ""}`
+      : view === "pool"
+        ? `pool:${openPool?.pool_id ?? ""}`
+        : view;
+
   /* Dropping what was read for a *different subject* — and only for that.
    *
    * An operator stepping out of a synthetic participant must not carry that
@@ -284,7 +297,9 @@ export default function App() {
    *  now** disappeared until the page was reloaded. `showcaseTo` already guarded the
    *  same call this way on the way in; this is the same rule on the way out. */
   const navigate = useCallback(
-    (next: View) => {
+    /* `dir` is what the swipe reads. A Back button is the one thing that must say so —
+       everything else is going further in, which is the default. */
+    (next: View, dir: Direction = "fwd") => {
       const leaving = api.inShowcaseScope();
       api.setShowcaseScope(false);
       setShowcase(null);
@@ -294,10 +309,15 @@ export default function App() {
          out of the coffee community and found their declaration gone would have been told
          the product forgot it. */
       if (leaving) forgetWorkspaceState();
-      setView(next);
-      setPanelOpen(false);
+      /* One visual move: the screen being left fades into the one arriving instead of
+         vanishing a frame before it. The read is deliberately outside — it is allowed to
+         land whenever it lands, and the move must not wait for it. */
+      changeScreen(() => {
+        setView(next);
+        setPanelOpen(false);
+        window.scrollTo({ top: 0 });
+      }, dir);
       void refresh();
-      window.scrollTo({ top: 0 });
     },
     [refresh, forgetWorkspaceState],
   );
@@ -563,7 +583,7 @@ export default function App() {
 
       <header className="topbar">
         <div className="wrap topbar-inner">
-          <button className="brand" onClick={() => navigate("home")} aria-label="Pool, home">
+          <button className="brand" onClick={() => navigate("home", "back")} aria-label="Pool, home">
             <BrandMark />
             <span className="brand-name">Pool</span>
           </button>
@@ -659,6 +679,7 @@ export default function App() {
             </div>
           ) : null}
 
+          <ScreenSwap id={screenId}>
           {showcase === "overview" ? (
             <About
               health={health}
@@ -794,7 +815,7 @@ export default function App() {
               needId={why.needId}
               productName={why.productName}
               unit={why.unit}
-              onBack={() => navigate("home")}
+              onBack={() => navigate("home", "back")}
             />
           ) : null}
 
@@ -877,7 +898,7 @@ export default function App() {
                     p.status === "purchased",
                 )?.pool_id ?? null
               }
-              onBack={() => navigate("community")}
+              onBack={() => navigate("community", "back")}
               onWorldChanged={worldChanged}
             />
           ) : null}
@@ -890,7 +911,7 @@ export default function App() {
             <JudgeDemo
               member={member}
               hasOrder={Boolean(member?.opportunity)}
-              onBack={() => navigate("home")}
+              onBack={() => navigate("home", "back")}
               /* The lifecycle itself, not the showcase's front page. The same handler
                  Behind Pool's "one order, stage by stage" uses — it runs the scripted
                  replay if it has not run yet, in the showcase's own partition, so a judge
@@ -917,7 +938,7 @@ export default function App() {
               demoConfig={demoConfig}
               memberCount={state?.counts.members ?? null}
               needCount={state?.counts.needs ?? null}
-              onBack={() => navigate("home")}
+              onBack={() => navigate("home", "back")}
               onOpenTechnical={() => {
                 const pool = state?.pools[0];
                 if (pool) void openPoolDetail(pool.pool_id, { tab: "activity", deep: "execution" });
@@ -949,11 +970,12 @@ export default function App() {
               liveBusy={liveBusy}
               identity={identity}
               entry={poolEntry}
-              onBack={() => navigate("pools")}
+              onBack={() => navigate("pools", "back")}
               onRefresh={() => void openPoolDetail(openPool.pool_id)}
               onRunLive={runLiveAgent}
             />
           ) : null}
+          </ScreenSwap>
 
           {!showcase && !state && view !== "needs" && view !== "operations" && view !== "about" ? (
             <p className="empty">Loading…</p>

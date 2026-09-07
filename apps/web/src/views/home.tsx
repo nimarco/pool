@@ -162,6 +162,9 @@ function PoolThumb({ pool }: { pool: PoolView }) {
  *  is in it than to somebody who is not, and it is a different thing again once the
  *  money has moved. The record keeps the canonical status chip; this only decides the
  *  sentence above it. */
+/** `mine` here is whether the pool is theirs at all — the server's answer, which lands
+ *  before the membership row does. Telling those apart is the point: the row carries the
+ *  personal price, and this sentence does not need it. */
 function poolHeading(status: PoolStatus, mine: boolean): string {
   if (status === "completed") return mine ? "Your order" : "The community's order";
   if (status === "distributing") return mine ? "Ready to collect" : "Pickup is open";
@@ -175,6 +178,7 @@ function poolHeading(status: PoolStatus, mine: boolean): string {
 function OpportunityCard({
   pool,
   mine,
+  isMine,
   substituteFor,
   whyNeedId,
   onWhy,
@@ -185,6 +189,12 @@ function OpportunityCard({
   pool: PoolView;
   /** This member's own membership row, when the server says they have one. */
   mine: PoolMember | null;
+  /** That the pool is theirs at all. `mine` is the row, and it arrives one read later —
+   *  so until it does, `Boolean(mine)` says "somebody else's order" about an order the
+   *  server has already said is this member's. That is the wrong sentence, briefly, on a
+   *  screen they have just come back to. The *figures* still wait for the row: an interim
+   *  group price is honest, an invented personal one would not be. */
+  isMine: boolean;
   /** What this member actually typed, when the pool is buying an authorised
    *  substitute for it. The card leads with the pool's name and photograph, so
    *  without this the two silently disagree with the declaration behind them. */
@@ -221,7 +231,7 @@ function OpportunityCard({
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>{poolHeading(pool.status, Boolean(mine))}</h2>
+        <h2>{poolHeading(pool.status, isMine)}</h2>
         <Chip tone={s.tone}>{s.label}</Chip>
       </div>
       <div className="panel-pad stack-sm">
@@ -1125,6 +1135,8 @@ export function Home({
         <OpportunityCard
           pool={pool}
           mine={myMembership}
+          /* Non-empty only because `/api/members/{id}` said this pool is theirs. */
+          isMine={Boolean(poolId)}
           /* The server's answer, not an inference from `is_exact_product`.
              Reading it off the product ids was wrong for two policies: a member who
              declared a family, or who stated a rule about product facts, named no

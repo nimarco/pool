@@ -20,6 +20,7 @@
  *  business and not an answer to anybody else's question (AGENTS.md §4).
  */
 import { useEffect, useState } from "react";
+import { useSlowEnoughToSay } from "../use-settled";
 import { ClarificationProof, NeedCoordination, StrategyVerdict, api } from "../api";
 import { Empty, Fact, IconArrowLeft } from "../ui";
 
@@ -146,6 +147,7 @@ export function WhyThisOrder({
   const [data, setData] = useState<NeedCoordination | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [proof, setProof] = useState(false);
+  const slow = useSlowEnoughToSay(!data && !error);
 
   useEffect(() => {
     let live = true;
@@ -159,7 +161,10 @@ export function WhyThisOrder({
   }, [needId]);
 
   if (error) return <Empty>{error}</Empty>;
-  if (!data) return <Empty>Loading…</Empty>;
+  /* Nothing at all while the read is quick — the screen you came from is still held over
+     this one, so an empty frame here is never seen. Say "Loading…" only for a wait that
+     is real. */
+  if (!data) return slow ? <Empty>Loading…</Empty> : null;
 
   const order = data.order;
   const investigated = data.investigated ?? [];

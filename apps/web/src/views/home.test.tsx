@@ -345,7 +345,13 @@ describe("the member's own stake in a pool", () => {
   it("shows the group's figures if the pool record has not caught up yet", async () => {
     /* The server has said this pool is theirs; the membership read has not landed.
        Leading with the group's numbers is the honest interim — inventing a personal
-       price would not be. */
+       price would not be.
+
+       The *heading* is not part of that interim. Whether the pool is theirs came from
+       `/api/members/{id}` and is already known; only the row carrying their price is
+       outstanding. Saying "overlapping demand" here used to contradict the answer the
+       screen was rendered from, and did it for about one frame on every return to Home,
+       which read as a navigation landing on the wrong screen. */
     const shown = poolView();
     vi.spyOn(apiModule.api, "pool").mockResolvedValue({
       ...shown,
@@ -353,7 +359,8 @@ describe("the member's own stake in a pool", () => {
     });
     renderHome([shown]);
 
-    expect(await screen.findByText(/Pool found overlapping demand/)).toBeTruthy();
+    expect(await screen.findByText(/^Pool found something for you$/)).toBeTruthy();
+    expect(screen.queryByText(/Pool found overlapping demand/)).toBeNull();
     expect(screen.queryByText(/your 2 tubs/)).toBeNull();
     expect(screen.getByText(/23\.6%/)).toBeTruthy();
   });

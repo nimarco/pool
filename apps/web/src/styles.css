@@ -4105,3 +4105,487 @@ select.control {
     font-size: 30px;
   }
 }
+
+/* Mobile ledger: the page supplies the surface, rules separate its sections.
+   Presentation only: keep the same DOM, disclosure states, controls and evidence. */
+@media (max-width: 560px) {
+  .onboard-panel {
+    padding: 8px 0 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .onboard-panel:focus-visible {
+    outline-offset: 6px;
+  }
+  .onboard-panel .inset,
+  .need-form .inset {
+    padding: 16px 0 0;
+    border-top: 1px solid var(--rule);
+    border-radius: 0;
+    background: transparent;
+  }
+  .chosen-product {
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 14px;
+  }
+  .field-label {
+    color: var(--ink);
+    font-size: 13px;
+  }
+  .control {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .prefs {
+    padding: 16px 0 0;
+    border: 0;
+    border-top: 1px solid var(--rule);
+    border-radius: 0;
+    background: transparent;
+    gap: 16px;
+  }
+  .prefs > legend {
+    padding: 0 8px 0 0;
+    font-size: 15px;
+  }
+  .prefs-choice {
+    gap: 0;
+  }
+  .prefs-radio,
+  .prefs-check {
+    padding: 12px 0;
+    border-radius: 0;
+  }
+  .prefs-radio + .prefs-radio {
+    border-top: 1px solid var(--rule);
+  }
+  .prefs-radio > span,
+  .prefs-check > span {
+    min-width: 0;
+    gap: 4px;
+  }
+  .prefs-radio strong,
+  .prefs-check strong {
+    font-weight: 500;
+  }
+  .prefs-tag {
+    display: block;
+    width: fit-content;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    margin: 4px 0 0;
+    font-weight: 500;
+    color: var(--moss);
+  }
+  .prefs-reach {
+    padding: 0 0 0 12px;
+    border-left: 2px solid var(--rule-strong);
+    border-radius: 0;
+    background: transparent;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .prefs-questions {
+    gap: 0;
+    padding-top: 16px;
+  }
+  .prefs-group {
+    padding: 0 0 14px;
+  }
+  .prefs-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 6px;
+  }
+  .prefs-pill {
+    width: 100%;
+    padding: 11px 8px;
+    border: 0;
+    border-bottom: 1px solid var(--rule);
+    border-radius: 0;
+    background: transparent;
+    gap: 7px;
+    font-size: 14px;
+  }
+  .prefs-pill.is-on {
+    background: var(--moss-soft);
+    border-color: var(--rule);
+  }
+  .prefs-reach-tag {
+    margin-left: auto;
+    font-size: 12px;
+  }
+  .prefs-check,
+  .prefs-why {
+    border-top: 1px solid var(--rule);
+  }
+  .prefs-why {
+    padding: 4px 0 0;
+  }
+  .prefs-why > summary {
+    min-height: 44px;
+  }
+  .onboard-choices {
+    gap: 0;
+  }
+  .onboard-choice {
+    border: 0;
+    border-bottom: 1px solid var(--rule);
+    border-radius: 0;
+    padding: 16px 8px;
+    background: transparent;
+  }
+  .onboard-choice.is-active {
+    border-color: var(--rule);
+    background: var(--moss-soft);
+  }
+  .onboard-added li {
+    border: 0;
+    border-bottom: 1px solid var(--rule);
+    background: transparent;
+    border-radius: 0;
+    padding: 10px 0;
+  }
+
+  /* Primary answers retain their numbers and colour. The surrounding panels become
+     sections; nested context becomes a rule rather than a second coloured surface. */
+  .main .panel,
+  .main .record-section {
+    border: 0;
+    border-top: 1px solid var(--rule-strong);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .main .panel-head {
+    padding: 14px 0;
+    border-bottom: 0;
+  }
+  .main .panel-pad {
+    padding: 16px 0;
+  }
+  .main .panel-head + .panel-pad {
+    padding-top: 0;
+  }
+  .main .panel .inset {
+    padding: 12px 0;
+    border-radius: 0;
+    border-top: 1px solid var(--rule);
+    background: transparent;
+  }
+  .main .panel .row,
+  .main .watch-row {
+    padding-inline: 0;
+  }
+  .pool-facts {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule);
+  }
+  .pool-facts li {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    white-space: normal;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .why-verdict,
+  .why-verdict.is-chosen {
+    padding: 4px 0 4px 12px;
+    border: 0;
+    border-left: 2px solid var(--rule-strong);
+    border-radius: 0;
+    background: transparent;
+  }
+  .why-verdict.is-ok {
+    border-left-color: var(--moss);
+  }
+  .why-verdict.is-no {
+    border-left-color: var(--clay);
+  }
+  .why-verdict + .why-verdict {
+    margin-top: 10px;
+  }
+  .why-verdict-head {
+    gap: 6px 12px;
+  }
+  .why-verdict-head > strong {
+    flex-basis: 100%;
+    font-size: 15px;
+    line-height: 1.4;
+  }
+  .why-verdict .chip {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    border-radius: 0;
+    font-size: 12px;
+  }
+  .why-fold > summary {
+    padding: 15px 0;
+    min-height: 48px;
+  }
+  .record-section > summary {
+    padding-left: 20px;
+    padding-right: 0;
+  }
+  .record-section > summary::before {
+    left: 2px;
+  }
+  .record-body {
+    padding-inline: 0;
+  }
+
+  /* Judge receipts and disclosures remain visible, but no longer compete with the
+     step title and the one action. Warning and error surfaces keep their treatment. */
+  .judge-honesty,
+  .judge-door {
+    padding: 14px 0;
+    border: 0;
+    border-block: 1px solid var(--rule);
+    border-radius: 0;
+    background: transparent;
+  }
+  .judge-honesty .chip {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .judge-verdict {
+    padding: 4px 0 4px 12px;
+    border: 0;
+    border-left: 2px solid var(--moss);
+    border-radius: 0;
+    background: transparent;
+  }
+  .judge-step.is-todo .judge-body {
+    opacity: 1;
+  }
+  .row-editing {
+    padding: 16px 0;
+    background: transparent;
+  }
+  .proof-index {
+    gap: 0;
+  }
+  .proof-link {
+    padding: 16px 0;
+    border: 0;
+    border-bottom: 1px solid var(--rule);
+    border-radius: 0;
+    background: transparent;
+    gap: 6px;
+  }
+  .proof-link-title {
+    text-decoration: underline;
+    text-decoration-color: var(--rule-strong);
+    text-underline-offset: 4px;
+  }
+  .proof-link:hover {
+    background: var(--paper-sunken);
+  }
+}
+
+/* ============================================================ screen changes
+
+   A screen that replaces another used to do it in a single frame, which gave a viewer
+   nothing to read the move by. The arriving screen now rises out of the page instead.
+
+   This is also what makes a fast read invisible. Every data-backed screen opens on a
+   loading state, and a same-origin read answers in about one frame — so what you used to
+   see between two screens was often neither of them. The loading states are deferred
+   where they are caused (`use-settled.ts`); what remains is that a screen's first frame
+   may be empty, and an empty frame at opacity zero is the same paper that is behind it
+   anyway. By the time the screen can be read, it is complete.
+
+   Durations are deliberately short. A 25 fps screen recording gets six frames out of
+   260 ms, which is enough to read as a move and not enough to sit through. */
+:root {
+  --swap-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.screen-in {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  animation: screen-arrive 260ms var(--swap-ease) both;
+}
+
+@keyframes screen-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* --- inside a wizard ------------------------------------------------------
+
+   The onboarding steps, and the two screens of the "what you buy" step, are a sequence
+   rather than a set — so they move sideways, and they move the way you went. Sliding in
+   from the right on the way back would say the opposite of what Back did. */
+
+.step-enter {
+  animation: step-arrive-fwd 240ms var(--swap-ease) both;
+}
+.step-enter.step-back {
+  animation-name: step-arrive-back;
+}
+
+@keyframes step-arrive-fwd {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+}
+
+@keyframes step-arrive-back {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+
+/* Somebody who has asked for less movement is asking about this, specifically. The
+   screens still replace each other; they just stop travelling to do it. */
+@media (prefers-reduced-motion: reduce) {
+  .screen-in,
+  .step-enter {
+    animation: none;
+  }
+}
+
+/* --- the swipe ----------------------------------------------------------------
+
+   `startViewTransition` snapshots the screen being left, lets the DOM change, and then
+   animates both snapshots at the compositor. That is the only way to move two screens at
+   once without mounting two of them.
+
+   A dissolve was tried here first and was wrong. Cross-fading two pages of mostly-white
+   paper spends the middle of the transition looking like neither screen — which reads
+   exactly as the screen glitching into another one. A slide never has that middle: there
+   is always a whole screen under the eye, and which edge it comes from says which way
+   through the app you just went.
+
+   Only the content region and the wizard's panel are named, so the Pool mark, the nav and
+   the footer stay put and the screen moves underneath them.
+
+   The group animation is switched off deliberately. Left on, it interpolates the box from
+   the old screen's height to the new one's and scales both snapshots to fit, so a short
+   screen arriving from a tall one arrives stretched. With it off the box is simply the new
+   screen's, and each snapshot travels at its own size. */
+html.can-cross-fade .screen-in {
+  view-transition-name: screen;
+}
+html.can-cross-fade .onboard-panel {
+  view-transition-name: wizard-step;
+}
+
+::view-transition-group(screen),
+::view-transition-group(wizard-step) {
+  animation: none;
+}
+
+/* `isolation: auto` with `mix-blend-mode: normal` turns off the default plus-lighter
+   blending, which is built for a cross-fade and makes two overlapping slides glow. */
+::view-transition-image-pair(screen),
+::view-transition-image-pair(wizard-step) {
+  isolation: auto;
+}
+
+::view-transition-old(screen),
+::view-transition-new(screen),
+::view-transition-old(wizard-step),
+::view-transition-new(wizard-step) {
+  mix-blend-mode: normal;
+  display: block;
+  /* With the group animation off, the group box is the *new* screen's box. These are
+     replaced elements that default to filling it, so a tall screen leaving a short one
+     gets squashed into it — which is not a slide, it is two screens torn together. Give
+     each snapshot its own natural height, pinned to the top-left corner, and let it
+     travel at the size it was actually drawn at. */
+  width: 100%;
+  height: auto;
+  object-fit: none;
+  object-position: top left;
+  /* Long enough to be a movement rather than a jump, and to survive a 25 fps recording:
+     420 ms is ten frames of the film. The easing is a hard decelerate — most of the
+     travel happens early, so the screen arrives and settles rather than drifting in. */
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  animation-fill-mode: both;
+}
+
+/* 100% is the snapshot's own width, and the content column is narrower than the window by
+   a gutter each side — so a screen parked at 100% still shows a strip of itself past the
+   edge of the other one. The gutter is added back so both screens clear the viewport
+   completely, and the strip cannot appear at either end of the move. */
+@keyframes swipe-out-to-left {
+  to {
+    transform: translateX(calc(-100% - var(--gutter) * 2));
+  }
+}
+@keyframes swipe-in-from-right {
+  from {
+    transform: translateX(calc(100% + var(--gutter) * 2));
+  }
+}
+@keyframes swipe-out-to-right {
+  to {
+    transform: translateX(calc(100% + var(--gutter) * 2));
+  }
+}
+@keyframes swipe-in-from-left {
+  from {
+    transform: translateX(calc(-100% - var(--gutter) * 2));
+  }
+}
+
+/* No space before the pseudo-element: the view-transition tree hangs off the root element
+   itself, so `html[...] ::view-transition-old(x)` is a descendant selector that matches
+   nothing. That typo is why the first attempt still looked like a dissolve — only the
+   default cross-fade was running. */
+html[data-nav="fwd"]::view-transition-old(screen),
+html[data-nav="fwd"]::view-transition-old(wizard-step) {
+  animation-name: swipe-out-to-left;
+}
+html[data-nav="fwd"]::view-transition-new(screen),
+html[data-nav="fwd"]::view-transition-new(wizard-step) {
+  animation-name: swipe-in-from-right;
+}
+html[data-nav="back"]::view-transition-old(screen),
+html[data-nav="back"]::view-transition-old(wizard-step) {
+  animation-name: swipe-out-to-right;
+}
+html[data-nav="back"]::view-transition-new(screen),
+html[data-nav="back"]::view-transition-new(wizard-step) {
+  animation-name: swipe-in-from-left;
+}
+
+/* The keyed fallback stands down only where there is something better to stand down for. */
+html.can-cross-fade .screen-in,
+html.can-cross-fade .step-enter {
+  animation: none;
+}
+
+/* Reduced motion is handled in changeScreen(): the transition is never started, so there
+   are no pseudo-elements here to switch off — but the fallback keyframes must stay off
+   too, or the arriving screen would slide after all. */
+@media (prefers-reduced-motion: reduce) {
+  html.can-cross-fade .screen-in,
+  html.can-cross-fade .step-enter {
+    animation: none;
+  }
+}

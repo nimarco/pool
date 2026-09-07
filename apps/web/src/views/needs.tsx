@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useSlowEnoughToSay } from "../use-settled";
 import {
   NeedDraft,
   NeedLimits,
@@ -647,6 +648,7 @@ export function Needs({
   region: string | null;
 }) {
   const [needs, setNeeds] = useState<NeedRow[] | null>(null);
+  /* See why.tsx: a one-frame "Loading…" reads as a wrong screen, not as a load. */
   const [limits, setLimits] = useState<NeedLimits | null>(null);
   const [showAll, setShowAll] = useState(false);
   /** `null` = the form is closed. A string = editing that need. "" = adding a new one. */
@@ -695,7 +697,9 @@ export function Needs({
     onConsumeInitialProduct();
   }, [initialProduct, identity.id, onConsumeInitialProduct]);
 
-  if (needs === null) return <Empty>Loading…</Empty>;
+  const slow = useSlowEnoughToSay(needs === null);
+
+  if (needs === null) return slow ? <Empty>Loading…</Empty> : null;
 
   const mine = needs
     .filter((n) => n.household_id === identity.id && n.active)

@@ -11,7 +11,23 @@ Built for the [AWS Agents for Humans hackathon](https://agentsforhumans.devpost.
 **Good Neighbor Agents** track. The value is structurally collective: one person alone
 cannot create it.
 
-![Pool's architecture](docs/architecture.svg)
+![Pool's architecture: one bounded Strands agent, two model providers, one deterministic truth layer](docs/architecture-strands.png)
+
+*[SVG](docs/architecture-strands.svg) · [PNG](docs/architecture-strands.png). The one
+thing to take from it: **both routes are the same `strands.Agent`, the same 17 `@tool`
+functions and the same `HookProvider` — only the object in the model position differs.**
+The public judge demo puts our own deterministic `strands.models.Model` there and spends
+zero tokens; the deployed AgentCore runtime puts `strands.models.BedrockModel` → Amazon
+Nova Lite there. Neither one gets to decide a price. The earlier
+[deployment-shaped diagram](docs/architecture.svg) is still accurate and still tracked.*
+
+**Judge, in a hurry?** [The demo](#open-this-first) ·
+[why this needs an agent](#the-problem-in-one-exchange) ·
+[how Strands is actually used](#how-strands-is-actually-used) ·
+[the deterministic truth boundary](#ai-decides-what-to-do-deterministic-code-determines-what-is-true) ·
+[verified AgentCore deployment](#aws) ·
+[reproduce the key path in one command](#reproduce-the-kestrelharbourstone-path) ·
+[what is synthetic](#local-mode-and-what-is-not-real).
 
 ---
 
@@ -26,8 +42,19 @@ Then open **<http://localhost:8000/verify>**.
 
 No signup, no password, no credentials, and nothing to arrange. You arrive as an ordinary
 member of a synthetic community that already buys coffee and disagrees about which coffee.
-Add a coffee you drink, say whether another brand would do, answer the two or three
+
+Type **`coffee`**. Pool offers the *family* first — "Coffee, any of 26" — because that is
+usually the sentence. Underneath it is **Or pick one exact product (6)**: those six are the
+coffees this community actually buys, and Pool holds a verified bulk quote for every one.
+**Pick any whole-bean one.** Then say another brand would do, answer the two or three
 questions Pool decides are worth asking, and save.
+
+That is the whole interaction, and it is enough to produce the run this submission is
+about: Pool costs the option with the most demand behind it, deterministic code refuses it
+because buying it together is *more expensive*, and the agent tries a different compatible
+option instead. Details in [the walkthrough
+below](#reproduce-the-kestrelharbourstone-path) — but you do not need them to see it
+happen.
 
 **Saving is the only thing you do** on this path — nothing here asks you to press *run*.
 Home does carry an **Ask Pool to check now** button, and on this deployment it runs the
@@ -63,9 +90,9 @@ tokens — that is deliberate, and the Lambda has no permission to call a model.
 execution is a separate action that goes Lambda → **Bedrock AgentCore Runtime** → Strands
 → Bedrock → the same typed tools; it was verified live on 2026-08-22 with
 `us.amazon.nova-lite-v1:0`, and it is **switched off on the public demo** (re-observed
-2026-09-05: `/api/demo/config` reports `live_agent_available: false`, and the deployed
-function carries `PUBLIC_DEMO_AGENTCORE_ENABLED=false`) so that no visitor can spend a
-model token. Both are described precisely
+2026-09-07: `/api/demo/config` reports `live_agent_available: false` and
+`live_agent_state: switched_off`, and the deployed function carries
+`PUBLIC_DEMO_AGENTCORE_ENABLED=false`) so that no visitor can spend a model token. Both are described precisely
 under [AWS](#aws).
 
 ---
@@ -120,6 +147,80 @@ FULFILMENT LABOUR        "I'll collect and hand it out if the job pays enough."
 A pool only locks if **all** of them work — plus Pool's own economics. That last
 constraint is deliberate: a platform that quietly subsidises a transaction is a platform
 that will stop existing.
+
+---
+
+## How Strands is actually used
+
+Five things, each with the file that does it. There is no wrapper around Strands here and
+no framework of our own on top of it; the SDK's own abstractions are the architecture.
+
+| Strands API | Where | What it does for Pool |
+| --- | --- | --- |
+| `strands.Agent` | [`agent/coordinator.py`](services/agent/pool/agent/coordinator.py) | One bounded coordinator, one run. Not a swarm, not a graph, not delegated sub-agents — the job is *choose which of several bounded options to investigate, and stop*, and one agent is the honest shape for it |
+| `@tool` × 17 | [`agent/tools.py`](services/agent/pool/agent/tools.py) | The only way out of the loop. Typed, idempotent, no shell, no SQL, no generic mutation. `create_candidate_pool_from_strategy` takes **two identifiers and nothing else** — there is no parameter for a member, a quantity, a price or a supplier term |
+| `HookProvider` / `HookRegistry` | [`agent/bounds.py`](services/agent/pool/agent/bounds.py) | `BoundedRun` registers `Before/AfterModelCallEvent` and `Before/AfterToolCallEvent`. Tool bounds *cancel the call* so the run ends cleanly; run bounds raise and are recorded as a `loop_fault`. Bounds live in the event loop, not in a prompt asking the model to behave |
+| `strands.models.Model` | [`agent/offline_model.py`](services/agent/pool/agent/offline_model.py) | Our own provider, implementing the SDK's `Model` interface and emitting Bedrock-shaped stream events. It occupies the model position on the public route: real event loop, real hooks, real tools, real domain maths — **zero tokens, and the role holds no `bedrock:InvokeModel`** |
+| `strands.models.BedrockModel` | [`agent/coordinator.py`](services/agent/pool/agent/coordinator.py) | The same agent with Amazon Nova Lite in the model position, running inside Bedrock AgentCore Runtime. Verified live; see [AWS](#aws) |
+
+Two properties are worth more than the table.
+
+**The tool surface is scoped to the objective, before the agent starts.** Four surfaces,
+one selected per run, never merged — [see the
+table](#the-agent-reaches-the-world-through-narrow-typed-tools) further down. A run that
+could reach a pool through two different tools would have two doors to one mutation, and
+only one of them is guarded.
+
+**The model provider is the only branch in the whole architecture.** Everything above it
+(the agent, the hooks, the objective router, the bounds) and everything below it (the 17
+tools, the services, the pure domain layer) is shared byte for byte between the free
+public route and the paid deployed one. That is what makes the free route a faithful
+rehearsal of the paid one rather than a second implementation telling the same story —
+and it is the claim the [architecture diagram](docs/architecture-strands.svg) exists to
+make legible.
+
+### Reproduce the Kestrel/Harbourstone path
+
+Free, offline, no credentials, about a second:
+
+```bash
+cd services/agent && .venv/bin/python -m pytest tests/test_member_demo.py -q
+```
+
+Those tests drive the same endpoints the browser calls. Three of them start at the
+**search box** rather than at a product id, because the engine was right and unreachable
+for a while: a broad query for `coffee` filled every result slot with national catalogue
+rows, and the six coffees this community buys could be found only by somebody who already
+knew a brand name. `test_the_declaration_that_search_reaches_shows_a_refusal_and_a_redirect`
+now fails if a judge who only knows the word "coffee" cannot get to the run.
+
+What the run does, and what it is not allowed to do:
+
+```
+list_cohort_strategies          agent asks what orders this cohort could support
+                                → 2 options, compatible demand each, NO prices
+evaluate_cohort_strategy        agent picks the one with the most demand behind it
+                                → deterministic: viable=false, not_cheaper
+                                  23 bags compatible, 20 evaluated as 4 whole cases of 5
+                                  $367.19 together vs $360.00 separately
+evaluate_cohort_strategy        agent does not argue, retry, or widen who is compatible.
+                                  It picks a different listed option
+                                → deterministic: viable=true
+                                  18 bags as 3 whole cases of 6, surplus 0
+                                  $263.82 together vs $333.00 separately, $69.18 saved
+create_candidate_pool_from_strategy
+                                gated on the evaluation_id that proved viability —
+                                not on the model asserting it
+```
+
+Both refusals in that trace came back from **successful** tool calls. A deterministic
+verdict is a payload the agent has to read and act on, not a tool error — and the
+distinction between **23 bags compatible** and **20 bags evaluated** is the case boundary,
+not a rounding.
+
+The same sequence, against live Amazon Nova Lite instead of the planner, is recorded in
+[`docs/AGENT_TRACE_EVIDENCE.md`](docs/AGENT_TRACE_EVIDENCE.md) — same options, same
+refusal, same redirect, same order.
 
 ---
 
@@ -222,7 +323,7 @@ One action *can* leave the machine, and it is the product's own: **Find opportun
 invokes Pool's coordinator on **Amazon Bedrock AgentCore Runtime** — a real model, a real
 Strands loop, real Pool tools — inside a runtime session generated per invocation, **bound
 to the visitor's own DynamoDB workspace**. **It is switched off on the public demo**
-(observed 2026-09-02: `/api/demo/config` reports `live_agent_available: false`), so it
+(observed 2026-09-07: `/api/demo/config` reports `live_agent_available: false`), so it
 belongs to an operator running their own deployment rather than to anyone merely visiting.
 With it off, the same button runs the coordinator in-process under the same bounds and the
 same tools, and the server refuses the paid route before taking a lease, spending a quota
@@ -457,11 +558,27 @@ the one that loses money. The run adapts or records honest no-action. The tool t
 an order takes **two identifiers and nothing else**: there is no parameter for a member, a
 quantity, a price or a supplier term.
 
-The agent reaches the world through twelve narrow typed tools and nothing else — no
-shell, no arbitrary SQL, no generic mutation. Every tool is either a safe read or a
-single consequential operation with idempotency and an approval boundary built in. A run
-answering a coordination event is given a different surface from the pool-day scan, and a
-run deciding what to *ask* holds two tools and no mutation at all.
+### The agent reaches the world through narrow typed tools
+
+No shell, no arbitrary SQL, no generic mutation. Every tool is either a safe read or a single
+consequential operation with idempotency and an approval boundary built in.
+
+**The two numbers on this page mean different things, and both are true.** The repository
+defines **17 `@tool` functions**. No run is ever given all of them: the objective selects
+one of **four** surfaces before the agent starts, and the largest is **12**.
+
+| Objective | Surface | Tools |
+| --- | --- | --- |
+| The pool-day scan, and a member asking Pool to look | lifecycle | **12** — 4 read, 1 record, 6 act, 1 end |
+| A saved declaration (`searches_strategies`) | cohort strategy | **7** — 3 of them strategy-only, 4 shared with the lifecycle surface |
+| Deciding which approved questions to ask (`plans_clarification`) | clarification | **3** — 2 clarification-only, and the end; no mutation at all |
+| A declaration a live pool already serves | review | **2** — one read, and the end |
+
+Seventeen distinct functions, twelve the most any single run holds. `/api/health` serves
+all three non-trivial surfaces as separate lists from the one definition in
+`agent/tools.py`, so a drifting count is a failing test rather than a plausible sentence.
+Two doors to one mutation would mean one of them was unguarded, which is why the surfaces
+are exclusive rather than additive.
 
 **Smart Join** returns one of three verdicts, never "close enough":
 
@@ -560,7 +677,7 @@ walkthrough is free to repeat.
 | Service | Role | Status |
 | --- | --- | --- |
 | Bedrock | Model inference via Strands | **Verified live 2026-08-22** — `us.amazon.nova-lite-v1:0`, reached through AgentCore, 2 of 8 iterations, 5,513 in / 133 out tokens, terminated `completed`. The **outcome was a truthful `no_action`**: the member's only declaration had already been served by the in-process run their save caused, so the objective was correctly empty. It establishes the deployment, the tool surface and the bounds on real infrastructure; it is *not* a live trace of the Kestrel→Harbourstone adaptation. Earlier discovery/recovery/lock branches verified 2026-08-19 |
-| AgentCore Runtime | Hosted agent entrypoint, and the only path to a live model | **Deployed 2026-08-23, status re-observed 2026-09-02** — `Pool_PoolCoordinator-TmVqSN9H56` **version 8**, `READY` in `us-east-1`, carrying this branch. Version 8 has **not** been invoked, and the public demo cannot invoke it: live invocation is switched off there (2026-09-02). The live Nova Lite verification — one bounded synthetic invocation proving AgentCore → Strands → Bedrock → Pool tools — was performed against **version 7** on 2026-08-22 and was not repeated for this deployment; the coordinator and the runtime entrypoint are byte-identical between the two |
+| AgentCore Runtime | Hosted agent entrypoint, and the only path to a live model | **Deployed 2026-08-23, verified live 2026-09-07** — `Pool_PoolCoordinator-TmVqSN9H56` **version 8**, `READY` in `us-east-1`, endpoint `DEFAULT` at `liveVersion 8`, carrying this branch. One bounded invocation of **version 8** proved AgentCore → Strands → Bedrock → Pool tools end to end: `run_9793fd48b53d`, `model_provider: bedrock`, `us.amazon.nova-lite-v1:0`, outcome `pool_created`, 7 of 8 iterations, terminated `completed`, 29,555 in / 605 out tokens, six tools called, one human decision surfaced. The pool it built was read back from DynamoDB independently of the response, with `created_by_run` matching. Run into the private workspace `smokev8-20260907`, a name the public demo's session scheme cannot generate, so no visitor partition was touched. The earlier version-7 verification (2026-08-22) still stands; the coordinator and entrypoint are byte-identical between the two. The public demo still cannot invoke this: live invocation is switched off there (re-observed 2026-09-07 — `/api/demo/config` reports `live_agent_state: switched_off`, meaning the runtime ARN is configured and the kill switch is off, not that no runtime exists) — see `docs/AGENT_TRACE_EVIDENCE.md` |
 | Lambda Function URL | The demo's origin, behind CloudFront: web app + reduced API | **Deployed and verified 2026-09-05** (`6414aa1`) — the canonical judge URL is the CloudFront hostname in front of it. Redeployed from 2026-09-02 for the web bundle only: the `cdk diff` was one resource and one line, the code asset key, with no IAM and no environment change. A smoke run against the deployed stack returned `model_provider: offline`, `model_id: offline-deterministic-planner`, `input_tokens: 0`, `output_tokens: 0`, and a pool the bounded loop formed. `/verify` hard-loads at `/`, `/verify`, `/verify/` and with a query string; full declaration → event → run → order over HTTPS on the real table, Kestrel refused on economics and Harbourstone formed, 0 payment rows. Runs the **offline planner** at zero model tokens and holds **no model permission** — its role carries `bedrock-agentcore:InvokeAgentRuntime` and no `bedrock:InvokeModel` |
 | DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified 2026-08-23** — shared by both artefacts, which is why they are deployed together |
 | API Gateway + Lambda | Pilot-shaped API | In `PoolStack`, which is **not** what the public demo deploys |

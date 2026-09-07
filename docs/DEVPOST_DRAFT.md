@@ -166,7 +166,7 @@ the demo are simulated.
 
 | Claim | Current evidence |
 | --- | --- |
-| Strands is load-bearing | **Tested and deployed.** The coordinator runs through Strands and seventeen typed tools. |
+| Strands is load-bearing | **Tested and deployed.** One `strands.Agent`, seventeen `@tool` functions, a `HookProvider` enforcing the bounds, and two `strands.models.Model` providers — our own deterministic one and `BedrockModel`. The objective selects one of four tool surfaces per run; the largest is twelve, so no run ever holds all seventeen. |
 | Bounded agent loop | **Tested and deployed.** Bounds and repeated-call faults have executed tests. |
 | Deterministic truth boundary | **Tested.** Domain and service suites assert money, policy, matching, state and viability. |
 | End-to-end lifecycle | **Tested and deployed.** The deterministic 13-stage scenario was observed against the public DynamoDB-backed demo. |
@@ -174,8 +174,8 @@ the demo are simulated.
 | Payments | **Simulated in the demo.** Stripe adapter accepts TEST keys only; Stripe servers have not been verified. |
 | Host compensation | **Computed and recorded; not paid out.** No payout rail exists. |
 | Supplier purchase | **Simulated.** Every purchase record is flagged; no supplier is contacted. |
-| Bedrock inference | **Verified live 2026-08-22** with Nova Lite through Strands, reached via AgentCore — `us.amazon.nova-lite-v1:0`, 2 of 8 iterations, 5,513 in / 133 out tokens, terminated `completed`. The **outcome was a truthful `no_action`**: the member's only declaration had already been served by the in-process run their save caused, so the objective was correctly empty. It establishes the deployment, the tool surface and the bounds on real infrastructure. It is **not** a live trace of the Kestrel→Harbourstone adaptation, and must never be described as one. |
-| AgentCore Runtime | **Deployed and verified live 2026-08-22**, `READY` in `us-east-1`, running the current release. |
+| Bedrock inference | **Verified live, most recently 2026-09-07** with Nova Lite through Strands, reached via AgentCore — `us.amazon.nova-lite-v1:0`, `run_9793fd48b53d`, outcome `pool_created`, 7 of 8 iterations, terminated `completed`, 29,555 in / 605 out tokens, six tools called, one human decision surfaced. The pool it built was read back from DynamoDB independently of the response, `created_by_run` matching. Its last call, `issue_final_offer`, returned `issued: false` because no host had accepted — a deterministic refusal the agent accepted rather than worked around. The earlier 2026-08-22 verification (version 7, a truthful `no_action`) still stands. Neither is a live trace of the Kestrel→Harbourstone adaptation *through the hosted runtime*; that adaptation was verified live against Nova Lite through the local API path, and both traces are in `docs/AGENT_TRACE_EVIDENCE.md`. |
+| AgentCore Runtime | **Deployed 2026-08-23, verified live 2026-09-07** — `Pool_PoolCoordinator-TmVqSN9H56` **version 8**, `READY` in `us-east-1`, endpoint `DEFAULT` at `liveVersion 8`, `AWS_IAM` inbound, `MODEL_PROVIDER=bedrock`, `BEDROCK_MODEL_ID=us.amazon.nova-lite-v1:0`. Re-read from `bedrock-agentcore-control` on 2026-09-07. **Switched off for public visitors** — the deployed demo function carries the runtime ARN *and* `PUBLIC_DEMO_AGENTCORE_ENABLED=false`, so `/api/demo/config` reports `live_agent_state: switched_off`: the runtime exists and no visitor can spend a token on it. |
 | The public `/verify` trace | **Produced by the deterministic offline planner**, on deployed Lambda + DynamoDB, inside the real Strands loop. Zero model tokens. Never to be presented as Nova output. |
 | Lambda Function URL | **Deployed and verified 2026-08-22** as the public same-origin web/API surface, running the current release. |
 | DynamoDB | **Deployed and verified 2026-08-22** as authoritative shared workspace state. |

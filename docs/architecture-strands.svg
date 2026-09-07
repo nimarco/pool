@@ -1,0 +1,263 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1136" width="1440" height="1136" role="img" aria-labelledby="title desc" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <title id="title">Pool — one bounded Strands agent, two model providers, one deterministic truth layer</title>
+  <desc id="desc">Pool runs one bounded Strands agent. A browser reaches CloudFront, which fronts a single Lambda Function URL serving both the React app and 36 of 55 API paths. Saving a declaration writes a coordination event, and one bounded run answers it. The coordinator derives its own objective from stored state — the browser sends only a trigger name from a server allowlist — and that objective selects one of four tool surfaces. Every run on both routes is a real strands.Agent, with the same 17 typed @tool functions and the same BoundedRun HookProvider registered on four hook events: BeforeModelCall, AfterModelCall, BeforeToolCall and AfterToolCall. Tool-level bounds cancel the call so the run can end cleanly; run-level bounds raise and the fault is recorded. The routes differ in exactly one place, the model position, which is a strands.models.Model. Route A, the public judge demo, puts a custom DeterministicPlannerModel there and runs in-process inside the Lambda at zero model tokens; that execution role holds no bedrock:InvokeModel permission. Route B is a separately deployed Bedrock AgentCore Runtime with AWS_IAM inbound auth and one server-generated session per invocation, where the same coordinator uses strands.models.BedrockModel with Amazon Nova Lite. The verified trace shown is from live Nova Lite run run_8a7b91e6793c: the agent listed cohort strategies, chose Kestrel, was refused by the deterministic evaluator on economics, redirected to Harbourstone, formed that pool gated on the evaluation id that confirmed viability, found no eligible host, and closed with record_no_action. Both routes reach the world only through those 17 tools, with no shell, no SQL and no generic mutation. The tools call deterministic orchestration services over a pure domain layer that performs no I/O, backed by one DynamoDB table keyed by workspace and entity, and CloudWatch run records. Payments, the supplier purchase and routing are simulated adapters. EventBridge, Amazon Location, API Gateway and S3 exist only in an un-deployed pilot stack; the deployed judge account has zero EventBridge rules.</desc>
+
+  <!-- Hand-authored rather than auto-laid-out. A generated flowchart of this graph came
+       out 1474 x 2902, which is illegible in a README and useless in a video frame.
+
+       Second version; docs/architecture.svg is kept. The first drew the two routes as one
+       chain — people, edge, then AgentCore into Strands into Bedrock — so a judge scanning
+       it would conclude the public demo calls Nova. It does not. The split lives at the
+       model position, because that is exactly where it lives in the code
+       (`coordinator._build_model`), so that is where this draws it.
+
+       The trace band is a real run, recorded in docs/AGENT_TRACE_EVIDENCE.md, not an
+       illustration. Every count and bound is pinned to the implementation by
+       services/agent/tests/test_presentation_truth.py.
+
+       Deliberately dropped from the visible surface, because neither earns a point on any
+       official judging criterion and both cost a judge attention: the reachable-API-path
+       count, and the DynamoDB key schema. Both remain in this desc and in the README. -->
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10z" fill="#8a8272"/>
+    </marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10z" fill="#3d6b4c"/>
+    </marker>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10z" fill="#a0512a"/>
+    </marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10z" fill="#9a5f3c"/>
+    </marker>
+  </defs>
+
+  <rect width="1440" height="1136" fill="#f7f4ef"/>
+
+  <!-- ─────────────────────────────────────────────────────── title -->
+  <text x="40" y="50" font-size="27" font-weight="600" fill="#17150f" letter-spacing="-0.4">Pool — one bounded Strands agent, two model providers, one truth layer</text>
+  <text x="40" y="78" font-size="14" fill="#575145">Both routes are the same <tspan font-weight="600">strands.Agent</tspan>, the same 17 <tspan font-weight="600">@tool</tspan> functions and the same <tspan font-weight="600">HookProvider</tspan>. Only the object in the model position differs.</text>
+  <text x="40" y="98" font-size="14" fill="#575145">Green is a decision the agent made. Blue is a fact deterministic code computed, which could not have been otherwise.</text>
+
+  <!-- ═══════════════════════════════════════════════════════ row 1 -->
+
+  <!-- people -->
+  <rect x="40" y="114" width="300" height="150" rx="10" fill="#ffffff" stroke="#ded7c9"/>
+  <text x="58" y="138" font-size="11" font-weight="700" letter-spacing="1.2" fill="#a0512a">PEOPLE</text>
+  <g font-size="13.5" fill="#17150f">
+    <text x="58" y="166">Buyer<tspan fill="#575145" font-size="12"> · declares a recurring need</tspan></text>
+    <text x="58" y="192">Host<tspan fill="#575145" font-size="12"> · earns recorded compensation</tspan></text>
+    <text x="58" y="218">Operator<tspan fill="#575145" font-size="12"> · offers, payments, cases</tspan></text>
+  </g>
+  <text x="58" y="240" font-size="11.5" fill="#a0512a">A person is asked only when a rule</text>
+  <text x="58" y="254" font-size="11.5" fill="#a0512a">they set themselves did not pass</text>
+
+  <!-- edge -->
+  <rect x="364" y="114" width="420" height="150" rx="10" fill="#ffffff" stroke="#ded7c9"/>
+  <text x="382" y="138" font-size="11" font-weight="700" letter-spacing="1.2" fill="#384b5e">EDGE — AWS</text>
+  <text x="382" y="166" font-size="14" font-weight="600" fill="#17150f">React app (Vite)</text>
+  <text x="382" y="190" font-size="14" font-weight="600" fill="#17150f">CloudFront → Lambda Function URL</text>
+  <text x="382" y="212" font-size="11.5" fill="#575145">One function serves the SPA and the API from one origin.</text>
+  <text x="382" y="227" font-size="11.5" fill="#575145">The browser never holds an AWS credential.</text>
+  <text x="382" y="250" font-size="11.5" fill="#384b5e">Saving a declaration is the only thing a member does.</text>
+
+  <!-- strands surface -->
+  <rect x="808" y="114" width="592" height="150" rx="10" fill="#ffffff" stroke="#b2cbb7"/>
+  <text x="826" y="138" font-size="11" font-weight="700" letter-spacing="1.2" fill="#3d6b4c">STRANDS AGENTS SDK — WHAT THIS BUILD USES</text>
+  <g font-size="13" font-weight="600" fill="#17150f">
+    <text x="826" y="164">strands.Agent<tspan font-weight="400" font-size="12" fill="#575145"> — one bounded coordinator, one run</tspan></text>
+    <text x="826" y="186">@tool × 17<tspan font-weight="400" font-size="12" fill="#575145"> — typed, idempotent, no shell, no SQL</tspan></text>
+    <text x="826" y="208">strands.hooks.HookProvider<tspan font-weight="400" font-size="12" fill="#575145"> — 4 events, cancel + hard stop</tspan></text>
+    <text x="826" y="230">strands.models.Model<tspan font-weight="400" font-size="12" fill="#575145"> — our own deterministic provider</tspan></text>
+    <text x="826" y="252">strands.models.BedrockModel<tspan font-weight="400" font-size="12" fill="#575145"> — Amazon Nova Lite</tspan></text>
+  </g>
+
+  <line x1="340" y1="192" x2="362" y2="192" stroke="#8a8272" stroke-width="1.4" marker-end="url(#a)"/>
+
+  <!-- human-in-the-loop, back to a person -->
+  <path d="M170 300 V268" stroke="#a0512a" stroke-width="1.4" fill="none" marker-end="url(#c)" stroke-dasharray="4 3"/>
+  <text x="186" y="288" font-size="11.5" fill="#a0512a">the agent chose to surface a decision — and a tool, not the model, decided whose rule it broke</text>
+
+  <!-- ═══════════════════════════════════════════════════════ agent -->
+  <rect x="40" y="300" width="1360" height="420" rx="10" fill="#ffffff" stroke="#b2cbb7"/>
+  <text x="58" y="324" font-size="11" font-weight="700" letter-spacing="1.2" fill="#3d6b4c">THE AGENT — DECIDES WHAT TO DO</text>
+
+  <!-- objective router -->
+  <rect x="58" y="334" width="390" height="118" rx="8" fill="#e4ede4" stroke="#b2cbb7"/>
+  <text x="74" y="358" font-size="14" font-weight="600" fill="#17150f">Objective router</text>
+  <text x="74" y="380" font-size="11.5" fill="#575145">The browser sends one trigger name from a server</text>
+  <text x="74" y="395" font-size="11.5" fill="#575145">allowlist. The subject, the declarations, the products</text>
+  <text x="74" y="410" font-size="11.5" fill="#575145">and the prompt are all read from stored state, so no</text>
+  <text x="74" y="425" font-size="11.5" fill="#575145">caller can point a run at somebody else's need.</text>
+  <text x="74" y="444" font-size="11.5" font-weight="600" fill="#3d6b4c">→ selects 1 of 4 objective-scoped tool surfaces</text>
+
+  <!-- coordinator -->
+  <rect x="468" y="334" width="420" height="118" rx="8" fill="#e4ede4" stroke="#3d6b4c" stroke-width="1.6"/>
+  <text x="484" y="358" font-size="14" font-weight="600" fill="#17150f">PoolCoordinator — one strands.Agent</text>
+  <text x="484" y="380" font-size="11.5" fill="#575145">Shared by both routes, byte for byte. A BoundedRun</text>
+  <text x="484" y="395" font-size="11.5" fill="#575145">HookProvider registers four hook events: Before/After-</text>
+  <text x="484" y="410" font-size="11.5" fill="#575145">ModelCall, Before/AfterToolCall. Tool bounds cancel the</text>
+  <text x="484" y="425" font-size="11.5" fill="#575145">call so a run ends cleanly; run bounds raise, and record.</text>
+  <text x="484" y="444" font-size="11.5" font-weight="600" fill="#3d6b4c">8 iterations · 25 tool calls · 45 s · 2 duplicate calls</text>
+
+  <!-- what the agent owns -->
+  <rect x="908" y="334" width="474" height="118" rx="8" fill="#e4ede4" stroke="#b2cbb7"/>
+  <text x="924" y="358" font-size="14" font-weight="600" fill="#17150f">What the agent actually decides</text>
+  <text x="924" y="380" font-size="11.5" fill="#575145">which opportunity out of many is worth costing at all</text>
+  <text x="924" y="395" font-size="11.5" fill="#575145">which of a member's standing declarations to take on</text>
+  <text x="924" y="410" font-size="11.5" fill="#575145">which uncertainty is worth asking a person about</text>
+  <text x="924" y="425" font-size="11.5" fill="#575145">whether a refusal ends the search or redirects it</text>
+  <text x="924" y="444" font-size="11.5" font-weight="600" fill="#3d6b4c">and when nothing is worth doing — a correct ending</text>
+
+  <!-- the model position -->
+  <line x1="58" y1="468" x2="1382" y2="468" stroke="#b2cbb7" stroke-width="1"/>
+  <text x="58" y="487" font-size="13" font-weight="600" fill="#3d6b4c">THE MODEL POSITION — a <tspan font-style="italic">strands.models.Model</tspan>. The only thing that differs between the routes. Everything above and below is shared.</text>
+
+  <!-- route A -->
+  <rect x="58" y="497" width="650" height="78" rx="8" fill="#e4ede4" stroke="#3d6b4c" stroke-width="1.6"/>
+  <text x="76" y="519" font-size="13.5" font-weight="700" fill="#17150f">ROUTE A · PUBLIC JUDGE DEMO<tspan font-weight="400" fill="#3d6b4c"> — what a judge clicks</tspan></text>
+  <text x="76" y="539" font-size="12" fill="#3f3a31">Our own <tspan font-weight="600">DeterministicPlannerModel(strands.models.Model)</tspan>, in-process in the Lambda.</text>
+  <text x="76" y="555" font-size="12" fill="#3f3a31">Real event loop, real hooks, real tools, real domain maths — only the LLM is substituted.</text>
+  <text x="76" y="571" font-size="12" fill="#3f3a31">0 model tokens, repeatable. That role holds no <tspan font-weight="600">bedrock:InvokeModel</tspan>.</text>
+
+  <!-- route B -->
+  <rect x="732" y="497" width="650" height="78" rx="8" fill="#ffffff" stroke="#3d6b4c" stroke-width="1.6"/>
+  <text x="750" y="519" font-size="13.5" font-weight="700" fill="#17150f">ROUTE B · DEPLOYED AGENTCORE<tspan font-weight="400" fill="#6f6759"> — separate deployment</tspan></text>
+  <text x="750" y="539" font-size="12" fill="#3f3a31"><tspan font-weight="600">strands.models.BedrockModel</tspan> → Amazon Nova Lite, inside Bedrock AgentCore Runtime:</text>
+  <text x="750" y="555" font-size="12" fill="#3f3a31">AWS_IAM inbound, one server-generated session per invocation, same DynamoDB table.</text>
+  <text x="750" y="571" font-size="12" fill="#3f3a31">Runtime v8 verified live 2026-09-07 — <tspan font-weight="600">pool_created</tspan>, 7 of 8 iterations, 29.6k input tokens.</text>
+
+  <!-- ─────────────────────────────────────── verified trace band -->
+  <line x1="58" y1="591" x2="1382" y2="591" stroke="#b2cbb7" stroke-width="1"/>
+  <text x="58" y="610" font-size="13" font-weight="600" fill="#3d6b4c">A REAL RUN, NOT AN ILLUSTRATION<tspan font-weight="400" fill="#575145"> — live Nova Lite, run_8a7b91e6793c, 7 of 8 iterations, 28.2k/640 tokens. Caused by one member saving one declaration.</tspan></text>
+
+  <g font-size="10.5">
+    <!-- 1 -->
+    <rect x="58" y="620" width="204" height="86" rx="7" fill="#e4ede4" stroke="#b2cbb7"/>
+    <text x="70" y="638" font-weight="700" fill="#3d6b4c">1 · AGENT</text>
+    <text x="70" y="656" font-size="11" font-weight="600" fill="#17150f">list_cohort_strategies</text>
+    <text x="70" y="675" fill="#575145">Lists the orders this cohort</text>
+    <text x="70" y="688" fill="#575145">could support. None costed;</text>
+    <text x="70" y="701" fill="#575145">no verdict yet.</text>
+
+    <!-- 2 -->
+    <rect x="282" y="620" width="204" height="86" rx="7" fill="#e5ebf1" stroke="#b6c4d2"/>
+    <text x="294" y="638" font-weight="700" fill="#384b5e">2 · REFUSED</text>
+    <text x="294" y="656" font-size="11" font-weight="600" fill="#17150f">evaluate_cohort_strategy</text>
+    <text x="294" y="675" fill="#575145">Agent picked <tspan font-weight="600">Kestrel</tspan> first.</text>
+    <text x="294" y="688" font-weight="600" fill="#384b5e">viable: false</text>
+    <text x="294" y="701" fill="#575145">blocker: not_cheaper</text>
+
+    <!-- 3 -->
+    <rect x="506" y="620" width="204" height="86" rx="7" fill="#e4ede4" stroke="#b2cbb7"/>
+    <text x="518" y="638" font-weight="700" fill="#3d6b4c">3 · REDIRECTED</text>
+    <text x="518" y="656" font-size="11" font-weight="600" fill="#17150f">evaluate_cohort_strategy</text>
+    <text x="518" y="675" fill="#575145">Did not argue or retry —</text>
+    <text x="518" y="688" fill="#575145">chose <tspan font-weight="600">Harbourstone</tspan>.</text>
+    <text x="518" y="701" font-weight="600" fill="#384b5e">viable: true</text>
+
+    <!-- 4 -->
+    <rect x="730" y="620" width="204" height="86" rx="7" fill="#e5ebf1" stroke="#384b5e" stroke-width="1.5"/>
+    <text x="742" y="638" font-weight="700" fill="#384b5e">4 · MUTATION</text>
+    <text x="742" y="656" font-size="11" font-weight="600" fill="#17150f">create_candidate_pool</text>
+    <text x="742" y="670" font-size="11" font-weight="600" fill="#17150f">_from_strategy</text>
+    <text x="742" y="688" fill="#575145">Gated on the evaluation_id</text>
+    <text x="742" y="701" fill="#575145">that proved it. 18 = 3×6, 0 left.</text>
+
+    <!-- 5 -->
+    <rect x="954" y="620" width="204" height="86" rx="7" fill="#e5ebf1" stroke="#b6c4d2"/>
+    <text x="966" y="638" font-weight="700" fill="#384b5e">5 · REFUSED</text>
+    <text x="966" y="656" font-size="11" font-weight="600" fill="#17150f">find_host_candidates</text>
+    <text x="966" y="675" fill="#575145">3 candidates considered,</text>
+    <text x="966" y="688" font-weight="600" fill="#384b5e">eligible_count: 0</text>
+    <text x="966" y="701" fill="#575145">by their own stated rules.</text>
+
+    <!-- 6 -->
+    <rect x="1178" y="620" width="204" height="86" rx="7" fill="#e4ede4" stroke="#b2cbb7"/>
+    <text x="1190" y="638" font-weight="700" fill="#3d6b4c">6 · ENDED</text>
+    <text x="1190" y="656" font-size="11" font-weight="600" fill="#17150f">record_no_action</text>
+    <text x="1190" y="675" fill="#575145">"No eligible hosts found"</text>
+    <text x="1190" y="688" fill="#575145">Stopping is a correct</text>
+    <text x="1190" y="701" fill="#575145">outcome, not a failure.</text>
+
+    <!-- connectors -->
+    <line x1="264" y1="663" x2="279" y2="663" stroke="#8a8272" stroke-width="1.3" marker-end="url(#a)"/>
+    <path d="M488 663 H503" stroke="#9a5f3c" stroke-width="1.6" fill="none" marker-end="url(#r)"/>
+    <line x1="712" y1="663" x2="727" y2="663" stroke="#8a8272" stroke-width="1.3" marker-end="url(#a)"/>
+    <line x1="936" y1="663" x2="951" y2="663" stroke="#8a8272" stroke-width="1.3" marker-end="url(#a)"/>
+    <line x1="1160" y1="663" x2="1175" y2="663" stroke="#8a8272" stroke-width="1.3" marker-end="url(#a)"/>
+  </g>
+
+  <!-- ─────────────────────────────────────── the only way out -->
+  <path d="M720 720 V750" stroke="#3d6b4c" stroke-width="1.6" fill="none" marker-end="url(#g)"/>
+  <text x="734" y="740" font-size="12" font-weight="600" fill="#3d6b4c">the only way out of the agent: 17 typed @tool functions — no shell, no SQL, no generic mutation</text>
+
+  <!-- ═══════════════════════════════════════════════ deterministic -->
+  <rect x="40" y="750" width="1360" height="170" rx="10" fill="#ffffff" stroke="#b6c4d2"/>
+  <text x="58" y="774" font-size="11" font-weight="700" letter-spacing="1.2" fill="#384b5e">DETERMINISTIC — DETERMINES WHAT IS TRUE · SHARED BY BOTH ROUTES</text>
+
+  <rect x="58" y="784" width="310" height="124" rx="8" fill="#e5ebf1" stroke="#b6c4d2"/>
+  <text x="74" y="806" font-size="13.5" font-weight="600" fill="#17150f">agent/tools.py — 17 @tool</text>
+  <text x="74" y="828" font-size="11.5" fill="#575145">12 lifecycle: 4 read · 1 record · 6 act · 1 end</text>
+  <text x="74" y="843" font-size="11.5" fill="#575145">+ 3 cohort-strategy + 2 clarification</text>
+  <text x="74" y="858" font-size="11.5" fill="#575145">Never all at once — one objective, one surface</text>
+  <text x="74" y="873" font-size="11.5" fill="#575145">An id this run did not itself list is refused</text>
+  <text x="74" y="895" font-size="11.5" fill="#384b5e">Labels tested against what each tool writes</text>
+
+  <rect x="388" y="784" width="330" height="124" rx="8" fill="#e5ebf1" stroke="#b6c4d2"/>
+  <text x="404" y="806" font-size="13.5" font-weight="600" fill="#17150f">services/ — orchestration</text>
+  <text x="404" y="828" font-size="11.5" fill="#575145">coordination · discover, form, price, lock</text>
+  <text x="404" y="846" font-size="11.5" fill="#575145">hosting · recruit, rank, offer</text>
+  <text x="404" y="864" font-size="11.5" fill="#575145">payments · authorise, capture, webhooks</text>
+  <text x="404" y="882" font-size="11.5" fill="#575145">fulfillment · purchase, pickup, issues</text>
+  <text x="404" y="900" font-size="11.5" fill="#575145">clarification · which question is worth asking</text>
+
+  <rect x="738" y="784" width="356" height="124" rx="8" fill="#e5ebf1" stroke="#b6c4d2"/>
+  <text x="754" y="806" font-size="13.5" font-weight="600" fill="#17150f">domain/ — pure, no I/O, no adapter imports</text>
+  <text x="754" y="828" font-size="11.5" fill="#575145">economics · landed price, fees, case fitting</text>
+  <text x="754" y="846" font-size="11.5" fill="#575145">viability · the 13-check gate before a lock</text>
+  <text x="754" y="864" font-size="11.5" fill="#575145">policy · Smart Join’s three verdicts</text>
+  <text x="754" y="882" font-size="11.5" fill="#575145">matching · timing · pickup · money · state</text>
+  <text x="754" y="902" font-size="11.5" font-weight="600" fill="#384b5e">No model client can reach any of this</text>
+
+  <rect x="1114" y="784" width="268" height="124" rx="8" fill="#ffffff" stroke="#ded7c9"/>
+  <text x="1130" y="806" font-size="13.5" font-weight="600" fill="#17150f">adapters/</text>
+  <text x="1130" y="828" font-size="11.5" fill="#575145">payments · simulated (Stripe TEST</text>
+  <text x="1130" y="843" font-size="11.5" fill="#575145">only; a live key is refused)</text>
+  <text x="1130" y="864" font-size="11.5" fill="#575145">purchase · simulated, flagged</text>
+  <text x="1130" y="885" font-size="11.5" fill="#575145">routing · deterministic function</text>
+
+  <path d="M373 920 V936" stroke="#8a8272" stroke-width="1.4" fill="none" marker-end="url(#a)"/>
+
+  <!-- ═══════════════════════════════════════════════════════ state -->
+  <rect x="40" y="940" width="666" height="112" rx="10" fill="#ffffff" stroke="#ded7c9"/>
+  <text x="58" y="964" font-size="11" font-weight="700" letter-spacing="1.2" fill="#384b5e">STATE AND EVIDENCE — AWS</text>
+  <text x="58" y="988" font-size="13.5" font-weight="600" fill="#17150f">DynamoDB — one table, on-demand, TTL</text>
+  <text x="58" y="1006" font-size="11.5" fill="#575145">Each visitor isolated in their own partition, expiring after 24 hours. Runs and pools</text>
+  <text x="58" y="1021" font-size="11.5" fill="#575145">are read back from here, never replayed — <tspan font-weight="600">created_by_run</tspan> proves which run built which pool.</text>
+  <text x="58" y="1043" font-size="11.5" fill="#575145"><tspan font-size="13.5" font-weight="600" fill="#17150f">CloudWatch</tspan> — tool sequence, termination, duration, tokens. No reasoning text; arguments hashed.</text>
+
+  <!-- ───────────────────────────────────────────────── not enabled -->
+  <rect x="734" y="940" width="666" height="112" rx="10" fill="#f2efe9" stroke="#c6bdab" stroke-dasharray="5 4"/>
+  <text x="752" y="964" font-size="11" font-weight="700" letter-spacing="1.2" fill="#6f6759">IMPLEMENTED BUT NOT DEPLOYED / ABSENT FROM THE JUDGE PATH</text>
+  <text x="752" y="988" font-size="13.5" font-weight="600" fill="#3f3a31">EventBridge — scheduled background scan</text>
+  <text x="752" y="1006" font-size="11.5" fill="#6f6759">Pilot-stack code only. Zero EventBridge rules exist in the deployed judge account, so</text>
+  <text x="752" y="1021" font-size="11.5" fill="#6f6759">nothing recurring runs: every run in this build was asked for by something.</text>
+  <text x="752" y="1043" font-size="11.5" fill="#6f6759"><tspan font-size="13.5" font-weight="600" fill="#3f3a31">Amazon Location · API Gateway · S3</tspan> — pilot stack; tested, never called live.</text>
+
+  <!-- ────────────────────────────────────────────────────── legend -->
+  <g font-size="11.5">
+    <path d="M46 1070 52 1076 46 1082 40 1076z" fill="#3d6b4c"/>
+    <text x="60" y="1080" fill="#575145">green — the agent chose to do this</text>
+    <rect x="258" y="1070" width="11" height="11" rx="2" fill="#384b5e"/>
+    <text x="278" y="1080" fill="#575145">blue — deterministic code computed it, and it could not have been otherwise</text>
+    <circle cx="782" cy="1076" r="5.5" fill="#a0512a"/>
+    <text x="796" y="1080" fill="#575145">clay — a person was asked</text>
+    <rect x="990" y="1070" width="11" height="11" rx="2" fill="#f2efe9" stroke="#c6bdab" stroke-dasharray="3 2"/>
+    <text x="1010" y="1080" fill="#575145">dashed — implemented, not deployed</text>
+  </g>
+  <text x="40" y="1102" font-size="11.5" fill="#6f6759">Synthetic community and suppliers; payments and the supplier purchase are simulated. Bedrock, AgentCore Runtime, DynamoDB, CloudFront and the Lambda</text>
+  <text x="40" y="1120" font-size="11.5" fill="#6f6759">Function URL verified on a real AWS account. The trace above is reproduced in docs/AGENT_TRACE_EVIDENCE.md; over 1,300 tests pass, including ones that pin every count, bound and verdict here to the code.</text>
+</svg>

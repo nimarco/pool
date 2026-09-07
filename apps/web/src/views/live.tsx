@@ -250,7 +250,17 @@ function InvocationPanel({
         </Heading>
         <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
           <Elapsed running={busy} />
-          {available ? <Chip tone="live">live</Chip> : <Chip>not on this deployment</Chip>}
+          {available ? (
+            <Chip tone="live">live</Chip>
+          ) : (
+            /* "not on this deployment" was true and unreadable: it left a judge to guess
+               whether the runtime is missing or disarmed. The server knows which. */
+            <Chip>
+              {config?.live_agent_state === "switched_off"
+                ? "switched off here"
+                : "not configured"}
+            </Chip>
+          )}
         </span>
       </div>
       <div className="panel-pad stack-sm">
@@ -276,10 +286,28 @@ function InvocationPanel({
               ) : null}
             </div>
           </>
+        ) : config?.live_agent_state === "switched_off" ? (
+          /* The distinction this paragraph exists to make. A runtime *is* deployed and
+             this deployment holds its ARN; the paid route is disarmed so that nothing a
+             visitor can press spends a model token. The screen used to say "No AgentCore
+             runtime is configured here", which reads as the project having no AgentCore
+             deployment at all — the opposite of the truth, and the one claim on this page
+             a judge would score. Neither may it imply the runs above used a model: they
+             did not, and the function serving this page cannot call one. */
+          <p className="small muted prose">
+            Live AgentCore execution is <strong>switched off</strong> on this reproducible
+            demo, so nothing here can spend a model token. A separately deployed AgentCore
+            runtime — the same Strands agent, the same typed tools, with{" "}
+            <code>BedrockModel</code> in the model position — has been invoked and verified;
+            the trace is in <code>docs/AGENT_TRACE_EVIDENCE.md</code>. Every run on this
+            page used the deterministic planner instead, which is why its token counts are
+            zero and why you can reproduce it exactly.
+          </p>
         ) : (
           <p className="small muted prose">
-            No AgentCore runtime is configured here. Local coordination uses the bounded
-            loop and typed tools with a deterministic planner.
+            No AgentCore runtime is configured for this deployment, so there is no live
+            route to offer. Coordination here runs the bounded Strands loop and the typed
+            tools with a deterministic planner.
           </p>
         )}
       </div>
@@ -352,8 +380,15 @@ export function AgentExecution({
             ? `Product discovery runs on AgentCore against this session's DynamoDB workspace.
                Lifecycle rehearsal uses the same bounded Strands/tool path with a deterministic
                planner; every run records which executor answered.`
-            : `This server runs the bounded Strands loop, typed tools and domain arithmetic
-               with a deterministic planner for repeatable local rehearsal.`}
+            : /* Not "local rehearsal": this text is served by the hosted judge demo as
+                 often as by a laptop, and calling a deployed run local was the same
+                 category of error as denying the runtime exists. What is true either way
+                 is that the loop, the tools and the arithmetic are the real ones and the
+                 model position holds a planner. */
+              `Every run here uses the real bounded Strands loop, the real typed tools and the
+               real domain arithmetic, with a deterministic planner in the model position —
+               so each one is free, repeatable and reproducible. Live model execution is a
+               separate route, and every run records which executor answered.`}
         </p>
       </header>
 

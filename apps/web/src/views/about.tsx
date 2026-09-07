@@ -146,8 +146,12 @@ export function About({
             </p>
           </details>
           <div className="btn-row" style={{ marginTop: 14 }}>
+            {/* The label has to match what pressing it can actually deliver. On a
+                deployment with the paid route disarmed it opens the evidence for a run
+                that already happened, not a live invocation — and promising "see it run
+                on AWS" to a judge who then cannot is worse than promising less. */}
             <button className="btn btn-sm" onClick={onOpenTechnical}>
-              See it run on AWS
+              {live ? "See it run on AWS" : "See how it runs on AWS"}
               <IconArrowRight />
             </button>
           </div>

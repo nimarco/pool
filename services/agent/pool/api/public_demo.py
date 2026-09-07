@@ -1002,6 +1002,24 @@ class PublicDemoGuard:
             "max_live_per_session": self.settings.max_live_per_session,
             "payments": "simulated",
             "purchase": "simulated",
+            # *Why* the live route is unavailable, because the two reasons are different
+            # claims and the UI was making the wrong one. This deployment has a runtime
+            # ARN and the kill switch off (``PUBLIC_DEMO_AGENTCORE_ENABLED=false``), and
+            # the screen said "No AgentCore runtime is configured here" — which reads as
+            # *this project has no AgentCore deployment* rather than *the paid route is
+            # switched off so no visitor can spend a token*. Reported from the setting
+            # rather than asserted in the browser, so a deployment that genuinely has no
+            # runtime cannot be described as one that merely disabled it.
+            #
+            # Deliberately not the ARN, the account or the region: switched off is the
+            # whole point, and naming an endpoint nobody can invoke would only expose it.
+            "live_agent_state": (
+                "available"
+                if self.settings.live_available
+                else "switched_off"
+                if self.settings.agentcore_runtime_arn
+                else "not_configured"
+            ),
         }
 
 

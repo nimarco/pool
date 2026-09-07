@@ -162,3 +162,61 @@ describe("what an in-flight invocation is allowed to claim", () => {
     expect(screen.getByText(/The live request did not complete/)).toBeTruthy();
   });
 });
+
+describe("what the screen may claim when the live route is not offered", () => {
+  /* The two unavailable cases are different claims, and saying the wrong one is the
+     single most damaging sentence on this page. The public judge demo has a runtime ARN
+     and the kill switch off, and the screen used to answer that with "No AgentCore
+     runtime is configured here" — which reads as *this project has no AgentCore
+     deployment*, the opposite of the truth. */
+
+  const off = (state: DemoConfig["live_agent_state"]): DemoConfig => ({
+    ...CONFIG,
+    live_agent_available: false,
+    live_agent_runtime: "",
+    region: "",
+    live_agent_state: state,
+  });
+
+  const renderOff = (state: DemoConfig["live_agent_state"]) =>
+    render(
+      <AgentExecution
+        config={off(state)}
+        health={HEALTH}
+        result={null}
+        busy={false}
+        onRun={() => {}}
+        runs={[]}
+        proof={null}
+      />,
+    );
+
+  it("says the paid route is switched off, not that the runtime does not exist", () => {
+    renderOff("switched_off");
+    expect(screen.getByText(/Live AgentCore execution is/i)).toBeTruthy();
+    expect(screen.getByText(/has been invoked and verified/i)).toBeTruthy();
+    expect(screen.queryByText(/No AgentCore runtime is configured/i)).toBeNull();
+  });
+
+  it("never implies the visible runs used a model", () => {
+    renderOff("switched_off");
+    const body = document.body.textContent ?? "";
+    expect(body).toMatch(/deterministic planner/i);
+    expect(body).toMatch(/token/i);
+    // The chip a judge reads at a glance has to agree with the paragraph under it.
+    expect(screen.getByText("switched off here")).toBeTruthy();
+    expect(screen.queryByText("live")).toBeNull();
+  });
+
+  it("still says so plainly when there genuinely is no runtime", () => {
+    renderOff("not_configured");
+    expect(screen.getByText(/No AgentCore runtime is configured for this deployment/i)).toBeTruthy();
+    expect(screen.getByText("not configured")).toBeTruthy();
+  });
+
+  it("does not describe a hosted deployment's own runs as local", () => {
+    renderOff("switched_off");
+    // "local rehearsal" was served by the deployed judge demo as often as by a laptop.
+    expect(document.body.textContent ?? "").not.toMatch(/local rehearsal/i);
+  });
+});

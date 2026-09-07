@@ -755,8 +755,13 @@ export interface Health {
     workflow_timeout_seconds: number;
   };
   /** The exact tool surface the running agent was given, served from its own
-   *  definition so the UI cannot display a catalogue that has drifted. */
+   *  definition so the UI cannot display a catalogue that has drifted.
+   *
+   *  Three lists, never merged: each is offered *instead of* the others, so no run ever
+   *  holds more than twelve even though the repository defines seventeen. */
   agent_tools: { name: string; kind: "read" | "record" | "act" | "end" }[];
+  agent_strategy_tools?: { name: string; kind: "read" | "record" | "act" | "end" }[];
+  agent_clarification_tools?: { name: string; kind: "read" | "record" | "act" | "end" }[];
 }
 
 export interface RunResult {
@@ -1078,6 +1083,14 @@ export interface DemoConfig {
   max_live_per_session: number;
   payments: string;
   purchase: string;
+  /** Why the live route is or is not offered — the server's own reading, because the
+   *  two unavailable cases are different claims and the browser must not pick one.
+   *
+   *  `switched_off` means a runtime is configured and the paid path is deliberately
+   *  disarmed, which is the public judge demo. `not_configured` means there is no
+   *  runtime to invoke. Optional so an older deployment that does not send it is
+   *  described as the weaker of the two rather than the stronger. */
+  live_agent_state?: "available" | "switched_off" | "not_configured";
 }
 
 export interface LiveAgentRun {
@@ -1409,9 +1422,10 @@ export const api = {
     request<RunReport>(`/api/runs/${runId}/report?household_id=${householdId}`),
 
   /** What this deployment can do. Answers everywhere; `live_agent_available` is false
-   *  when no AgentCore runtime is configured, so the UI describes the action rather
-   *  than offering a button that cannot work. It is also what decides whether the
-   *  product's discovery action goes to AWS or runs here. */
+   *  when the paid route cannot be invoked — either because the kill switch is off or
+   *  because no runtime is configured, which `live_agent_state` distinguishes — so the
+   *  UI describes the action rather than offering a button that cannot work. It is also
+   *  what decides whether the product's discovery action goes to AWS or runs here. */
   demoConfig: () => request<DemoConfig>("/api/demo/config"),
 
   /** Invoke the deployed coordinator, once, against *this session's* workspace.

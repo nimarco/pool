@@ -387,7 +387,9 @@ export function DemoPanel({
                 <div className="fact-value">
                   {demoConfig?.live_agent_available
                     ? `AgentCore / Bedrock available · ${demoConfig.region}`
-                    : "local bounded coordinator"}
+                    : demoConfig?.live_agent_state === "switched_off"
+                      ? "bounded coordinator · AgentCore switched off here"
+                      : "bounded coordinator · no AgentCore runtime configured"}
                 </div>
               </div>
               <div>

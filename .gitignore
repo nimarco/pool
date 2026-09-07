@@ -172,7 +172,46 @@ cdk.out.demotest/
 .catalog-cache/
 
 # Rendered demo video. The markdown, the captions and the still frames are committed;
-# the three MP4 deliveries are ~90MB together and are uploaded to the submission host
-# rather than carried in every clone. Rebuild with the pipeline in
-# docs/VIDEO_MEDIA_MANIFEST.md §7.
+# the MP4 deliveries are ~90MB per cut and are uploaded to the submission host rather
+# than carried in every clone. Rebuild with the pipeline in
+# docs/VIDEO_MEDIA_MANIFEST.md §7, or video/preview-v3/PREVIEW_MEDIA_MANIFEST.md §11.
+#
+# Both patterns are needed: the first only ever matched the top level, so a cut rendered
+# into a subdirectory would have been committed by the next `git add -A`.
 video/*.mp4
+video/**/*.mp4
+
+# The final-hybrid working copy: keep the sources, never the derived frames or deps.
+# appframes/ and frames/ are each one ffmpeg command from app/*.webm and the scene page.
+video/final-hybrid/appframes/
+video/final-hybrid/frames/
+video/final-hybrid/node_modules/
+video/final-hybrid/out/
+video/final-hybrid/verify/
+
+# The fresh-chat hybrid. Sources and documents are committed; the derived
+# artefacts are one command each (see video/final-hybrid-fresh/README.md).
+video/final-hybrid-fresh/appframes/
+video/final-hybrid-fresh/frames/
+video/final-hybrid-fresh/node_modules/
+video/final-hybrid-fresh/out/
+video/final-hybrid-fresh/audio/
+video/final-hybrid-fresh/verify/
+video/final-hybrid-fresh/audit/cues/
+
+# Every cut, present and future — because naming them one at a time is how two 2.2 GB
+# working copies (`final-hybrid-astra`, `final-hybrid-mobile`) ended up outside the
+# rules above, and `git add -A` would have staged 33,057 derived PNGs. These directories
+# are all reproducible with one ffmpeg command from the committed sources; the markdown,
+# the narration, the storyboards, the manifests and the contact sheets stay tracked.
+video/*/appframes/
+video/*/app-prev-mobile/
+video/*/frames/
+video/*/key-frames/
+video/*/node_modules/
+video/*/out/
+video/*/build/
+video/*/verify/
+video/*/audio/
+video/*/audit/cues/
+video/frames/

@@ -7927,3 +7927,113 @@ still works. They are pointing at the hostname that filtered networks block, whi
 thing to fix at deploy time, not before. `DemoUrl` is now the CDN's URL and `make demo-url`
 reads it, so the replacement value comes from the deploy itself. A first request through a
 new distribution should also be expected to take a few seconds while it propagates.
+
+
+### #0066 — [2026-09-07] — Final video polish preserves evidence and repairs captions
+
+**Implemented and tested locally; no deployment.** Created the separate `video/final-hybrid-astra/` build from the verified current `Pool-Final.mp4` baseline. Refined hook settling and redistribution, community settings, case/price hierarchy, preference reversal, conditional host explanation, agent payoff and closing hold. Preserved the visual identity and recorded product evidence. Removed the misleading reformed-order refill to 18 bags; the later recorded card shows 15 bags / five buyers / Forming. Fixed the subtitle writer truncating six long narration cues, preserving every locked word in 80 captions.
+
+Rendered the complete 1080p30 master (8,686 frames, 4:49.533). Separate encoded QA used sequential whole-film frame samples plus motion, transition and full-resolution samples; it was not a continuous human watch with sound. An identified hook numeral collision was corrected and the full encode/checks repeated. Full decode and timestamps passed; original AAC payload and decoded PCM hashes match exactly. Verified 164 protected baseline/reference files and 6,718 reused asset files. Reports, storyboard, timing inventory, contact sheet, key frames and reproducible local build are included. The first presenter placeholder remains a human finishing dependency.
+
+No application behavior changed, no app workflow was invoked, and no AWS resource was created, modified or destroyed. No AgentCore, Bedrock or Nova invocation occurred. The render used finite local browser workers and a temporary loopback static server. No earlier video output was overwritten. See `video/final-hybrid-astra/FINAL-QA.md` for actual evidence and limitations.
+
+### #0067 — [2026-09-07] — Mobile evidence reads as a ledger rather than nested cards
+
+**Implemented and tested locally; not deployed.** The mobile declaration had a raised wizard, sunken form, bordered fieldset, choice pills and a helper surface competing for attention. Added presentation-only rules at the existing 560px breakpoint in `apps/web/src/styles.css`: flatten setup and editing containers, use checkbox rows with aligned demand counts, demote contextual tags, and separate sections with spacing and rules. Home, order records, comparison verdicts, disclosures, judge receipts and Behind Pool navigation use the same calmer treatment. Prices, status labels, chosen/refused markers, host conditions and simulation disclosures remain visible. Native inputs retain at least 44px height; preference rows measured 45px at 390px width. Existing colours, fonts and desktop styling remain.
+
+No component markup, wording, event handlers, navigation, API, fixtures, backend or product semantics changed. No information was newly hidden and disclosure defaults remain unchanged. Existing video artifacts were not touched.
+
+Verification: production build and frontend lint passed; all 191 tests across 20 files passed. Browser inspection used an isolated local judge-mode API, in-memory repository, offline planner and simulated payments. Walked verify entry, name/location setup, product search, flexible coffee declaration, autonomy setup, Home, Kestrel/Harbourstone comparison, technical proof, order/host record, need editing and exact-only reversal. The actual local flow showed the $367.19/$360 Kestrel refusal, $69.18 Harbourstone saving and zero model tokens; reversal removed the member and left the need standing. Inspected narrow 320px and standard 390px mobile layouts, with no document overflow on the inspected preference, comparison/proof, order record, editing and community screens. Final Behind Pool refinements were inspected at 390px; desktop inspected at 1280px. Existing regression tests also cover the legacy judge walkthrough, which was reviewed in source rather than separately replayed in the browser.
+
+No AWS resources or paid model calls. The temporary local verification server was stopped; pre-existing development servers were left alone. No deployment or video re-recording was performed.
+
+### #0068 — [2026-09-07] — The judge's own query reaches the products the demo is about
+
+**Implemented and tested locally; deployed separately below.** A judge who followed the
+README could not reach the run this submission is about. Searching `coffee` returned the
+coffee *family* plus six national-catalogue rows — Death Wish, a cold brew, a Chobani
+vanilla **creamer**, Folgers — and none of the six curated coffees this community buys.
+Kestrel and Harbourstone were reachable only by typing a brand name nobody could have
+known. Taking the offered family instead produced a real order, but a boring one: one
+strategy listed, viable on the first evaluation, no refusal, no redirect, and **no
+preference questions at all**. The whole agentic story was present in the code, verified
+in the tests, recorded in the trace evidence — and invisible on the path a judge walks.
+
+**Root cause.** `search_products` ranked only the bundled snapshot. Products the
+workspace holds but the snapshot does not carry were found by a separate blunt matcher
+(`_local_matches`) and **appended after the ranked list, only `if len(results) < limit`**.
+For any query broad enough for the catalogue to answer, the limit (6) was already full, so
+every workspace-only row was truncated away — and `SOURCEABLE_BOOST`, which exists
+precisely to stop a broad noun from burying the product Pool holds a quote for, was
+applied to only half the candidate population. The six curated coffees are the only
+sourceable products the snapshot does not carry, so they were the only ones structurally
+unreachable.
+
+**The change.** One ranked population. `catalog.search` takes `extra` identities from the
+caller, scores them with the same pure function via the extracted `_haystack`, gives them
+the same bounded boost, sorts once, and **applies the limit after the merge instead of
+before it**. `catalog.entry_from_product` is the honest converter — it copies fields and
+carries the product's own `source`/`source_ref`, so nothing claims the snapshot holds a
+row it does not. `_local_matches` and its hand-built duplicate of the response dict are
+gone; both populations now render through `CatalogEntry.view`. Deduped by `product_id`
+with the snapshot winning, because the seven rows in both places are the same product.
+
+No query is special-cased and no fixture is named. Symmetric by construction: a national
+catalogue cannot starve a community's shelf, and six local rows cannot starve the
+catalogue — there is one ranking and the better answer wins. `folgers` still returns
+Folgers; `vanilla whey` still ranks the flagship first; `ground coffee` interleaves both
+populations. Fixture economics, canonical values and every downstream semantic are
+untouched: only discovery changed.
+
+**What the normal path now reaches.** `coffee` → *Or pick one exact product (6)* → all six
+curated coffees, each marked *Pool can source this*. Every one of the four whole-bean
+caffeinated options produces the documented run: `list_cohort_strategies` → Kestrel
+refused `not_cheaper` at $367.19 against $360.00 (23 bags compatible from 8 people, 20
+evaluated as 4 whole cases of 5) → Harbourstone `viable` at $263.82 against $333.00, 18
+bags in 3 cases of 6, surplus 0, $69.18 saved → `create_candidate_pool_from_strategy`
+gated on the evaluation id. The two structurally different coffees, ground and decaf,
+truthfully produce `no_action` / `below_minimum`. The clarification plan — the agent
+choosing which approved questions are worth asking, in what order — is now on the normal
+path too, where the family shortcut had skipped it entirely.
+
+**Technical-proof copy.** `/api/demo/config` now reports `live_agent_state`, so the UI
+stops guessing why the live route is absent. The deployed function carries the AgentCore
+runtime ARN *and* `PUBLIC_DEMO_AGENTCORE_ENABLED=false`; the screen answered that with
+"No AgentCore runtime is configured here", which reads as *this project has no AgentCore
+deployment* — the opposite of the truth, and the one claim on that page a judge would
+score. It now says the paid route is switched off, that a separately deployed runtime has
+been invoked and verified, and that every visible run used the deterministic planner at
+zero tokens. Two adjacent errors went with it: a hosted deployment's runs were described
+as "local rehearsal", and a button promised "See it run on AWS" on a deployment where
+pressing it cannot run anything. `/api/health` now also publishes the clarification tool
+surface, which was missing — the endpoint's catalogue added up to fifteen while the
+repository defines seventeen.
+
+**Regression coverage.** Twelve tests in `test_catalog.py` pin the merge as a property —
+extras ranked not appended, the boost reaching them, the boost unable to invent a match,
+dedupe, limits, determinism, provenance, and the symmetric guarantee that naming a
+snapshot brand still returns it — all built from synthetic extras, so none can pass by
+special-casing a fixture. Four in `test_member_demo.py` start at the **search box** rather
+than at a product id, asserting that a sourceable product the snapshot does not carry is
+reachable by the ordinary noun for its category, and that the declaration a `coffee`
+search reaches shows a refusal *and* a redirect. Four in `live.test.tsx` pin the corrected
+copy in both unavailable states. All sixteen new server-side tests fail with the merge
+removed; the four UI tests fail against the old sentence.
+
+**Verification.** 1,321 Python, 195 web, 86 infra tests pass; ruff, eslint, `tsc` and the
+production build are clean; secret scan clean and its self-test still detects planted
+secrets. The judge walkthrough was driven end to end at 375×812 through the real UI, in
+the exact configuration the demo deploys in: 34 samples across every transition showed no
+blank frames, no `Loading` flashes, no duplicate `<main>`, no stale or duplicated `<h1>`,
+no scroll jumps and no horizontal overflow; the seven-card result list scrolls internally
+rather than crowding. AgentCore state was re-read from `bedrock-agentcore-control`
+(version 8, `READY`, `liveVersion 8`, `AWS_IAM`, `us.amazon.nova-lite-v1:0`) and the
+recorded live run in `docs/AGENT_TRACE_EVIDENCE.md` was read back from DynamoDB and
+matches exactly, so no new paid invocation was needed. Zero EventBridge rules confirmed.
+
+**`.gitignore`.** `git add -A` would have staged 33,057 files and roughly 9 GB of derived
+video frames: the ignore rules named `final-hybrid` and `final-hybrid-fresh` one at a
+time, so the later `final-hybrid-astra` and `final-hybrid-mobile` working copies fell
+outside them. The patterns are now per-cut wildcards, which covers the next one too. No
+video asset, source, narration, storyboard or encoded output was read for content,
+modified, re-rendered or committed.

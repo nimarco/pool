@@ -305,6 +305,20 @@ def group(slug: str) -> CatalogGroup | None:
 # --------------------------------------------------------------------------- search
 
 
+def _haystack(entry: CatalogEntry) -> tuple[frozenset[str], str]:
+    """The searchable tokens and the lowercase label for one identity.
+
+    Split out from :func:`_index` so a row that is *not* in the snapshot can be scored by
+    exactly the same function as one that is. A community's own products have to be
+    ranked beside the bundled catalogue rather than after it, and a second derivation of
+    "what words does this product match" would be a second search engine.
+    """
+    words: set[str] = set()
+    for field in (entry.name, entry.brand, entry.variant, entry.category, *entry.synonyms):
+        words.update(_tokens(field))
+    return frozenset(words), entry.label.casefold()
+
+
 @functools.lru_cache(maxsize=1)
 def _index() -> tuple[tuple[CatalogEntry, frozenset[str], str], ...]:
     """Precomputed haystacks: (entry, searchable tokens, lowercase label).
@@ -313,13 +327,7 @@ def _index() -> tuple[tuple[CatalogEntry, frozenset[str], str], ...]:
     costs well under a millisecond — which is the entire reason this needs no search
     service, no index server, and no vector store (AGENTS.md §3.7).
     """
-    out = []
-    for e in entries():
-        words = set()
-        for field in (e.name, e.brand, e.variant, e.category, *e.synonyms):
-            words.update(_tokens(field))
-        out.append((e, frozenset(words), e.label.casefold()))
-    return tuple(out)
+    return tuple((e, *_haystack(e)) for e in entries())
 
 
 def _score(query: str, tokens: frozenset[str], label: str, entry: CatalogEntry) -> int:
@@ -376,12 +384,38 @@ def _score(query: str, tokens: frozenset[str], label: str, entry: CatalogEntry) 
 SOURCEABLE_BOOST = 120
 
 
+def entry_from_product(product: Product) -> CatalogEntry:
+    """One workspace product, expressed as the identity shape search ranks.
+
+    The inverse of :meth:`CatalogEntry.to_product`, and the reason a curated family
+    installed into a single Community can be found at all. It copies fields; it invents
+    nothing — in particular it does not claim the snapshot carries this row, because
+    ``source`` and ``source_ref`` travel from the product itself.
+    """
+    return CatalogEntry(
+        product_id=product.id,
+        name=product.name,
+        brand=product.brand,
+        variant=product.variant,
+        category=product.category,
+        substitute_group=product.substitute_group,
+        unit=product.unit,
+        gtin=product.gtin,
+        display_size=product.display_size,
+        image_ref=product.image_ref,
+        synonyms=tuple(product.synonyms),
+        source=product.source.value,
+        source_ref=product.source_ref,
+    )
+
+
 def search(
     query: str,
     limit: int = DEFAULT_LIMIT,
     sourceable_ids: frozenset[str] = frozenset(),
+    extra: tuple[CatalogEntry, ...] = (),
 ) -> list[CatalogEntry]:
-    """Rank catalogue entries against free text. Pure, offline, and stable.
+    """Rank product identities against free text. Pure, offline, and stable.
 
     Ties break on ``(brand, name, product_id)`` rather than on iteration order, so the
     ranking is reproducible across processes and across rebuilds of the snapshot — which
@@ -392,15 +426,35 @@ def search(
     :data:`SOURCEABLE_BOOST`. Nothing about product identity changes: a sourceable
     product is not renamed, merged, or substituted for anything, and an unsourceable one
     a member deliberately picks stays exactly what they picked.
+
+    ``extra`` are identities the caller holds that the snapshot does not — the products a
+    single Community has curated for itself. They are scored by the same function, given
+    the same boost, and sorted into the same list, and **the limit is applied after the
+    merge rather than before it**. That ordering is the whole point (#0068): these rows
+    used to be appended to a list the snapshot had already filled, so a query broad
+    enough for the catalogue to answer — ``coffee`` — truncated every one of them away,
+    and a product Pool held a verified quote for could only be reached by typing its
+    brand. A community's own shelf cannot be starved by a national catalogue, and the
+    catalogue cannot be starved by a handful of local rows either: there is one
+    ranking, and whichever identity actually answers the query better wins.
+
+    Deduped by ``product_id`` with the snapshot winning, because a row that exists in
+    both places is the same product and the snapshot's copy is the one the ranking is
+    pinned against.
     """
     query = (query or "").strip()
     if len(query) < MIN_QUERY_CHARS:
         return []
     limit = max(1, min(limit, MAX_LIMIT))
 
+    known = {e.product_id for e in entries()}
+    candidates = list(_index())
+    candidates.extend(
+        (e, *_haystack(e)) for e in extra if e.product_id not in known
+    )
     scored = [
         (s + (SOURCEABLE_BOOST if e.product_id in sourceable_ids else 0), e)
-        for e, tokens, label in _index()
+        for e, tokens, label in candidates
         if (s := _score(query, tokens, label, e)) > 0
     ]
     scored.sort(key=lambda pair: (-pair[0], pair[1].brand, pair[1].name, pair[1].product_id))

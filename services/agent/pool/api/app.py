@@ -45,7 +45,11 @@ from ..adapters.repository import Repository, build_repository
 from ..adapters.routing import build_routing
 from ..adapters.sourcing import SyntheticCatalogProvider
 from ..agent.coordinator import PoolCoordinator
-from ..agent.tools import STRATEGY_TOOL_SURFACE, TOOL_SURFACE
+from ..agent.tools import (
+    CLARIFICATION_TOOL_SURFACE,
+    STRATEGY_TOOL_SURFACE,
+    TOOL_SURFACE,
+)
 from ..config import get_settings
 from ..data import catalog
 from ..data.roast_coffee_fixture import install_roast_coffee
@@ -549,12 +553,21 @@ def health() -> dict[str, Any]:
         # `agent/tools.py` so the UI cannot show a tool list that has drifted from the
         # one Strands is actually given.
         "agent_tools": [{"name": name, "kind": kind} for name, kind in TOOL_SURFACE],
-        # The second surface, published separately because it is offered *instead of*
-        # the first and never alongside it (``objective.searches_strategies``). Two lists
-        # rather than one, because merging them would say a run holds fifteen tools when
-        # no run ever holds more than twelve.
+        # The other surfaces, published separately because each is offered *instead of*
+        # the first and never alongside it (``objective.searches_strategies``,
+        # ``objective.plans_clarification``). Separate lists rather than one, because
+        # merging them would say a run holds seventeen tools when no run ever holds more
+        # than twelve.
         "agent_strategy_tools": [
             {"name": name, "kind": kind} for name, kind in STRATEGY_TOOL_SURFACE
+        ],
+        # The narrowest surface, and the one a judge now meets first: choosing which of
+        # the approved preference questions are worth asking. It was absent here, so the
+        # catalogue this endpoint served added up to fifteen while the repository's own
+        # count was seventeen — the sort of drift the "served from one definition" rule
+        # above exists to prevent.
+        "agent_clarification_tools": [
+            {"name": name, "kind": kind} for name, kind in CLARIFICATION_TOOL_SURFACE
         ],
     }
 
@@ -944,22 +957,39 @@ def search_products(
     deterministic; there was simply no way to *reach* one except a dropdown of six
     invented brands.
 
-    Read-only, free, and offline: it ranks a bundled snapshot with a pure function. No
-    model is called — not here and nowhere else on this path — because a language model
-    on the keystroke path would cost money per character, make the ranking
-    irreproducible, and put an LLM one step away from deciding which product somebody
-    is buying (AGENTS.md §3.3, §5). Interpretation is allowed to be forgiving; the
-    member still confirms, and compatibility is decided later by
-    ``domain.substitution`` from structure alone.
+    Read-only, free, and offline: it ranks the bundled snapshot **and this workspace's own
+    products**, in one pass, with a pure function. No model is called — not here and
+    nowhere else on this path — because a language model on the keystroke path would cost
+    money per character, make the ranking irreproducible, and put an LLM one step away
+    from deciding which product somebody is buying (AGENTS.md §3.3, §5). Interpretation is
+    allowed to be forgiving; the member still confirms, and compatibility is decided later
+    by ``domain.substitution`` from structure alone.
     """
     ws = check_workspace(workspace)
     ensure_seeded(ws)
+    held = repo().list_products(ws)
     # What Pool can actually buy right now, read from this workspace's own offers. It is
     # a deployment fact, not a product fact, so it is computed here rather than baked
     # into the snapshot — and it is the reason a broad query like "coffee" surfaces the
     # coffee Pool holds a quote for instead of burying it under eight it does not.
-    sourceable = _sourceable_product_ids(ws)
-    found = catalog.search(q, limit, sourceable_ids=sourceable)
+    sourceable = _sourceable_product_ids(ws, held)
+    # Both populations, ranked together: the bundled snapshot, and this Community's own
+    # products for anything the snapshot does not carry. A curated family installed into
+    # one workspace is a real thing a real member of that community buys, and a search
+    # that could not find it would leave them unable to declare it — which is the one
+    # action the whole product is built around.
+    #
+    # Merged before the limit is applied rather than appended after it. Appending was the
+    # bug (#0068): the snapshot filled all six slots for any query broad enough for it to
+    # answer, so every workspace-only product — including six coffees Pool holds verified
+    # bulk quotes for — was truncated away, and the sourceable boost that exists to stop
+    # exactly that never reached them. See ``catalog.search``.
+    found = catalog.search(
+        q,
+        limit,
+        sourceable_ids=sourceable,
+        extra=tuple(catalog.entry_from_product(p) for p in held),
+    )
     # Families first, because "coffee" is usually a statement about coffee rather than a
     # half-remembered brand. A family is sourceable when Pool holds a bulk quote for
     # anything inside it — which is the honest reading: the member is declaring the
@@ -970,40 +1000,11 @@ def search_products(
     if families:
         wanted = {g.group for g in families}
         by_group: dict[str, bool] = {g: False for g in wanted}
-        for p in repo().list_products(ws):
+        for p in held:
             if p.substitute_group in wanted and p.id in sourceable:
                 by_group[p.substitute_group] = True
         in_group = by_group
     results = [e.view(sourceable=e.product_id in sourceable) for e in found]
-    # Then this Community's own products, for anything the bundled snapshot does not
-    # carry. A curated family installed into one workspace is a real thing a real member
-    # of that community buys, and a search that could not find it would leave them unable
-    # to declare it — which is the one action the whole product is built around.
-    #
-    # Appended rather than merged into the ranking: the snapshot's ordering is a pure
-    # function a test can pin, and these rows have no ranking of their own. Deduped
-    # against what the catalogue already returned, and capped by the same limit.
-    seen = {r["product_id"] for r in results}
-    if len(results) < limit:
-        for product in _local_matches(ws, q):
-            if product.id in seen:
-                continue
-            results.append(
-                {
-                    "product_id": product.id,
-                    "name": product.name,
-                    "brand": product.brand,
-                    "variant": product.variant,
-                    "display_size": product.display_size,
-                    "unit": product.unit,
-                    "category": product.category,
-                    "image_ref": product.image_ref,
-                    "sourceable": product.id in sourceable,
-                }
-            )
-            seen.add(product.id)
-            if len(results) >= limit:
-                break
     return {
         "query": q.strip(),
         "groups": [g.view(sourceable=in_group.get(g.group, False)) for g in families],
@@ -1013,39 +1014,19 @@ def search_products(
     }
 
 
-def _local_matches(ws: str, query: str) -> list[Any]:
-    """Products this workspace holds that a query plainly names.
-
-    Deliberately blunt — whole-word substring over brand, name and variant, ordered by
-    product id. The catalogue's ranking is a tuned, tested, pure function over a fixed
-    snapshot; these rows are whatever a community happens to have, and inventing a second
-    scoring system for them would be two rankings that disagree. Anything subtler belongs
-    in the snapshot.
-    """
-    words = [w for w in re.split(r"[^a-z0-9]+", query.casefold()) if len(w) >= 2]
-    if not words:
-        return []
-    out = []
-    for product in sorted(repo().list_products(ws), key=lambda p: p.id):
-        haystack = " ".join(
-            (product.brand, product.name, product.variant, product.category)
-        ).casefold()
-        if all(word in haystack for word in words):
-            out.append(product)
-    return out
-
-
-def _sourceable_product_ids(ws: str) -> frozenset[str]:
+def _sourceable_product_ids(ws: str, held: list[Any] | None = None) -> frozenset[str]:
     """Products this workspace holds a usable bulk quote for.
 
     Truthful by construction: it is the same ``offers_for`` the evaluator consults, so a
     product marked sourceable is one an opportunity assessment could genuinely price.
     No offer is fabricated for a catalogue product to make this list longer.
+
+    ``held`` lets a caller that has already listed this workspace's products pass them in
+    rather than paying for the same Query twice.
     """
     ctx = ctx_for(ws)
-    return frozenset(
-        p.id for p in repo().list_products(ws) if coord.offers_for(ctx, p.id)[1]
-    )
+    products = held if held is not None else repo().list_products(ws)
+    return frozenset(p.id for p in products if coord.offers_for(ctx, p.id)[1])
 
 
 class OnboardingRequest(BaseModel):

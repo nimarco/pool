@@ -322,3 +322,145 @@ def test_a_product_pool_quotes_a_synthetic_price_for_claims_no_barcode(repo):
         if offers:
             assert not stored.gtin, f"{curated.id} publishes a barcode beside a synthetic quote"
             assert not stored.display_size
+
+
+# ------------------------------------------------- two populations, one ranking
+#
+# A deployment holds products the bundled snapshot does not: a family curated for one
+# Community. Those rows used to be found by a separate matcher and *appended* to a
+# ranked list the snapshot had already filled to the limit, so any query broad enough
+# for the catalogue to answer truncated every one of them away (#0068).
+#
+# These tests are about the merge rather than about any particular product, so they build
+# their own extras. Nothing here names a fixture, and none of them would pass because a
+# query was special-cased.
+
+
+def _extra(product_id: str, brand: str, name: str, **kw) -> catalog.CatalogEntry:
+    """One identity a deployment holds and the snapshot does not."""
+    return catalog.entry_from_product(
+        Product(
+            id=product_id,
+            name=name,
+            category=kw.get("category", "beverage"),
+            unit="bag",
+            substitute_group=kw.get("group", "coffee"),
+            brand=brand,
+            variant=kw.get("variant", ""),
+            source=ProductSource.CURATED,
+            source_ref="test",
+        )
+    )
+
+
+def test_a_deployments_own_products_are_ranked_with_the_snapshot_not_after_it():
+    """The bug, stated as the property it violated.
+
+    Six extras that all answer the query, against a snapshot that already returns a full
+    page for it. Appending gave them nothing; ranking gives them the places they earn.
+    """
+    extras = tuple(
+        _extra(f"prod_x_{i}", f"Testbrand{i} Coffee", "Whole bean coffee, 2 lb")
+        for i in range(6)
+    )
+    limit = 6
+    assert len(catalog.search("coffee", limit)) == limit, "the snapshot alone fills this"
+
+    found = [e.product_id for e in catalog.search("coffee", limit, extra=extras)]
+    assert len(found) == limit
+    assert [p for p in found if p.startswith("prod_x_")], (
+        "a deployment's own matching products were starved out by the catalogue"
+    )
+
+
+def test_the_boost_reaches_a_deployments_own_products_too():
+    """``SOURCEABLE_BOOST`` exists so a broad noun surfaces what Pool can actually buy.
+
+    It was applied only to the snapshot, which is why six coffees Pool held verified bulk
+    quotes for could be reached only by typing their brand.
+    """
+    extra = _extra("prod_x_quoted", "Testbrand Roastworks", "Whole bean coffee, 2 lb")
+    page = 6
+    unboosted = [e.product_id for e in catalog.search("coffee", page, extra=(extra,))]
+    boosted = [
+        e.product_id
+        for e in catalog.search(
+            "coffee", page, sourceable_ids=frozenset({"prod_x_quoted"}), extra=(extra,)
+        )
+    ]
+    assert "prod_x_quoted" not in unboosted, "a plain match does not need the first page"
+    assert "prod_x_quoted" in boosted, "the product Pool holds a quote for was buried"
+
+
+def test_a_boost_cannot_invent_a_match():
+    """Favouring a sourceable product must not make it an answer to a query it fails."""
+    extra = _extra("prod_x_soap", "Testbrand", "Bar soap", category="personal_care", group="soap")
+    found = [
+        e.product_id
+        for e in catalog.search(
+            "coffee", 12, sourceable_ids=frozenset({"prod_x_soap"}), extra=(extra,)
+        )
+    ]
+    assert "prod_x_soap" not in found
+
+
+def test_naming_a_snapshot_brand_still_returns_that_brand():
+    """The symmetric guarantee. A local shelf must not starve the catalogue either, and
+    a member who typed a specific product keeps getting it (``SOURCEABLE_BOOST``)."""
+    extras = tuple(
+        _extra(f"prod_x_{i}", f"Testbrand{i} Coffee", "Whole bean coffee, 2 lb")
+        for i in range(8)
+    )
+    every_extra = frozenset(e.product_id for e in extras)
+    found = catalog.search("vanilla whey", 6, sourceable_ids=every_extra, extra=extras)
+    assert found[0].product_id == CANONICAL
+
+
+def test_an_extra_that_is_already_in_the_snapshot_is_returned_once():
+    """The seven rows that exist in both places are the same product."""
+    duplicate = catalog.entry_from_product(catalog.get(CANONICAL).to_product())
+    found = [e.product_id for e in catalog.search("vanilla whey", 6, extra=(duplicate,))]
+    assert found.count(CANONICAL) == 1
+
+
+def test_the_limit_still_bounds_a_merged_result():
+    extras = tuple(
+        _extra(f"prod_x_{i}", f"Testbrand{i} Coffee", "Whole bean coffee, 2 lb")
+        for i in range(30)
+    )
+    every_extra = frozenset(e.product_id for e in extras)
+    for limit in (1, 3, 6, 12):
+        found = catalog.search("coffee", limit, sourceable_ids=every_extra, extra=extras)
+        assert len(found) == limit
+    assert len(catalog.search("coffee", 999, extra=extras)) <= catalog.MAX_LIMIT
+
+
+def test_merging_keeps_the_ranking_deterministic():
+    extras = tuple(
+        _extra(f"prod_x_{i}", f"Testbrand{i} Coffee", "Whole bean coffee, 2 lb")
+        for i in range(6)
+    )
+    every_extra = frozenset(e.product_id for e in extras)
+    runs = [
+        [e.product_id for e in catalog.search("coffee", 8, every_extra, extras)]
+        for _ in range(5)
+    ]
+    assert all(r == runs[0] for r in runs)
+
+
+def test_a_product_expressed_as_an_identity_keeps_its_own_provenance():
+    """``entry_from_product`` copies; it must not claim the snapshot carries the row."""
+    product = Product(
+        id="prod_x_prov",
+        name="Whole bean coffee, 2 lb",
+        category="beverage",
+        unit="bag",
+        substitute_group="coffee",
+        brand="Testbrand",
+        source=ProductSource.CURATED,
+        source_ref="curated:test",
+    )
+    entry = catalog.entry_from_product(product)
+    assert entry.source == ProductSource.CURATED.value
+    assert entry.source_ref == "curated:test"
+    assert catalog.get("prod_x_prov") is None, "nothing was written into the snapshot"

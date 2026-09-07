@@ -35,6 +35,7 @@ from pool.adapters.repository import InMemoryRepository
 from pool.adapters.routing import CachingRouting, DeterministicRouting
 from pool.api import app as api
 from pool.api import public_demo
+from pool.data import catalog
 from pool.data import product_facts as pf
 from pool.data.roast_coffee_fixture import A_MEDIUM, C_DECAF, E_UNVERIFIED_ROAST
 from pool.data.seed import COMMUNITY_ID, seed
@@ -670,3 +671,117 @@ def test_the_preference_mapping_is_a_pure_function_of_stored_state(client):
     second = needs_service.policy_from_answers(ctx, A_MEDIUM, answers)
     assert first == second
     assert first[0] is SubstitutionPolicy.ATTRIBUTE_CONSTRAINED
+
+
+# ----------------------------------------------- the discovery the walkthrough needs
+#
+# Everything above declares by product id, which is what the engine takes. A judge types
+# a word. These tests start where they start — at the search box — because the engine was
+# right and unreachable: a broad noun filled all six result slots with national catalogue
+# rows, and the six coffees this community buys, every one of which Pool holds a verified
+# bulk quote for, could be found only by somebody who already knew a brand name (#0068).
+#
+# Written against what the query returns rather than against ids, so passing them by
+# special-casing a string is not possible.
+
+
+def _search(client: TestClient, query: str, ws: str = VERIFY_WS) -> list[dict]:
+    return client.get(f"/api/products/search?q={query}&workspace={ws}").json()["results"]
+
+
+def test_the_broad_noun_a_member_types_reaches_what_pool_can_source(client):
+    """"coffee" is the whole demo's opening move, and it is a statement about coffee.
+
+    The property, stated without naming anything: a product **this deployment holds a
+    verified bulk quote for, and the bundled snapshot does not carry**, has to be
+    reachable by the ordinary noun for its category. Reachable only by its brand is the
+    same as unreachable, because a member who knew the brand would have typed it.
+    """
+    client.get(f"/api/state?workspace={VERIFY_WS}")
+    ctx = ctx_for()
+    from pool.services import coordination as coord
+
+    only_here = {
+        p.id
+        for p in api._repo.list_products(VERIFY_WS)
+        if catalog.get(p.id) is None and coord.offers_for(ctx, p.id)[1]
+    }
+    assert only_here, "this workspace has no curated sourceable product to test with"
+
+    results = _search(client, "coffee")
+    assert results, "the opening query returned nothing"
+    reached = {r["product_id"] for r in results} & only_here
+    assert reached, (
+        "every slot went to the national catalogue: a member who types the noun cannot "
+        "reach the products this community actually buys and Pool can actually quote"
+    )
+    assert all(r["sourceable"] for r in results if r["product_id"] in reached)
+
+
+def test_a_whole_bean_coffee_found_by_searching_is_declarable_and_asked_about(client):
+    """The path the README documents: type a noun, pick a bag, get asked the questions.
+
+    The product is chosen from the search results by the facts a member can see on the
+    card, never by id — so this test still means something if the fixture changes.
+    """
+    onboard(client)
+    candidates = [
+        r
+        for r in _search(client, "coffee")
+        if r["sourceable"] and "whole bean" in r["name"].casefold()
+    ]
+    assert candidates, "no whole-bean coffee Pool can source is reachable from 'coffee'"
+
+    picked = candidates[0]["product_id"]
+    plan = client.post(
+        f"/api/products/{picked}/clarification?workspace={VERIFY_WS}", json={}
+    ).json()
+    assert plan["planned"] is True
+    assert plan["questions"], "a curated family product was asked nothing"
+    # The agent chose from the approved set and could not have written one.
+    assert set(q["attribute"] for q in plan["questions"]) <= {
+        qid.split(".", 1)[1] for qid in plan["questions_offered"]
+    }
+
+
+def test_the_declaration_that_search_reaches_shows_a_refusal_and_a_redirect(client):
+    """The beat the whole submission rests on, reached without knowing a brand name.
+
+    Deliberately asserts the *shape* — one listed option costed and refused on economics,
+    another costed and formed — rather than the two brand names. The names are pinned by
+    ``test_the_order_is_the_one_the_evaluator_adapted_to``; what this adds is that a
+    person who only knows the word "coffee" gets there.
+    """
+    household_id = onboard(client)
+    picked = next(
+        r["product_id"]
+        for r in _search(client, "coffee")
+        if r["sourceable"] and "whole bean" in r["name"].casefold()
+    )
+    saved = declare(
+        client, household_id, product_id=picked, preferences=SIMILAR
+    ).json()
+    assert saved["substitution"] == "attribute_constrained"
+
+    explained = client.get(
+        f"/api/needs/{saved['need_id']}/coordination?workspace={VERIFY_WS}"
+    ).json()
+    investigated = explained["investigated"]
+    assert len(investigated) >= 2, "only one option was costed; nothing was redirected"
+    refused = [v for v in investigated if not v["viable"]]
+    assert any(v["blocker_code"] == "not_cheaper" for v in refused), (
+        "no option was refused on economics, so the run shows no judgement"
+    )
+    assert explained["chosen"] and explained["chosen"]["viable"] is True
+    assert explained["order"] and explained["order"]["formed_by_this_run"] is True
+    # The refusal came back from a *successful* tool call, and the agent moved on.
+    names = [c["name"] for c in explained["run"]["tool_calls"]]
+    assert names.count("evaluate_cohort_strategy") >= 2
+    assert all(c["ok"] for c in explained["run"]["tool_calls"])
+    # Nothing was bought to make the story happen.
+    assert explained["not_yet"] == {
+        "host_accepted": False,
+        "final_price_issued": False,
+        "card_authorised": False,
+        "purchased": False,
+    }

@@ -8037,3 +8037,42 @@ time, so the later `final-hybrid-astra` and `final-hybrid-mobile` working copies
 outside them. The patterns are now per-cut wildcards, which covers the next one too. No
 video asset, source, narration, storyboard or encoded output was read for content,
 modified, re-rendered or committed.
+
+### #0069 — [2026-09-07] — The judge demo deploys the search fix
+
+**Deployed.** `PoolDemoStack` only, from `f06345e`. `cdk diff` inspected with `--strict`
+before anything changed: one resource, one line — the Lambda code asset key and its asset
+metadata path — plus two em-dash encoding artefacts in the stack description and the
+CloudFront comment, which the deploy repairs. **No IAM change and no environment change.**
+`PUBLIC_DEMO_AGENTCORE_ENABLED` is still `false` and `AGENTCORE_RUNTIME_ARN` is still set,
+both re-read off the deployed function afterwards, so the paid route stays disarmed and
+the public demo stays free and reproducible. No unrelated stack was synthesized or
+touched; `cdk list` confirms the demo app defines exactly one stack. No AgentCore runtime
+configuration, domain, IAM policy, table, rate limit or session boundary was altered, and
+nothing was deleted.
+
+Bundle: 73 MB unzipped, its own credential scan clean, import-verified. CDN invalidated
+and waited to `Completed`; the `index-*.js` CloudFront serves is byte-identical to the one
+the build produced.
+
+Verified against the live URL rather than against the deploy's own output. `/api/health`
+publishes 12 + 3 + 2 = 17 unique tools; `/api/demo/config` reports
+`live_agent_state: switched_off`. A fresh anonymous session then walked the documented
+path end to end on the real DynamoDB table: `coffee` returned all six curated coffees,
+every one marked sourceable; the clarification plan asked what the agent chose from the
+approved set; and saving one declaration produced `list_cohort_strategies` →
+`evaluate_cohort_strategy` (Kestrel, `not_cheaper`, 23/15 matched, 4×5 = 20, $367.19 vs
+$360.00) → `evaluate_cohort_strategy` (Harbourstone, viable, 3×6 = 18, surplus 0, $263.82
+vs $333.00, $69.18) → `create_candidate_pool_from_strategy`, at `input_tokens: 0`. Host
+still recruiting, nothing authorised, nothing purchased. The same run was then read
+through the browser at the CloudFront hostname, including the technical-proof panel.
+
+No paid model invocation was made at any point. AgentCore evidence was re-verified
+read-only instead: runtime version 8 `READY`, endpoint `DEFAULT` at `liveVersion 8`,
+`AWS_IAM` inbound, `us.amazon.nova-lite-v1:0`, and the recorded live run
+`run_9793fd48b53d` read back from DynamoDB with `created_by_run` matching the pool it
+built — so the existing trace evidence is current and a new smoke run would have spent
+tokens to learn nothing.
+
+README deployment rows re-dated to this deploy and repointed at this commit. No video
+asset, source or output was touched.

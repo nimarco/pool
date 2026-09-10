@@ -212,10 +212,11 @@ desktop.ini
 # =============================================================================
 # VIDEO PRODUCTION — the entire tree is local-only, deliberately.
 #
-# video/ is a 65 GB production workspace: raw camera and screen recordings, 33k+
-# derived PNG/JPEG frame sequences, narration WAV chunks and takes, presenter frames,
-# per-cut audit dumps, the take reviewer's working state, third-party audio, and ~79
-# intermediate MP4 renders. None of it is needed to build, run, test, or judge Pool,
+# video/ is a 14 GB production workspace across six cut directories: 1.6 GB of raw
+# camera and screen recordings, 71,627 derived PNG/JPEG frames, narration WAV chunks
+# and takes, presenter frames, per-cut audit dumps, the take reviewer's working state,
+# third-party audio, and 80 intermediate MP4 renders. Measured, not estimated.
+# None of it is needed to build, run, test, or judge Pool,
 # and none of it is reproducible-by-clone in any useful sense.
 #
 # What a judge needs instead is already committed elsewhere: the narration text

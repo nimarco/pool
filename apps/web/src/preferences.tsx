@@ -145,7 +145,7 @@ export function Preferences({
            clause about prices and minimums stays: it is the anti-promise this whole
            surface is built around, and the counts above it read as a forecast without
            it. What went was the connective tissue between them. */
-        <p className="small muted prefs-reach">
+        <p className="small muted prefs-reach reveal">
           {reaches > 0 ? (
             <>
               {flexibility.exact_requests === 0
@@ -173,7 +173,9 @@ export function Preferences({
         loading ? (
           <p className="small muted prefs-note">Working out what is worth asking…</p>
         ) : questions.length > 0 ? (
-          <div className="prefs-questions">
+          /* These exist because alternatives were allowed, so they arrive rather than
+             having always been there. */
+          <div className="prefs-questions reveal">
             {questions.map((q) =>
               q.kind === "keep" ? (
                 <label className="prefs-check" key={q.attribute}>

@@ -331,8 +331,16 @@ export function ProductSearch({
         />
       </label>
 
+      {/* Keyed on the query so a new set of results arrives rather than mutating in place —
+          the ranking changed, and the list should say so. */}
       {options.length > 0 ? (
-        <ul className="product-results" id={listId} role="listbox" aria-label="What you buy">
+        <ul
+          className="product-results reveal"
+          key={query}
+          id={listId}
+          role="listbox"
+          aria-label="What you buy"
+        >
           {options.map((option, i) =>
             option.kind === "family" ? (
               <FamilyCard

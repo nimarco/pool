@@ -4589,3 +4589,41 @@ html.can-cross-fade .step-enter {
     animation: none;
   }
 }
+
+/* --- content that arrives in place -------------------------------------------
+
+   Not every change of picture is a change of screen. Search results land under the box
+   you are typing in, the three preference questions appear because you allowed
+   alternatives, a note appears because you said "only this exact one". Those all used to
+   arrive in a single frame, which on a screen recording is indistinguishable from a cut —
+   the same complaint as an unanimated navigation, at a smaller scale.
+
+   Short and small: this is a block settling into a page that is otherwise still, not a
+   screen change, and it must not compete with one. */
+.reveal {
+  /* Not `--swap-ease`. That curve is a hard decelerate, which is right for something
+     travelling — it arrives and settles — but wrong for something fading: it spends most
+     of the opacity in the first two frames and the block still lands as a pop. A symmetric
+     curve spreads the change across the whole 240 ms, so a 25 fps recording gets six frames
+     of it instead of two. */
+  animation: reveal 240ms cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* Results are a list, so they come in as one block rather than as a stagger — a stagger
+   here would read as the app thinking, and the ranking is instant. */
+.product-results.reveal {
+  animation-duration: 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+  }
+}

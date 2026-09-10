@@ -344,13 +344,15 @@ export default function App() {
     (next: ShowcaseView) => {
       const entering = !api.inShowcaseScope();
       api.setShowcaseScope(true);
-      setShowcase(next);
-      setPanelOpen(false);
+      changeScreen(() => {
+        setShowcase(next);
+        setPanelOpen(false);
+        window.scrollTo({ top: 0 });
+      });
       if (entering) {
         forgetWorkspaceState();
         void refresh();
       }
-      window.scrollTo({ top: 0 });
     },
     [refresh, forgetWorkspaceState],
   );
@@ -373,11 +375,15 @@ export default function App() {
       try {
         setPoolEntry(entry);
         setOpenPool(await api.pool(poolId));
-        if (showcase) setShowcase("pool");
-        else setView("pool");
-        setPanelOpen(false);
-        setError(null);
-        window.scrollTo({ top: 0 });
+        /* Going into a record is going further in. The read above already happened, so
+           the screen it arrives on is complete rather than empty. */
+        changeScreen(() => {
+          if (showcase) setShowcase("pool");
+          else setView("pool");
+          setPanelOpen(false);
+          setError(null);
+          window.scrollTo({ top: 0 });
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         // A pool this tab knows about but the server does not means the list is stale —
@@ -619,7 +625,17 @@ export default function App() {
                       ? "page"
                       : undefined
                   }
-                  onClick={() => navigate(item.id)}
+                  /* The tabs are laid out in an order, so the move should agree with it:
+                     going to a tab on the left reads as coming back, not going on. */
+                  onClick={() =>
+                    navigate(
+                      item.id,
+                      NAV.findIndex((n) => n.id === item.id) <
+                      NAV.findIndex((n) => n.id === (view === "pool" ? "pools" : view))
+                        ? "back"
+                        : "fwd",
+                    )
+                  }
                 >
                   {item.label}
                 </button>

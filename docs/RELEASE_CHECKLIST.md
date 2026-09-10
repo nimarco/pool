@@ -39,7 +39,7 @@ line here for a submission decision.
 | Submission URL is the CDN's, not the function's | **TODO — at deploy time** | `make deploy-demo`, then `make demo-url`. The distribution's hostname does not exist until it is created, so `README.md`, `PRODUCT.md`, `docs/HACKATHON_SCORECARD.md`, this file and the `BUILD_HISTORY.md` ledger still publish the Function URL. Every one of those statements is still true — the Function URL stays public — but they point at the blocked hostname |
 | Architecture diagram shows the CDN once it is deployed | **TODO — at deploy time** | `docs/architecture.svg` is correct as it stands: it puts CloudFront in the dashed un-deployed group, which is where an un-deployed distribution belongs. When the demo's own distribution is deployed, CloudFront moves onto the solid judge path and the `<desc>` and footer need the same edit |
 | Demo stays free to test throughout judging | **TODO (human)** | Depends on credits lasting. `make cost-check` weekly; `make demo-kill` is the emergency stop |
-| Public video, **5 minutes maximum** | **TODO (human)** | Not recorded. Must cover the problem, the users, and why it matters |
+| Public video, **5 minutes maximum** | **Recorded — TODO (human): publish** | Recorded and frozen: **4:49.70**, 1920x1080, 30 fps, human narration, captions embedded. 10.3 s inside the limit. What remains is uploading it somewhere public and pasting the link into Devpost. Contents and licensing: `docs/VIDEO_MEDIA_MANIFEST.md`, `docs/VIDEO_AUDIO_LICENSING.md` |
 | Video is public and plays without a login | **TODO (human)** | Check in a private window before submitting |
 | Devpost submission form complete | **TODO (human)** | Draft text in `docs/DEVPOST_DRAFT.md` — it is a draft, not a submission |
 

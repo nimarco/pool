@@ -70,12 +70,16 @@ that separated them.
 **On location:** Pool never asks your browser for a position, and never claims you are near
 the people in the demo. The community is invented, and the page says so before you start.
 
-**The hosted URL** runs this branch:
+**The hosted URL**:
 
 **<https://d38kno05ygcarw.cloudfront.net/verify>**
 
-Deployed and verified **2026-09-07** from **`f06345e`**, the commit this README is in.
-Later commits, if any, change documentation only — the deployed bundle is that tree's.
+Deployed and verified **2026-09-07** from **`f06345e`**, and that is still exactly what
+CloudFront serves — you can check it without credentials: building `f06345e`'s `apps/web`
+reproduces the `index-*.css` and `index-*.js` that `/verify` loads, byte for byte. Commits
+after it change documentation, plus front-end transition animations that are in this tree
+and not in the deployed bundle. No agent, planner, API, tool, economics or IAM change is
+outstanding, so every behavioural claim below is a claim about the live URL.
 CloudFront distribution `EMOLZSGVY7HTN`, `Deployed` and enabled, cache invalidated, in
 front of the demo's Lambda Function URL. Use this hostname, not the raw
 Function URL underneath it: `*.lambda-url.*.on.aws` is a blocked *category* on Cisco
@@ -666,7 +670,7 @@ obligations: [`services/agent/pool/data/CATALOG_LICENSE.md`](services/agent/pool
 **Status language on this page is about when something was last observed, not about what
 is plausible.** Every line below carries the date it was observed.
 
-Both deployed artefacts now run this branch, and they do different jobs. The **Lambda**
+Both deployed artefacts run the agent code in this repository, and they do different jobs. The **Lambda**
 serves the web app and the reduced API and runs coordination in-process with the
 deterministic offline planner; its execution role can reach DynamoDB and
 `bedrock-agentcore:InvokeAgentRuntime`, and **nothing else** — it cannot call a model. The
@@ -683,7 +687,7 @@ walkthrough is free to repeat.
 | DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified 2026-08-23** — shared by both artefacts, which is why they are deployed together |
 | API Gateway + Lambda | Pilot-shaped API | In `PoolStack`, which is **not** what the public demo deploys |
 | S3 | Pilot-shaped web hosting | In `PoolStack`. The public demo needs it for nothing — its web app ships inside the function |
-| CloudFront | Reachable hostname in front of the demo's Function URL, and the canonical judge URL | **Deployed and verified 2026-09-07** (cache invalidated to completion; the `index-*.js` the CDN serves is byte-identical to the one this branch builds) — distribution `EMOLZSGVY7HTN`, `Deployed` and enabled, serving `https://d38kno05ygcarw.cloudfront.net/verify` over HTTP/2 with HSTS and a strict CSP. Added to `PoolDemoStack` because `*.lambda-url.*.on.aws` is a blocked *category* on filtered resolvers (Cisco Umbrella answers the demo's hostname with a block page and an untrusted certificate, so a judge behind one sees a certificate error, not Pool). Caches `/assets/*` only; every dynamic path is uncached, because the workspace travels as a query parameter. Separately, `PoolStack` uses it for pilot-shaped hosting |
+| CloudFront | Reachable hostname in front of the demo's Function URL, and the canonical judge URL | **Deployed and verified 2026-09-07** (cache invalidated to completion; the `index-*.js` the CDN serves is byte-identical to the one `f06345e` builds) — distribution `EMOLZSGVY7HTN`, `Deployed` and enabled, serving `https://d38kno05ygcarw.cloudfront.net/verify` over HTTP/2 with HSTS and a strict CSP. Added to `PoolDemoStack` because `*.lambda-url.*.on.aws` is a blocked *category* on filtered resolvers (Cisco Umbrella answers the demo's hostname with a block page and an untrusted certificate, so a judge behind one sees a certificate error, not Pool). Caches `/assets/*` only; every dynamic path is uncached, because the workspace travels as a query parameter. Separately, `PoolStack` uses it for pilot-shaped hosting |
 | EventBridge | Optional future background scan | Implemented only in the un-deployed `PoolStack`; **zero rules exist in the deployed judge account** |
 | Amazon Location | `geo-routes`, no provisioned calculator | Implemented, unverified |
 | CloudWatch | Structured run records, retention capped at 14 days | In both stacks |

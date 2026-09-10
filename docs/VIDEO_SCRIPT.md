@@ -1,12 +1,18 @@
 # Demo video — narration
 
-The spoken track of the submission film, in order, with the second each line starts and
-the picture it plays over. Runtime **4:01.56**, against a five-minute limit.
+> **Status.** This is the script of the **earlier synthetic-voice reference cut** (runtime
+> 4:01.56). It is kept as the record of how the film was written and marked up. It is *not*
+> the delivered narration: the submitted film is a human read, runs **4:49.70**, and its
+> wording and timings both moved. For the delivered text and times, read the caption track
+> embedded in the film itself; for what the film contains and is allowed to claim, read
+> [VIDEO_MEDIA_MANIFEST.md](VIDEO_MEDIA_MANIFEST.md).
 
-The reference audio in `video/pool-demo.mp4` is macOS `say` (Samantha, 166 wpm) — a
-stand-in, not a performance. `video/pool-demo-silent.mp4` and the timings below exist so
-the same film can be re-voiced without touching the picture: read to these marks and the
-edit still lands.
+The spoken track, in order, with the second each line starts and the picture it plays over.
+
+The reference audio was macOS `say` (Samantha, 166 wpm) — a stand-in, not a performance.
+A silent cut and the timings below existed so the film could be re-voiced without touching
+the picture: read to these marks and the edit still lands. That is exactly what then
+happened, and the human read was timed against its own clock.
 
 **Tone.** A student explaining something they built, not a launch film. Contractions,
 understatement, and three jokes that are allowed to be quiet. Every number spoken is a

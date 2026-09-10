@@ -2,6 +2,9 @@
 
 Every element in the submission film, where it came from, and what it is allowed to claim.
 
+The film this repository submits is the **human-narrated cut, runtime 4:49.70** —
+1920x1080, 30 fps, mono AAC, -21.0 LUFS integrated.
+
 Companion to [VIDEO_SCRIPT.md](VIDEO_SCRIPT.md) and
 [VIDEO_STORYBOARD.md](VIDEO_STORYBOARD.md).
 
@@ -92,21 +95,30 @@ system, no status bar. A rectangle with a radius and a bezel.
 | **System sans** (`-apple-system` / Helvetica Neue) | macOS | System font, used for rendering only | No | Body text and captions |
 | **Open Food Facts product names and photographs** | [openfoodfacts.org](https://world.openfoodfacts.org/), dated snapshot 2026-08-19 | Data ODbL-1.0; images CC-BY-SA-4.0 | Yes — and it is, on screen, inside the app's own product search, visible in the film during beat 6 | The catalogue a member searches |
 
-Nothing else third-party is used. No music, no sound effects, no stock media, no
-AI-generated imagery, no scraped images.
+No stock media, no AI-generated imagery, no scraped images. The only other third-party
+material is the two licensed audio files in §5, itemised in
+[VIDEO_AUDIO_LICENSING.md](VIDEO_AUDIO_LICENSING.md).
 
 ## 5. Audio
 
-The narration is macOS `say`, voice **Samantha**, 166 wpm — a reference track, generated
-locally, no service involved and no rights attached. One clip per cue, laid onto silence
-at the cue's start time and normalised to −14 LUFS.
+**The narration is a human read, performed by the author.** It was recorded locally,
+take-reviewed, and never sent to any transcription or synthesis service. The picture was
+then timed to that read rather than the other way round. The mix is mono at **-21.0 LUFS**
+integrated (the spoken-word standard for mono; the perceptual equivalent of -16 LUFS
+stereo), LRA 3.8 LU, true peak -5.1 dBTP.
 
-It is a stand-in for a human read. `pool-demo-silent.mp4`, `pool-demo.srt` and the cue
-timings in [VIDEO_SCRIPT.md](VIDEO_SCRIPT.md) exist so the film can be re-voiced without
-re-cutting the picture.
+Earlier cuts used a macOS `say` reference voice as a stand-in. That is no longer what
+ships, and the timings in [VIDEO_SCRIPT.md](VIDEO_SCRIPT.md) and
+[VIDEO_STORYBOARD.md](VIDEO_STORYBOARD.md) are that earlier cut's — see the status note at
+the top of each. The authoritative cue times are the caption track embedded in the
+delivered film.
 
-There is no music. The brief allowed it; this environment cannot audition it, and an
-unheard bed under a synthetic voice is a risk with no upside.
+**There are two pieces of licensed music**, both Pixabay Content License, neither requiring
+attribution: a short glitch sting under the opening title card, and a soft piano outro that
+enters under the last line and resolves over the held final frame. Full provenance —
+source URLs, creators, licence text, and the standalone-redistribution clause that keeps
+them out of git — is in
+[VIDEO_AUDIO_LICENSING.md](VIDEO_AUDIO_LICENSING.md).
 
 ## 6. Truth boundaries, as stated on screen
 

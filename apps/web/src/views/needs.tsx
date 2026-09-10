@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { changeScreen } from "../screen-change";
 import { useSlowEnoughToSay } from "../use-settled";
 import {
   NeedDraft,
@@ -716,15 +717,25 @@ export function Needs({
      away with every field it always had. */
   const shape = standingShape(standing);
 
+  /* The list, the form and the product search are three screens inside this one view, and
+     they replace each other in place. Without the swap they change in a single frame, which
+     is the same defect the onboarding step had: the button looks like it went somewhere
+     wrong and then corrected itself. */
   const openAdd = () => {
-    setError(null);
-    setReconciled([]);
-    setEditingId("");
-    setChosen(null);
-    setDraft(blankDraft(identity.id));
+    changeScreen(() => {
+      setError(null);
+      setReconciled([]);
+      setEditingId("");
+      setChosen(null);
+      setDraft(blankDraft(identity.id));
+    });
   };
 
   const openEdit = (need: NeedRow) => {
+    changeScreen(() => openEditNow(need));
+  };
+
+  const openEditNow = (need: NeedRow) => {
     setError(null);
     setReconciled([]);
     setEditingId(need.need_id);
@@ -765,14 +776,22 @@ export function Needs({
     clarification.load(need.preferences);
   };
 
+  /* Reached by Save changes and by Cancel alike: either way the member is coming back out
+     to the list, so it moves the way Back moves. */
   const close = () => {
-    setEditingId(null);
-    setDraft(null);
-    setChosen(null);
-    setError(null);
+    changeScreen(() => {
+      setEditingId(null);
+      setDraft(null);
+      setChosen(null);
+      setError(null);
+    }, "back");
   };
 
   const chooseProduct = (picked: Picked) => {
+    changeScreen(() => chooseProductNow(picked));
+  };
+
+  const chooseProductNow = (picked: Picked) => {
     const item = asChosen(picked);
     setChosen(item);
     // Exactly one of the two travels, because the server refuses both.
@@ -784,9 +803,11 @@ export function Needs({
   };
 
   const clearProduct = () => {
-    setChosen(null);
-    clarification.reset();
-    setDraft((d) => (d ? { ...d, product_id: undefined, group: undefined } : d));
+    changeScreen(() => {
+      setChosen(null);
+      clarification.reset();
+      setDraft((d) => (d ? { ...d, product_id: undefined, group: undefined } : d));
+    }, "back");
   };
 
 

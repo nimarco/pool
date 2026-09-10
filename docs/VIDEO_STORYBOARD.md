@@ -4,8 +4,13 @@ Companion to [VIDEO_SCRIPT.md](VIDEO_SCRIPT.md) (what is said) and
 [VIDEO_MEDIA_MANIFEST.md](VIDEO_MEDIA_MANIFEST.md) (where every pixel came from). This
 file is what is *shown*, and for how long.
 
-**Delivered runtime: 4:01.56.** The hackathon limit is 5:00 and the brief's target window
-was 3:35–4:05.
+> **Status.** The runtime and beat times below are the **earlier synthetic-voice reference
+> cut's**. The submitted film is a human read and runs **4:49.70** — still inside the 5:00
+> limit, with 10.3 s to spare. The beat *order* below is still the film's; the numbers are
+> not. See [VIDEO_MEDIA_MANIFEST.md](VIDEO_MEDIA_MANIFEST.md).
+
+**Reference-cut runtime: 4:01.56.** The hackathon limit is 5:00 and the brief's target
+window was 3:35–4:05.
 
 ---
 
@@ -145,9 +150,11 @@ Two lines maximum, balanced, broken where a person would pause — never on an o
 They sit at y 996, below the phone body, which ends at 991: the caption cannot cross the
 device in any beat. Set in the film's own face rather than a subtitle renderer's.
 
-Three deliveries: `pool-demo.mp4` (narrated, captions as a soft subtitle track),
-`pool-demo-captioned.mp4` (the same picture, captions burned in),
-`pool-demo-silent.mp4` (picture only), plus `pool-demo.srt` as a sidecar.
+The reference cut had three deliveries: `pool-demo.mp4` (narrated, captions as a soft
+subtitle track), `pool-demo-captioned.mp4` (the same picture, captions burned in),
+`pool-demo-silent.mp4` (picture only), plus `pool-demo.srt` as a sidecar. The submitted
+human-narrated film is a single delivery with its captions embedded as a soft subtitle
+track. None of these files is committed; the video production tree is local-only.
 
 ## 6. What was rejected
 

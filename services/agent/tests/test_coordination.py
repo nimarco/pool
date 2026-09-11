@@ -294,6 +294,16 @@ def test_offering_to_host_does_not_claim_the_job(seeded_ctx):
 
 def test_only_one_host_offer_is_outstanding_at_a_time(declared_ctx):
     pool, _ = _candidate_pool(declared_ctx)
+    # The offer window has to be open for "exactly one outstanding" to mean anything,
+    # and the fixture cannot be relied on to leave it open: its timeline is anchored to
+    # today's *clock* times, so `host_acceptance_deadline` is noon UTC today. Run the
+    # suite after that and `_offer_deadline` returns a deadline already behind
+    # `ctx.now` — the offer is written pre-expired, the second call expires it before
+    # it can find one outstanding, and this fails on the wall clock rather than on the
+    # property. Pinned the way `test_an_expired_host_offer_does_not_stall_the_pool`
+    # pins the opposite case, so both directions are deliberate.
+    pool.timing.host_acceptance_deadline = iso(declared_ctx.now + timedelta(hours=6))
+    declared_ctx.repo.put_pool(WS, pool)
     hosting.open_host_recruiting(ctx=declared_ctx, pool_id=pool.id)
     first = hosting.offer_to_next_host(ctx=declared_ctx, pool_id=pool.id)
     second = hosting.offer_to_next_host(ctx=declared_ctx, pool_id=pool.id)

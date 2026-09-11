@@ -85,8 +85,8 @@ Deployed and verified **2026-09-11** from **`54b0a6ae`** — the most recent com
 changes anything the deployed function contains, and the tree `main` still carries. You
 can check it without credentials and without trusting this sentence: build this
 repository's `apps/web` and you get the exact `index-*.css` and `index-*.js` that
-`/verify` loads, byte for byte. Commits after `54b0a6ae` touch documentation only, so
-that check keeps passing as this file grows. Nothing about the agent, the planner, the API, the tools, the economics or
+`/verify` loads, byte for byte. Commits after `54b0a6ae` touch documentation and tests
+only — nothing the bundle contains — so that check keeps passing as this file grows. Nothing about the agent, the planner, the API, the tools, the economics or
 the IAM is outstanding, so every behavioural claim below is a claim about the live URL.
 CloudFront distribution `EMOLZSGVY7HTN`, `Deployed` and enabled, cache invalidated, in
 front of the demo's Lambda Function URL. Use this hostname, not the raw

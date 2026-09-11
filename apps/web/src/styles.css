@@ -4528,28 +4528,37 @@ html.can-cross-fade .onboard-panel {
   animation-fill-mode: both;
 }
 
-/* 100% is the snapshot's own width, and the content column is narrower than the window by
-   a gutter each side — so a screen parked at 100% still shows a strip of itself past the
-   edge of the other one. The gutter is added back so both screens clear the viewport
-   completely, and the strip cannot appear at either end of the move. */
+/* The travel is a viewport width, not a column width.
+
+   It used to be `100% + var(--gutter) * 2` — the snapshot's own width plus a gutter each
+   side — which is exactly `--max` (1160px) and therefore exactly right on a window that
+   the content column fills. On a wider one it is not: the column stops growing at
+   `--max`, the margin beside it does not, and the screen then stops travelling
+   `(100vw - --max) / 2 - var(--gutter)` short of the edge. At 1680px that is 228px, so
+   the outgoing screen did not leave — it reached a point 228px inside the frame and
+   vanished, and the arriving one was 228px on screen before it started moving. Both ends
+   of the move popped. Any window past 1224px had it.
+
+   A viewport width always clears, at every size: an element inside the viewport can never
+   need to travel further than the viewport is wide to get out of it. */
 @keyframes swipe-out-to-left {
   to {
-    transform: translateX(calc(-100% - var(--gutter) * 2));
+    transform: translateX(-100vw);
   }
 }
 @keyframes swipe-in-from-right {
   from {
-    transform: translateX(calc(100% + var(--gutter) * 2));
+    transform: translateX(100vw);
   }
 }
 @keyframes swipe-out-to-right {
   to {
-    transform: translateX(calc(100% + var(--gutter) * 2));
+    transform: translateX(100vw);
   }
 }
 @keyframes swipe-in-from-left {
   from {
-    transform: translateX(calc(-100% - var(--gutter) * 2));
+    transform: translateX(-100vw);
   }
 }
 
@@ -4572,6 +4581,97 @@ html[data-nav="back"]::view-transition-old(wizard-step) {
 html[data-nav="back"]::view-transition-new(screen),
 html[data-nav="back"]::view-transition-new(wizard-step) {
   animation-name: swipe-in-from-left;
+}
+
+/* --- the same move, at desktop scale -------------------------------------
+
+   A swipe is a phone gesture. It is right on a phone because the screen *is* the column:
+   the thing that leaves is the thing you were holding, and the distance it travels is a
+   thumb's width of glass. On a 1680px window the identical rule sends a 1096px column
+   across 1680px of mostly-empty paper in 420ms, and it reads as the page being thrown
+   rather than turned — the complaint that started this. Correcting the distance above
+   fixed the pop at each end; it could not fix that there is simply too much travel to
+   watch on a desktop.
+
+   So past a laptop width the move keeps its grammar and loses its scale: same direction,
+   same easing family, 36px instead of a viewport, carried by opacity rather than by
+   distance. Direction still says which way through the app you went, which is the whole
+   reason a dissolve was rejected in the first place — but nothing crosses the room.
+
+   1024px is deliberately below the 1224px where the old arithmetic started popping, so
+   there is no window width that gets the full-viewport swipe by accident.
+
+   The arriving screen paints over the leaving one, so it is the one that is front-loaded:
+   opaque by 55% of the move, which covers the old snapshot instead of blending with it.
+   That is what keeps the middle of the transition from looking like neither screen —
+   the objection that ruled out a plain cross-fade. The old one fades underneath, where
+   the ghosting a simultaneous fade would produce cannot be seen. */
+@keyframes ease-out-to-left {
+  to {
+    opacity: 0;
+    transform: translateX(-36px);
+  }
+}
+@keyframes ease-in-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(36px);
+  }
+  55% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes ease-out-to-right {
+  to {
+    opacity: 0;
+    transform: translateX(36px);
+  }
+}
+@keyframes ease-in-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-36px);
+  }
+  55% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (min-width: 1024px) {
+  ::view-transition-old(screen),
+  ::view-transition-new(screen),
+  ::view-transition-old(wizard-step),
+  ::view-transition-new(wizard-step) {
+    /* 260ms is the rhythm the rest of the app already moves at — the same figure as
+       `screen-arrive` and `SWAP_MS`. The 420ms above exists to survive a 25 fps screen
+       recording; nothing on a desktop is being recorded at 25 fps. */
+    animation-duration: 260ms;
+    animation-timing-function: var(--swap-ease);
+  }
+  html[data-nav="fwd"]::view-transition-old(screen),
+  html[data-nav="fwd"]::view-transition-old(wizard-step) {
+    animation-name: ease-out-to-left;
+  }
+  html[data-nav="fwd"]::view-transition-new(screen),
+  html[data-nav="fwd"]::view-transition-new(wizard-step) {
+    animation-name: ease-in-from-right;
+  }
+  html[data-nav="back"]::view-transition-old(screen),
+  html[data-nav="back"]::view-transition-old(wizard-step) {
+    animation-name: ease-out-to-right;
+  }
+  html[data-nav="back"]::view-transition-new(screen),
+  html[data-nav="back"]::view-transition-new(wizard-step) {
+    animation-name: ease-in-from-left;
+  }
 }
 
 /* The keyed fallback stands down only where there is something better to stand down for. */

@@ -118,9 +118,18 @@ AgentCore/Nova Lite path deployed separately and switched off for visitors.
 Every crop is a straight rectangular crop. Nothing was retouched, recoloured, upscaled or
 composited, and no value on any screen was edited.
 
-All four app screenshots come from the current deployed build, which presents the
-community as *Demo* rather than *Demo University*. The two remaining film frames show no
-application UI at all.
+> **Stale as of 2026-09-10 — recapture before publishing.** All four app screenshots were
+> true of the build deployed when they were taken, but the deployment has since been
+> restyled: the app now reads as a flat ledger, without the nested card borders, bordered
+> `How flexible are you?` fieldset, or pill-shaped `Costs more` / `Saves $69.18` badges that
+> these PNGs show. Re-driven live against
+> <https://d38kno05ygcarw.cloudfront.net/verify> on 2026-09-10, **every number, label and
+> sentence in all four images still matches the live app exactly** — only the chrome around
+> them changed — so the article prose and the alt text below remain correct. What is wrong
+> is the styling, and the fix is a straight recapture at 390 px / 2×, not an edit.
+
+All four app screenshots present the community as *Demo* rather than *Demo University*. The
+two remaining film frames show no application UI at all.
 
 ---
 
@@ -157,9 +166,10 @@ application UI at all.
 
 No claim in any article was contradicted by the current repo or the live deployment.
 
-**Unrelated repo note, not an article problem:** `README.md` records the demo deployment as
-commit `6414aa1`, but the deployed bundle already carries `0598d78` (it serves the *Share my
-location* step and the *Demo* badge). Worth correcting in the README before submission.
+**Resolved 2026-09-10.** This section previously recorded that `README.md` named the wrong
+deployment commit. The README now names `f06345e`, and that was checked rather than assumed:
+building `f06345e`'s `apps/web` reproduces the exact `index-*.css` and `index-*.js` that
+CloudFront serves, byte for byte.
 
 ---
 

@@ -2,11 +2,12 @@
 # Build the deployment bundle for the public judge demo.
 #
 # One Lambda serves both the API and the built web app, so this assembles exactly
-# three things into build/demo-lambda/:
+# four things into build/demo-lambda/:
 #
 #   1. the `pool` package               — the application itself
 #   2. its runtime dependencies         — resolved for Lambda's platform, not this Mac
 #   3. apps/web/dist as web/            — the SPA, served from the same origin
+#   4. demo-data/                       — the committed supplier sheets and their digests
 #
 # Why this script exists at all: `lambda_.Code.from_asset(<source dir>)` zips a
 # directory as-is. For a Python function whose dependencies are not vendored, that
@@ -63,6 +64,20 @@ echo "→ Copying the built web app"
 mkdir -p "$OUT/web"
 rsync -a --quiet "$WEB_DIST/" "$OUT/web/"
 
+# The two committed supplier sheets and the manifest of their digests. The walkthrough's
+# "let a supplier quote arrive" step imports these through the same endpoint an operator
+# uploads a file to, and the public deployment will only accept bytes whose digest is in
+# the manifest — so without this directory the deployed demo refuses its own fixtures and
+# says "Expected one of: ." with an empty list, which is exactly what it did (#0069).
+#
+# They live at the repository root rather than inside the package because a judge is meant
+# to be able to download the sheet from GitHub and upload it by hand. That makes them the
+# one thing the runtime needs that is not under services/agent/, and therefore the one
+# thing a bundle that copies only the package will miss.
+echo "→ Copying the committed supplier fixtures"
+mkdir -p "$OUT/demo-data"
+rsync -a --quiet "$ROOT/demo-data/" "$OUT/demo-data/"
+
 # Anything that could carry a credential must not be in a zip that goes to AWS and
 # lands in the CDK staging bucket. Cheap to check, expensive to discover later.
 #
@@ -98,6 +113,20 @@ find "$OUT" -maxdepth 1 -name 'mangum' -type d -o -maxdepth 1 -name 'fastapi' -t
   | grep -q . || { echo "✗ dependencies missing from the bundle" >&2; exit 1; }
 test -f "$OUT/pool/api/app.py" || { echo "✗ pool package missing" >&2; exit 1; }
 test -f "$OUT/web/index.html" || { echo "✗ web app missing" >&2; exit 1; }
+# Data, not code, and therefore the kind of omission that imports cleanly and fails in
+# front of a judge. Assert every sheet the manifest names is actually here.
+test -f "$OUT/demo-data/MANIFEST.json" \
+  || { echo "✗ demo-data/MANIFEST.json missing from the bundle" >&2; exit 1; }
+python3 - "$OUT" <<'PY' || exit 1
+import json, os, sys
+out = sys.argv[1]
+manifest = json.load(open(os.path.join(out, "demo-data", "MANIFEST.json"), encoding="utf-8"))
+missing = [n for n in manifest["files"] if not os.path.isfile(os.path.join(out, "demo-data", n))]
+if missing:
+    print(f"✗ committed sheets missing from the bundle: {missing}", file=sys.stderr)
+    sys.exit(1)
+print(f"→ Supplier fixtures: {len(manifest['files'])} sheet(s) and their digests")
+PY
 grep -q "bedrock-agentcore" "$OUT/botocore/data/endpoints.json" 2>/dev/null \
   || test -d "$OUT/botocore/data/bedrock-agentcore" \
   || { echo "✗ vendored botocore has no bedrock-agentcore service model" >&2; exit 1; }

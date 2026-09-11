@@ -473,6 +473,44 @@ def test_a_missing_manifest_fails_closed(monkeypatch, committed):
     assert si.allowlisted(committed) == ""
 
 
+def test_the_fixtures_are_found_when_the_package_is_rooted_like_the_bundle(tmp_path):
+    """The layout the deployed function actually has, which no other test exercises.
+
+    In the repository `pool/` is four levels under the root. In the Lambda bundle it is
+    at the root, beside a copied `demo-data/`. The locator used to be a fixed four-level
+    climb: right here, and `/demo-data` there. So the deployed walkthrough refused its own
+    committed sheets — "Expected one of: ." with an empty list — while the whole suite
+    stayed green, because the suite only ever runs from the layout where the wrong
+    arithmetic happens to land on the right directory (#0069).
+
+    This asserts the thing that was actually broken: given the bundle's shape, the
+    fixtures are found. It fails against the fixed-depth version.
+    """
+    bundle = tmp_path / "var-task"
+    (bundle / "pool" / "services").mkdir(parents=True)
+    (bundle / "demo-data").mkdir()
+    (bundle / "demo-data" / "MANIFEST.json").write_text('{"files": {}}', encoding="utf-8")
+
+    found = si._resolve_demo_data(str(bundle / "pool" / "services"))
+    assert found == str(bundle / "demo-data"), found
+
+
+def test_the_locator_walks_past_a_level_that_has_no_fixtures(tmp_path):
+    """It searches rather than counting, so an intermediate directory is not a wall."""
+    root = tmp_path / "repo"
+    (root / "services" / "agent" / "pool" / "services").mkdir(parents=True)
+    (root / "demo-data").mkdir()
+    (root / "demo-data" / "MANIFEST.json").write_text('{"files": {}}', encoding="utf-8")
+
+    found = si._resolve_demo_data(str(root / "services" / "agent" / "pool" / "services"))
+    assert found == str(root / "demo-data"), found
+
+
+def test_the_shipped_package_finds_its_own_fixtures():
+    """Belt and braces for the layout this checkout has."""
+    assert os.path.isfile(si.MANIFEST_PATH), si.MANIFEST_PATH
+
+
 def test_the_manifest_is_valid_json_and_names_only_files_that_exist():
     with open(si.MANIFEST_PATH, encoding="utf-8") as handle:
         payload = json.load(handle)

@@ -72,9 +72,43 @@ from typing import Any
 from ..domain.models import MoqKind, Offer, OfferKind, OfferSource, iso, utcnow
 from .context import PoolContext
 
-#: Where the committed fixtures and their digests live, relative to the repository root.
 _HERE = os.path.dirname(os.path.abspath(__file__))
-DEMO_DATA_DIR = os.path.normpath(os.path.join(_HERE, "..", "..", "..", "..", "demo-data"))
+
+
+def _resolve_demo_data(start: str) -> str:
+    """Locate ``demo-data/`` from wherever this package is rooted.
+
+    Two layouts matter and they sit at different depths. In the repository the package
+    is ``services/agent/pool/``, so the directory is four levels above this file. In the
+    deployed Lambda bundle ``pool/`` is at the root with ``demo-data/`` beside it, so it
+    is two.
+
+    This used to be a fixed four-level climb, which is correct in the repository and
+    resolves to ``/demo-data`` inside the bundle — a path that cannot exist. The manifest
+    read then failed into an empty allowlist rather than an error, so the deployed
+    walkthrough refused its own committed sheets and told the judge they were "not one of
+    the committed sheets. Expected one of: ." with nothing after the colon. Every test
+    passed throughout, because every test runs from the repository layout where the wrong
+    arithmetic gives the right answer (#0069).
+
+    Searching for the manifest is correct in both layouts and stays correct if either
+    moves again. Bounded to six levels so this cannot wander up to a stray ``/demo-data``
+    on some unrelated machine.
+    """
+    for parent in (start, *(str(p) for p in list(Path(start).parents)[:6])):
+        candidate = os.path.join(parent, "demo-data")
+        if os.path.isfile(os.path.join(candidate, "MANIFEST.json")):
+            return candidate
+    # Nothing found. Name the place the files belong anyway, so the constant still points
+    # somewhere meaningful and the open() that needs it fails loudly there rather than
+    # here at import time — a missing manifest is a fail-closed condition the callers
+    # already handle, and refusing to import would take the whole API down with it.
+    return os.path.normpath(os.path.join(start, "..", "..", "..", "..", "demo-data"))
+
+
+#: Where the committed fixtures and their digests live. Resolved rather than assumed —
+#: the repository and the deployed bundle root the package at different depths.
+DEMO_DATA_DIR = _resolve_demo_data(_HERE)
 MANIFEST_PATH = os.path.join(DEMO_DATA_DIR, "MANIFEST.json")
 
 #: The columns a row must carry. Extra columns are ignored rather than refused — a

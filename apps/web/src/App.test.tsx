@@ -23,7 +23,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
-import { resetWorkspaceId, setShowcaseScope } from "./api";
+import { resetWorkspaceId, setShowcaseScope, setVerifyScope } from "./api";
 
 /** The two partitions, and a pool that exists in each. Deliberately different ids: a
  *  request that mixes one partition's pool with the other partition's workspace is the
@@ -301,6 +301,7 @@ beforeEach(() => {
   // Both are module state that outlives a test: a leaked scope would make the next test
   // pass for the wrong reason, which is the one failure mode this file cannot afford.
   setShowcaseScope(false);
+  setVerifyScope(false);
   resetWorkspaceId();
   // So is the URL. The app records the screen it is on in a `screen` parameter, and
   // jsdom keeps one location for the whole file — so without this, a test that
@@ -315,6 +316,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   setShowcaseScope(false);
+  setVerifyScope(false);
   resetWorkspaceId();
 });
 
@@ -334,6 +336,43 @@ async function openShowcaseFromTheDrawer() {
   await user.click(screen.getByRole("button", { name: "Open Showcase mode" }));
   return user;
 }
+
+it("keeps the supplier walkthrough reachable after onboarding without operator controls", async () => {
+  window.history.replaceState({}, "", "/verify?screen=home");
+  render(<App />);
+  const user = userEvent.setup();
+  await screen.findByText(/Good \w+, Marco/);
+  await user.click(screen.getByTitle("Demo environment, controls, and what is real here"));
+  expect(screen.queryByRole("button", { name: "Reset Demo University" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Check the supplier walkthrough" }));
+  await screen.findByRole("heading", { name: "Check Pool's central claim yourself" });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(window.location.search).toBe("?screen=judge");
+  expect(addressed().every((r) => r.workspace.endsWith("-verify"))).toBe(true);
+});
+
+it("restores Home when a reloaded explanation URL has no declaration context", async () => {
+  window.history.replaceState({}, "", "/verify?screen=why");
+  render(<App />);
+  await screen.findByText(/Good \w+, Marco/);
+  expect(addressed().every((r) => r.workspace.endsWith("-verify"))).toBe(true);
+});
+
+it("keeps the complete needs list visible on return while its next read is pending", async () => {
+  render(<App />);
+  const user = userEvent.setup();
+  await screen.findByText(/Good \w+, Marco/);
+  await user.click(screen.getByRole("button", { name: "What you buy" }));
+  await screen.findByRole("button", { name: "Change" });
+  await user.click(screen.getByRole("button", { name: "Home" }));
+  await screen.findByText(/Good \w+, Marco/);
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((input, init) =>
+    String(input).includes("/api/needs?") ? new Promise(() => {}) : original(input, init),
+  );
+  await user.click(screen.getByRole("button", { name: "What you buy" }));
+  expect(screen.getByRole("button", { name: "Change" })).toBeTruthy();
+});
 
 describe("showcase mode is a different world, not a different screen", () => {
   it("points every request at the showcase partition when entered from Demo controls", async () => {

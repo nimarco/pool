@@ -906,11 +906,13 @@ export function Home({
      took. Measured against the deployed demo that is ~450 ms on a tab change and just
      over a second after onboarding, which is the one moment the member has *just*
      declared. The empty state now waits until it is actually true. */
-  const [needs, setNeeds] = useState<NeedRow[] | null>(null);
+  const [needs, setNeeds] = useState<NeedRow[] | null>(() => api.peekNeeds()?.needs ?? null);
+  const [needsError, setNeedsError] = useState(false);
+  const [needsAttempt, setNeedsAttempt] = useState(0);
   const [hosting, setHosting] = useState<HostOpportunities | null>(null);
   /** The headline pool's full record. The list on `/api/state` carries no memberships,
    *  and this member's own allocation and price are the reason the card exists. */
-  const [detail, setDetail] = useState<PoolView | null>(null);
+  const [detail, setDetail] = useState<PoolView | null>(() => api.peekPool(member?.opportunity?.pool_id ?? ""));
 
   /* Which pool Home leads with is the server's answer, not this component's.
    *
@@ -931,13 +933,22 @@ export function Home({
     : null;
 
   useEffect(() => {
-    api.needs().then((view) => setNeeds(view.needs)).catch(() => setNeeds([]));
-  }, [state.workspace]);
+    let live = true;
+    setNeedsError(false);
+    // A failed read says nothing about whether this account has declarations. Keep
+    // that answer unknown and let the member retry, rather than showing first use.
+    api.needs().then((view) => {
+      if (live) setNeeds(view.needs);
+    }).catch(() => {
+      if (live) setNeedsError(true);
+    });
+    return () => { live = false; };
+  }, [state.workspace, needsAttempt]);
 
   useEffect(() => {
-    // Cleared first: switching identity must never leave the previous member's pool
-    // record on screen while the next answer loads.
-    setDetail(null);
+    // Use only the snapshot for this pool in this workspace. A different identity
+    // must never inherit the previous member's record while its own read loads.
+    setDetail(api.peekPool(poolId));
     // Pool is three-sided, and one of those sides is this same person on a different
     // day. If they are carrying an order, that is the most important thing on their
     // home screen.
@@ -947,6 +958,7 @@ export function Home({
     // member to an *existing* pool would leave the previous answer on screen.
   }, [
     identity.id,
+    poolId,
     state.workspace,
     state.pools.length,
     state.decisions.length,
@@ -1134,7 +1146,15 @@ export function Home({
           just did — a second onboarding wearing the product's clothes. Once they have a
           declaration the coordinator's card leads instead, and adding another lives with
           the rest of their needs further down where it belongs. */}
-      {!pool && needs !== null && mine.length === 0 ? (
+      {needsError ? (
+        <div className="banner banner-stop" role="alert">
+          <span>Could not load what you buy. Try again to read your saved list.</span>
+          <button className="btn btn-sm" onClick={() => setNeedsAttempt((n) => n + 1)}>
+            Try again
+          </button>
+        </div>
+      ) : null}
+      {!pool && !needsError && needs !== null && mine.length === 0 ? (
         <FirstUseCard onStartNeed={onStartNeed} />
       ) : null}
 

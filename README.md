@@ -74,6 +74,13 @@ the people in the demo. The community is invented, and the page says so before y
 
 **<https://d38kno05ygcarw.cloudfront.net/verify>**
 
+**Have four minutes?** [Check the supplier walkthrough](https://d38kno05ygcarw.cloudfront.net/verify?screen=judge).
+Declare rice, import two committed synthetic supplier sheets, and watch Pool refuse a
+supplier whose minimum is met, then form an order when better terms arrive. The same
+walkthrough stays reachable after setup through **Demo → Check the supplier walkthrough**.
+It runs the real checks with the offline planner, at zero model tokens; payments are simulated.
+
+
 Deployed and verified **2026-09-11** from **`bf2c7a23`** — the most recent commit that
 changes anything the deployed function contains, and the tree `main` still carries. You
 can check it without credentials and without trusting this sentence: build this

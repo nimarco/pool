@@ -54,7 +54,8 @@ describe("demo truth labels", () => {
         actingAs={null}
         onActAs={() => {}}
         onReset={() => {}}
-    onFreshSession={() => {}}
+        onFreshSession={() => {}}
+        onJudgeDemo={() => {}}
         onRefresh={async () => {}}
         onAbout={() => {}}
         onTechnical={() => {}}

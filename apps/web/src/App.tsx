@@ -101,9 +101,8 @@ const NOBODY: Identity = { id: "", display_name: "" };
  *  you at the entry screen however deep you were. Both now hold, without any screen
  *  gaining a path of its own: one `screen` parameter, pushed on navigation.
  *
- *  A pool record restores to the list it came from. It is identified by an id this does
- *  not carry, and inventing a URL for every record is the router this deliberately is
- *  not. */
+ *  A pool record restores to its list, and an explanation to Home. Their ids are not
+ *  carried by this token, so restoring the detail itself would leave an empty screen. */
 type Screen = { view: View; showcase: ShowcaseView | null };
 
 const SHOWCASE_IDS: ShowcaseView[] = [
@@ -139,6 +138,7 @@ function parseScreen(token: string | null | undefined): Screen | null {
   }
   const v = token as View;
   if (v === "pool") return { view: "pools", showcase: null };
+  if (v === "why") return { view: "home", showcase: null };
   return VIEW_IDS.includes(v) ? { view: v, showcase: null } : null;
 }
 
@@ -1249,6 +1249,7 @@ export default function App() {
         onActAs={setActingAs}
         onReset={reset}
         onFreshSession={freshSession}
+        onJudgeDemo={() => navigate("judge")}
         onRefresh={refreshAll}
         onAbout={() => navigate("about")}
         onTechnical={() => {

@@ -312,6 +312,15 @@ describe("the proof action on Home", () => {
 });
 
 describe("the member's own stake in a pool", () => {
+  it("keeps the last read allocation visible while the arriving screen revalidates", () => {
+    const shown = poolView();
+    vi.spyOn(apiModule.api, "peekPool").mockReturnValue({ ...shown, members: [ROSA_MEMBERSHIP] });
+    vi.spyOn(apiModule.api, "pool").mockReturnValue(new Promise(() => {}));
+    renderHome([shown]);
+    expect(screen.getByText(/your 2 tubs/)).toBeTruthy();
+    expect(screen.getByText("$71.83")).toBeTruthy();
+  });
+
   it("leads with this member's allocation and price, read from the pool record", async () => {
     const shown = poolView();
     vi.spyOn(apiModule.api, "pool").mockResolvedValue({
@@ -1142,6 +1151,18 @@ describe("motion reports a change and never an arrival", () => {
 });
 
 describe("what Home claims before the server has answered", () => {
+  it("offers a retry after a failed read instead of claiming the account is empty", async () => {
+    const read = vi.spyOn(apiModule.api, "needs").mockRejectedValueOnce(new Error("offline"));
+    renderHome([], { member: memberView({ opportunity: null }) });
+    await screen.findByRole("alert");
+    expect(screen.queryByText(/Tell Pool something you buy anyway/)).toBeNull();
+    read.mockResolvedValue(EMPTY);
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await screen.findByText(/Tell Pool something you buy anyway/);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
   const EMPTY: NeedsView = {
     needs: [],
     products: [],

@@ -131,6 +131,7 @@ export function DemoPanel({
   onActAs,
   onReset,
   onFreshSession,
+  onJudgeDemo,
   onRefresh,
   onAbout,
   onTechnical,
@@ -152,6 +153,7 @@ export function DemoPanel({
   /** Drop this visitor's own workspace and start again with an empty one. Member-safe,
    *  unlike `onReset`: it touches nothing but the partition this browser addresses. */
   onFreshSession: () => void;
+  onJudgeDemo: () => void;
   onRefresh: () => Promise<void>;
   onAbout: () => void;
   onTechnical: () => void;
@@ -280,6 +282,20 @@ export function DemoPanel({
         </div>
 
         <div className="sheet-body">
+          <section className="block" style={{ borderTop: "none", paddingTop: 0 }}>
+            <h3 className="section-title" style={{ marginBottom: 10 }}>
+              Check the central claim
+            </h3>
+            <p className="small muted" style={{ marginBottom: 12 }}>
+              About four minutes: declare rice, import two synthetic supplier sheets,
+              and see why Pool refuses one and accepts the other. Each step runs the
+              real checks, with simulated payments and no model tokens.
+            </p>
+            <button className="btn btn-primary" onClick={onJudgeDemo}>
+              Check the supplier walkthrough
+            </button>
+          </section>
+
           {/* Operator tooling, and framed as such.
               This used to be headed "You are signed in as", which made a roster of
               invented students look like the account model — the first thing a visitor

@@ -1201,6 +1201,7 @@ const VERIFY_SUFFIX = "-verify";
 let showcaseScope = false;
 
 export function setShowcaseScope(on: boolean): void {
+  if (showcaseScope !== on) clearReadSnapshots();
   showcaseScope = on;
   if (on) verifyScope = false;
 }
@@ -1220,6 +1221,7 @@ export function inShowcaseScope(): boolean {
 let verifyScope = false;
 
 export function setVerifyScope(on: boolean): void {
+  if (verifyScope !== on) clearReadSnapshots();
   verifyScope = on;
   if (on) showcaseScope = false;
 }
@@ -1260,6 +1262,7 @@ function activeWorkspace(): string {
 }
 
 export function resetWorkspaceId(): void {
+  clearReadSnapshots();
   cachedWorkspace = null;
   try {
     localStorage.removeItem(WORKSPACE_KEY);
@@ -1268,25 +1271,60 @@ export function resetWorkspaceId(): void {
   }
 }
 
+/** Two bounded presentation snapshots, never substitutes for a read. A remounted
+ * screen may start with the last server answer while its normal request is in flight.
+ * Writes and scope changes discard both; an older in-flight read cannot restore them.
+ * Nothing here computes a domain value or persists beyond this browser tab. */
+let readGeneration = 0;
+let writesInFlight = 0;
+let needsSnapshot: { workspace: string; value: NeedsView } | null = null;
+let poolSnapshot: { workspace: string; value: PoolView } | null = null;
+
+function clearReadSnapshots(): void {
+  readGeneration += 1;
+  needsSnapshot = null;
+  poolSnapshot = null;
+}
+
+async function snapshotRead<T>(path: string, save: (workspace: string, value: T) => void): Promise<T> {
+  const workspace = activeWorkspace();
+  const generation = readGeneration;
+  const value = await request<T>(path);
+  if (generation === readGeneration && writesInFlight === 0) save(workspace, value);
+  return value;
+}
+
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const sep = path.includes("?") ? "&" : "?";
-  const response = await fetch(`${BASE}${path}${sep}workspace=${activeWorkspace()}`, {
-    headers: { "content-type": "application/json" },
-    ...init,
-  });
-  if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try {
-      const body = await response.json();
-      if (body?.detail) detail = String(body.detail);
-    } catch {
-      /* keep the status line */
-    }
-    throw new Error(detail);
+  const writing = Boolean(init?.method && init.method !== "GET");
+  if (writing) {
+    writesInFlight += 1;
+    clearReadSnapshots();
   }
-  return (await response.json()) as T;
+  try {
+    const sep = path.includes("?") ? "&" : "?";
+    const response = await fetch(`${BASE}${path}${sep}workspace=${activeWorkspace()}`, {
+      headers: { "content-type": "application/json" },
+      ...init,
+    });
+    if (!response.ok) {
+      let detail = `${response.status} ${response.statusText}`;
+      try {
+        const body = await response.json();
+        if (body?.detail) detail = String(body.detail);
+      } catch {
+        /* keep the status line */
+      }
+      throw new Error(detail);
+    }
+    return (await response.json()) as T;
+  } finally {
+    if (writing) {
+      writesInFlight -= 1;
+      clearReadSnapshots();
+    }
+  }
 }
 
 const post = <T,>(path: string, body?: unknown) =>
@@ -1296,7 +1334,10 @@ export const api = {
   health: () => request<Health>("/api/health"),
   state: () => request<AppState>("/api/state"),
   map: () => request<MapData>("/api/map"),
-  needs: () => request<NeedsView>("/api/needs"),
+  needs: () => snapshotRead<NeedsView>("/api/needs", (workspace, value) => {
+    needsSnapshot = { workspace, value };
+  }),
+  peekNeeds: () => needsSnapshot?.workspace === activeWorkspace() ? needsSnapshot.value : null,
   /** Finish account setup. The household id is a server constant, so this can only ever
    *  write the caller's own account. */
   completeOnboarding: (displayName: string, autonomyMode: string) =>
@@ -1340,7 +1381,11 @@ export const api = {
   declareNeed: (draft: NeedDraft) => post<NeedRow>("/api/needs", draft),
   amendNeed: (needId: string, draft: NeedDraft) =>
     post<NeedRow>(`/api/needs/${needId}`, draft),
-  pool: (id: string) => request<PoolView>(`/api/pools/${id}`),
+  pool: (id: string) => snapshotRead<PoolView>(`/api/pools/${id}`, (workspace, value) => {
+    poolSnapshot = { workspace, value };
+  }),
+  peekPool: (id: string) => poolSnapshot?.workspace === activeWorkspace() && poolSnapshot.value.pool_id === id
+    ? poolSnapshot.value : null,
   checklist: (id: string) => request<Checklist>(`/api/pools/${id}/checklist`),
   operator: () => request<OperatorView>("/api/operator"),
 
@@ -1576,21 +1621,9 @@ export interface SupplierFileInfo {
 export async function importSupplierQuotes(file: File): Promise<SupplierImportResult> {
   const body = new FormData();
   body.append("file", file);
-  const response = await fetch(
-    `${BASE}/api/demo/supplier-import?workspace=${activeWorkspace()}`,
-    { method: "POST", body },
-  );
-  if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try {
-      const parsed = await response.json();
-      if (parsed?.detail) detail = String(parsed.detail);
-    } catch {
-      /* keep the status line */
-    }
-    throw new Error(detail);
-  }
-  return (await response.json()) as SupplierImportResult;
+  return request<SupplierImportResult>("/api/demo/supplier-import", {
+    method: "POST", body, headers: {},
+  });
 }
 
 /** Import one of the committed sheets by name, for the judge walkthrough.
@@ -1600,21 +1633,10 @@ export async function importSupplierQuotes(file: File): Promise<SupplierImportRe
  *  row is written by the same code under the same lease. The browser sends a name, never
  *  a number — there is still no field here in which anybody could set a price. */
 export async function importSampleQuote(name: string): Promise<SupplierImportResult> {
-  const response = await fetch(
-    `${BASE}/api/demo/supplier-sample?name=${encodeURIComponent(name)}&workspace=${activeWorkspace()}`,
+  return request<SupplierImportResult>(
+    `/api/demo/supplier-sample?name=${encodeURIComponent(name)}`,
     { method: "POST" },
   );
-  if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try {
-      const parsed = await response.json();
-      if (parsed?.detail) detail = String(parsed.detail);
-    } catch {
-      /* keep the status line */
-    }
-    throw new Error(detail);
-  }
-  return (await response.json()) as SupplierImportResult;
 }
 
 /** What the deployment will accept. Absent on a public deployment, where the browser does

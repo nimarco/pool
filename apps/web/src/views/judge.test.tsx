@@ -77,6 +77,12 @@ afterEach(() => {
 });
 
 describe("the judge walkthrough", () => {
+  it("does not count an existing order for another product as the rice proof", () => {
+    renderJudge({ needs_outlook: [] }, true);
+    expect(screen.queryByText(/An order formed from demand that was already there/)).toBeNull();
+    expect((screen.getByRole("button", { name: /Ask Pool to check now/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("says what is synthetic before it asks anybody to believe a number", () => {
     renderJudge(null);
     const honesty = document.querySelector(".judge-honesty");

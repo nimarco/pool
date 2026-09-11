@@ -67,8 +67,11 @@ function progress(member: MemberView | null, hasOrder: boolean) {
      an order has formed. Read, never assumed — if the engine's answer changes, this
      screen's idea of where the judge is changes with it. */
   const quoteA = declared && state !== "no_supply";
-  const quoteB = declared && (state === "ready" || state === "in_pool" || hasOrder);
-  return { declared, quoteA, quoteB, ran: hasOrder };
+  // A visitor can arrive here after forming a coffee order. Only the server's rice
+  // outlook can establish this walkthrough's result; another order proves nothing here.
+  const ran = hasOrder && state === "in_pool";
+  const quoteB = declared && (state === "ready" || state === "in_pool");
+  return { declared, quoteA, quoteB, ran };
 }
 
 function Step({

@@ -116,6 +116,19 @@ async function chooseProduct(query = "vanilla whey") {
 
 afterEach(cleanup);
 
+it("offers a retry after a failed list read instead of an empty declaration list", async () => {
+  vi.restoreAllMocks();
+  const read = vi.spyOn(apiModule.api, "needs").mockRejectedValueOnce(new Error("offline"));
+  renderNeeds();
+  await screen.findByRole("alert");
+  expect(screen.queryByRole("button", { name: /add a need/i })).toBeNull();
+  read.mockResolvedValue({ needs: [needRow()], products: PRODUCTS, limits: LIMITS });
+  await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await screen.findAllByText("Paper towels, 6 rolls");
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(read).toHaveBeenCalledTimes(2);
+});
+
 describe("declaring a standing need", () => {
   beforeEach(() => {
     vi.restoreAllMocks();

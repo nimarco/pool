@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { pct, shortDateOnly } from "./api";
+import { api, pct, resetWorkspaceId, setVerifyScope, shortDateOnly } from "./api";
 
 describe("semantic calendar dates", () => {
   it("does not move a YYYY-MM-DD need date into the previous local day", () => {
@@ -28,5 +28,35 @@ describe("percentages agree with the server's own formatter", () => {
     expect(pct(2360)).toBe("23.6%");
     expect(pct(0)).toBe("0.0%");
     expect(pct(-1299)).toBe("-12.9%");
+  });
+});
+
+
+describe("presentation snapshots", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetWorkspaceId();
+    setVerifyScope(false);
+  });
+
+  it("discards a prior read on writes and does not restore an in-flight stale answer", async () => {
+    const payload = { needs: [], limits: {}, products: [] };
+    const response = () => ({ ok: true, json: async () => payload }) as Response;
+    const fetcher = vi.fn().mockResolvedValue(response());
+    vi.stubGlobal("fetch", fetcher);
+    await api.needs();
+    expect(api.peekNeeds()).toEqual(payload);
+    let finish!: (response: Response) => void;
+    fetcher.mockImplementationOnce(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    const old = api.needs();
+    await api.saveOwnPaymentMethod();
+    expect(api.peekNeeds()).toBeNull();
+    finish(response());
+    await old;
+    expect(api.peekNeeds()).toBeNull();
+    await api.needs();
+    expect(api.peekNeeds()).toEqual(payload);
+    setVerifyScope(true);
+    expect(api.peekNeeds()).toBeNull();
   });
 });

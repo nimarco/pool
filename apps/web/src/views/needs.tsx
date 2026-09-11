@@ -648,9 +648,11 @@ export function Needs({
   liveDiscovery: boolean;
   region: string | null;
 }) {
-  const [needs, setNeeds] = useState<NeedRow[] | null>(null);
+  const [needs, setNeeds] = useState<NeedRow[] | null>(() => api.peekNeeds()?.needs ?? null);
+  const [readError, setReadError] = useState(false);
+  const [readAttempt, setReadAttempt] = useState(0);
   /* See why.tsx: a one-frame "Loading…" reads as a wrong screen, not as a load. */
-  const [limits, setLimits] = useState<NeedLimits | null>(null);
+  const [limits, setLimits] = useState<NeedLimits | null>(() => api.peekNeeds()?.limits ?? null);
   const [showAll, setShowAll] = useState(false);
   /** `null` = the form is closed. A string = editing that need. "" = adding a new one. */
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -683,8 +685,19 @@ export function Needs({
   }, []);
 
   useEffect(() => {
-    reload().catch(() => setNeeds([]));
-  }, [reload]);
+    let live = true;
+    setReadError(false);
+    // Unavailable is not empty. In particular, do not invite a second declaration
+    // because the request for the first one failed. Retrying is an explicit read.
+    api.needs().then((view) => {
+      if (!live) return;
+      setNeeds(view.needs);
+      setLimits(view.limits);
+    }).catch(() => {
+      if (live) setReadError(true);
+    });
+    return () => { live = false; };
+  }, [readAttempt]);
 
   /* Arriving from Home with a product already picked opens the form on step two. The
      hand-off is consumed immediately so a later navigation back here starts clean. */
@@ -720,7 +733,14 @@ export function Needs({
     return (
       <div className="stack">
         {heading}
-        {slow ? <Empty>Loading…</Empty> : null}
+        {readError ? (
+          <div className="banner banner-stop" role="alert">
+            <span>Could not load what you buy. Try again to read your saved list.</span>
+            <button className="btn btn-sm" onClick={() => setReadAttempt((n) => n + 1)}>
+              Try again
+            </button>
+          </div>
+        ) : slow ? <Empty>Loading…</Empty> : null}
       </div>
     );
 

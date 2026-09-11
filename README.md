@@ -74,19 +74,13 @@ the people in the demo. The community is invented, and the page says so before y
 
 **<https://d38kno05ygcarw.cloudfront.net/verify>**
 
-Deployed and verified **2026-09-10** from **`d940de2d`** — the most recent commit that
+Deployed and verified **2026-09-11** from **`099b444e`** — the most recent commit that
 changes the shipped web app, and the tree `main` still carries. You can check it without
 credentials and without trusting this sentence: build this repository's `apps/web` and
 you get the exact `index-*.css` and `index-*.js` that `/verify` loads, byte for byte.
-Commits after `d940de2d` touch documentation, test fixtures and backend defaults that
-the bundle does not contain, so that check keeps passing as this file grows.
-Nothing about the agent, the planner, the API, the tools, the economics or the IAM is
-outstanding, so every behavioural claim below is a claim about the live URL. One backend
-line has moved since: `AgentBounds.workflow_timeout_seconds` now defaults to 45 rather
-than 120, which is what a clone run locally will report. That cannot change the
-deployment, because every deployment sets `WORKFLOW_TIMEOUT_SECONDS=45` explicitly and
-always did — `/api/health` on the live URL published 45 before the default moved and
-publishes 45 now. The default was fixed so the local and deployed numbers agree.
+Commits after `099b444e` touch documentation only, so that check keeps passing as this
+file grows. Nothing about the agent, the planner, the API, the tools, the economics or
+the IAM is outstanding, so every behavioural claim below is a claim about the live URL.
 CloudFront distribution `EMOLZSGVY7HTN`, `Deployed` and enabled, cache invalidated, in
 front of the demo's Lambda Function URL. Use this hostname, not the raw
 Function URL underneath it: `*.lambda-url.*.on.aws` is a blocked *category* on Cisco
@@ -102,9 +96,10 @@ tokens — that is deliberate, and the Lambda has no permission to call a model.
 execution is a separate action that goes Lambda → **Bedrock AgentCore Runtime** → Strands
 → Bedrock → the same typed tools; it was verified live on 2026-08-22 with
 `us.amazon.nova-lite-v1:0`, and it is **switched off on the public demo** (re-observed
-2026-09-07: `/api/demo/config` reports `live_agent_available: false` and
-`live_agent_state: switched_off`, and the deployed function carries
-`PUBLIC_DEMO_AGENTCORE_ENABLED=false`) so that no visitor can spend a model token. Both are described precisely
+2026-09-11 after the redeploy: `/api/demo/config` reports `live_agent_available: false`
+and `live_agent_state: switched_off`, and the deployed function carries
+`PUBLIC_DEMO_AGENTCORE_ENABLED=false` with the runtime ARN still set, both read back off
+the live function) so that no visitor can spend a model token. Both are described precisely
 under [AWS](#aws).
 
 ---
@@ -690,7 +685,7 @@ walkthrough is free to repeat.
 | --- | --- | --- |
 | Bedrock | Model inference via Strands | **Verified live 2026-08-22** — `us.amazon.nova-lite-v1:0`, reached through AgentCore, 2 of 8 iterations, 5,513 in / 133 out tokens, terminated `completed`. The **outcome was a truthful `no_action`**: the member's only declaration had already been served by the in-process run their save caused, so the objective was correctly empty. It establishes the deployment, the tool surface and the bounds on real infrastructure; it is *not* a live trace of the Kestrel→Harbourstone adaptation. Earlier discovery/recovery/lock branches verified 2026-08-19 |
 | AgentCore Runtime | Hosted agent entrypoint, and the only path to a live model | **Deployed 2026-08-23, verified live 2026-09-07** — `Pool_PoolCoordinator-TmVqSN9H56` **version 8**, `READY` in `us-east-1`, endpoint `DEFAULT` at `liveVersion 8`, carrying this branch. One bounded invocation of **version 8** proved AgentCore → Strands → Bedrock → Pool tools end to end: `run_9793fd48b53d`, `model_provider: bedrock`, `us.amazon.nova-lite-v1:0`, outcome `pool_created`, 7 of 8 iterations, terminated `completed`, 29,555 in / 605 out tokens, six tools called, one human decision surfaced. The pool it built was read back from DynamoDB independently of the response, with `created_by_run` matching. Run into the private workspace `smokev8-20260907`, a name the public demo's session scheme cannot generate, so no visitor partition was touched. The earlier version-7 verification (2026-08-22) still stands; the coordinator and entrypoint are byte-identical between the two. The public demo still cannot invoke this: live invocation is switched off there (re-observed 2026-09-07 — `/api/demo/config` reports `live_agent_state: switched_off`, meaning the runtime ARN is configured and the kill switch is off, not that no runtime exists) — see `docs/AGENT_TRACE_EVIDENCE.md` |
-| Lambda Function URL | The demo's origin, behind CloudFront: web app + reduced API | **Deployed and verified 2026-09-10** (`d940de2d`) — the canonical judge URL is the CloudFront hostname in front of it. Redeployed for the product-search fix (#0068) and the corrected technical-proof copy: the `cdk diff` was one resource and one line, the code asset key, with **no IAM change and no environment change** — `PUBLIC_DEMO_AGENTCORE_ENABLED` is still `false` and the runtime ARN is still set, re-read off the deployed function afterwards. The judge walkthrough was then driven against the live URL: searching `coffee` returns all six curated coffees, and declaring one produced Kestrel refused `not_cheaper` at $367.19/$360.00 and Harbourstone formed at $263.82/$333.00, 18 bags in 3 cases of 6, `input_tokens: 0`. A smoke run against the deployed stack returned `model_provider: offline`, `model_id: offline-deterministic-planner`, `input_tokens: 0`, `output_tokens: 0`, and a pool the bounded loop formed. `/verify` hard-loads at `/`, `/verify`, `/verify/` and with a query string; full declaration → event → run → order over HTTPS on the real table, Kestrel refused on economics and Harbourstone formed, 0 payment rows. Runs the **offline planner** at zero model tokens and holds **no model permission** — its role carries `bedrock-agentcore:InvokeAgentRuntime` and no `bedrock:InvokeModel` |
+| Lambda Function URL | The demo's origin, behind CloudFront: web app + reduced API | **Deployed and verified 2026-09-11** (`099b444e`) — the canonical judge URL is the CloudFront hostname in front of it. Redeployed for the desktop screen-transition fix: the `cdk diff` was one resource and one line, the code asset key, with **no IAM change and no environment change** — `PUBLIC_DEMO_AGENTCORE_ENABLED` is still `false` and the runtime ARN is still set, re-read off the deployed function afterwards. The judge walkthrough was then driven against the live URL: searching `coffee` returns all six curated coffees, and declaring one produced Kestrel refused `not_cheaper` at $367.19/$360.00 and Harbourstone formed at $263.82/$333.00, 18 bags in 3 cases of 6, `input_tokens: 0`. A smoke run against the deployed stack returned `model_provider: offline`, `model_id: offline-deterministic-planner`, `input_tokens: 0`, `output_tokens: 0`, and a pool the bounded loop formed. `/verify` hard-loads at `/`, `/verify`, `/verify/` and with a query string; full declaration → event → run → order over HTTPS on the real table, Kestrel refused on economics and Harbourstone formed, 0 payment rows. Runs the **offline planner** at zero model tokens and holds **no model permission** — its role carries `bedrock-agentcore:InvokeAgentRuntime` and no `bedrock:InvokeModel` |
 | DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified 2026-08-23** — shared by both artefacts, which is why they are deployed together |
 | API Gateway + Lambda | Pilot-shaped API | In `PoolStack`, which is **not** what the public demo deploys |
 | S3 | Pilot-shaped web hosting | In `PoolStack`. The public demo needs it for nothing — its web app ships inside the function |

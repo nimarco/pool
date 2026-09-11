@@ -714,14 +714,29 @@ export default function App() {
       setMap(await api.map());
       setShowcase("run");
       setView("home");
-      if (result.pool_id) setOpenPool(await api.pool(result.pool_id));
+      recordScreen({ view: "home", showcase: "run" });
+      if (result.pool_id) {
+        /* The run is the evidence; this read is a convenience on top of it.
+         *
+         * `openPoolDetail` already treats a pool the server cannot find as staleness
+         * rather than as an error — "after a reset, say" — and recovers without a
+         * banner. This call did not, so a 404 here painted `pool not found` in red
+         * across a lifecycle that had just completed successfully and was on screen
+         * behind it. The record is optional: **Open the pool record** re-reads it
+         * through the path that does recover, so dropping it here costs nothing. */
+        try {
+          setOpenPool(await api.pool(result.pool_id));
+        } catch {
+          setOpenPool(null);
+        }
+      }
       window.scrollTo({ top: 0 });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setRunning(false);
     }
-  }, [forgetWorkspaceState]);
+  }, [forgetWorkspaceState, recordScreen]);
 
   const respond = useCallback(
     async (decisionId: string, approve: boolean) => {

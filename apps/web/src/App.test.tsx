@@ -302,6 +302,11 @@ beforeEach(() => {
   // pass for the wrong reason, which is the one failure mode this file cannot afford.
   setShowcaseScope(false);
   resetWorkspaceId();
+  // So is the URL. The app records the screen it is on in a `screen` parameter, and
+  // jsdom keeps one location for the whole file — so without this, a test that
+  // navigated would hand the next one a restored screen instead of a cold start, and
+  // that next test would fail looking for a home screen it never asked to leave.
+  window.history.replaceState({}, "", "/");
   stubFetch();
 });
 
@@ -368,6 +373,55 @@ describe("showcase mode is a different world, not a different screen", () => {
         (r.workspace === showcase && r.path === `/api/pools/${VISITOR_POOL}`),
     );
     expect(crossed).toEqual([]);
+  });
+
+  /* The run is the evidence; reading its record afterwards is a convenience.
+   *
+   * `runScenario` finished the lifecycle, put it on screen, and then read the pool it
+   * had just written. When that read 404s — a partition moved, a reset landed, a record
+   * aged out — the catch painted `pool not found` in red across a lifecycle that had
+   * demonstrably succeeded and was rendered underneath it. `openPoolDetail` had always
+   * treated the same 404 as staleness rather than failure; this path simply did not. */
+  it("does not put an error banner over a lifecycle that succeeded", async () => {
+    const inner = globalThis.fetch as typeof fetch;
+    vi.stubGlobal("fetch", (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input), "http://localhost").pathname;
+      const response = await inner(input as RequestInfo, init);
+      if (path !== "/api/demo/scenario") return response;
+      const payload = (await (response as Response).json()) as Record<string, unknown>;
+      /* A pool id this partition does not hold, which the harness 404s exactly as the
+         real API does. */
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ...payload, pool_id: "pool_that_went_away" }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch);
+
+    const user = userEvent.setup();
+    /* The lifecycle entry, not "Open Showcase mode" — the latter is `showcaseTo`, which
+       shows the recording without running one. Only this button reaches `runScenario`. */
+    window.history.replaceState({}, "", "/?operator=1");
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
+    await user.click(screen.getByTitle("Demo environment, controls, and what is real here"));
+    await user.click(
+      screen.getByRole("button", { name: "How a pool happens, stage by stage" }),
+    );
+
+    // Wait for the read that 404s to have gone out and come back, or this asserts on a
+    // banner that has not had the chance to appear yet.
+    await waitFor(() =>
+      expect(
+        addressed().some((r) => r.path === "/api/pools/pool_that_went_away"),
+      ).toBe(true),
+    );
+
+    // The lifecycle ran and the app is in the showcase...
+    expect(await screen.findByRole("button", { name: "Leave showcase" })).toBeTruthy();
+    // ...and nothing red is claiming otherwise.
+    await waitFor(() => expect(document.querySelector(".banner-stop")).toBeNull());
+    expect(screen.queryByText(/not found/i)).toBeNull();
   });
 });
 
@@ -463,6 +517,11 @@ describe("a run's answer outlives the world it was given in", () => {
        editing its finding to agree with the present would be Pool rewriting history to
        look more consistent than it is. */
     const user = userEvent.setup();
+    /* Asked for explicitly. The Operations console below is an operator control, and
+       this test used to reach it only because an earlier `describe` had left
+       `?operator=1` in jsdom's one location — so it passed for a reason that had
+       nothing to do with what it checks. */
+    window.history.replaceState({}, "", "/?operator=1");
     render(<App />);
     await waitFor(() => expect(screen.getByText(/Good \w+, Marco/)).toBeTruthy());
 

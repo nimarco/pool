@@ -138,7 +138,6 @@ function parseScreen(token: string | null | undefined): Screen | null {
   }
   const v = token as View;
   if (v === "pool") return { view: "pools", showcase: null };
-  if (v === "why") return { view: "home", showcase: null };
   return VIEW_IDS.includes(v) ? { view: v, showcase: null } : null;
 }
 
@@ -166,7 +165,7 @@ function initialScreen(): Screen {
   if (onVerifyPath) api.setVerifyScope(true);
   if (fromUrl) {
     if (fromUrl.showcase) api.setShowcaseScope(true);
-    return fromUrl;
+    return fromUrl.view === "why" ? { view: "home", showcase: null } : fromUrl;
   }
   return { view: pathView(), showcase: null };
 }
@@ -441,7 +440,9 @@ export default function App() {
       const token =
         (event.state as { screen?: string } | null)?.screen ??
         new URLSearchParams(window.location.search).get("screen");
-      const next = parseScreen(token) ?? { view: pathView(), showcase: null };
+      const restored = parseScreen(token) ?? { view: pathView(), showcase: null };
+      const next = restored.view === "why" && !why
+        ? { view: "home" as const, showcase: null } : restored;
       const leavingShowcase = api.inShowcaseScope() && !next.showcase;
       api.setShowcaseScope(Boolean(next.showcase));
       changeScreen(() => {
@@ -455,7 +456,7 @@ export default function App() {
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [refresh, forgetWorkspaceState]);
+  }, [refresh, forgetWorkspaceState, why]);
 
   const navigate = useCallback(
     /* `dir` is what the swipe reads. A Back button is the one thing that must say so —

@@ -236,6 +236,11 @@ PRODUCT.md
 /docs/RELEASE_CHECKLIST.md
 /docs/VIDEO_*.md
 /docs/builder-center-final/PUBLISHING_CHECKLIST.md
+/docs/DEMO_POLISH_AUDIT.md
+# Re-drives the four Builder Center captures and audits navigation. Article-production
+# tooling by the same rule as the rest of this section — and it cannot run from a clean
+# clone anyway: it resolves Playwright out of video/, which is not in this repository.
+/scripts/audit_demo_polish.mjs
 
 # =============================================================================
 # VIDEO PRODUCTION — the entire tree is local-only, deliberately.

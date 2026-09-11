@@ -18,7 +18,7 @@
  * was actually requested.
  */
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -358,6 +358,38 @@ it("restores Home when a reloaded explanation URL has no declaration context", a
   expect(addressed().every((r) => r.workspace.endsWith("-verify"))).toBe(true);
 });
 
+it("keeps an explanation open when Back returns to one this session already opened", async () => {
+  /* The other half of the rule above, and the half a cold-reload test cannot reach.
+     `?screen=why` carries a screen but not *which* declaration, so a reload has no
+     context and Home is the only honest answer. Back is a different event: the
+     explanation was opened in this session, the declaration it was opened for is still
+     in memory, and sending that to Home would throw away a screen the person is
+     explicitly navigating back to.
+
+     Asserted through a real popstate rather than a router call, because the distinction
+     lives entirely in that handler — the reload path never runs it. Without the handler
+     checking for the declaration, this lands on Home and the test fails. */
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByText(/Good \w+, Marco/);
+
+  await user.click(await screen.findByRole("button", { name: "Why this order?" }));
+  await screen.findByRole("button", { name: "Back" });
+
+  await user.click(screen.getByRole("button", { name: "What you buy" }));
+  await screen.findByRole("heading", { name: "What you buy" });
+
+  // Wrapped, because this is a real browser event rather than a router call: it updates
+  // state outside React's own event handling, and an unwrapped dispatch warns.
+  act(() => {
+    window.dispatchEvent(new PopStateEvent("popstate", { state: { screen: "why" } }));
+  });
+
+  // The explanation, not Home.
+  await screen.findByRole("button", { name: "Back" });
+  expect(screen.queryByText(/Good \w+, Marco/)).toBeNull();
+});
+
 it("keeps the complete needs list visible on return while its next read is pending", async () => {
   render(<App />);
   const user = userEvent.setup();
@@ -582,3 +614,4 @@ describe("a run's answer outlives the world it was given in", () => {
     expect(history).toMatch(/No supplier Pool has verified sells/);
   });
 });
+

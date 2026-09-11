@@ -130,6 +130,7 @@ export function DemoPanel({
   actingAs,
   onActAs,
   onReset,
+  onFreshSession,
   onRefresh,
   onAbout,
   onTechnical,
@@ -148,6 +149,9 @@ export function DemoPanel({
   actingAs: Identity | null;
   onActAs: (next: Identity | null) => void;
   onReset: () => void;
+  /** Drop this visitor's own workspace and start again with an empty one. Member-safe,
+   *  unlike `onReset`: it touches nothing but the partition this browser addresses. */
+  onFreshSession: () => void;
   onRefresh: () => Promise<void>;
   onAbout: () => void;
   onTechnical: () => void;
@@ -427,6 +431,29 @@ export function DemoPanel({
                 </p>
               </details>
             ) : null}
+          </section>
+
+          {/* The one control a member is entitled to. Resetting *the world* is an
+              operator capability and stays in the block below; starting your own session
+              over is not — it drops this browser's workspace and nobody else's. It lives
+              here because a visitor who had finished looking around and wanted to try the
+              walkthrough cleanly previously had no way to do it short of clearing site
+              data by hand. */}
+          <section className="block">
+            <h3 className="section-title" style={{ marginBottom: 10 }}>
+              Start again
+            </h3>
+            <p className="small muted" style={{ marginBottom: 12 }}>
+              Empties this browser&apos;s workspace and reloads, so the demo begins from the
+              same place a first visitor sees. It affects nothing but your own session — the
+              community, the catalogue and everyone else&apos;s declarations are untouched.
+            </p>
+            <div className="btn-row">
+              <button className="btn btn-sm" onClick={onFreshSession}>
+                <IconReplay />
+                Start a fresh session
+              </button>
+            </div>
           </section>
 
           {operator ? (

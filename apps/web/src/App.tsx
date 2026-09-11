@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
   DemoConfig,
@@ -92,13 +92,83 @@ const NAV: { id: View; label: string }[] = [
  *  greeted by somebody else's name. */
 const NOBODY: Identity = { id: "", display_name: "" };
 
-/** The one linkable entry point. Everything else is a state machine, deliberately —
- *  Pool is one screen deep in most places and a router would be ceremony. But
- *  verification is a thing somebody is *sent to*, so `/verify` has to survive being
- *  typed, pasted and reloaded. Read once, at mount, from the real path. */
-function initialView(): View {
+/** Where the app is, as one token, so the Back button and a reload both work.
+ *
+ *  Still not a router. Pool is one screen deep in most places and routing it properly
+ *  would be ceremony — but "the screen is state and the URL never moves" had two costs a
+ *  visitor actually pays. The browser Back button left Pool entirely, from any screen,
+ *  because there was never a second history entry to go back to; and a reload dropped
+ *  you at the entry screen however deep you were. Both now hold, without any screen
+ *  gaining a path of its own: one `screen` parameter, pushed on navigation.
+ *
+ *  A pool record restores to the list it came from. It is identified by an id this does
+ *  not carry, and inventing a URL for every record is the router this deliberately is
+ *  not. */
+type Screen = { view: View; showcase: ShowcaseView | null };
+
+const SHOWCASE_IDS: ShowcaseView[] = [
+  "overview",
+  "run",
+  "live",
+  "community",
+  "operations",
+  "pool",
+];
+const VIEW_IDS: View[] = [
+  "home",
+  "pools",
+  "needs",
+  "community",
+  "pool",
+  "operations",
+  "about",
+  "judge",
+  "why",
+  "verify",
+];
+
+function screenToken(s: Screen): string {
+  return s.showcase ? `s:${s.showcase}` : s.view;
+}
+
+function parseScreen(token: string | null | undefined): Screen | null {
+  if (!token) return null;
+  if (token.startsWith("s:")) {
+    const id = token.slice(2) as ShowcaseView;
+    return SHOWCASE_IDS.includes(id) ? { view: "home", showcase: id } : null;
+  }
+  const v = token as View;
+  if (v === "pool") return { view: "pools", showcase: null };
+  return VIEW_IDS.includes(v) ? { view: v, showcase: null } : null;
+}
+
+/** The path's own answer, which is what a first visit gets. `/verify` has to survive
+ *  being typed, pasted and reloaded, so it stays the one linkable entry point. */
+function pathView(): View {
   if (typeof window === "undefined") return "home";
   return window.location.pathname.replace(/\/+$/, "") === "/verify" ? "verify" : "home";
+}
+
+/** Read once, at mount.
+ *
+ *  The path decides the *world* and the parameter decides the *screen*, and both have to
+ *  be restored or neither is. Scope is module state in `api`, not React state: `/verify`
+ *  used to enter its partition as a side effect of the Verify page mounting, which was
+ *  fine while a reload always landed there. Restoring `?screen=pools` skips that page,
+ *  and a reload that addressed the base partition instead found no consumer and offered
+ *  onboarding to somebody who had already done it. So the path sets the scope here,
+ *  before the first read goes out, whichever screen is being restored. A showcase token
+ *  then overrides it, exactly as `setShowcaseScope` does at runtime. */
+function initialScreen(): Screen {
+  if (typeof window === "undefined") return { view: "home", showcase: null };
+  const onVerifyPath = pathView() === "verify";
+  const fromUrl = parseScreen(new URLSearchParams(window.location.search).get("screen"));
+  if (onVerifyPath) api.setVerifyScope(true);
+  if (fromUrl) {
+    if (fromUrl.showcase) api.setShowcaseScope(true);
+    return fromUrl;
+  }
+  return { view: pathView(), showcase: null };
 }
 
 /** Whether this session may drive other synthetic participants.
@@ -113,7 +183,8 @@ function operatorRequested(): boolean {
 }
 
 export default function App() {
-  const [view, setView] = useState<View>(initialView);
+  const [firstScreen] = useState(initialScreen);
+  const [view, setView] = useState<View>(firstScreen.view);
   const [operatorMode] = useState(operatorRequested);
   /** Set when Home hands a chosen product to the Needs form. */
   const [pendingProduct, setPendingProduct] = useState<Picked | null>(null);
@@ -121,6 +192,14 @@ export default function App() {
   const [map, setMap] = useState<MapData | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [openPool, setOpenPool] = useState<PoolView | null>(null);
+  /* Records already read, so opening one is not a wait.
+   *
+   * `openPoolDetail` deliberately reads before it switches, so the record arrives
+   * complete rather than empty. That is right, and on the deployed demo it also meant a
+   * tap on "Open the pool" did nothing visible for ~400 ms — long enough to read as a
+   * missed tap rather than as loading. The read still happens; it just happens earlier,
+   * for the one record the member is most likely to open. */
+  const poolCache = useRef<Map<string, PoolView>>(new Map());
   /** Which declaration "Why this order?" is about. One server read behind it, so the
    *  screen survives a reload — the old judge demo held its narrative in React state and
    *  lost it, which is the failure this replaces. */
@@ -145,7 +224,7 @@ export default function App() {
    *  "see it run on AWS" can land on the evidence rather than on the front page of a
    *  record the visitor then has to navigate. */
   const [poolEntry, setPoolEntry] = useState<{ tab?: string; deep?: string }>({});
-  const [showcase, setShowcase] = useState<ShowcaseView | null>(null);
+  const [showcase, setShowcase] = useState<ShowcaseView | null>(firstScreen.showcase);
   /** The current identity's own view of themselves — including which pool, if any, is
    *  genuinely theirs. Owned here rather than by each screen: two of them need it, one
    *  request answers both, and the outlook it carries is the most expensive read the
@@ -233,6 +312,7 @@ export default function App() {
   useEffect(() => {
     setMember(null);
     setReport(null);
+    poolCache.current.clear();
   }, [identity.id, state?.workspace]);
 
   /* Whose pool is whose is a server question, and it is re-asked whenever anything
@@ -260,6 +340,28 @@ export default function App() {
     worldEpoch,
   ]);
 
+  /* Read the member's own record before they ask for it.
+   *
+   * This is the one pool a member opens, it is named on Home as soon as the outlook
+   * lands, and reading it here costs the same request `openPoolDetail` would make a
+   * moment later — only off the critical path of a tap. Failures are ignored on purpose:
+   * this is an optimisation, and `openPoolDetail` still does the real read when the
+   * cache misses. */
+  const ownPoolId = member?.opportunity?.pool_id ?? "";
+  useEffect(() => {
+    if (!ownPoolId || poolCache.current.has(ownPoolId)) return;
+    let live = true;
+    api
+      .pool(ownPoolId)
+      .then((record) => {
+        if (live) poolCache.current.set(ownPoolId, record);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [ownPoolId]);
+
   /** Something changed the deterministic picture without changing anything
    *  `/api/state` counts. Re-read the server rather than adjusting anything here: what
    *  the outlook now says is the server's answer, and this only asks for it again. */
@@ -276,10 +378,26 @@ export default function App() {
    *  already asked the new partition for the old partition's pool id and been given a
    *  404. Dropped in the same callback that moves the scope, alongside `openPool`, which
    *  was already here for exactly this reason. */
+  /** Drop this browser's workspace and reload into an empty one.
+   *
+   *  Reachable two ways on purpose. The error banner offers it because a session that
+   *  has broken needs a way out; the drawer offers it because a visitor who has finished
+   *  looking around and wants to walk through cleanly needs the same door, and nothing
+   *  has gone wrong for them. Member-safe either way: it addresses a different partition
+   *  and touches no shared state. Resetting the community is a separate, operator-only
+   *  capability. */
+  const freshSession = useCallback(() => {
+    resetWorkspaceId();
+    window.location.reload();
+  }, []);
+
   const forgetWorkspaceState = useCallback(() => {
     setOpenPool(null);
     setMember(null);
     setReport(null);
+    /* Records are scoped to a partition too. A cached one carried across would be the
+       stale-card bug with a longer memory. */
+    poolCache.current.clear();
   }, []);
 
   /** Leaving showcase mode points every request back at the visitor's own session.
@@ -296,6 +414,49 @@ export default function App() {
    *  then never re-asked: their standing demand, their current outlook and **Run Pool
    *  now** disappeared until the page was reloaded. `showcaseTo` already guarded the
    *  same call this way on the way in; this is the same rule on the way out. */
+  /** Record a screen in history. The URL only gains `?screen=` once the visitor has
+   *  actually moved, so the address a judge is given stays exactly what the README
+   *  prints until they navigate. */
+  const recordScreen = useCallback((next: Screen) => {
+    if (typeof window === "undefined") return;
+    const token = screenToken(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("screen", token);
+    window.history.pushState({ screen: token }, "", url);
+  }, []);
+
+  /* Give the entry itself a state object without touching the URL, so the first Back
+     out of the first navigation has somewhere defined to land. */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.history.replaceState({ screen: screenToken(firstScreen) }, "");
+  }, [firstScreen]);
+
+  /* Back and forward. Mirrors what `navigate`/`showcaseTo` do on the way in, including
+     the scope change and the one conditional drop of partition-scoped state — going
+     back out of the showcase is still leaving a different world, not changing screen. */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onPop = (event: PopStateEvent) => {
+      const token =
+        (event.state as { screen?: string } | null)?.screen ??
+        new URLSearchParams(window.location.search).get("screen");
+      const next = parseScreen(token) ?? { view: pathView(), showcase: null };
+      const leavingShowcase = api.inShowcaseScope() && !next.showcase;
+      api.setShowcaseScope(Boolean(next.showcase));
+      changeScreen(() => {
+        setShowcase(next.showcase);
+        setView(next.view);
+        setPanelOpen(false);
+        window.scrollTo({ top: 0 });
+      }, "back");
+      if (leavingShowcase) forgetWorkspaceState();
+      void refresh();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [refresh, forgetWorkspaceState]);
+
   const navigate = useCallback(
     /* `dir` is what the swipe reads. A Back button is the one thing that must say so —
        everything else is going further in, which is the default. */
@@ -317,9 +478,10 @@ export default function App() {
         setPanelOpen(false);
         window.scrollTo({ top: 0 });
       }, dir);
+      recordScreen({ view: next, showcase: null });
       void refresh();
     },
-    [refresh, forgetWorkspaceState],
+    [refresh, forgetWorkspaceState, recordScreen],
   );
 
   /** What was picked on Home, handed to the form so the member does not have to search
@@ -349,12 +511,13 @@ export default function App() {
         setPanelOpen(false);
         window.scrollTo({ top: 0 });
       });
+      recordScreen({ view, showcase: next });
       if (entering) {
         forgetWorkspaceState();
         void refresh();
       }
     },
-    [refresh, forgetWorkspaceState],
+    [refresh, forgetWorkspaceState, recordScreen, view],
   );
 
   /** Re-reads the pool currently open, so an action taken in the drawer is visible on
@@ -374,16 +537,39 @@ export default function App() {
     async (poolId: string, entry: { tab?: string; deep?: string } = {}) => {
       try {
         setPoolEntry(entry);
-        setOpenPool(await api.pool(poolId));
-        /* Going into a record is going further in. The read above already happened, so
-           the screen it arrives on is complete rather than empty. */
-        changeScreen(() => {
-          if (showcase) setShowcase("pool");
-          else setView("pool");
-          setPanelOpen(false);
-          setError(null);
-          window.scrollTo({ top: 0 });
-        });
+        /* Going into a record is going further in, and the screen it arrives on has to be
+           complete rather than empty — so the record is read before the switch. When it
+           was prefetched the switch is immediate and the re-read lands underneath it;
+           otherwise this still waits, because a blank record is worse than a pause. */
+        const arrive = () => {
+          changeScreen(() => {
+            if (showcase) setShowcase("pool");
+            else setView("pool");
+            setPanelOpen(false);
+            setError(null);
+            window.scrollTo({ top: 0 });
+          });
+          recordScreen(
+            showcase ? { view, showcase: "pool" } : { view: "pool", showcase: null },
+          );
+        };
+        const held = poolCache.current.get(poolId);
+        if (held) {
+          setOpenPool(held);
+          arrive();
+          api
+            .pool(poolId)
+            .then((fresh) => {
+              poolCache.current.set(poolId, fresh);
+              setOpenPool((cur) => (cur && cur.pool_id === poolId ? fresh : cur));
+            })
+            .catch(() => {});
+          return;
+        }
+        const record = await api.pool(poolId);
+        poolCache.current.set(poolId, record);
+        setOpenPool(record);
+        arrive();
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         // A pool this tab knows about but the server does not means the list is stale —
@@ -397,7 +583,7 @@ export default function App() {
         setError(message);
       }
     },
-    [refresh, showcase],
+    [refresh, showcase, recordScreen, view],
   );
 
   /** Invoke the coordinator deployed on Bedrock AgentCore, bound to this session.
@@ -683,13 +869,7 @@ export default function App() {
           {error ? (
             <div className="banner banner-stop">
               <span>{error}</span>
-              <button
-                className="btn btn-sm"
-                onClick={() => {
-                  resetWorkspaceId();
-                  window.location.reload();
-                }}
-              >
+              <button className="btn btn-sm" onClick={freshSession}>
                 Start a fresh session
               </button>
             </div>
@@ -1053,6 +1233,7 @@ export default function App() {
         actingAs={actingAs}
         onActAs={setActingAs}
         onReset={reset}
+        onFreshSession={freshSession}
         onRefresh={refreshAll}
         onAbout={() => navigate("about")}
         onTechnical={() => {

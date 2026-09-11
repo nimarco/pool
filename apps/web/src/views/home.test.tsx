@@ -20,6 +20,7 @@ import {
   AppState,
   Decision,
   MemberView,
+  NeedsView,
   NeedOutlook,
   PersonalOpportunity,
   PoolMember,
@@ -1137,5 +1138,52 @@ describe("motion reports a change and never an arrival", () => {
     const chip = document.querySelector(".status-chip");
     expect((chip?.querySelector(".status-word")?.textContent ?? "").length).toBeGreaterThan(0);
     expect((chip?.querySelector(".status-reason")?.textContent ?? "").length).toBeGreaterThan(0);
+  });
+});
+
+describe("what Home claims before the server has answered", () => {
+  const EMPTY: NeedsView = {
+    needs: [],
+    products: [],
+    limits: {
+      max_quantity: 100,
+      max_cadence_days: 365,
+      max_min_savings_pct: 90,
+      max_spend_cents: 500000,
+      max_horizon_days: 365,
+    },
+  };
+
+  /* The empty state is a claim about the account, so it has to wait until the claim is
+     true. `needs` began as `[]`, which made "not read yet" and "this member has declared
+     nothing" the same value — and because the shell remounts this screen on every
+     navigation, the read restarted every time. On the deployed demo that read takes
+     ~450 ms, so a member who had just declared coffee was told to declare something for
+     about half a second on each tab press, and for just over a second immediately after
+     onboarding, which is the one moment they certainly had. */
+  it("does not offer the first-use card while the declarations are still being read", async () => {
+    let deliver: (view: NeedsView) => void = () => {};
+    vi.spyOn(apiModule.api, "needs").mockReturnValue(
+      new Promise<NeedsView>((resolve) => {
+        deliver = resolve;
+      }),
+    );
+
+    renderHome([], { member: memberView({ opportunity: null }) });
+
+    expect(screen.queryByText(/Tell Pool something you buy anyway/)).toBeNull();
+
+    deliver(EMPTY);
+
+    expect(
+      await screen.findByText(/Tell Pool something you buy anyway/),
+    ).toBeTruthy();
+  });
+
+  it("still offers it once the read says the account really has declared nothing", async () => {
+    renderHome([], { member: memberView({ opportunity: null }) });
+    expect(
+      await screen.findByText(/Tell Pool something you buy anyway/),
+    ).toBeTruthy();
   });
 });

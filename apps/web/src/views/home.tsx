@@ -899,7 +899,14 @@ export function Home({
   liveDiscovery: boolean;
   region: string | null;
 }) {
-  const [needs, setNeeds] = useState<NeedRow[]>([]);
+  /* `null` is "not read yet", `[]` is "read, and this account has declared nothing".
+     They were the same value once, and because ScreenSwap remounts this screen on every
+     navigation, the difference is the whole bug: a member who has declared something was
+     shown FirstUseCard — "Tell Pool something you buy anyway" — for as long as the read
+     took. Measured against the deployed demo that is ~450 ms on a tab change and just
+     over a second after onboarding, which is the one moment the member has *just*
+     declared. The empty state now waits until it is actually true. */
+  const [needs, setNeeds] = useState<NeedRow[] | null>(null);
   const [hosting, setHosting] = useState<HostOpportunities | null>(null);
   /** The headline pool's full record. The list on `/api/state` carries no memberships,
    *  and this member's own allocation and price are the reason the card exists. */
@@ -975,7 +982,7 @@ export function Home({
      community view can show it, and a member who has stopped buying something should
      not find it still listed under "what you buy anyway". The matcher stopped counting
      them at the same time. */
-  const mine = needs
+  const mine = (needs ?? [])
     .filter((n) => n.household_id === identity.id && n.active)
     .sort((a, b) => a.expected_next_need_date.localeCompare(b.expected_next_need_date));
   const forMe = state.decisions.filter((d) => d.household_id === identity.id);
@@ -1127,7 +1134,9 @@ export function Home({
           just did — a second onboarding wearing the product's clothes. Once they have a
           declaration the coordinator's card leads instead, and adding another lives with
           the rest of their needs further down where it belongs. */}
-      {!pool && mine.length === 0 ? <FirstUseCard onStartNeed={onStartNeed} /> : null}
+      {!pool && needs !== null && mine.length === 0 ? (
+        <FirstUseCard onStartNeed={onStartNeed} />
+      ) : null}
 
       {/* The order this member is actually in, and — when the run that formed it is the
           one on screen — the deterministic facts that made it work. */}

@@ -700,7 +700,29 @@ export function Needs({
 
   const slow = useSlowEnoughToSay(needs === null);
 
-  if (needs === null) return slow ? <Empty>Loading…</Empty> : null;
+  /* The screen says what it is before it knows what is on it.
+   *
+   * This used to return nothing at all until the read landed. Against the deployed demo
+   * that read takes ~460 ms, so a tab press produced half a second of bare paper and
+   * then a whole screen — which reads as a stall, and briefly as the wrong screen. The
+   * heading is static, so there is no reason to make it wait for the list; it is the
+   * same markup either way, rendered once here and reused below. */
+  const heading = (
+    <header className="stack-sm">
+      <h1 className="title">What you buy</h1>
+      <p className="lede">
+        What you restock, and roughly when. Saving never commits money.
+      </p>
+    </header>
+  );
+
+  if (needs === null)
+    return (
+      <div className="stack">
+        {heading}
+        {slow ? <Empty>Loading…</Empty> : null}
+      </div>
+    );
 
   const mine = needs
     .filter((n) => n.household_id === identity.id && n.active)
@@ -861,12 +883,7 @@ export function Needs({
 
   return (
     <div className="stack">
-      <header className="stack-sm">
-        <h1 className="title">What you buy</h1>
-        <p className="lede">
-          What you restock, and roughly when. Saving never commits money.
-        </p>
-      </header>
+      {heading}
 
       <section className="panel">
         <div className="panel-head">

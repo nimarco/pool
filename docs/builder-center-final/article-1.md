@@ -34,7 +34,7 @@ What people actually have is in between. Whole bean, caffeinated, medium or dark
 
 On screen you don't pick a substitution policy, you get asked whether it has to be whole bean. Skipping a question always narrows your rule and never widens it.
 
-![Pool's declaration screen: Kestrel Roastworks whole bean coffee, 3 bags every 30 days, and a choice between "Only this exact coffee" and "Any brand that matches my preferences".](images/article-1-declare-flexibility.png)
+![Pool's declaration screen: Kestrel Roastworks whole bean coffee, 3 bags every 30 days, and a choice between "Only this exact coffee" and "Any brand that matches my preferences". With alternatives allowed, Pool asks which roasts work — Dark, Light, Medium — and whether it has to be whole bean and has to be caffeinated.](images/article-1-declare-flexibility.png)
 
 ## Nobody presses run
 

@@ -8076,3 +8076,59 @@ tokens to learn nothing.
 
 README deployment rows re-dated to this deploy and repointed at this commit. No video
 asset, source or output was touched.
+
+### #0070 — [2026-09-10] — The film said 120 s; the demo runs 45
+
+**The defect.** `scenes/_tech.js:93` put `bounded · 8 iterations · 25 tool calls · 120 s`
+on the *Strands · decision layer* card, on screen for ~26 s of the submission film
+(3:48.50–4:14.33 on the delivered cut). Two of the three figures were right in every
+deployment. The third was not: 120 s is the code default (`pool/config.py:72`) and the
+bound of the **un-deployed** pilot `PoolStack` (`infra/app.py:125`), while the public judge
+demo runs **45 s** — `infra/demo_app.py:325`, `agentcore/agentcore.json:44`, the deployed
+Lambda's environment, and live `/api/health`, all agreeing. Entry #0030 had already caught
+this exact inversion once, in the Live-on-AWS view; the film kept the pre-fix number
+because scene code sits outside the test that pins the two config files together. A judge
+who paused on that frame and then opened `/api/health` would have caught it.
+
+**Fixed in the picture, not in the bound.** 120 s was rejected on purpose — it sits outside
+the function's own 90 s timeout, so the agent's deadline could never fire. Changing the
+deployment to match the film would have re-broken the nesting (45 agent → 60 bridge read →
+90 function) and failed `test_demo_stack.py:307`. So the literal changed to `45 s` and the
+implementation was left alone.
+
+**Re-render, scoped.** Film frames 6759–7577 only (`from=225.3 to=252.6`), everything else
+reused. `retime.py --audit` accounts for all 106 literals, 58/58 anchors on convention, 0
+taps without a pointer — the change moves no timing. Against the previous cut the new file
+is **pixel-identical (PSNR ∞)** at t = 5, 30, 60, 120, 180, 220, 260, 275 and 288 s, and
+differs only across t 227.8–255.1: 47–52 dB where the badge is, 49–79 dB either side, which
+is JPEG and encoder noise rather than anything visible. Decoded audio is **bit-identical**
+to the previous final — the mix was never rebuilt — and narration lag against the immutable
+master is 0.0 ms at t = 40, 150, 240 and 275 s. Same 8691 frames, same 289.700 s, same
+−21.08 LUFS / −5.09 dBTP. The 120 s cut survives intact as `out/Pool-Human-Outro2.mp4`.
+
+**Deployed.** `PoolDemoStack` only, from the tree at `3d8ca8fb`, whose `apps/` is identical
+to `d940de2d` — the last commit that touches application source. This is the deploy that
+finally puts the front-end transition animations (`.reveal`, `changeScreen`) in front of
+visitors; they had been committed since `d940de2d` and never shipped. Deployment time 21.6 s,
+one changeset. **No IAM change and no environment change**: the synthesized template grants
+`bedrock-agentcore:InvokeAgentRuntime` and DynamoDB only, with no `bedrock:InvokeModel`, and
+`PUBLIC_DEMO_AGENTCORE_ENABLED` is still `false`.
+
+Verified against the live URL, not against the deploy's output. The CSS and JS CloudFront
+serves (`index-Dfh4yWZD.css`, `index-dGX7v1cr.js`) are **byte-identical by SHA-256** to what
+this repository builds. `/verify` 200; `/api/health` 200 with `routing_provider:
+deterministic`, `model_provider: offline`, `payment_provider: simulated`,
+`purchase_simulated: true`, `schedules_enabled: false`, bounds 8 / 25 / 2 / **45**, 17 tools;
+`/api/demo/config` 200 with `live_agent_available: false`, `live_agent_state: switched_off`.
+A fresh anonymous session then walked the whole path on the real table and 21 of 21 canonical
+facts matched: Kestrel `not_cheaper` $367.19 vs $360.00 from 23 bags across 8 people;
+Harbourstone `CHOSEN`, saves $69.18, $263.82 vs $333.00, 20.7%, 18 bags in 3 full cases of 6;
+member $43.96 vs $55.50 with 5 others; towels 7 declared, 48 required, 3 people; `Host
+needed`; `Nothing charged`; and the location step word for word. No paid model invocation.
+
+**Builder Center.** The four app screenshots were recaptured from this deployment at 390 px
+and 2x as full-page captures. They were genuinely stale — the app had been restyled to a flat
+ledger since 2026-09-06, so the old PNGs still showed nested card borders, a bordered *How
+flexible are you?* fieldset and pill-shaped badges. Every number in them had stayed correct,
+so only `article-1`'s alt text changed, to cover the clarification questions the new capture
+shows and the adjacent prose already describes. No article prose was touched.

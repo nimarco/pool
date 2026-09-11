@@ -109,27 +109,19 @@ AgentCore/Nova Lite path deployed separately and switched off for visitors.
 | File | Source | Real app? |
 | --- | --- | --- |
 | `article-1-inversion-24x1.jpg` | Frame from the submission film, cropped | No — original graphic, no app UI shown |
-| `article-1-declare-flexibility.png` | **Captured live 2026-09-06** from the deployed demo, 390px viewport at 2× | Yes |
-| `article-2-why-this-order.png` | **Captured live 2026-09-06** from the deployed demo, 390px viewport at 2× | Yes |
+| `article-1-declare-flexibility.png` | **Captured live 2026-09-10** from the deployed demo, 390 px viewport at 2x, full page | Yes |
+| `article-2-why-this-order.png` | **Captured live 2026-09-10** from the deployed demo, 390 px viewport at 2x, full page | Yes |
 | `article-2-agent-and-code.jpg` | Frame from the submission film, cropped | No — explanatory diagram, visually distinct from app UI |
-| `article-3-paper-towels-7-of-48.png` | **Captured live 2026-09-06** from the deployed demo, 390px viewport at 2× | Yes |
-| `article-3-share-my-location.png` | **Captured live 2026-09-06** from the deployed demo, 390px viewport at 2× | Yes |
+| `article-3-paper-towels-7-of-48.png` | **Captured live 2026-09-10** from the deployed demo, 390 px viewport at 2x, full page | Yes |
+| `article-3-share-my-location.png` | **Captured live 2026-09-10** from the deployed demo, 390 px viewport at 2x, full page | Yes |
 
 Every crop is a straight rectangular crop. Nothing was retouched, recoloured, upscaled or
 composited, and no value on any screen was edited.
 
-> **Stale as of 2026-09-10 — recapture before publishing.** All four app screenshots were
-> true of the build deployed when they were taken, but the deployment has since been
-> restyled: the app now reads as a flat ledger, without the nested card borders, bordered
-> `How flexible are you?` fieldset, or pill-shaped `Costs more` / `Saves $69.18` badges that
-> these PNGs show. Re-driven live against
-> <https://d38kno05ygcarw.cloudfront.net/verify> on 2026-09-10, **every number, label and
-> sentence in all four images still matches the live app exactly** — only the chrome around
-> them changed — so the article prose and the alt text below remain correct. What is wrong
-> is the styling, and the fix is a straight recapture at 390 px / 2×, not an edit.
-
-All four app screenshots present the community as *Demo* rather than *Demo University*. The
-two remaining film frames show no application UI at all.
+**Recaptured 2026-09-10** from the live deployment after the final deploy, at 390 px with a
+2x device pixel ratio, as full-page captures — uncropped, unretouched, and driven through
+the real application rather than assembled. All four present the community as *Demo* rather
+than *Demo University*. The two remaining film frames show no application UI at all.
 
 ---
 
@@ -167,9 +159,9 @@ two remaining film frames show no application UI at all.
 No claim in any article was contradicted by the current repo or the live deployment.
 
 **Resolved 2026-09-10.** This section previously recorded that `README.md` named the wrong
-deployment commit. The README now names `f06345e`, and that was checked rather than assumed:
-building `f06345e`'s `apps/web` reproduces the exact `index-*.css` and `index-*.js` that
-CloudFront serves, byte for byte.
+deployment commit. The README now names `d940de2d`, the most recent commit that touches
+`apps/`, and that was checked rather than assumed: building this repository's `apps/web`
+reproduces the exact `index-*.css` and `index-*.js` CloudFront serves, byte for byte.
 
 ---
 

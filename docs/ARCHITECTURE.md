@@ -415,7 +415,7 @@ Enforced in the Strands event loop as a hook provider, not by asking the model n
 | `MAX_AGENT_ITERATIONS` | 8 | Raises → run recorded as `loop_fault` |
 | `MAX_TOOL_CALLS_PER_RUN` | 25 | Cancels the tool with an explanatory result |
 | `MAX_DUPLICATE_TOOL_CALLS` | 2 | Identical name+args cancelled as a loop |
-| `WORKFLOW_TIMEOUT_SECONDS` | 45 deployed; 120 local default | Cooperative check between model/tool steps → raises; cannot interrupt a call already running |
+| `WORKFLOW_TIMEOUT_SECONDS` | 45 | Cooperative check between model/tool steps → raises; cannot interrupt a call already running. Same figure locally and in both deployments |
 | `MAX_ROUTE_MATRIX_CELLS` | 100 | Checked *before* the call is made and billed |
 
 The three strategy budgets above are enforced in the tools rather than in the hook,
@@ -490,8 +490,8 @@ Still **implemented but never called against the live service**: the EventBridge
 definition in the un-deployed pilot stack and the Amazon Location adapter. The judge
 account has zero EventBridge rules; “disabled” is not used as shorthand for a resource
 that does not exist. Neither component is on the judge path. Nothing in this repository
-claims a deployment that has not happened; `docs/HACKATHON_SCORECARD.md` carries the
-evidence per item.
+claims a deployment that has not happened; the AWS table in [`README.md`](../README.md#aws)
+carries the dated evidence per item.
 
 Not in the CDK stack, deliberately:
 

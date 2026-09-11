@@ -203,26 +203,52 @@ desktop.ini
 *.bak
 
 # Agent/tool working state. Machine-specific (launch.json carries absolute paths) and
-# of no use to anyone cloning this repository. The design system itself is documented
-# in DESIGN.md, which is committed.
+# of no use to anyone cloning this repository. The design system it describes is
+# documented inline in apps/web/src/styles.css, which is committed.
 .claude/
 .impeccable/
 .finalize-record/
+DESIGN.md
+PRODUCT.md
+
+# =============================================================================
+# SUBMISSION AND PUBLISHING WORKSPACE — local-only, deliberately.
+#
+# These are the working files of *making* a hackathon submission, not of the
+# product: the engineering notebook, the Devpost copy, the self-scored rubric,
+# the release checklist, the film's script/storyboard/media manifest, the
+# article evidence notes and the Builder Center publishing steps. None of them
+# is needed to build, run, test, understand or judge Pool, and a public
+# repository that carries them describes the workstation rather than the
+# software. Kept on disk, kept out of git — the same treatment as AGENTS.md.
+#
+# What a judge needs instead is committed: README.md, docs/ARCHITECTURE.md,
+# the two architecture diagrams, docs/AGENT_TRACE_EVIDENCE.md, and the film
+# itself at the public submission link.
+# =============================================================================
+/BUILD_HISTORY.md
+/docs/ARTICLE_NOTES.md
+/docs/DEMO_SCRIPT.md
+/docs/DEVPOST_DRAFT.md
+/docs/FINAL_EXPERIENCE_PLAN.md
+/docs/HACKATHON_SCORECARD.md
+/docs/IMPECCABLE_HANDOFF.md
+/docs/RELEASE_CHECKLIST.md
+/docs/VIDEO_*.md
+/docs/builder-center-final/PUBLISHING_CHECKLIST.md
 
 # =============================================================================
 # VIDEO PRODUCTION — the entire tree is local-only, deliberately.
 #
-# video/ is a 14 GB production workspace across six cut directories: 1.6 GB of raw
-# camera and screen recordings, 71,627 derived PNG/JPEG frames, narration WAV chunks
-# and takes, presenter frames, per-cut audit dumps, the take reviewer's working state,
-# third-party audio, and 80 intermediate MP4 renders. Measured, not estimated.
-# None of it is needed to build, run, test, or judge Pool,
+# video/ is a 12 GB production workspace across eleven cut directories: 1.6 GB of raw
+# camera recordings, 71,627 derived PNG/JPEG frames, 570 narration WAV chunks and
+# takes, presenter frames, per-cut audit dumps, the take reviewer's working state,
+# third-party audio, the scene code and renderer, and the delivered film itself.
+# Measured, not estimated. None of it is needed to build, run, test, or judge Pool,
 # and none of it is reproducible-by-clone in any useful sense.
 #
-# What a judge needs instead is already committed elsewhere: the narration text
-# (docs/VIDEO_SCRIPT.md), the storyboard (docs/VIDEO_STORYBOARD.md), the media and
-# truth statement (docs/VIDEO_MEDIA_MANIFEST.md), and the film itself at the public
-# submission link.
+# What a judge needs is the film at the public submission link, not its sources —
+# the hackathon requires the video on YouTube or Vimeo, never in the repository.
 #
 # Two licensing notes, both of which this rule enforces:
 #   - The raw recordings are irreplaceable. They are ignored, never deleted.
@@ -235,3 +261,17 @@ desktop.ini
 # working copies escaped the rules once already.
 # =============================================================================
 /video/
+
+# Article-production artefacts: screenshots captured from a running app for the
+# Builder Center pieces, and the tooling that captures them. The six images the three
+# final articles actually embed are committed under docs/builder-center-final/images/;
+# everything else a capture run produces is regenerable and local-only.
+/docs/builder-center-final/captures/
+/docs/screenshots/
+
+# Scratch: research spikes, throwaway notes, and anything being drafted before it
+# either becomes part of the project or is deleted. (`scratch/` itself is already
+# covered under Local data, above.)
+notes/
+*.tmp
+*.local.md

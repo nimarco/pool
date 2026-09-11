@@ -32,7 +32,7 @@ const HEALTH: apiModule.Health = {
     max_iterations: 8,
     max_tool_calls: 25,
     max_duplicate_tool_calls: 2,
-    workflow_timeout_seconds: 120,
+    workflow_timeout_seconds: 45,
   },
   agent_tools: [],
 };

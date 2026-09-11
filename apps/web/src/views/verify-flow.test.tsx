@@ -12,8 +12,7 @@
  *  This pins the sequence at component level rather than in a browser. No automation
  *  framework is added for it: the surfaces below are the real ones, the API calls are the
  *  real call sites, and what a browser would add here is a rendering engine rather than a
- *  fact. The deployed path is separately walked by hand before release
- *  (`docs/RELEASE_CHECKLIST.md`).
+ *  fact. The deployed path is separately walked by hand before release.
  */
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -76,7 +75,7 @@ const HEALTH: apiModule.Health = {
     max_iterations: 8,
     max_tool_calls: 25,
     max_duplicate_tool_calls: 2,
-    workflow_timeout_seconds: 120,
+    workflow_timeout_seconds: 45,
   },
   agent_tools: [],
 };

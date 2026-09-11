@@ -122,7 +122,12 @@ class PoolStack(Stack):
             "MAX_AGENT_ITERATIONS": "8",
             "MAX_TOOL_CALLS_PER_RUN": "25",
             "MAX_DUPLICATE_TOOL_CALLS": "2",
-            "WORKFLOW_TIMEOUT_SECONDS": "120",
+            # 45, the same figure as `infra/demo_app.py` and `agentcore/agentcore.json`,
+            # and it has to stay below this function's own 60 s timeout to mean anything.
+            # It was 120 here — outside the 60 — so a wedged run would have been killed
+            # by Lambda first and this bound could never have fired, while `/api/health`
+            # went on publishing it as the wall clock every run is held to (#0030).
+            "WORKFLOW_TIMEOUT_SECONDS": "45",
             "MAX_ROUTE_MATRIX_CELLS": "100",
         }
 

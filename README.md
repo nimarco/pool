@@ -75,12 +75,18 @@ the people in the demo. The community is invented, and the page says so before y
 **<https://d38kno05ygcarw.cloudfront.net/verify>**
 
 Deployed and verified **2026-09-10** from **`d940de2d`** — the most recent commit that
-touches `apps/`, and the tree `main` still carries. You can check it without credentials
-and without trusting this sentence: build this repository's `apps/web` and you get the
-exact `index-*.css` and `index-*.js` that `/verify` loads, byte for byte. Commits after
-`d940de2d` change documentation only, so that check keeps passing as this file grows.
+changes the shipped web app, and the tree `main` still carries. You can check it without
+credentials and without trusting this sentence: build this repository's `apps/web` and
+you get the exact `index-*.css` and `index-*.js` that `/verify` loads, byte for byte.
+Commits after `d940de2d` touch documentation, test fixtures and backend defaults that
+the bundle does not contain, so that check keeps passing as this file grows.
 Nothing about the agent, the planner, the API, the tools, the economics or the IAM is
-outstanding, so every behavioural claim below is a claim about the live URL.
+outstanding, so every behavioural claim below is a claim about the live URL. One backend
+line has moved since: `AgentBounds.workflow_timeout_seconds` now defaults to 45 rather
+than 120, which is what a clone run locally will report. That cannot change the
+deployment, because every deployment sets `WORKFLOW_TIMEOUT_SECONDS=45` explicitly and
+always did — `/api/health` on the live URL published 45 before the default moved and
+publishes 45 now. The default was fixed so the local and deployed numbers agree.
 CloudFront distribution `EMOLZSGVY7HTN`, `Deployed` and enabled, cache invalidated, in
 front of the demo's Lambda Function URL. Use this hostname, not the raw
 Function URL underneath it: `*.lambda-url.*.on.aws` is a blocked *category* on Cisco
@@ -606,7 +612,7 @@ Every run is bounded in the Strands event loop, not by asking the model nicely:
 | `MAX_AGENT_ITERATIONS` | 8 | Terminates the run as a recorded loop fault |
 | `MAX_TOOL_CALLS_PER_RUN` | 25 | Global circuit breaker |
 | `MAX_DUPLICATE_TOOL_CALLS` | 2 | Identical name+args cancelled as a loop |
-| `WORKFLOW_TIMEOUT_SECONDS` | 45 deployed (120 local default) | Cooperative wall-clock bound checked between model/tool steps; it does not interrupt a call already in progress |
+| `WORKFLOW_TIMEOUT_SECONDS` | 45 | Cooperative wall-clock bound checked between model/tool steps; it does not interrupt a call already in progress. One figure everywhere — the local default, both deployments, and what `/api/health` publishes |
 | `MAX_ROUTE_MATRIX_CELLS` | 100 | Checked *before* any routing call is billed |
 
 A run that hits a bound ends loudly with a `loop_fault` outcome — never a silent
@@ -755,7 +761,7 @@ apps/web/src/
   ui.tsx           primitives — actors, figures, ledgers, traces, drawn icons
   views/           overview · run · live · community · operations · pool
 infra/             CDK stack + cost-safety tests
-docs/              architecture, pilot readiness, thesis, demo script, scorecard
+docs/              architecture, recorded agent traces, pilot readiness, thesis, costs
 ```
 
 ---
@@ -763,16 +769,18 @@ docs/              architecture, pilot readiness, thesis, demo script, scorecard
 ## Docs
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — what is actually built, and how
+- [`docs/AGENT_TRACE_EVIDENCE.md`](docs/AGENT_TRACE_EVIDENCE.md) — recorded output from runs that actually executed, including the ones that ended in a refusal
+- [`docs/architecture-strands.svg`](docs/architecture-strands.svg) — the two routes, the model position on each, and where the tool surface is shared
 - [`docs/PILOT_READINESS.md`](docs/PILOT_READINESS.md) — what a real pilot still needs, including the parts that are legal questions rather than coding ones
 - [`docs/STARTUP_THESIS.md`](docs/STARTUP_THESIS.md) — the business argument and its assumptions
-- [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) — the five-minute story
-- [`docs/HACKATHON_SCORECARD.md`](docs/HACKATHON_SCORECARD.md) — evidence per judging criterion, honestly graded
-- [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) — everything that must be true before submitting, with the human-only items left as TODO rather than assumed
 - [`docs/COST_NOTES.md`](docs/COST_NOTES.md) — every resource that can accrue cost
-- [`BUILD_HISTORY.md`](BUILD_HISTORY.md) — decisions, rejected approaches, and what broke
-- `AGENTS.md` — the operating manual any agent working here must follow. Deliberately
-  **not** in this repository: it is local contributor instruction, not part of the
-  project, so section references to it above will not resolve to a file here
+- [`docs/CATALOG_RESEARCH.md`](docs/CATALOG_RESEARCH.md) — why the product catalogue is a committed file rather than a live API call
+- `AGENTS.md`, `BUILD_HISTORY.md`, `DESIGN.md`, `PRODUCT.md` — the operating manual any
+  agent working here must follow, the engineering notebook behind it, and the design and
+  product sidecars the interface work was driven from. Deliberately **not** in this
+  repository: they are local contributor instruction and working notes rather than part
+  of the project. Source comments cite them for provenance (`BUILD_HISTORY #0021` and the
+  like); those citations will not resolve to a file here, and are not meant to
 
 ## Licence
 

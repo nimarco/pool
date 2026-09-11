@@ -67,9 +67,14 @@ class AgentBounds:
     #: and before each tool call, so it ends a run that is *taking* too long — it
     #: cannot interrupt one call that has already hung. The outer rungs are what
     #: cover that case: the bridge's read timeout, then the Lambda's own timeout
-    #: (`infra/demo_app.py` documents the nesting). Deployments set this to 45 in
-    #: both places the agent can run, so it stays the innermost bound.
-    workflow_timeout_seconds: int = 120
+    #: (`infra/demo_app.py` documents the nesting).
+    #:
+    #: 45, which is what every deployment sets and what `/api/health` therefore
+    #: publishes. The default used to be 120 — a number no deployment used, larger
+    #: than the Lambda timeout that would have killed the run first, and the figure a
+    #: judge running this locally would read off the page while the film and the
+    #: diagrams said 45. One value in every place a run can execute (#0030).
+    workflow_timeout_seconds: int = 45
 
     #: Caps on the cohort-strategy surface, which the global bounds above do not
     #: express. Those count *calls*; these count **consequential investigation**, and the
@@ -104,7 +109,7 @@ class AgentBounds:
             max_iterations=_int_env("MAX_AGENT_ITERATIONS", 8),
             max_tool_calls=_int_env("MAX_TOOL_CALLS_PER_RUN", 25),
             max_duplicate_tool_calls=_int_env("MAX_DUPLICATE_TOOL_CALLS", 2),
-            workflow_timeout_seconds=_int_env("WORKFLOW_TIMEOUT_SECONDS", 120),
+            workflow_timeout_seconds=_int_env("WORKFLOW_TIMEOUT_SECONDS", 45),
             max_strategy_listings=_int_env("MAX_STRATEGY_LISTINGS", 1),
             max_strategy_evaluations=_int_env("MAX_STRATEGY_EVALUATIONS", 3),
             max_strategy_pool_creations=_int_env("MAX_STRATEGY_POOL_CREATIONS", 1),

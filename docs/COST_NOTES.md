@@ -14,7 +14,9 @@ deployed AgentCore runtime (`AgentCore-Pool-default`) are live. There is **no al
 compute**: the runtime bills per invocation only. What does accrue quietly is storage and
 log ingestion — the CDK staging bucket, three CloudWatch log groups, and account-wide X-Ray
 Transaction Search. Every one of them is enumerated with its own teardown command in the
-resource ledger at the top of [`BUILD_HISTORY.md`](../BUILD_HISTORY.md).
+resource ledger at the top of `BUILD_HISTORY.md` — the local engineering notebook, which
+is deliberately not part of this repository, so that reference will not resolve to a file
+here. `make cost-check` lists the same resources from the live account.
 
 Every other run — the full test suite, `make demo`, all UI development — used the
 in-memory store, deterministic routing, simulated payments, and the offline planner, and
@@ -31,7 +33,7 @@ All configurable via environment variables so they can be tightened without a co
 | Model iterations per run | `MAX_AGENT_ITERATIONS` | 8 | `BeforeModelCallEvent` — **raises**, terminating the run |
 | Tool calls per run | `MAX_TOOL_CALLS_PER_RUN` | 25 | `BeforeToolCallEvent` — cancels further calls |
 | Identical repeated calls | `MAX_DUPLICATE_TOOL_CALLS` | 2 | Argument digest; cancelled with an explanation |
-| Wall clock per run | `WORKFLOW_TIMEOUT_SECONDS` | 120 local, **45 deployed** | Checked before every model and tool call — cooperative, see below |
+| Wall clock per run | `WORKFLOW_TIMEOUT_SECONDS` | 45 | Checked before every model and tool call — cooperative, see below. Same locally and deployed |
 | Route matrix cells | `MAX_ROUTE_MATRIX_CELLS` | 100 | Checked **before** any Location API call |
 | Background schedules | `SCHEDULES_ENABLED` | `false` | Deployed judge stack has no rule; un-deployed pilot template asserts DISABLED |
 
@@ -335,7 +337,7 @@ single workspace partition and has a test proving it cannot reach another worksp
 
 ## Live AWS resource ledger
 
-See the ledger at the top of [`BUILD_HISTORY.md`](../BUILD_HISTORY.md). As of **2026-08-16**
+See the ledger at the top of `BUILD_HISTORY.md` (local-only, as above). As of **2026-08-16**
 it lists **23 live rows** across three groups: the `CDKToolkit` bootstrap and its 11
 resources (12), the `AgentCore-Pool-default` stack and its 3 resources (4), and **seven
 things created outside both stacks** that no teardown command removes for you.

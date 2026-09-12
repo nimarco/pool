@@ -36,7 +36,7 @@ import {
   Reconciliation,
 } from "../api";
 import { ChosenItem, Picked, asChosen, defaultQuantity } from "../chosen";
-import { outlookHasDetail, outlookHeadline } from "../labels";
+import { outlookHasDetail, outlookHeadline, units } from "../labels";
 import { EXACT } from "../preference-answers";
 import { Preferences } from "../preferences";
 import { useClarification } from "../use-clarification";
@@ -1005,7 +1005,7 @@ export function Needs({
                         decision the member actually made, and the only field on this row
                         that was missing. */}
                     <div className="tiny muted">
-                      {n.quantity} {n.unit} · every {n.cadence_days} days ·{" "}
+                      {units(n.quantity, n.unit)} · every {n.cadence_days} days ·{" "}
                       {flexibilityTag(n)}
                     </div>
                     {byNeed.get(n.need_id) ? (

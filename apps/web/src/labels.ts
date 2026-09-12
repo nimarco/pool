@@ -129,3 +129,17 @@ export function communityLabel(
   if (!verifying) return name;
   return opts.sentenceStart ? "Your area" : "your area";
 }
+
+/** `3 bag` was rendering on What you buy: a quantity beside a raw unit noun. The two
+ *  other places that print a quantity each grew their own `n === 1 ? u : u + "s"`, and
+ *  `preferences.tsx` grew a third as a local `plural`. One of the three simply got
+ *  missed. Shared so the next screen that prints a quantity has something to reach for. */
+export function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** The plural of a unit noun the server supplied, which is always regular here —
+ *  `bag`, `pack`, `tub`, `unit`. */
+export function units(n: number, unit: string): string {
+  return plural(n, unit, `${unit}s`);
+}

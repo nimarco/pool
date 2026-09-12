@@ -70,7 +70,15 @@ export function changeScreen(update: () => void, dir: Direction = "fwd"): void {
     update();
     return;
   }
-  doc.startViewTransition(() => {
+  const transition = doc.startViewTransition(() => {
     flushSync(update);
   });
+  /* A transition that is superseded before it finishes rejects `finished` with
+     `AbortError: Transition was skipped`. Nothing is wrong when that happens — somebody
+     navigated again and the newer transition is the one that should win — but the
+     rejection was unhandled, so it surfaced as an uncaught error in the console. That is
+     the one place a sceptical reader looks to decide whether the software is sound, and
+     a benign race does not get to spend that credit. Swallowed here rather than in a
+     global handler so only *this* promise is covered. */
+  transition?.finished?.catch(() => {});
 }

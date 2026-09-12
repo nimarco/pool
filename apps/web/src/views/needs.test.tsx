@@ -106,6 +106,32 @@ function renderNeeds(
   );
 }
 
+it("pluralises the unit beside a quantity on a standing row", async () => {
+  /* The row read "2 pack · every 30 days" on the deployed demo — a quantity printed
+     beside the raw unit noun the server supplies. Two other screens had each grown
+     their own pluraliser and this one was missed; they share one now. */
+  vi.spyOn(apiModule.api, "needs").mockResolvedValue({
+    needs: [needRow({ quantity: 2, unit: "pack" })],
+    products: PRODUCTS,
+    limits: LIMITS,
+  });
+  renderNeeds();
+  const line = await screen.findByText(/every 30 days/);
+  expect(line.textContent).toMatch(/2 packs/);
+  expect(line.textContent).not.toMatch(/2 pack\s*·/);
+});
+
+it("keeps the singular when the quantity is one", async () => {
+  vi.spyOn(apiModule.api, "needs").mockResolvedValue({
+    needs: [needRow({ quantity: 1, unit: "pack" })],
+    products: PRODUCTS,
+    limits: LIMITS,
+  });
+  renderNeeds();
+  const line = await screen.findByText(/every 30 days/);
+  expect(line.textContent).toMatch(/1 pack\s*·/);
+});
+
 /** Open the form and get through the product half of it, the way a member would. */
 async function chooseProduct(query = "vanilla whey") {
   await userEvent.click(await screen.findByRole("button", { name: /add a need/i }));

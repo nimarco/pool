@@ -45,12 +45,14 @@ You could write all of this as normal code. But the branching adds up fast: seve
 
 So I split it. The agent, running on [Strands](https://strandsagents.com/), gets two questions — what's worth investigating, and what to try next when that came back no. Ordinary code decides everything that has to be correct: who qualifies, quantities, how the cases fill, what it costs, whether it's viable.
 
-![A two-column diagram. Agent: what is worth investigating, what should I try next — freedom to coordinate. Code: who qualifies, what does it cost, does the order actually work — no freedom to make up the math.](images/article-2-agent-and-code.jpg)
+![A two-column diagram headed "One decision that matters". Agent: what is worth investigating, what should I try next — freedom to coordinate. Code: who qualifies, what does it cost, does the order actually work — no freedom to make up the math.](images/article-2-agent-and-code.jpg)
 
 The model does not decide whether $367.19 is more than $360.00. There's no route by which it could. That refusal comes from the same pricing code that prices every order in the system, and the run just receives the verdict.
 
 ## Where this runs
 
-[The public demo](https://d38kno05ygcarw.cloudfront.net/verify) runs the real Strands loop and the real tools with a deterministic planner in place of the model, so the trace is free to reproduce and the function serving it can't call a model at all. The same bounded agent is deployed separately to [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/) against Amazon Nova Lite, on the same DynamoDB state, verified live in August.
+[The public demo](https://d38kno05ygcarw.cloudfront.net/verify) runs the real Strands loop and the real tools with a deterministic planner in place of the model, so the trace is free to reproduce and the function serving it can't call a model at all. The same bounded agent is deployed separately to [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/) against Amazon Nova Lite, over the same DynamoDB state.
 
-That live run's outcome was a truthful *no action* — the declaration it got had already been handled. It proves the deployment works; it isn't a recording of Nova picking Harbourstone. I'd rather say that than let a good-looking trace imply otherwise.
+A bounded run there executed on Nova Lite — six tools, terminated `completed` — and the order it formed was read back out of DynamoDB afterwards, with `created_by_run` matching the run that made it rather than being taken from that run's own response.
+
+What it is not is a recording of Nova picking Harbourstone. The cohort search that produces this refusal is selected by a coordination event, and the hosted entry point doesn't accept one — so the Kestrel-to-Harbourstone run on Nova Lite went through the same Strands loop by the local path instead. Both traces are in the repo. I'd rather name which is which than let one good-looking trace stand in for the other.

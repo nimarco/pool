@@ -2,7 +2,7 @@
 
 Costco gives one person the purchasing power of twenty-four buyers, and in exchange that person takes home twenty-four of something. Which is fine if you need twenty-four.
 
-[Pool](https://github.com/nimarco/pool) is what I built for the Agents for Humans hackathon. Twenty-four people each get one, and nobody has to organise the group.
+[Pool](https://github.com/nimarco/pool) is what I built for the Agents for Humans hackathon, and [the demo is public](https://d38kno05ygcarw.cloudfront.net/verify). Twenty-four people each get one, and nobody has to organise the group.
 
 ![Twenty-four small figures arranged in a grid, each with one package, under the label 24 × 1.](images/article-1-inversion-24x1.jpg)
 

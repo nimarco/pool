@@ -600,19 +600,26 @@ function WatchingRow({
     <div className="watch-row">
       <div className="watch-head">
         <span className="watch-name">{demand.product_name}</span>
-        <StatusChip status={status} label={label} />
-        {/* Present whatever the answer was. "Pool looked and decided not to" is exactly
-            as much of an answer as an order, and a link that only appeared on success
-            would make the refusal look like nothing happened. The screen behind it says
-            so itself when Pool has not looked yet. */}
-        {need ? (
-          <button
-            className="linkish watch-why"
-            onClick={() => onWhy(need.need_id, demand.product_name, demand.unit)}
-          >
-            {status === "coordinating" ? "Why this order?" : "Why not yet?"}
-          </button>
-        ) : null}
+        {/* The state and the way into it, as one block. They were three siblings under
+            `space-between`, which puts the *middle* one in the middle — so the status
+            describing the product floated in the centre of a wide card with nothing
+            beside it. Grouped, the row reads subject on the left, state on the right,
+            which is also the column a reader scans down a list of these. */}
+        <div className="watch-state">
+          <StatusChip status={status} label={label} />
+          {/* Present whatever the answer was. "Pool looked and decided not to" is exactly
+              as much of an answer as an order, and a link that only appeared on success
+              would make the refusal look like nothing happened. The screen behind it says
+              so itself when Pool has not looked yet. */}
+          {need ? (
+            <button
+              className="linkish watch-why"
+              onClick={() => onWhy(need.need_id, demand.product_name, demand.unit)}
+            >
+              {status === "coordinating" ? "Why this order?" : "Why not yet?"}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {/* Skipped entirely when an order has already taken the demand. `compatible_members`
@@ -806,19 +813,25 @@ function RunNow({
 }) {
   return (
     <>
-      <div className="btn-row">
-        <button className="btn btn-primary" onClick={onFind} disabled={running}>
-          {running ? <span className="spinner" /> : null}
-          {running ? "Pool is checking…" : again ? "Check again now" : "Ask Pool to check now"}
-        </button>
+      {/* The button and the caveat that qualifies it, as one block. They were stacked,
+          so the card ended on a heavy control followed by a loose line of grey text with
+          the rest of the width empty. Side by side past a laptop width the caveat reads
+          as a note *about the button*, which is what it is. */}
+      <div className="run-now">
+        <div className="btn-row">
+          <button className="btn btn-primary" onClick={onFind} disabled={running}>
+            {running ? <span className="spinner" /> : null}
+            {running ? "Pool is checking…" : again ? "Check again now" : "Ask Pool to check now"}
+          </button>
+        </div>
+        {/* Pool is designed to do this on its own schedule; this deployment has no
+            scheduler running, and saying so is cheaper than implying a background job
+            that does not exist (AGENTS.md §8). */}
+        <p className="tiny faint prose run-now-note">
+          Normally automatic on the community&apos;s pool day. Nothing is scheduled in this
+          demo account.
+        </p>
       </div>
-      {/* Pool is designed to do this on its own schedule; this deployment has no
-          scheduler running, and saying so is cheaper than implying a background job
-          that does not exist (AGENTS.md §8). */}
-      <p className="tiny faint prose">
-        Normally automatic on the community&apos;s pool day. Nothing is scheduled in this
-        demo account.
-      </p>
       {running ? (
         <CoordinatorWait live={liveDiscovery} region={region} objective={objective} />
       ) : null}

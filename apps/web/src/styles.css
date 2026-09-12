@@ -1076,8 +1076,14 @@ table.data th.r {
   flex-wrap: wrap;
   gap: 4px 12px;
 }
-.watch-head > .watch-why {
-  margin-inline-start: auto;
+/* Subject left, state right — two children, so `space-between` means what it says. */
+.watch-head {
+  justify-content: space-between;
+}
+.watch-state {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
 }
 .watch-name {
   font-family: var(--display);
@@ -4759,14 +4765,48 @@ html.can-cross-fade .step-enter {
   .why-verdict-head { align-content: start; min-height: 64px; }
 }
 
-/* The row's subject was the quietest thing in it: a 19px name above a bolder sentence,
-   so the eye landed on the explanation before the product it explains. Desktop only —
-   the phone keeps the size it had. */
+/* Desktop composition for a watched row.
+   The card is ~1100px wide and the content used about a third of it: a left ribbon of
+   prose with the status adrift in the middle and the rest of the width empty. Three
+   things fix that without changing what the row says — the subject outranks the
+   sentence explaining it, the state sits in a right-hand column where it can be scanned
+   down a list, and the prose gets a measure instead of running the full width.
+   Phone keeps its size, its stacking and its single column. */
 @media (min-width: 941px) {
   .watch-name {
     font-size: 23px;
   }
   .watch-head {
-    gap: 6px 14px;
+    gap: 6px 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 14px;
+  }
+  /* Pushed right only where there is width to push into. On a phone the block simply
+     wraps under the name, which is where it already sat. */
+  .watch-state {
+    gap: 18px;
+    margin-inline-start: auto;
+  }
+  /* The card's last block: control and its caveat on one line, so the card ends
+     deliberately instead of trailing off into grey text. */
+  .run-now {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .run-now .btn-row {
+    margin: 0;
+    flex: none;
+  }
+  .run-now-note {
+    margin: 0;
+    max-width: 46ch;
+  }
+  /* A line of body text 1000px wide is not a line anybody finishes. */
+  .watch-row > .watch-demand,
+  .watch-row > .watch-blocker,
+  .watch-row > .watch-meta {
+    max-width: 68ch;
   }
 }

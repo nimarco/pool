@@ -1065,12 +1065,19 @@ table.data th.r {
   border-bottom: none;
   padding-bottom: 2px;
 }
+/* Name and state belong together; only the link is an action.
+   `space-between` across three children put the status chip in the middle of the row,
+   so on a wide card it floated in dead space with no relationship to the product it
+   describes. Pushing the link right instead leaves the subject and its state adjacent,
+   which is the pair a reader is scanning for. */
 .watch-head {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   flex-wrap: wrap;
   gap: 4px 12px;
+}
+.watch-head > .watch-why {
+  margin-inline-start: auto;
 }
 .watch-name {
   font-family: var(--display);
@@ -4750,4 +4757,16 @@ html.can-cross-fade .step-enter {
   .why-comparison > :only-child { grid-column: 1 / -1; }
   .why-comparison > p { grid-column: 1 / -1; }
   .why-verdict-head { align-content: start; min-height: 64px; }
+}
+
+/* The row's subject was the quietest thing in it: a 19px name above a bolder sentence,
+   so the eye landed on the explanation before the product it explains. Desktop only —
+   the phone keeps the size it had. */
+@media (min-width: 941px) {
+  .watch-name {
+    font-size: 23px;
+  }
+  .watch-head {
+    gap: 6px 14px;
+  }
 }

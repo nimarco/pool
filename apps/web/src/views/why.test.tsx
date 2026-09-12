@@ -80,6 +80,25 @@ function coordination(
   };
 }
 
+it("says there was no run instead of proving one with zeros", async () => {
+  /* A member already inside an order saves a declaration that order already serves.
+     Deterministic reconciliation puts them back and the save causes no run, so
+     `run` is null — and the proof panel used to render a fact table of zeros with
+     `undefined · undefined` in the Provider row, which is the one field the panel
+     exists to make unambiguous. Seen on the deployed demo. */
+  vi.spyOn(apiModule.api, "needCoordination").mockResolvedValue(
+    coordination({}, { run: null, evidence_run_id: "run_earlier" }),
+  );
+  render(<WhyThisOrder needId="need_1" productName="Jasmine rice, 5 lb" unit="bag" onBack={() => {}} />);
+  await userEvent.click(await screen.findByRole("button", { name: "Show" }));
+
+  expect(document.body.textContent).not.toContain("undefined");
+  expect(await screen.findByText(/This save caused no new run/)).toBeTruthy();
+  expect(document.body.textContent).toContain("run_earlier");
+  // and it must not print a bounds table it has no run for
+  expect(document.body.textContent).not.toMatch(/0 of 0 allowed/);
+});
+
 const OFFLINE_PLAN: NonNullable<NeedCoordination["clarification"]> = {
   plan_id: "cpl_a",
   run_id: "run_clarify",

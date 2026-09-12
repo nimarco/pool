@@ -525,7 +525,28 @@ function ClarificationProofBlock({ proof }: { proof: ClarificationProof }) {
 
 function Proof({ data }: { data: NeedCoordination }) {
   const run = data.run;
-  const words = vocabularyFor(run?.model_provider);
+  /* No run means no run to prove, and a table of zeros beside `undefined · undefined`
+     is not a smaller claim than a false one — it is the same claim, badly typeset. It
+     happens on a real path: a member already inside an order saves a declaration the
+     order already serves, deterministic reconciliation puts them back, and the save
+     causes no new run. The reasoning on screen is the earlier run's, which the payload
+     names, so say that instead of rendering an empty fact table. */
+  if (!run) {
+    return (
+      <div className="panel-pad stack-sm">
+        <p className="small">
+          <strong>This save caused no new run.</strong> The order you are already in
+          serves this declaration, so Pool had nothing new to work out.
+        </p>
+        <p className="small muted">
+          The reasoning above is the run that built that order —{" "}
+          <code>{data.evidence_run_id || "recorded when it formed"}</code>. Its tools,
+          bounds and verdicts are the ones shown there.
+        </p>
+      </div>
+    );
+  }
+  const words = vocabularyFor(run.model_provider);
   return (
     <div className="panel-pad stack-sm">
       {/* The five facts a sceptical reader is here for, before anything else. Everything
@@ -536,7 +557,7 @@ function Proof({ data }: { data: NeedCoordination }) {
         <Fact label="Outcome" value={run?.outcome ?? ""} />
         {/* Provider first among the rest, and never abbreviated away: it is what decides
             whether any of the words around it may say "model". */}
-        <Fact label="Provider" value={`${run?.model_provider} · ${run?.model_id}`} />
+        <Fact label="Provider" value={`${run.model_provider} · ${run.model_id}`} />
         <Fact
           label={words.tokens}
           value={`${run?.input_tokens ?? 0} in · ${run?.output_tokens ?? 0} out`}

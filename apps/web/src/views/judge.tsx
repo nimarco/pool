@@ -26,7 +26,7 @@
  * purpose and a member never sees.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   MemberView,
   NeedOutlook,
@@ -86,7 +86,7 @@ function Step({
   children: React.ReactNode;
 }) {
   return (
-    <li className={`judge-step is-${state}`}>
+    <li className={`judge-step is-${state}`} aria-current={state === "current" ? "step" : undefined}>
       <span className="judge-num" aria-hidden="true">
         {state === "done" ? <IconCheck size={13} /> : n}
       </span>
@@ -185,22 +185,29 @@ export function JudgeDemo({
   const standing = (member?.standing_demand ?? []).find((d) => d.product_id === RICE) ?? null;
   const p = progress(member, hasOrder);
 
+  const advancePending = useRef<string | null>(null);
+  useEffect(() => {
+    const action = advancePending.current;
+    if (!action || busy !== null) return;
+    const landed = action === "setup" ? p.declared : action === "a" ? p.quoteA
+      : action === "b" ? p.quoteB : action === "run" ? p.ran : !p.declared;
+    if (!landed) return;
+    const target = document.querySelector<HTMLElement>(
+      ".judge-step.is-current button:not(:disabled), .judge-step:last-child button:not(:disabled)",
+    );
+    if (!target) return;
+    advancePending.current = null;
+    target.focus({ preventScroll: true });
+    target.closest(".judge-step")?.scrollIntoView({ block: "center" });
+  }, [p.declared, p.quoteA, p.quoteB, p.ran, busy]);
+
   const act = async (key: string, fn: () => Promise<unknown>) => {
     setBusy(key);
     setError(null);
     try {
       await fn();
       await onRefresh();
-      /* Bring the next thing to do into view. A checklist that advances off-screen asks
-         the reader to go and find their own place, and this one is being followed by
-         somebody who has never seen it. Instant, not smooth: the global
-         reduced-motion rule already forces `scroll-behavior: auto`, and a four-minute
-         walkthrough is not the place for a scroll animation. */
-      window.requestAnimationFrame(() => {
-        document
-          .querySelector(".judge-step.is-current")
-          ?.scrollIntoView({ block: "center" });
-      });
+      advancePending.current = key;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -312,7 +319,7 @@ export function JudgeDemo({
         <Step
           n={2}
           title="See the demand that was already there"
-          state={state(p.quoteA, p.declared && !p.quoteA)}
+          state={state(p.declared, false)}
         >
           {p.declared && (demandAt ?? standing) ? (
             <>
@@ -345,7 +352,7 @@ export function JudgeDemo({
         <Step
           n={3}
           title="Let a supplier quote arrive — and watch Pool refuse it"
-          state={state(p.quoteB, p.quoteA && !p.quoteB)}
+          state={state(p.quoteA, p.declared && !p.quoteA)}
         >
           <p className="judge-note">
             This imports a committed CSV from <code>demo-data/</code> through the same
@@ -384,7 +391,7 @@ export function JudgeDemo({
         <Step
           n={4}
           title="Now let better terms arrive"
-          state={state(p.ran, p.quoteB && !p.ran)}
+          state={state(p.quoteB, p.quoteA && !p.quoteB)}
         >
           <p className="judge-note">
             The same path, the second committed sheet. Bigger cases, a higher minimum, a

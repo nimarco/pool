@@ -134,6 +134,7 @@ export function WhyThisOrder({
   productName,
   unit,
   onBack,
+  onReviewNeeds,
 }: {
   needId: string;
   /** What the member called it, for the heading. The server names the *bought* product. */
@@ -143,6 +144,7 @@ export function WhyThisOrder({
    *  them, and a hardcoded "bags" is wrong on every row that is not coffee. */
   unit: string;
   onBack: () => void;
+  onReviewNeeds?: () => void;
 }) {
   const [data, setData] = useState<NeedCoordination | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -184,7 +186,7 @@ export function WhyThisOrder({
   );
 
   return (
-    <div className="stack">
+    <div className="stack why-page">
       <button className="btn btn-sm btn-ghost self-start" onClick={onBack}>
         <IconArrowLeft />
         Back
@@ -196,6 +198,13 @@ export function WhyThisOrder({
           {productName}
           {refused.length > 0 && chosen ? " · more demand isn't cheaper" : ""}
         </p>
+        {onReviewNeeds ? (
+          <div className="row-actions">
+            <button className="btn btn-sm" onClick={onReviewNeeds}>
+              Review what you buy
+            </button>
+          </div>
+        ) : null}
       </header>
 
       {!data.event ? (
@@ -226,7 +235,7 @@ export function WhyThisOrder({
             <div className="panel-head">
               <h2>{order ? "What Pool worked out" : "What Pool found"}</h2>
             </div>
-            <div className="panel-pad stack-sm">
+            <div className="panel-pad stack-sm why-comparison">
               {investigated.length === 0 ? (
                 <p className="small muted">
                   Nothing new to assemble — the order you are in already serves this.
@@ -248,6 +257,23 @@ export function WhyThisOrder({
                 </p>
               ) : null}
             </div>
+          </section>
+
+          {/* 5. The proof, one layer down and closed by default. */}
+          <section className="panel">
+            <div className="panel-head">
+              <h2>Technical proof for this run</h2>
+              <span className="spacer" />
+              <button
+                className="btn btn-sm"
+                onClick={() => setProof((p) => !p)}
+                aria-expanded={proof}
+                aria-controls="run-proof"
+              >
+                {proof ? "Hide" : "Show"}
+              </button>
+            </div>
+            <div id="run-proof" hidden={!proof}>{proof ? <Proof data={data} /> : null}</div>
           </section>
 
           {/* Who could not join, and what has not happened. Both load-bearing, both
@@ -295,21 +321,7 @@ export function WhyThisOrder({
             </div>
           </details>
 
-          {/* 5. The proof, one layer down and closed by default. */}
-          <section className="panel">
-            <div className="panel-head">
-              <h2>Technical proof for this run</h2>
-              <span className="spacer" />
-              <button
-                className="btn btn-sm"
-                onClick={() => setProof((p) => !p)}
-                aria-expanded={proof}
-              >
-                {proof ? "Hide" : "Show"}
-              </button>
-            </div>
-            {proof ? <Proof data={data} /> : null}
-          </section>
+
         </>
       )}
     </div>

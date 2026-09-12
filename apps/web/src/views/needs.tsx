@@ -614,6 +614,7 @@ export function Needs({
   communityName,
   initialProduct,
   onConsumeInitialProduct,
+  onWhy,
   onFind,
   onWorldChanged,
   running,
@@ -627,6 +628,7 @@ export function Needs({
   /** A product already chosen on Home, so the member does not search twice. */
   initialProduct: Picked | null;
   onConsumeInitialProduct: () => void;
+  onWhy?: (needId: string, productName: string, unit: string) => void;
   onFind: () => void;
   /** Something a save did to the deterministic picture that this view does not own —
    *  the outlook beside every row, and whether this member is in an order at all.
@@ -1007,7 +1009,15 @@ export function Needs({
                       {flexibilityTag(n)}
                     </div>
                     {byNeed.get(n.need_id) ? (
-                      <Outlook outlook={byNeed.get(n.need_id)!} unit={n.unit} />
+                      <>
+                        <Outlook outlook={byNeed.get(n.need_id)!} unit={n.unit} />
+                        {onWhy ? (
+                          <button className="btn btn-sm btn-ghost self-start"
+                            onClick={() => onWhy(n.need_id, n.product_name, n.unit)}>
+                            See what Pool found
+                          </button>
+                        ) : null}
+                      </>
                     ) : null}
                   </div>
                   <div className="row-tail">

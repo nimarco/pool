@@ -9,3 +9,4 @@
 import { vi } from "vitest";
 
 window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
+HTMLElement.prototype.scrollIntoView = vi.fn();

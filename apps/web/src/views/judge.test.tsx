@@ -150,3 +150,14 @@ describe("the judge walkthrough", () => {
     expect(screen.getByRole("button", { name: /Behind Pool/ })).toBeTruthy();
   });
 });
+
+it.each([
+  ["no_supply", "Import quote A"],
+  ["not_worth_it", "Import quote B"],
+  ["ready", "Ask Pool to check now"],
+] as const)("marks exactly the next actionable step for %s", (state, action) => {
+  renderJudge({ needs_outlook: [outlook({ state })] });
+  const current = document.querySelectorAll('.judge-step[aria-current="step"]');
+  expect(current).toHaveLength(1);
+  expect(current[0].contains(screen.getByRole("button", { name: action }))).toBe(true);
+});

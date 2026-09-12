@@ -310,6 +310,13 @@ function BuyStep({
         nearby who need the same thing, and works out whether buying together is cheaper.
       </p>
 
+      {added.length > 0 && !chosen ? (
+        <p className="small muted" role="status">
+          Saved. Continue to choose how Pool may act, then see what it found on Home.
+          You can add something else here too.
+        </p>
+      ) : null}
+
       {added.length > 0 ? (
         <ul className="onboard-added" aria-label="Added so far">
           {added.map((a) => (
@@ -421,7 +428,7 @@ function BuyStep({
       </div>
 
       <div className="btn-row">
-        <button className="btn btn-primary btn-lg" onClick={onNext} disabled={added.length === 0}>
+        <button className="btn btn-primary btn-lg" onClick={onNext} disabled={added.length === 0 || chosen !== null || busy}>
           {added.length === 0 ? "Add one to continue" : "Continue"}
           {added.length === 0 ? null : <IconArrowRight />}
         </button>

@@ -615,3 +615,63 @@ describe("a run's answer outlives the world it was given in", () => {
   });
 });
 
+
+it("keeps the judge's starting evidence through setup and the four actions", async () => {
+  window.history.replaceState({}, "", "/?screen=judge");
+  const fallback = fetch;
+  let onboarded = false;
+  let stage = 0;
+  const body = (payload: unknown) => ({ ok: true, status: 200, json: async () => payload }) as Response;
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), "http://localhost");
+    const workspace = url.searchParams.get("workspace") ?? "";
+    if (url.pathname === "/api/state") {
+      const state = appState(workspace);
+      state.consumer.onboarded = onboarded;
+      return body(state);
+    }
+    if (url.pathname === "/api/onboarding") {
+      onboarded = true;
+      return body(appState(workspace).consumer);
+    }
+    if (url.pathname === "/api/needs" && init?.method === "POST") {
+      stage = 1;
+      return body({});
+    }
+    if (url.pathname === "/api/demo/supplier-sample") {
+      stage += 1;
+      return body({ filename: `quote-${stage}.csv`, valid: 1, rejected: 0, rows_found: 1,
+        bytes: 100, sha256: "abc123", recorded: true });
+    }
+    if (url.pathname === "/api/agent/run") {
+      stage = 4;
+      return body({ run_id: "judge_run", outcome: "pool_created" });
+    }
+    if (url.pathname.startsWith("/api/members/")) {
+      const member = memberView(workspace);
+      return body({ ...member,
+        standing_demand: stage ? [{ product_id: "prod_rice_jasmine", compatible_members: stage === 4 ? 0 : 6,
+          compatible_units: stage === 4 ? 0 : 22, my_units: 2 }] : [],
+        needs_outlook: stage ? [{ product_id: "prod_rice_jasmine",
+          state: ["", "no_supply", "not_worth_it", "ready", "in_pool"][stage],
+          headline: ["", "Original demand, no supplier", "Quote A refused", "Quote B worth doing", "In an order"][stage],
+          blocker: stage === 2 ? "Costs more after fees" : "" }] : [],
+      });
+    }
+    return fallback(input, init);
+  }));
+  render(<App />);
+  await userEvent.click(await screen.findByRole("button", { name: "Set that up for me" }));
+  await waitFor(() => expect(screen.getByText("Original demand, no supplier")).toBeTruthy());
+  await waitFor(() => expect(screen.getByRole("button", { name: "Import quote A" }).closest("li")?.getAttribute("aria-current")).toBe("step"));
+  await userEvent.click(screen.getByRole("button", { name: "Import quote A" }));
+  await waitFor(() => expect(screen.getByText("Quote A refused")).toBeTruthy());
+  await userEvent.click(screen.getByRole("button", { name: "Import quote B" }));
+  await waitFor(() => expect((screen.getByRole("button", { name: "Ask Pool to check now" }) as HTMLButtonElement).disabled).toBe(false));
+  await userEvent.click(screen.getByRole("button", { name: "Ask Pool to check now" }));
+  await screen.findByRole("button", { name: "See it on your home screen" });
+  expect(screen.getByText("Original demand, no supplier")).toBeTruthy();
+  expect(screen.getByText("Quote A refused")).toBeTruthy();
+  expect(screen.getByText("7 people near you buy this")).toBeTruthy();
+  expect(document.querySelectorAll('.judge-step[aria-current="step"]')).toHaveLength(0);
+});

@@ -290,7 +290,7 @@ export default function App() {
   /* What counts as "a different screen" for the swap. The showcase is a different world
      rather than a different screen, and a pool record is a different screen per pool —
      moving between two of them should read as a move, not as a redraw in place. */
-  const screenId = needsOnboarding
+  const screenId = needsOnboarding && view !== "judge" && view !== "verify" && !showcase
     ? "onboarding"
     : showcase
       ? `showcase:${showcase}${showcase === "pool" ? `:${openPool?.pool_id ?? ""}` : ""}`
@@ -1028,6 +1028,7 @@ export default function App() {
               productName={why.productName}
               unit={why.unit}
               onBack={() => navigate("home", "back")}
+              onReviewNeeds={() => navigate("needs")}
             />
           ) : null}
 
@@ -1055,6 +1056,10 @@ export default function App() {
             <Needs
               identity={identity}
               communityName={communityLabel(communityName, verifying)}
+              onWhy={(needId, productName, unit) => {
+                setWhy({ needId, productName, unit });
+                navigate("why");
+              }}
               initialProduct={pendingProduct}
               onConsumeInitialProduct={() => setPendingProduct(null)}
               onFind={findOpportunities}

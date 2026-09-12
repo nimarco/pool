@@ -3877,7 +3877,7 @@ select.control {
 
 /* The steps are the instruction, so they are set at reading size rather than at the
    13.5px the disclosure lists use. Four short lines, nothing between them and the CTA. */
-.verify > .verify-steps {
+.verify .verify-steps {
   font-size: 15px;
   gap: 9px;
   max-width: 46ch;
@@ -4726,4 +4726,28 @@ html.can-cross-fade .step-enter {
   .reveal {
     animation: none;
   }
+}
+
+/* Judge entry and evidence use the extra width; phone materials and type stay intact. */
+@media (min-width: 941px) {
+  .verify-intro {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 34px;
+    align-items: start;
+  }
+  .verify-start {
+    border-left: 1px solid var(--rule-strong);
+    padding-left: 34px;
+  }
+  .why-page { gap: 22px; }
+  .why-comparison {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 22px;
+  }
+  .why-comparison > :only-child { grid-column: 1 / -1; }
+  .why-comparison > p { grid-column: 1 / -1; }
+  .why-verdict-head { align-content: start; min-height: 64px; }
 }

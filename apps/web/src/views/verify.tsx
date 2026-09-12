@@ -46,38 +46,45 @@ export function Verify({
 
   return (
     <div className="stack verify">
-      <header className="stack-sm">
-        <h1 className="title">Verify this yourself</h1>
-        <p className="lede">
-          You are joining a synthetic community that already buys coffee. Nothing here has
-          been arranged for you.
-        </p>
-      </header>
+      <div className="verify-intro stack">
+        <header className="stack-sm">
+          <h1 className="title">Verify this yourself</h1>
+          <p className="lede">
+            Tell Pool what you buy. It finds people nearby who need the same thing and
+            works out whether buying together is worth it.
+          </p>
+          <p className="small muted">
+            You are joining a synthetic community that already buys coffee. Nothing here
+            has been arranged for you.
+          </p>
+        </header>
 
-      <ol className="verify-steps">
-        <li>
-          Add a coffee you drink — <strong>three bags a month</strong>.
-        </li>
-        <li>Say whether another brand would do.</li>
-        <li>
-          <strong>Answer them the way you actually buy.</strong>
-        </li>
-        <li>Save.</li>
-      </ol>
-
-      <div className="row-actions">
-        <button className="btn btn-primary" onClick={onStart}>
-          Start — add what you buy
-        </button>
-        <button className="btn btn-ghost" onClick={onHome}>
-          Look at Home first
-        </button>
+        <div className="verify-start stack-sm">
+          <ol className="verify-steps">
+            <li>Add a coffee you drink — <strong>three bags a month</strong>.</li>
+            <li>Say whether another brand would do.</li>
+            <li><strong>Answer them the way you actually buy.</strong></li>
+            <li>Save, then finish setup to see what Pool found on Home.</li>
+          </ol>
+          <div className="row-actions">
+            <button className="btn btn-primary" onClick={onStart}>
+              Start — add what you buy
+            </button>
+            <button className="btn btn-ghost" onClick={onHome}>
+              Look at Home first
+            </button>
+          </div>
+          <p className="verify-badge">
+            Synthetic community · simulated payments · real software
+          </p>
+        </div>
       </div>
 
-      {/* The one boundary that does not get to be a click away. Six words, above the
-          fold, on first paint — and the link into the whole of it. */}
-      <p className="verify-badge">
-        Synthetic community · simulated payments · real software
+      <p className="small muted">
+        An order or a reason to keep watching: both are real answers. From Home, open
+        <strong> Why this order?</strong> or <strong>Why not yet?</strong> to compare
+        the options and read the technical proof. Your answers stay editable in
+        <strong> What you buy</strong>.
       </p>
 
       <details className="panel why-fold">

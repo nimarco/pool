@@ -402,6 +402,20 @@ describe("what the declaration caused, afterwards", () => {
     expect(screen.getByText("Planner iterations")).toBeTruthy();
   });
 
+  it("offers a route back to editable needs and identifies the proof disclosure", async () => {
+    vi.spyOn(apiModule.api, "needCoordination").mockResolvedValue(coordination);
+    const review = vi.fn();
+    render(<WhyThisOrder needId="need_1" productName="Coffee" unit="bag"
+      onBack={() => {}} onReviewNeeds={review} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Review what you buy" }));
+    expect(review).toHaveBeenCalledTimes(1);
+    const show = screen.getByRole("button", { name: "Show" });
+    expect(show.getAttribute("aria-controls")).toBe("run-proof");
+    await userEvent.click(show);
+    expect(document.getElementById("run-proof")?.hidden).toBe(false);
+    expect(screen.getByText("Planner iterations")).toBeTruthy();
+  });
+
   it("never describes the provisional order as bought", async () => {
     inVerifyScope(true);
     vi.spyOn(apiModule.api, "needCoordination").mockResolvedValue(coordination);
@@ -425,4 +439,19 @@ describe("what the declaration caused, afterwards", () => {
     expect(text).toMatch(/No card has been charged/i);
     expect(text).toMatch(/Nothing has been ordered from the supplier/i);
   });
+});
+
+it("acknowledges a saved item and blocks continuation past an unsaved second item", async () => {
+  inVerifyScope(true);
+  render(<Onboarding consumer={FRESH} onDone={() => {}} />);
+  await nameYourself();
+  await shareLocation();
+  await chooseTheCoffee();
+  await userEvent.click(screen.getByRole("button", { name: "Add this" }));
+  await screen.findByText(/Saved. Continue to choose how Pool may act/);
+  expect((screen.getByRole("button", { name: "Continue" }) as HTMLButtonElement).disabled).toBe(false);
+  await chooseTheCoffee();
+  expect((screen.getByRole("button", { name: "Continue" }) as HTMLButtonElement).disabled).toBe(true);
+  await userEvent.click(screen.getByRole("button", { name: "Change" }));
+  expect((screen.getByRole("button", { name: "Continue" }) as HTMLButtonElement).disabled).toBe(false);
 });

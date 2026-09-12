@@ -206,6 +206,7 @@ export function ProductSearch({
   const [active, setActive] = useState(0);
   const [busy, setBusy] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [verificationOnly, setVerificationOnly] = useState(false);
   /* Whether the exact products are showing. Collapsed while a family matched, because
      the family is the answer and six brand cards below it is the browse experience this
      screen is trying not to be. Expanded automatically when no family matched — somebody
@@ -242,12 +243,14 @@ export function ProductSearch({
           setAttribution(view.attribution);
           setActive(0);
           setShowProducts((view.groups ?? []).length === 0);
+          setVerificationOnly(Boolean(view.verification_only));
           setSearched(true);
         })
         .catch(() => {
           if (token !== latest.current) return;
           setResults([]);
           setFamilies([]);
+          setVerificationOnly(false);
           setSearched(true);
         })
         .finally(() => {
@@ -398,7 +401,26 @@ export function ProductSearch({
               : ""}
       </p>
 
-      {empty ? (
+      {empty && verificationOnly ? (
+        /* The film shows Pool refusing Kestrel and forming Harbourstone. Both are
+           invented, and they live in the verification walkthrough's partition and
+           nowhere else — so somebody who watched the film and typed the brand here is
+           told, truthfully, that Pool has never heard of it, with no way to know that is
+           the right answer. This says which world it belongs to and opens that world.
+           `/verify` is the address the README and the submission already use. */
+        <div className="inset stack-sm">
+          <p className="small">
+            <strong>{query.trim()}</strong> is part of Pool&apos;s verification
+            walkthrough, which uses a synthetic coffee community — so it is not in the
+            ordinary catalogue.
+          </p>
+          <div className="btn-row">
+            <a className="btn btn-sm" href="/verify">
+              Open verification demo
+            </a>
+          </div>
+        </div>
+      ) : empty ? (
         <div className="inset stack-sm">
           <p className="small">
             Pool does not have <strong>{query.trim()}</strong> in its catalogue yet.

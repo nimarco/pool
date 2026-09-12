@@ -460,6 +460,11 @@ export interface ProductSearchResult {
   groups: FamilyCandidate[];
   results: ProductCandidate[];
   attribution: CatalogAttribution;
+  /** True when nothing matched here, but the query names a product that exists only in
+   *  the verification walkthrough's synthetic community. A boolean, never the rows:
+   *  those brands are invented, and putting them in an ordinary catalogue result is the
+   *  thing the partition exists to prevent. */
+  verification_only?: boolean;
 }
 
 export interface NeedLimits {

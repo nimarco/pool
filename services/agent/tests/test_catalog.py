@@ -464,3 +464,55 @@ def test_a_product_expressed_as_an_identity_keeps_its_own_provenance():
     assert entry.source == ProductSource.CURATED.value
     assert entry.source_ref == "curated:test"
     assert catalog.get("prod_x_prov") is None, "nothing was written into the snapshot"
+
+class TestVerificationOnlySignpost:
+    """A brand from the film, typed into the ordinary product.
+
+    Kestrel and Harbourstone are invented. They exist to make a refusal demonstrable
+    against verified bulk quotes, and they are installed into the `-verify` partition
+    and nowhere else — so a viewer who types one here is told Pool has never heard of
+    it, which is true and reads as broken. The search says which world it belongs to.
+    """
+
+    @staticmethod
+    def _client():
+        from fastapi.testclient import TestClient
+
+        from pool.api.app import app
+
+        return TestClient(app)
+
+    def _search(self, ws, q):
+        client = self._client()
+        client.get(f"/api/state?workspace={ws}")
+        return client.get(f"/api/products/search?workspace={ws}&q={q}").json()
+
+    def test_a_verification_brand_is_signposted_not_returned(self):
+        body = self._search("wsignpost1", "kestrel")
+        assert body["verification_only"] is True
+        # The hint is a boolean. The rows must not leak into an ordinary catalogue.
+        assert body["results"] == []
+        assert body["groups"] == []
+
+    def test_every_brand_in_that_community_behaves_the_same(self):
+        """General, not a special case for one string. A seventh brand added to the
+        fixture needs no change in the endpoint."""
+        for i, brand in enumerate(
+            ["kestrel", "harbourstone", "beacon row", "millgate", "stillfield"]
+        ):
+            body = self._search(f"wsignpost2{i}", brand)
+            assert body["verification_only"] is True, brand
+
+    def test_a_genuinely_unknown_product_keeps_the_ordinary_empty_state(self):
+        body = self._search("wsignpost3", "flurbleglorp")
+        assert body["verification_only"] is False
+
+    def test_a_real_catalogue_product_is_never_signposted(self):
+        body = self._search("wsignpost4", "starbucks")
+        assert body["verification_only"] is False
+        assert body["results"]
+
+    def test_the_verification_world_signposts_nothing_because_it_has_them(self):
+        body = self._search("wsignpost5-verify", "kestrel")
+        assert body["verification_only"] is False
+        assert body["results"], "the curated coffees resolve in their own partition"

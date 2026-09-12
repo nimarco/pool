@@ -51,7 +51,7 @@ from ..agent.tools import (
     TOOL_SURFACE,
 )
 from ..config import get_settings
-from ..data import catalog
+from ..data import catalog, product_facts
 from ..data.roast_coffee_fixture import install_roast_coffee
 from ..data.seed import COMMUNITY_ID, seed
 from ..domain.attributes import AttributeConstraint
@@ -1011,7 +1011,41 @@ def search_products(
         "results": results,
         # So the client can render the licence obligation next to what it obliges.
         "attribution": catalog.attribution().to_dict(),
+        "verification_only": _matches_verification_only(ws, q, results, families),
     }
+
+
+def _matches_verification_only(ws: str, q: str, results: list, families: list) -> bool:
+    """Whether an empty result here would have matched the verification community.
+
+    The submission film shows Pool refusing *Kestrel Roastworks* and forming
+    *Harbourstone* — brands that do not exist. They are synthetic, invented so the
+    refusal could be demonstrated against verified bulk quotes, and they are installed
+    into the ``-verify`` partition and nowhere else (``public_demo.is_verify_workspace``).
+    Somebody who watched the film and typed the brand into the ordinary product is
+    therefore told, correctly, that Pool has never heard of it — and has no way to know
+    that is the right answer rather than a broken one.
+
+    So this answers the *class* of question and returns a boolean. The rows stay out of
+    the response: putting an invented brand into the ordinary catalogue is the one thing
+    the partition exists to prevent, and a hint the client renders is not a search
+    result. Matching runs the same ranker over the fixture's own products rather than
+    over any hardcoded string, so every brand in that community behaves the same way and
+    a seventh added later needs no change here.
+    """
+    if results or families:
+        return False
+    if public_demo.is_verify_workspace(ws):
+        return False
+    if len(q.strip()) < 2:
+        return False
+    probe = catalog.search(
+        q,
+        1,
+        sourceable_ids=frozenset(),
+        extra=tuple(catalog.entry_from_product(p) for p in product_facts.PRODUCTS),
+    )
+    return bool(probe)
 
 
 def _sourceable_product_ids(ws: str, held: list[Any] | None = None) -> frozenset[str]:

@@ -23,7 +23,7 @@ So Pool refuses it. The reason is boring: that bag is barely discounted at whole
 
 Then it costs Harbourstone: discounted hard, sold in sixes, lower minimum. Eighteen bags is exactly three whole cases, nothing spare. **About $69 saved, a little over 20%.** Pool forms that order instead — provisionally, with no card touched and nobody yet signed up to carry it.
 
-![Pool's "Why this order?" screen. Kestrel Roastworks is marked "Costs more" at $367.19 together against $360.00 buying separately, from 23 bags standing across 8 people. Harbourstone Coffee is marked CHOSEN, saving $69.18 at $263.82 against $333.00, with 18 bags in 3 full cases of 6 and nothing left over. A row below reads "Nothing has been charged, ordered or assigned".](images/article-2-why-this-order.png)
+![Pool's "What Pool worked out" panel, showing the two options side by side. Kestrel Roastworks is marked "Costs more" at $367.19 together against $360.00 buying separately, from 23 bags standing across 8 people. Harbourstone Coffee is marked CHOSEN, saving $69.18 at $263.82 against $333.00 — a 20.7% saving — with 18 bags in 3 full cases of 6 and nothing left over.](images/article-2-why-this-order.png)
 
 ## The demo couldn't have done this a week earlier
 

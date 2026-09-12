@@ -12,7 +12,7 @@ Alongside coffee I declare paper towels. Pool finds seven packs of demand nearby
 
 Seeding a world where every declaration resolves would have been easy, and it proves nothing: a system that always finds a deal is one you can't trust when it does.
 
-![Paper towels, 6 rolls on Pool's home screen, marked WATCHING — "Not enough demand yet" — with a "Why not yet?" link. Three figures beneath it: 7 packs declared, 48 required, 3 people near you. Under those: 3 packs every 30 days, up to 14 days early if it saves money.](images/article-3-paper-towels-7-of-48.png)
+![Two figures from Pool's paper-towels declaration: 7 packs declared, 48 required. Beneath them, the standing terms: 3 packs every 30 days, up to 14 days early if it saves money.](images/article-3-paper-towels-figures.png)
 
 There's a copy bug from this I think about. A refusal used to end with "so there was plenty", written for a different refusal and printed on all of them — so the paper-towels screen described seven packs against a minimum of forty-eight as *plenty*. The logic was right the whole time. The sentence wasn't, and the sentence is what a person reads.
 

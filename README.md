@@ -789,6 +789,18 @@ docs/              architecture, recorded agent traces, pilot readiness, thesis,
   like); those citations will not resolve to a file here, and are not meant to. They
   record why a line is the way it is; the code they annotate stands without them.
 
+## Provenance
+
+Built new for this hackathon. The submission period opened on 10 August 2026; the first
+commit here is dated 15 August 2026 and the last falls before the deadline, so the whole
+history sits inside the window and is public if you want to check it. No
+pre-existing codebase was carried in and no third-party source is vendored — dependencies
+are declared in [`services/agent/pyproject.toml`](services/agent/pyproject.toml) and
+[`apps/web/package.json`](apps/web/package.json) in the ordinary way.
+
+One piece of pre-existing third-party *work* is incorporated, and it is data rather than
+code: the product catalogue and its photographs, described immediately below.
+
 ## Licence
 
 MIT — see [`LICENSE`](LICENSE) — with one deliberate exception.

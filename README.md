@@ -33,6 +33,9 @@ Nova Lite there. Neither one gets to decide a price. The earlier
 
 ## Open this first
 
+You need [`uv`](https://docs.astral.sh/uv/) and Node 20+. Nothing else: `uv` fetches
+Python 3.13 itself, and no AWS account, credential or API key is involved below.
+
 ```bash
 make install     # Python agent, web app, CDK deps
 make demo-local  # judge mode, one origin on :8000, offline and free
@@ -783,7 +786,8 @@ docs/              architecture, recorded agent traces, pilot readiness, thesis,
   product sidecars the interface work was driven from. Deliberately **not** in this
   repository: they are local contributor instruction and working notes rather than part
   of the project. Source comments cite them for provenance (`BUILD_HISTORY #0021` and the
-  like); those citations will not resolve to a file here, and are not meant to
+  like); those citations will not resolve to a file here, and are not meant to. They
+  record why a line is the way it is; the code they annotate stands without them.
 
 ## Licence
 

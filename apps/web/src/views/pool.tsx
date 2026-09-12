@@ -1137,7 +1137,7 @@ function ActivityTab({
         <div className="panel panel-pad stack-sm">
           <h2 className="section-title">How this pool happened</h2>
           <p className="small muted">
-            Thirteen recorded stages from discovery through decline, repair, lock and
+            Fourteen recorded stages from discovery through decline, repair, lock and
             handover.
           </p>
           {!scenario ? (

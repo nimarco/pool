@@ -180,15 +180,24 @@ def evaluate_viability(inputs: ViabilityInputs, stage: ViabilityStage) -> Viabil
     )
 
     # --- buyers -------------------------------------------------------------
-    checks.append(
-        ViabilityCheck(
-            "buyer_savings",
-            econ.net_savings_cents > 0,
-            f"net landed savings {format_cents(econ.net_savings_cents)} after all costs"
-            if econ.net_savings_cents > 0
-            else "the all-in Pool cost does not beat buying retail alone",
+    # Host compensation is part of what buyers pay, and until a host accepts there is no
+    # reward to price it with — `price_pool` puts zero in its place. As a *gate* that is
+    # correct and always has been: nothing can lock while `host_assigned` and
+    # `host_compensation` are still failing two lines above. But reporting it as "after
+    # all costs" overstated the saving by exactly the host's pay, and printed a second,
+    # larger number beside the one the member is shown on their own order. Name the
+    # basis instead of the total, so the two can never read as two answers to one
+    # question.
+    if econ.net_savings_cents <= 0:
+        savings_detail = "the all-in Pool cost does not beat buying retail alone"
+    elif econ.host_reward is None:
+        savings_detail = (
+            f"net landed savings {format_cents(econ.net_savings_cents)} before host pay, "
+            "which is not known until a host accepts"
         )
-    )
+    else:
+        savings_detail = f"net landed savings {format_cents(econ.net_savings_cents)} after all costs"
+    checks.append(ViabilityCheck("buyer_savings", econ.net_savings_cents > 0, savings_detail))
     checks.append(
         ViabilityCheck(
             "buyer_authorisation",

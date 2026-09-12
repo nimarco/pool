@@ -76,6 +76,10 @@ def _verdict(retail, bulk, stage=ViabilityStage.FINAL_LOCK, **overrides):
     return evaluate_viability(_inputs(retail, bulk, **overrides), stage)
 
 
+def _detail(verdict, name):
+    return next(c.detail for c in verdict.checks if c.name == name)
+
+
 # --------------------------------------------------------------------------- passing
 
 
@@ -155,6 +159,43 @@ def test_no_net_saving_blocks_a_lock(retail_offer, bulk_offer):
     verdict = _verdict(retail_offer, bulk_offer)
     assert not verdict.viable
     assert "buyer_savings" in verdict.failed
+
+
+def test_a_saving_reported_before_a_host_accepts_names_its_basis(retail_offer, bulk_offer):
+    """A pre-host saving is not "after all costs" — the host's pay is not in it yet.
+
+    ``price_pool`` puts zero where the reward will go until somebody accepts, so a pool
+    with no host reports a larger saving than the one its own members are shown on the
+    order. The gate is unaffected — ``host_assigned`` is failing in exactly that state —
+    but the sentence has to name its basis, or one order prints two different savings.
+    """
+    without_host = price_pool(
+        bulk_offer=bulk_offer,
+        retail_offer=retail_offer,
+        requests=[Request(f"m{i}", f"n{i}", 10) for i in range(2)],
+        host_reward=None,
+        platform_fee=PlatformFeeConfig(mode="percent_of_savings", bps=1000),
+        processing_fee=ProcessingFeeConfig(),
+        host_is_estimated=True,
+    )
+    verdict = _verdict(
+        retail_offer,
+        bulk_offer,
+        stage=ViabilityStage.PRE_FUNDING,
+        economics=without_host,
+        host_assigned=False,
+        host_reward_meets_minimum=False,
+    )
+    detail = _detail(verdict, "buyer_savings")
+    assert "before host pay" in detail
+    assert "after all costs" not in detail
+    # Still a passing check: it gates nothing on its own, and the pool cannot lock
+    # anyway while the two host checks above it are failing.
+    assert "buyer_savings" not in verdict.failed
+    assert {"host_assigned", "host_compensation"} <= set(verdict.failed)
+
+    # Once a host's reward is priced in, the same sentence is entitled to say "all".
+    assert "after all costs" in _detail(_verdict(retail_offer, bulk_offer), "buyer_savings")
 
 
 def test_a_buyer_whose_rules_reject_the_price_blocks_a_lock(retail_offer, bulk_offer):

@@ -185,7 +185,7 @@ OAC, a bucket policy, a distribution, and an invalidation step, for a 196 KB app
 | Action | Work | Bedrock? |
 | --- | --- | --- |
 | Landing on the site | 1 cold start, ~100 DynamoDB writes to seed the session | No |
-| **Run the full lifecycle** (the drawer's end-to-end action) | ~800 DynamoDB round trips, all thirteen stages | No |
+| **Run the full lifecycle** (the drawer's end-to-end action) | ~800 DynamoDB round trips, all fourteen stages | No |
 | **Find opportunities** | One `InvokeAgentRuntime`, followed by authoritative DynamoDB readback | **Yes** — one bounded AgentCore / Nova Lite run |
 | Drawer lifecycle controls | ~30–90 DynamoDB round trips; bounded Strands run where applicable | **No** — deterministic planner |
 | **Run again** under technical proof | Same paid invocation as Find opportunities; secondary and not part of the video path | **Yes** |

@@ -1,6 +1,6 @@
 # Agents for Humans: More demand doesn't always mean a better group order
 
-Pool is a group-buying coordinator I built for the Agents for Humans hackathon. You tell it something you already buy, and it looks for enough compatible demand nearby to order it together.
+[Pool](https://github.com/nimarco/pool) is a group-buying coordinator I built for the Agents for Humans hackathon. You tell it something you already buy, and it looks for enough compatible demand nearby to order it together.
 
 There's one moment in the demo I didn't design. It fell out of the arithmetic, and it's what convinced me the agent was earning its keep.
 

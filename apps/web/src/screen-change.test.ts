@@ -24,20 +24,25 @@ function stubTransition() {
     new DOMException("Transition was skipped", "AbortError"),
   );
   const onCatch = vi.fn();
+  const onReadyCatch = vi.fn();
   // Record the handler and then genuinely swallow it, so the stub itself cannot be
   // the thing that leaks.
   const spied = { catch: (fn: (e: unknown) => void) => { onCatch(fn); return finished.catch(() => {}); } };
+  const ready = Promise.reject(
+    new DOMException("Transition was aborted because of invalid state", "InvalidStateError"),
+  );
+  const spiedReady = { catch: (fn: (e: unknown) => void) => { onReadyCatch(fn); return ready.catch(() => {}); } };
   (document as unknown as { startViewTransition: unknown }).startViewTransition = (
     cb: () => void,
   ) => {
     cb();
-    return { finished: spied };
+    return { ready: spiedReady, finished: spied };
   };
-  return onCatch;
+  return { onCatch, onReadyCatch };
 }
 
 it("handles the skipped-transition rejection rather than discarding it", () => {
-  const onCatch = stubTransition();
+  const { onCatch, onReadyCatch } = stubTransition();
   let ran = false;
 
   changeScreen(() => {
@@ -46,4 +51,7 @@ it("handles the skipped-transition rejection rather than discarding it", () => {
 
   expect(ran).toBe(true);
   expect(onCatch).toHaveBeenCalled();
+  // `ready` rejects separately with InvalidStateError; catching only `finished` still
+  // leaked seven of those on the deployed demo.
+  expect(onReadyCatch).toHaveBeenCalled();
 });

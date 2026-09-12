@@ -30,7 +30,10 @@ import { flushSync } from "react-dom";
  * when there is something better to stand down for.
  */
 type Transitional = Document & {
-  startViewTransition?: (cb: () => void) => { finished: Promise<void> };
+  startViewTransition?: (cb: () => void) => {
+    ready: Promise<void>;
+    finished: Promise<void>;
+  };
 };
 
 /** Kept in step with the `screen-arrive` animation in styles.css. */
@@ -73,12 +76,20 @@ export function changeScreen(update: () => void, dir: Direction = "fwd"): void {
   const transition = doc.startViewTransition(() => {
     flushSync(update);
   });
-  /* A transition that is superseded before it finishes rejects `finished` with
-     `AbortError: Transition was skipped`. Nothing is wrong when that happens — somebody
-     navigated again and the newer transition is the one that should win — but the
-     rejection was unhandled, so it surfaced as an uncaught error in the console. That is
-     the one place a sceptical reader looks to decide whether the software is sound, and
-     a benign race does not get to spend that credit. Swallowed here rather than in a
-     global handler so only *this* promise is covered. */
+  /* A transition interrupted by the next one rejects, and it rejects on *two* promises:
+     `finished` with `AbortError: Transition was skipped`, and `ready` with
+     `InvalidStateError: Transition was aborted because of invalid state`. Neither means
+     anything is broken — somebody navigated again and the newer transition is the one
+     that should win — but both were unhandled, so they surfaced as uncaught errors in
+     the console. That is the one place a sceptical reader looks to decide whether the
+     software is sound, and a benign race does not get to spend that credit.
+
+     Catching only `finished` was the first attempt, and moving between two screens at a
+     normal pace still produced seven `InvalidStateError`s on the deployed demo. Both
+     promises, therefore.
+
+     `updateCallbackDone` is deliberately left alone: it rejects when the DOM update
+     itself threw, which is a real fault and should stay loud. */
+  transition?.ready?.catch(() => {});
   transition?.finished?.catch(() => {});
 }

@@ -48,11 +48,17 @@ Then open **<http://localhost:8000/verify>**.
 No signup, no password, no credentials, and nothing to arrange. You arrive as an ordinary
 member of a synthetic community that already buys coffee and disagrees about which coffee.
 
-Type **`coffee`**. Pool offers the *family* first — "Coffee, any of 26" — because that is
-usually the sentence. Underneath it is **Or pick one exact product (6)**: those six are the
-coffees this community actually buys, and Pool holds a verified bulk quote for every one.
-**Pick any whole-bean one.** Then say another brand would do, answer the two or three
-questions Pool decides are worth asking, and save.
+Press **Start — add what you buy**, then **Add a need**, and type **`coffee`**. Pool offers
+the *family* first — "Coffee, any of 26" — because that is usually the sentence. Underneath
+it is **Or pick one exact product (6)**: those six are the coffees this community actually
+buys, and Pool holds a verified bulk quote for every one.
+
+**Pick Kestrel Roastworks, whole bean, medium roast.** Any of them produces a real run, but
+that one produces *this* run, the one the rest of this page quotes numbers from — and
+picking Harbourstone instead would hand you the answer rather than the refusal that makes
+it interesting. Leave the defaults at three bags every thirty days. Choose **Any brand that
+matches my preferences**, tick **Dark** alongside Medium, leave *whole bean* and
+*caffeinated* on, and save.
 
 That is the whole interaction, and it is enough to produce the run this submission is
 about: Pool costs the option with the most demand behind it, deterministic code refuses it

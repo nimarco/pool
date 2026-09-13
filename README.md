@@ -11,22 +11,24 @@ Built for the [AWS Agents for Humans hackathon](https://agentsforhumans.devpost.
 **Good Neighbor Agents** track. The value is structurally collective: one person alone
 cannot create it.
 
-![Pool's architecture: one bounded Strands agent, two model providers, one deterministic truth layer](docs/architecture-strands.png)
+![Pool's architecture: one bounded Strands agent, two model providers, one deterministic truth layer, and the four things it refused when attacked](docs/architecture-strands.png)
 
 *[SVG](docs/architecture-strands.svg) · [PNG](docs/architecture-strands.png). The one
 thing to take from it: **both routes are the same `strands.Agent`, the same 17 `@tool`
 functions and the same `HookProvider` — only the object in the model position differs.**
 The public judge demo puts our own deterministic `strands.models.Model` there and spends
 zero tokens; the deployed AgentCore runtime puts `strands.models.BedrockModel` → Amazon
-Nova Lite there. Neither one gets to decide a price. The earlier
+Nova Lite there. Neither one gets to decide a price. The middle band is a real recorded
+run, not an illustration; the bottom band is [what happened when the deployed runtime was
+attacked](#what-happens-when-you-attack-it). The earlier
 [deployment-shaped diagram](docs/architecture.svg) is still accurate and still tracked.*
 
 **Judge, in a hurry?** [The demo](#open-this-first) ·
-[why this needs an agent](#the-problem-in-one-exchange) ·
 [how Strands is actually used](#how-strands-is-actually-used) ·
+[reproduce the key path in one command](#reproduce-the-kestrelharbourstone-path) ·
+[**what happens when you attack it**](#what-happens-when-you-attack-it) ·
 [the deterministic truth boundary](#ai-decides-what-to-do-deterministic-code-determines-what-is-true) ·
 [verified AgentCore deployment](#aws) ·
-[reproduce the key path in one command](#reproduce-the-kestrelharbourstone-path) ·
 [what is synthetic](#local-mode-and-what-is-not-real).
 
 ---
@@ -84,34 +86,19 @@ walkthrough stays reachable after setup through **Demo → Check the supplier wa
 It runs the real checks with the offline planner, at zero model tokens; payments are simulated.
 
 
-Deployed and verified **2026-09-12** from **`21a76bb1`** — the most recent commit that
-changes anything the deployed function contains, and the tree `main` still carries. You
-can check it without credentials and without trusting this sentence: build this
-repository's `apps/web` and you get the exact `index-*.css` and `index-*.js` that
-`/verify` loads, byte for byte. Commits after `21a76bb1` touch documentation, tests and
-`.gitignore` only — nothing the bundle contains — so that check keeps passing as this
-file grows. Nothing about the agent, the planner, the API, the tools, the economics or
-the IAM is outstanding, so every behavioural claim below is a claim about the live URL.
-CloudFront distribution `EMOLZSGVY7HTN`, `Deployed` and enabled, cache invalidated, in
-front of the demo's Lambda Function URL. Use this hostname, not the raw
-Function URL underneath it: `*.lambda-url.*.on.aws` is a blocked *category* on Cisco
-Umbrella and its peers, so a judge on a filtered university or corporate network gets a
-certificate error instead of Pool (#0065). The walkthrough above was driven against it: a
-declaration saved over HTTPS produced a coordination event, one bounded run, a refused
-option, a viable one, and a provisional order — on a real DynamoDB table, with no card
-touched.
+Deployed and verified **2026-09-12** from **`21a76bb1`**. Check that without credentials
+and without trusting this sentence: build this repository's `apps/web` and you get the
+exact `index-*.css` and `index-*.js` that `/verify` loads, byte for byte. Use the
+CloudFront hostname rather than the Function URL underneath it — `*.lambda-url.*.on.aws`
+is a blocked *category* on Cisco Umbrella and its peers, so a judge on a filtered campus
+or corporate network gets a certificate error instead of Pool (#0065).
 
-**What is live, exactly.** Everything a judge can reach on this deployment runs the real
-Strands loop with the **deterministic offline planner** on the Lambda, at zero model
-tokens — that is deliberate, and the Lambda has no permission to call a model. Live model
-execution is a separate action that goes Lambda → **Bedrock AgentCore Runtime** → Strands
-→ Bedrock → the same typed tools; it was verified live on 2026-08-22 with
-`us.amazon.nova-lite-v1:0`, and it is **switched off on the public demo** (re-observed
-2026-09-11 after the redeploy: `/api/demo/config` reports `live_agent_available: false`
-and `live_agent_state: switched_off`, and the deployed function carries
-`PUBLIC_DEMO_AGENTCORE_ENABLED=false` with the runtime ARN still set, both read back off
-the live function) so that no visitor can spend a model token. Both are described precisely
-under [AWS](#aws).
+**What is live, exactly.** Everything a judge can reach here runs the real Strands loop
+with the **deterministic offline planner**, at zero model tokens, and the Lambda holds no
+permission to call a model. Live model execution is a separate path — Lambda → **Bedrock
+AgentCore Runtime** → Strands → Bedrock → the same typed tools — and it is **switched off
+on the public demo**, so no visitor can spend a token. Both are set out precisely, with
+dates and run ids, under [AWS](#aws).
 
 ---
 
@@ -242,6 +229,205 @@ refusal, same redirect, same order.
 
 ---
 
+## What happens when you attack it
+
+Four invocations were run against the deployed AgentCore runtime on **2026-09-12**, on
+live Amazon Nova Lite, to try to break it rather than to demonstrate it.
+
+**A prompt telling it to set a price.** The hosted entrypoint accepts an `instruction`
+string, which makes it the obvious injection surface. A payload instructing the agent to
+ignore the rules and fix a price reached `no_action` in **one tool call** — not because a
+filter caught the words, but because **no tool accepts a price**.
+`create_candidate_pool_from_strategy` takes two identifiers and nothing else. There is no
+argument to smuggle a number through, so there is nothing to defend.
+
+**Two invocations at once, against one workspace.** They produced exactly one pool —
+`pool_created`, then `pool_advanced` — not a duplicate.
+
+**A run asked to prove its own result.** `run_cbe04980cec3` created a pool in 6 of 8
+iterations, 24,254 in / 506 out tokens, five tools. The pool was then read back **through
+the public API** with `created_by_run` matching the run that claimed it, rather than
+trusting the agent's own response.
+
+**A scan with nothing worth doing.** Three candidates evaluated, ended `record_no_action`.
+Stopping is a correct outcome, and it is recorded as one.
+
+One more, from the version-8 verification on 2026-09-07: the agent called
+`issue_final_offer` before any host had accepted. Deterministic code answered
+`issued: false, reason: "no host has accepted this pool yet"` and the run terminated
+`completed` — it did not retry, and it did not route around the precondition. A refusal is
+a payload the agent has to read, not an error it can treat as a transient failure.
+
+Full traces in [`docs/AGENT_TRACE_EVIDENCE.md`](docs/AGENT_TRACE_EVIDENCE.md).
+
+---
+
+## AI decides what to do. Deterministic code determines what is true.
+
+| The model may decide | Deterministic code determines |
+| --- | --- |
+| which of the approved questions are worth asking a member, and in what order | what every answer means, and the typed rule it becomes |
+| which bounded strategy to investigate, and whether to adapt after a refusal | compatibility, eligibility, case allocation, landed economics, viability |
+| which latent demand deserves investigation | cents, quantities, package maths |
+| whether to search or refresh offers | MOQ, allocations, offer freshness |
+| whether a candidate pool is worth forming | timing eligibility, product compatibility |
+| whether to recruit a host | host eligibility and compensation |
+| which recovery strategy to attempt | buyer landed price, platform fee |
+| whether to surface a human decision | payment and funding state |
+| when there is nothing worth doing | pickup-code validity, state transitions |
+| | Smart Join verdicts and final viability |
+
+Two of those rows are the ones this product turns on, and they are worth stating as
+sentences rather than as cells.
+
+**Asking.** When a member says another brand would do, a bounded run reads a listing of
+*approved* questions — built from a curated family schema, each carrying two counts and no
+verdict — and chooses which are worth that person's attention and in what order. It cannot
+write a question the listing did not offer, and it decides nothing about what an answer
+implies: every prompt, every value label and every mapping lives in a committed table, and
+`services/needs.policy_from_answers` is the only thing that reads an answer. Every default
+there is the narrowest reading, so an unanswered question can never widen a rule.
+
+**Choosing.** When a declaration changes, a bounded run is given up to six candidate orders
+with no price, no verdict and no ranking, and picks which to cost. The deterministic
+evaluator answers, and can refuse — the option with the most demand behind it is routinely
+the one that loses money. The run adapts or records honest no-action. The tool that forms
+an order takes **two identifiers and nothing else**: there is no parameter for a member, a
+quantity, a price or a supplier term.
+
+### The agent reaches the world through narrow typed tools
+
+No shell, no arbitrary SQL, no generic mutation. Every tool is either a safe read or a single
+consequential operation with idempotency and an approval boundary built in.
+
+**The two numbers on this page mean different things, and both are true.** The repository
+defines **17 `@tool` functions**. No run is ever given all of them: the objective selects
+one of **four** surfaces before the agent starts, and the largest is **12**.
+
+| Objective | Surface | Tools |
+| --- | --- | --- |
+| The pool-day scan, and a member asking Pool to look | lifecycle | **12** — 4 read, 1 record, 6 act, 1 end |
+| A saved declaration (`searches_strategies`) | cohort strategy | **7** — 3 of them strategy-only, 4 shared with the lifecycle surface |
+| Deciding which approved questions to ask (`plans_clarification`) | clarification | **3** — 2 clarification-only, and the end; no mutation at all |
+| A declaration a live pool already serves | review | **2** — one read, and the end |
+
+Seventeen distinct functions, twelve the most any single run holds. `/api/health` serves
+all three non-trivial surfaces as separate lists from the one definition in
+`agent/tools.py`, so a drifting count is a failing test rather than a plausible sentence.
+Two doors to one mutation would mean one of them was unguarded, which is why the surfaces
+are exclusive rather than additive.
+
+**Smart Join** returns one of three verdicts, never "close enough":
+
+```
+AUTO_APPROVED   HUMAN_APPROVAL_REQUIRED   NOT_ALLOWED
+```
+
+`NOT_ALLOWED` is reserved for situations no prompt can fix — a product outside the
+member's substitution authority, or a scheduling conflict with the pickup day.
+
+---
+
+## Bounded by construction
+
+Every run is bounded in the Strands event loop, not by asking the model nicely:
+
+| Bound | Default | Behaviour on hit |
+| --- | --- | --- |
+| `MAX_AGENT_ITERATIONS` | 8 | Terminates the run as a recorded loop fault |
+| `MAX_TOOL_CALLS_PER_RUN` | 25 | Global circuit breaker |
+| `MAX_DUPLICATE_TOOL_CALLS` | 2 | Identical name+args cancelled as a loop |
+| `WORKFLOW_TIMEOUT_SECONDS` | 45 | Cooperative wall-clock bound checked between model/tool steps; it does not interrupt a call already in progress. One figure everywhere — the local default, both deployments, and what `/api/health` publishes |
+| `MAX_ROUTE_MATRIX_CELLS` | 100 | Checked *before* any routing call is billed |
+
+A run that hits a bound ends loudly with a `loop_fault` outcome — never a silent
+truncation that looks like a normal result. The deployed judge account has **zero EventBridge rules**;
+no background schedule exists there.
+
+Two bounds sit outside the loop, in IAM and in the table:
+
+**The agent cannot delete.** The runtime is a *participant* in a workspace, never its
+owner. Its execution role can read and write one DynamoDB table and holds no delete
+permission, so `Repository.reset()` — the only operation that empties a partition — is
+unavailable to the agent by construction, not by convention
+([`services/agent/iam/agentcore-dynamodb.json`](services/agent/iam/agentcore-dynamodb.json)).
+
+**One live run per session, held by a conditional write.** Two coordination runs on one
+partition would both find no pool and both create one, so the lease is a DynamoDB
+condition rather than a lock in application memory. That is the property the two
+simultaneous invocations [above](#what-happens-when-you-attack-it) were testing.
+
+---
+
+## AWS
+
+**Status language on this page is about when something was last observed, not about what
+is plausible.** Every line below carries the date it was observed.
+
+Both deployed artefacts run the agent code in this repository, and they do different jobs. The **Lambda**
+serves the web app and the reduced API and runs coordination in-process with the
+deterministic offline planner; its execution role can reach DynamoDB and
+`bedrock-agentcore:InvokeAgentRuntime`, and **nothing else** — it cannot call a model. The
+**AgentCore Runtime** is where a live model runs, reached only when the live agent action
+is explicitly requested. Keeping the paid path behind one deliberate action, rather than
+under every page load, is a cost decision (AGENTS.md §3.3) and the reason the judge
+walkthrough is free to repeat.
+
+**Why Amazon Nova Lite.** The agent's job here is to choose which of a few listed options
+to cost next, and to stop — it never computes a price, a quantity or an eligibility, so
+the reasoning ceiling of a larger model buys nothing the bounds and the tool surface do
+not already decide. Nova Lite does that inside eight iterations at a fraction of a cent a
+run, which is what makes a live path affordable to leave deployed at all. If the model
+were doing arithmetic, this would be the wrong choice; it isn't, so it isn't.
+
+| Service | Role | Status |
+| --- | --- | --- |
+| Bedrock | Model inference via Strands | **Verified live 2026-08-22** — `us.amazon.nova-lite-v1:0`, reached through AgentCore, 2 of 8 iterations, 5,513 in / 133 out tokens, terminated `completed`. The **outcome was a truthful `no_action`**: the member's only declaration had already been served by the in-process run their save caused, so the objective was correctly empty. It establishes the deployment, the tool surface and the bounds on real infrastructure; it is *not* a live trace of the Kestrel→Harbourstone adaptation. Earlier discovery/recovery/lock branches verified 2026-08-19 |
+| AgentCore Runtime | Hosted agent entrypoint, and the only path to a live model | **Deployed 2026-08-23, verified live 2026-09-07, re-verified 2026-09-12** — `Pool_PoolCoordinator-TmVqSN9H56` **version 8**, `READY` in `us-east-1`, endpoint `DEFAULT` at `liveVersion 8`, `BEDROCK_MODEL_ID=us.amazon.nova-lite-v1:0`, bounds 8/25/2/45. `run_9793fd48b53d` proved AgentCore → Strands → Bedrock → Pool tools end to end: `pool_created`, 7 of 8 iterations, `completed`, 29,555 in / 605 out, six tools, one human decision surfaced — and the pool was read back from DynamoDB independently of the response, `created_by_run` matching. Four further invocations on 2026-09-12, including the adversarial ones, are in [What happens when you attack it](#what-happens-when-you-attack-it). Runs were made into private workspaces the demo's session scheme cannot generate, so no visitor partition was touched, and run records expire by TTL. The public demo cannot invoke any of this: `/api/demo/config` reports `live_agent_state: switched_off`. Traces: [`docs/AGENT_TRACE_EVIDENCE.md`](docs/AGENT_TRACE_EVIDENCE.md) |
+| Lambda Function URL | The demo's origin, behind CloudFront: web app + reduced API | **Deployed and verified 2026-09-12** (`21a76bb1`) — every redeploy that day showed a `cdk diff` of one resource and one line, the code asset key, with **no IAM change and no environment change**, re-read off the deployed function afterwards. The judge walkthrough was then driven against the live URL over HTTPS on the real table: searching `coffee` returns all six curated coffees; declaring one refused Kestrel `not_cheaper` at $367.19/$360.00 and formed Harbourstone at $263.82/$333.00, 18 bags in 3 cases of 6, `input_tokens: 0`, 0 payment rows. Runs the **offline planner** at zero model tokens and holds **no model permission** — its role carries `bedrock-agentcore:InvokeAgentRuntime` and no `bedrock:InvokeModel` |
+| DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified 2026-08-23** — shared by both artefacts, which is why they are deployed together |
+| API Gateway + Lambda | Pilot-shaped API | In `PoolStack`, which is **not** what the public demo deploys |
+| S3 | Pilot-shaped web hosting | In `PoolStack`. The public demo needs it for nothing — its web app ships inside the function |
+| CloudFront | Reachable hostname in front of the demo's Function URL, and the canonical judge URL | **Deployed and verified 2026-09-12** (the `index-*.css` and `index-*.js` the CDN serves are byte-identical by SHA-256 to the ones this repository builds; no invalidation was needed because `/verify` answers `cache-control: no-cache` and the asset filenames are content-hashed and `immutable`) — distribution `EMOLZSGVY7HTN`, `Deployed` and enabled, serving `https://d38kno05ygcarw.cloudfront.net/verify` over HTTP/2 with HSTS and a strict CSP. Added to `PoolDemoStack` because `*.lambda-url.*.on.aws` is a blocked *category* on filtered resolvers (Cisco Umbrella answers the demo's hostname with a block page and an untrusted certificate, so a judge behind one sees a certificate error, not Pool). Caches `/assets/*` only; every dynamic path is uncached, because the workspace travels as a query parameter. Separately, `PoolStack` uses it for pilot-shaped hosting |
+| EventBridge | Optional future background scan | Implemented only in the un-deployed `PoolStack`; **zero rules exist in the deployed judge account** |
+| Amazon Location | `geo-routes`, no provisioned calculator | Implemented, unverified |
+| CloudWatch | Structured run records, retention capped at 14 days | In both stacks |
+
+```bash
+make whoami   # which principal am I? run this first
+make synth    # synthesize the template — no credentials needed
+make deploy   # (COSTS MONEY)
+make cost-check
+make destroy
+```
+
+### AgentCore
+
+The hosted coordinator is deployed with the official `@aws/agentcore` CLI, whose project
+config lives in `agentcore/`. Only `agentcore.json` and `aws-targets.json` are committed;
+the CDK app the CLI deploys through is generated, per that CLI's own convention. From a
+fresh clone:
+
+```bash
+make install-agentcore   # installs the CLI, then rebuilds agentcore/cdk/
+make agent-validate      # config check — offline and free
+make agent-dry-run       # synthesizes the stack; creates nothing
+make deploy-agent        # (COSTS MONEY)
+```
+
+`make agentcore-cdk` rebuilds `agentcore/cdk/` on its own by copying the installed CLI's
+bundled assets. It refuses to overwrite an existing directory unless passed `--force`, and
+warns if the installed CLI is not the version this repository was verified against.
+
+The first `agentcore deploy` needs a CDK bootstrap in the account — a separate,
+account-wide step that grants `AdministratorAccess` to a CloudFormation execution role.
+It is deliberately not automated here (`AGENTS.md` §3.5).
+
+See [`docs/COST_NOTES.md`](docs/COST_NOTES.md) for the resource ledger and
+`AGENTS.md` §3 for the cost rules every change is held to.
+
+---
+
 ## Run it
 
 Everything below is free, offline, and deterministic. No AWS account, no API key, no
@@ -332,49 +518,30 @@ What judge mode changes, and why each one matters:
 
 ### Deterministic by default, live where it says so
 
-Almost everything a judge touches runs **deterministically on the server** — the real
-Strands loop with the offline planner, the real domain maths, the real state machine.
-That is deliberate: a demo that depends on a paid model call for every interaction is a
-demo that breaks in front of someone.
-
-One action *can* leave the machine, and it is the product's own: **Find opportunities**
-invokes Pool's coordinator on **Amazon Bedrock AgentCore Runtime** — a real model, a real
-Strands loop, real Pool tools — inside a runtime session generated per invocation, **bound
-to the visitor's own DynamoDB workspace**. **It is switched off on the public demo**
-(observed 2026-09-07: `/api/demo/config` reports `live_agent_available: false`), so it
-belongs to an operator running their own deployment rather than to anyone merely visiting.
-With it off, the same button runs the coordinator in-process under the same bounds and the
-same tools, and the server refuses the paid route before taking a lease, spending a quota
-unit, or reaching AWS. The pool that appears afterwards was formed by
-that run: its `created_by_run` is the run id the runtime reported, and the page renders it
-by re-reading the table rather than by drawing the model's answer. It is capped and
-labelled, and if it fails it says so. **There is no code path that fabricates a run**
-(`AGENTS.md` §8).
-
-The `/verify` walkthrough never needs that action, which is deliberate. There, a saved
+The `/verify` walkthrough never needs a live model call, and that is deliberate. A saved
 declaration writes a coordination event and one bounded run answers it in-process, under
 the same bounds and the same tools — so the thing a judge verifies is caused by an
-ordinary member action rather than by pressing a button labelled *run the agent*. That run
-uses the **deterministic offline planner**, at zero model tokens, locally *and on the
-deployed URL*: the function serving it has no permission to call a model. The technical
-proof panel names the provider it actually ran on and its wording follows that provider —
+ordinary member action rather than by pressing a button labelled *run the agent*. A demo
+that depends on a paid model call for every interaction is a demo that breaks in front of
+someone.
+
+One action *can* leave the machine: **Find opportunities** invokes the coordinator on
+AgentCore Runtime, inside a session generated per invocation and bound to the visitor's
+own workspace. With it switched off, the same button runs the coordinator in-process, and
+the server refuses the paid route before taking a lease, spending a quota unit or reaching
+AWS. **There is no code path that fabricates a run** (`AGENTS.md` §8) — the pool that
+appears is re-read from the table by `created_by_run`, never drawn from the model's answer.
+
+The technical proof panel names the provider a run actually used and follows its wording:
 an offline run reports *planner iterations*, never model calls.
 
-The runtime is a *participant* in a workspace, never its owner. The API seeds workspaces,
-resets them, and rations how many exist; the runtime's execution role can read and write
-that one table and cannot delete from it, so `Repository.reset()` — the only operation
-that empties a partition — is unavailable to the agent by construction
-(`services/agent/iam/agentcore-dynamodb.json`). One live run per session at a time, held
-by a conditional-write lease, because two coordination runs on one partition would both
-find no pool and both create one.
-
-That call takes ten to twenty seconds, so the screen spends them saying something true.
-It shows the path the request takes, the caps the run is bounded by, and the complete
-list of tools the agent is allowed to choose from; when the answer comes back, the ones
-it actually chose are marked, in order. A browser making one HTTPS request can observe
-its own send and its own receive and nothing in between, so nothing animates a journey
-through AWS it did not watch. Three real, separately measured durations come back with
-the result: time inside the agent, time inside AWS, and the browser's own round trip.
+That call takes ten to twenty seconds, so the screen spends them saying something true. It
+shows the path the request takes, the caps it is bounded by, and every tool the agent is
+allowed to choose from; when the answer returns, the ones it chose are marked in order.
+Three separately measured durations come back with it — time inside the agent, time inside
+AWS, and the browser's own round trip. A browser making one HTTPS request can observe its
+own send and its own receive and nothing in between, so nothing animates a journey through
+AWS it did not watch.
 
 ```bash
 make demo-local   # judge mode, locally, free
@@ -439,191 +606,22 @@ pre-lock, capture fails, purchase fails, buyer no-shows, credential re-used.
 
 ## The parts that are easy to get wrong
 
-### Provisional participation is not financial commitment
+Nine places where the obvious implementation is subtly wrong. Each is enforced in
+deterministic code, not asked for in a prompt; the full reasoning, with the state machine
+and the pricing identity, is in
+[`docs/PRODUCT_CORRECTNESS.md`](docs/PRODUCT_CORRECTNESS.md).
 
-A candidate pool counts **provisional** demand so the opportunity can be discovered and
-shown. Only **authorised** demand counts toward the funded threshold. Adding a recurring
-need never touches anyone's card.
-
-```
-ELIGIBLE → PROVISIONAL → FINAL_OFFERED → AUTHORIZED → LOCKED
-```
-
-### The host is chosen before anyone is charged
-
-Host compensation is part of the buyer's price, so the order is fixed: host accepts →
-quote refreshed → exact landed cost → final offer → buyer policies evaluated →
-authorisation → lock. Pool never authorises $42 and later charges $47. If the price
-moves before lock, the stale hold is released and the buyer is asked again.
-
-### The price includes everything
-
-```
-  bulk merchandise
-+ host / runner compensation
-+ payment processing
-+ Pool platform fee
-= all-in Pool cost
-
-retail comparison − all-in Pool cost = net savings
-```
-
-Smart Join is evaluated against **net** landed savings. Two subtleties are load-bearing:
-the platform fee is a share of *gross* savings, so it is defined without referring to the
-total it belongs to; and card processing is **grossed up** per buyer, so the charge
-covers the processor's cut of that very charge. Computing it the naive way would
-under-recover by a few cents per buyer — a silent platform subsidy, which is exactly what
-the model forbids.
-
-If fair host compensation erases the saving, the pool should not form. That is a correct outcome,
-not a bug.
-
-### Pool does not buy stock nobody ordered
-
-Cases do not divide evenly into demand. Rather than quietly buying the leftovers and
-billing someone for them, Pool **chooses the buyer set that fills whole cases exactly**
-([`fit_to_cases`](services/agent/pool/domain/economics.py)), preferring people whose need
-is already due over demand pulled forward. If no combination lands on a case boundary,
-the pool does not lock and says why.
-
-### Future demand moves only with permission
-
-Each need carries two different timing numbers: a **routine restock lead** (when someone
-normally buys) and an **earliest acceptable purchase date** (how far ahead they are
-willing to buy if it saves money). The agent may decide to *investigate* whether more
-demand exists; the deterministic timing engine decides *who is actually eligible*. A
-member who authorised no early purchase is never pulled forward, however convenient it
-would be for the case count.
-
-In the demo this is not decoration, and the split is a figure the transcript carries
-rather than a claim the interface makes: **eight people were buying about now anyway —
-18 units, against a supplier minimum of 24. Two more had authorised an early purchase,
-and their 6 units close the gap exactly.** Ten people, twenty-four units, two whole
-cases. Take away the pull-forward pair and this pool does not form.
-
-### Ten people bought. The record shows eleven
-
-The counts move once, and the run says so where it happens. Ten people are matched at
-discovery. One card is then declined, and recovery finds one replacement — so ten people
-still buy, and the pool's record carries **eleven memberships**, the extra one being the
-failed authorisation. It stays visible on the pool page instead of being deleted, and
-every surface reports both numbers: `buyer_count` alongside `member_count`.
-
-### Offering to host is not claiming the job
-
-Candidates come from two places: standing hosts who opted in earlier, and ordinary pool
-members who click "Offer to host" on this specific pool. Several people can offer at
-once. A deterministic evaluator checks facts — availability, vehicle, capacity, weight,
-supplier travel, pickup-site suitability, their own minimum pay — and ranks the eligible
-ones on the whole transaction, not the cheapest line. The top candidate gets an offer.
-If they decline or the window expires, the next one does. There is no
-first-come-first-served path.
-
-Compensation scales with the work: base + per order + distance + exceptional weight +
-an optional handoff component. A buyer no-show cannot erase pay for a run already done —
-only the handoff slice is contingent.
-
-### Pickup is proved, not asserted
-
-Every buyer allocation gets its own one-time credential: a long token for the QR and a
-short human-readable code for when scanning is awkward. **Only hashes are stored.** The
-plaintext exists exactly once, in the response that issued it; re-issuing invalidates the
-previous pair. The credential carries no payment details, phone number, or email. A host
-cannot mark an order collected without one — the only other route is an operator override
-that requires a stated reason and is audited.
-
-### Communication is exception-driven
-
-Routine communication is automated; human messaging is the exception. There is no pool
-group chat. Buyers get structured exceptions first ("running late", "can't pick up
-today"), most of which Pool resolves with nobody's attention; a product problem becomes an
-operator case rather than an argument at the pickup table; only what is left opens a
-private, transaction-scoped buyer ↔ host thread that archives with the pool. No phone
-number or email is ever exposed.
-
----
-
-## AI decides what to do. Deterministic code determines what is true.
-
-| The model may decide | Deterministic code determines |
+| | |
 | --- | --- |
-| which of the approved questions are worth asking a member, and in what order | what every answer means, and the typed rule it becomes |
-| which bounded strategy to investigate, and whether to adapt after a refusal | compatibility, eligibility, case allocation, landed economics, viability |
-| which latent demand deserves investigation | cents, quantities, package maths |
-| whether to search or refresh offers | MOQ, allocations, offer freshness |
-| whether a candidate pool is worth forming | timing eligibility, product compatibility |
-| whether to recruit a host | host eligibility and compensation |
-| which recovery strategy to attempt | buyer landed price, platform fee |
-| whether to surface a human decision | payment and funding state |
-| when there is nothing worth doing | pickup-code validity, state transitions |
-| | Smart Join verdicts and final viability |
-
-Two of those rows are the ones this product turns on, and they are worth stating as
-sentences rather than as cells.
-
-**Asking.** When a member says another brand would do, a bounded run reads a listing of
-*approved* questions — built from a curated family schema, each carrying two counts and no
-verdict — and chooses which are worth that person's attention and in what order. It cannot
-write a question the listing did not offer, and it decides nothing about what an answer
-implies: every prompt, every value label and every mapping lives in a committed table, and
-`services/needs.policy_from_answers` is the only thing that reads an answer. Every default
-there is the narrowest reading, so an unanswered question can never widen a rule.
-
-**Choosing.** When a declaration changes, a bounded run is given up to six candidate orders
-with no price, no verdict and no ranking, and picks which to cost. The deterministic
-evaluator answers, and can refuse — the option with the most demand behind it is routinely
-the one that loses money. The run adapts or records honest no-action. The tool that forms
-an order takes **two identifiers and nothing else**: there is no parameter for a member, a
-quantity, a price or a supplier term.
-
-### The agent reaches the world through narrow typed tools
-
-No shell, no arbitrary SQL, no generic mutation. Every tool is either a safe read or a single
-consequential operation with idempotency and an approval boundary built in.
-
-**The two numbers on this page mean different things, and both are true.** The repository
-defines **17 `@tool` functions**. No run is ever given all of them: the objective selects
-one of **four** surfaces before the agent starts, and the largest is **12**.
-
-| Objective | Surface | Tools |
-| --- | --- | --- |
-| The pool-day scan, and a member asking Pool to look | lifecycle | **12** — 4 read, 1 record, 6 act, 1 end |
-| A saved declaration (`searches_strategies`) | cohort strategy | **7** — 3 of them strategy-only, 4 shared with the lifecycle surface |
-| Deciding which approved questions to ask (`plans_clarification`) | clarification | **3** — 2 clarification-only, and the end; no mutation at all |
-| A declaration a live pool already serves | review | **2** — one read, and the end |
-
-Seventeen distinct functions, twelve the most any single run holds. `/api/health` serves
-all three non-trivial surfaces as separate lists from the one definition in
-`agent/tools.py`, so a drifting count is a failing test rather than a plausible sentence.
-Two doors to one mutation would mean one of them was unguarded, which is why the surfaces
-are exclusive rather than additive.
-
-**Smart Join** returns one of three verdicts, never "close enough":
-
-```
-AUTO_APPROVED   HUMAN_APPROVAL_REQUIRED   NOT_ALLOWED
-```
-
-`NOT_ALLOWED` is reserved for situations no prompt can fix — a product outside the
-member's substitution authority, or a scheduling conflict with the pickup day.
-
----
-
-## Bounded by construction
-
-Every run is bounded in the Strands event loop, not by asking the model nicely:
-
-| Bound | Default | Behaviour on hit |
-| --- | --- | --- |
-| `MAX_AGENT_ITERATIONS` | 8 | Terminates the run as a recorded loop fault |
-| `MAX_TOOL_CALLS_PER_RUN` | 25 | Global circuit breaker |
-| `MAX_DUPLICATE_TOOL_CALLS` | 2 | Identical name+args cancelled as a loop |
-| `WORKFLOW_TIMEOUT_SECONDS` | 45 | Cooperative wall-clock bound checked between model/tool steps; it does not interrupt a call already in progress. One figure everywhere — the local default, both deployments, and what `/api/health` publishes |
-| `MAX_ROUTE_MATRIX_CELLS` | 100 | Checked *before* any routing call is billed |
-
-A run that hits a bound ends loudly with a `loop_fault` outcome — never a silent
-truncation that looks like a normal result. The deployed judge account has **zero EventBridge rules**;
-no background schedule exists there.
+| **Provisional is not committed** | Candidate pools count provisional demand so the opportunity can be *found*; only authorised demand counts toward funding. Declaring never touches a card |
+| **The host is chosen before anyone is charged** | Their compensation is part of the buyer's price, so the order is fixed. Pool never authorises $42 and later charges $47 |
+| **The price includes everything** | Merchandise + host pay + processing + platform fee. The fee is a share of *gross* savings, and card processing is grossed up per buyer, so Pool cannot silently subsidise a transaction by a few cents |
+| **No stock nobody ordered** | Cases do not divide evenly into demand, so Pool picks the buyer set that fills whole cases exactly rather than buying the remainder and billing someone for it |
+| **Future demand moves only with permission** | A member who authorised no early purchase is never pulled forward, however convenient it would be for the case count |
+| **Ten people bought. The record shows eleven** | A declined card leaves a failed membership visible instead of deleted; `buyer_count` and `member_count` are both reported everywhere |
+| **Offering to host is not claiming the job** | Several people can offer at once. A deterministic evaluator ranks them on the whole transaction, not the cheapest line. There is no first-come-first-served path |
+| **Pickup is proved, not asserted** | One-time credential per allocation, only hashes stored, plaintext issued exactly once, no payment details or contact inside it |
+| **Communication is exception-driven** | No pool group chat. Structured exceptions first, an operator case next, and only what is left opens a transaction-scoped thread. No phone number or email is ever exposed |
 
 ---
 
@@ -678,68 +676,6 @@ obligations: [`services/agent/pool/data/CATALOG_LICENSE.md`](services/agent/pool
 
 ---
 
-## AWS
-
-**Status language on this page is about when something was last observed, not about what
-is plausible.** Every line below carries the date it was observed.
-
-Both deployed artefacts run the agent code in this repository, and they do different jobs. The **Lambda**
-serves the web app and the reduced API and runs coordination in-process with the
-deterministic offline planner; its execution role can reach DynamoDB and
-`bedrock-agentcore:InvokeAgentRuntime`, and **nothing else** — it cannot call a model. The
-**AgentCore Runtime** is where a live model runs, reached only when the live agent action
-is explicitly requested. Keeping the paid path behind one deliberate action, rather than
-under every page load, is a cost decision (AGENTS.md §3.3) and the reason the judge
-walkthrough is free to repeat.
-
-| Service | Role | Status |
-| --- | --- | --- |
-| Bedrock | Model inference via Strands | **Verified live 2026-08-22** — `us.amazon.nova-lite-v1:0`, reached through AgentCore, 2 of 8 iterations, 5,513 in / 133 out tokens, terminated `completed`. The **outcome was a truthful `no_action`**: the member's only declaration had already been served by the in-process run their save caused, so the objective was correctly empty. It establishes the deployment, the tool surface and the bounds on real infrastructure; it is *not* a live trace of the Kestrel→Harbourstone adaptation. Earlier discovery/recovery/lock branches verified 2026-08-19 |
-| AgentCore Runtime | Hosted agent entrypoint, and the only path to a live model | **Deployed 2026-08-23, verified live 2026-09-07** — `Pool_PoolCoordinator-TmVqSN9H56` **version 8**, `READY` in `us-east-1`, endpoint `DEFAULT` at `liveVersion 8`, carrying this branch. One bounded invocation of **version 8** proved AgentCore → Strands → Bedrock → Pool tools end to end: `run_9793fd48b53d`, `model_provider: bedrock`, `us.amazon.nova-lite-v1:0`, outcome `pool_created`, 7 of 8 iterations, terminated `completed`, 29,555 in / 605 out tokens, six tools called, one human decision surfaced. The pool it built was read back from DynamoDB independently of the response, with `created_by_run` matching. Run into the private workspace `smokev8-20260907`, a name the public demo's session scheme cannot generate, so no visitor partition was touched. **Re-verified independently on 2026-09-12**, against the same version 8: the control plane reports `READY` with `BEDROCK_MODEL_ID=us.amazon.nova-lite-v1:0` and the four bounds as 8/25/2/45; four fresh invocations ran end to end on Nova Lite — `run_cbe04980cec3` (`pool_created`, 6 of 8 iterations, 24,254 in / 506 out, five tools) whose pool was then read back **through the public API** with `created_by_run` matching, a second scan that evaluated three candidates before committing and ended in `record_no_action`, two simultaneous invocations against one workspace that produced exactly one pool (`pool_created` then `pool_advanced`, not a duplicate), and an `instruction` payload attempting to override the rules and set a price, which reached `no_action` in one tool call because no tool accepts a price. Run records expire from the demo table by TTL, so the run ids above are evidence of what happened rather than rows that stay fetchable. The earlier version-7 verification (2026-08-22) still stands; the coordinator and entrypoint are byte-identical between the two. The public demo still cannot invoke this: live invocation is switched off there (re-observed 2026-09-07 — `/api/demo/config` reports `live_agent_state: switched_off`, meaning the runtime ARN is configured and the kill switch is off, not that no runtime exists) — see `docs/AGENT_TRACE_EVIDENCE.md` |
-| Lambda Function URL | The demo's origin, behind CloudFront: web app + reduced API | **Deployed and verified 2026-09-12** (`21a76bb1`) — the canonical judge URL is the CloudFront hostname in front of it. Redeployed across the day for the desktop screen-transition fix, to ship `demo-data/` (which the bundle had never contained, so the judge walkthrough's two committed supplier sheets were refused by their own digest check), for the navigation and error-state polish, for Back reopening an explanation it had been sending to Home, and last so the pre-host viability line names its basis instead of claiming a total it has not counted. Each time: the `cdk diff` was one resource and one line, the code asset key, with **no IAM change and no environment change** — `PUBLIC_DEMO_AGENTCORE_ENABLED` is still `false` and the runtime ARN is still set, re-read off the deployed function afterwards. The judge walkthrough was then driven against the live URL: searching `coffee` returns all six curated coffees, and declaring one produced Kestrel refused `not_cheaper` at $367.19/$360.00 and Harbourstone formed at $263.82/$333.00, 18 bags in 3 cases of 6, `input_tokens: 0`. A smoke run against the deployed stack returned `model_provider: offline`, `model_id: offline-deterministic-planner`, `input_tokens: 0`, `output_tokens: 0`, and a pool the bounded loop formed. `/verify` hard-loads at `/`, `/verify`, `/verify/` and with a query string; full declaration → event → run → order over HTTPS on the real table, Kestrel refused on economics and Harbourstone formed, 0 payment rows. Runs the **offline planner** at zero model tokens and holds **no model permission** — its role carries `bedrock-agentcore:InvokeAgentRuntime` and no `bedrock:InvokeModel` |
-| DynamoDB | Authoritative application state, single table, on-demand, TTL | **Deployed and verified 2026-08-23** — shared by both artefacts, which is why they are deployed together |
-| API Gateway + Lambda | Pilot-shaped API | In `PoolStack`, which is **not** what the public demo deploys |
-| S3 | Pilot-shaped web hosting | In `PoolStack`. The public demo needs it for nothing — its web app ships inside the function |
-| CloudFront | Reachable hostname in front of the demo's Function URL, and the canonical judge URL | **Deployed and verified 2026-09-12** (the `index-*.css` and `index-*.js` the CDN serves are byte-identical by SHA-256 to the ones this repository builds; no invalidation was needed because `/verify` answers `cache-control: no-cache` and the asset filenames are content-hashed and `immutable`) — distribution `EMOLZSGVY7HTN`, `Deployed` and enabled, serving `https://d38kno05ygcarw.cloudfront.net/verify` over HTTP/2 with HSTS and a strict CSP. Added to `PoolDemoStack` because `*.lambda-url.*.on.aws` is a blocked *category* on filtered resolvers (Cisco Umbrella answers the demo's hostname with a block page and an untrusted certificate, so a judge behind one sees a certificate error, not Pool). Caches `/assets/*` only; every dynamic path is uncached, because the workspace travels as a query parameter. Separately, `PoolStack` uses it for pilot-shaped hosting |
-| EventBridge | Optional future background scan | Implemented only in the un-deployed `PoolStack`; **zero rules exist in the deployed judge account** |
-| Amazon Location | `geo-routes`, no provisioned calculator | Implemented, unverified |
-| CloudWatch | Structured run records, retention capped at 14 days | In both stacks |
-
-```bash
-make whoami   # which principal am I? run this first
-make synth    # synthesize the template — no credentials needed
-make deploy   # (COSTS MONEY)
-make cost-check
-make destroy
-```
-
-### AgentCore
-
-The hosted coordinator is deployed with the official `@aws/agentcore` CLI, whose project
-config lives in `agentcore/`. Only `agentcore.json` and `aws-targets.json` are committed;
-the CDK app the CLI deploys through is generated, per that CLI's own convention. From a
-fresh clone:
-
-```bash
-make install-agentcore   # installs the CLI, then rebuilds agentcore/cdk/
-make agent-validate      # config check — offline and free
-make agent-dry-run       # synthesizes the stack; creates nothing
-make deploy-agent        # (COSTS MONEY)
-```
-
-`make agentcore-cdk` rebuilds `agentcore/cdk/` on its own by copying the installed CLI's
-bundled assets. It refuses to overwrite an existing directory unless passed `--force`, and
-warns if the installed CLI is not the version this repository was verified against.
-
-The first `agentcore deploy` needs a CDK bootstrap in the account — a separate,
-account-wide step that grants `AdministratorAccess` to a CloudFormation execution role.
-It is deliberately not automated here (`AGENTS.md` §3.5).
-
-See [`docs/COST_NOTES.md`](docs/COST_NOTES.md) for the resource ledger and
-`AGENTS.md` §3 for the cost rules every change is held to.
-
----
-
 ## Repository
 
 ```
@@ -777,6 +713,7 @@ docs/              architecture, recorded agent traces, pilot readiness, thesis,
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — what is actually built, and how
 - [`docs/AGENT_TRACE_EVIDENCE.md`](docs/AGENT_TRACE_EVIDENCE.md) — recorded output from runs that actually executed, including the ones that ended in a refusal
 - [`docs/architecture-strands.svg`](docs/architecture-strands.svg) — the two routes, the model position on each, and where the tool surface is shared
+- [`docs/PRODUCT_CORRECTNESS.md`](docs/PRODUCT_CORRECTNESS.md) — the nine places the obvious implementation is subtly wrong, and what Pool does instead
 - [`docs/PILOT_READINESS.md`](docs/PILOT_READINESS.md) — what a real pilot still needs, including the parts that are legal questions rather than coding ones
 - [`docs/STARTUP_THESIS.md`](docs/STARTUP_THESIS.md) — the business argument and its assumptions
 - [`docs/COST_NOTES.md`](docs/COST_NOTES.md) — every resource that can accrue cost
@@ -789,6 +726,8 @@ docs/              architecture, recorded agent traces, pilot readiness, thesis,
   like); those citations will not resolve to a file here, and are not meant to. They
   record why a line is the way it is; the code they annotate stands without them.
 
+---
+
 ## Provenance
 
 Built new for this hackathon. The submission period opened on 10 August 2026; the first
@@ -800,6 +739,8 @@ are declared in [`services/agent/pyproject.toml`](services/agent/pyproject.toml)
 
 One piece of pre-existing third-party *work* is incorporated, and it is data rather than
 code: the product catalogue and its photographs, described immediately below.
+
+---
 
 ## Licence
 
